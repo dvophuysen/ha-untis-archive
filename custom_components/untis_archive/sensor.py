@@ -1,17 +1,24 @@
 """Sensor entities for UNTIS Archive.
 
-Three sensors per child:
+Per child:
 
-- ``..._lehrstoff_heute``   – Lehrstoff der heutigen Stunden
-- ``..._hausaufgaben_offen`` – Anzahl offener Hausaufgaben
-- ``..._versaeumter_stoff``  – Lehrstoff verpasster Tage (greift
-  ``input_boolean.kind_<slug>_krank`` ab, falls vorhanden)
+- ``..._lehrstoff_heute``     – Lehrstoff der heutigen Stunden
+- ``..._hausaufgaben_offen``  – Anzahl offener Hausaufgaben
+- ``..._versaeumter_stoff``   – Lehrstoff der Stunden, in denen das Kind
+                                laut WebUntis abwesend war (letzte 14 Tage)
+- ``..._fehlzeiten_schuljahr`` – Anzahl Fehlzeiten-Einträge im laufenden
+                                Schuljahr, plus Unentschuldigte als Attribut
+- ``..._stundenplan_aenderungen`` – Anzahl Änderungen am Stundenplan
+                                (Vertretungen, Raumwechsel, Ausfälle,
+                                Lehrstoff-Updates, retroaktive Einträge)
+                                in den letzten 7 Tagen
 """
 
 from __future__ import annotations
 
+import json
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
@@ -29,6 +36,14 @@ def _slug(name: str) -> str:
     return s or "kind"
 
 
+def _school_year_start(today: date) -> date:
+    """German school year roughly starts in August. Anything before
+    August belongs to the previous year's start.
+    """
+    year = today.year if today.month >= 8 else today.year - 1
+    return date(year, 8, 1)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -41,6 +56,8 @@ async def async_setup_entry(
             LehrstoffHeuteSensor(coordinator, entry, slug),
             HausaufgabenOffenSensor(coordinator, entry, slug),
             VersaeumterStoffSensor(coordinator, entry, slug),
+            FehlzeitenSchuljahrSensor(coordinator, entry, slug),
+            StundenplanAenderungenSensor(coordinator, entry, slug),
         ]
     )
 
@@ -88,7 +105,11 @@ class LehrstoffHeuteSensor(_Base):
                 {
                     "subject": r.get("subject_name"),
                     "start": r.get("start_time"),
+                    "teacher": r.get("teacher_name"),
+                    "teacher_orig": r.get("teacher_orig_name"),
+                    "room": r.get("room"),
                     "code": r.get("code") or "",
+                    "was_absent": bool(r.get("was_absent")),
                     "lstext": text,
                 }
             )
@@ -125,11 +146,11 @@ class HausaufgabenOffenSensor(_Base):
 
 
 class VersaeumterStoffSensor(_Base):
-    """Lehrstoff von Tagen, an denen das Kind krank war.
+    """Lehrstoff der Stunden, in denen das Kind nach WebUntis abwesend war.
 
-    Erkennung: ``input_boolean.kind_<slug>_krank`` ist (oder war heute)
-    aktiv. Vereinfachte Variante: zeigt den Lehrstoff der letzten 7 Tage
-    der entsprechenden Stunden.
+    Erkennung erfolgt automatisch über die ``was_absent``-Spalte, die der
+    Coordinator aus den Fehlzeiten der Schule ableitet. Kein manueller
+    Toggle nötig.
     """
 
     _attr_icon = "mdi:emoticon-sick"
@@ -140,40 +161,127 @@ class VersaeumterStoffSensor(_Base):
         self._attr_translation_key = "versaeumter_stoff"
         self._attr_name = "Versäumter Stoff"
 
-    def _is_sick(self) -> bool:
-        state = self.hass.states.get(f"input_boolean.kind_{self._slug}_krank")
-        return bool(state and state.state == "on")
+    def _window(self) -> tuple[str, str]:
+        today = date.today()
+        return (today - timedelta(days=14)).isoformat(), today.isoformat()
+
+    def _missed(self) -> list[dict[str, Any]]:
+        start, end = self._window()
+        return self.coordinator.storage.missed_lessons(
+            self.coordinator.account_id, start, end
+        )
 
     @property
     def native_value(self) -> int:
-        if not self._is_sick():
-            return 0
-        today = date.today()
-        start = (today - timedelta(days=7)).isoformat()
-        end = today.isoformat()
-        rows = self.coordinator.storage.lessons_between(
-            self.coordinator.account_id, start, end
-        )
-        return sum(1 for r in rows if (r.get("lstext") or r.get("lstext_manual_override")))
+        return len(self._missed())
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        if not self._is_sick():
-            return {"hint": "Aktiviere input_boolean.kind_<name>_krank, um den verpassten Stoff zu sehen."}
-        today = date.today()
-        start = (today - timedelta(days=7)).isoformat()
-        end = today.isoformat()
-        rows = self.coordinator.storage.lessons_between(
-            self.coordinator.account_id, start, end
-        )
+        rows = self._missed()
         return {
             "items": [
                 {
                     "date": r.get("date"),
+                    "start": r.get("start_time"),
                     "subject": r.get("subject_name"),
-                    "lstext": r.get("lstext_manual_override") or r.get("lstext"),
+                    "teacher": r.get("teacher_name"),
+                    "absence_reason": r.get("absence_reason"),
+                    "lstext": r.get("lstext_manual_override") or r.get("lstext") or "",
                 }
                 for r in rows
-                if (r.get("lstext") or r.get("lstext_manual_override"))
             ]
         }
+
+
+class FehlzeitenSchuljahrSensor(_Base):
+    _attr_icon = "mdi:calendar-remove"
+
+    def __init__(self, coordinator: UntisCoordinator, entry: ConfigEntry, slug: str) -> None:
+        super().__init__(coordinator, entry, slug)
+        self._attr_unique_id = f"{entry.entry_id}_fehlzeiten_schuljahr"
+        self._attr_translation_key = "fehlzeiten_schuljahr"
+        self._attr_name = "Fehlzeiten Schuljahr"
+
+    def _absences(self) -> list[dict[str, Any]]:
+        today = date.today()
+        start = _school_year_start(today).isoformat()
+        end = (today + timedelta(days=14)).isoformat()
+        return self.coordinator.storage.absences_between(
+            self.coordinator.account_id, start, end
+        )
+
+    @property
+    def native_value(self) -> int:
+        return len(self._absences())
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        rows = self._absences()
+        unexcused = [r for r in rows if not r.get("is_excused")]
+        return {
+            "unexcused_count": len(unexcused),
+            "items": [
+                {
+                    "start_date": r.get("start_date"),
+                    "end_date": r.get("end_date"),
+                    "start_time": r.get("start_time"),
+                    "end_time": r.get("end_time"),
+                    "reason": r.get("reason"),
+                    "text": r.get("text"),
+                    "is_excused": bool(r.get("is_excused")),
+                }
+                for r in rows[:50]
+            ],
+        }
+
+
+class StundenplanAenderungenSensor(_Base):
+    """Zählt alle Stundenplan-Änderungen der letzten 7 Tage.
+
+    Greift auf das ``lesson_snapshots``-Change-Log zu — also alle
+    Vertretungen, Raumwechsel, Ausfälle, Lehrstoff-Updates und
+    retroaktive Einträge die der Coordinator beobachtet hat.
+    """
+
+    _attr_icon = "mdi:calendar-alert"
+
+    def __init__(self, coordinator: UntisCoordinator, entry: ConfigEntry, slug: str) -> None:
+        super().__init__(coordinator, entry, slug)
+        self._attr_unique_id = f"{entry.entry_id}_stundenplan_aenderungen"
+        self._attr_translation_key = "stundenplan_aenderungen"
+        self._attr_name = "Stundenplan-Änderungen (7 Tage)"
+
+    def _changes(self) -> list[dict[str, Any]]:
+        since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat(timespec="seconds")
+        return self.coordinator.storage.recent_lesson_changes(
+            self.coordinator.account_id, since
+        )
+
+    @property
+    def native_value(self) -> int:
+        return len(self._changes())
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        rows = self._changes()
+        items = []
+        for r in rows[:50]:
+            try:
+                types = json.loads(r.get("change_types_json") or "[]")
+            except ValueError:
+                types = []
+            items.append(
+                {
+                    "captured_at": r.get("captured_at"),
+                    "date": r.get("date"),
+                    "start": r.get("start_time"),
+                    "subject": r.get("subject_name"),
+                    "teacher": r.get("teacher_name"),
+                    "teacher_orig": r.get("teacher_orig_name"),
+                    "room": r.get("room"),
+                    "room_orig": r.get("room_orig"),
+                    "code": r.get("code") or "",
+                    "change_types": types,
+                }
+            )
+        return {"items": items}

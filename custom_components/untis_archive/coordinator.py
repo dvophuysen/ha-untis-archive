@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date, timedelta
 from pathlib import Path
@@ -13,6 +14,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import UntisApiError, UntisAuthError, UntisClient
 from .const import (
+    ABSENCE_WINDOW_DAYS_BACK,
+    ABSENCE_WINDOW_DAYS_FORWARD,
     CONF_PASSWORD,
     CONF_SCHOOL,
     CONF_SERVER,
@@ -22,10 +25,12 @@ from .const import (
     DB_SUBDIR,
     DOMAIN,
     UPDATE_INTERVAL_HOURS,
-    WINDOW_DAYS,
+    WINDOW_DAYS_BACK,
+    WINDOW_DAYS_FORWARD,
 )
 from .storage import (
     UntisStorage,
+    collect_absences,
     collect_homework,
     normalize_period,
 )
@@ -85,8 +90,10 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         data = self._entry.data
         today = date.today()
-        start = today - timedelta(days=WINDOW_DAYS)
-        end = today + timedelta(days=WINDOW_DAYS)
+        start = today - timedelta(days=WINDOW_DAYS_BACK)
+        end = today + timedelta(days=WINDOW_DAYS_FORWARD)
+        absence_start = today - timedelta(days=ABSENCE_WINDOW_DAYS_BACK)
+        absence_end = today + timedelta(days=ABSENCE_WINDOW_DAYS_FORWARD)
 
         client = UntisClient(
             data[CONF_SERVER],
@@ -103,12 +110,37 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             elem_id = data.get(CONF_STUDENT_ID) or session.person_id
             elem_type = session.person_type
 
+            # Polling optimisation: skip the (expensive) timetable +
+            # period/info pass when the server reports the same import
+            # timestamp as on our previous pull. Homework and absences
+            # come from independent endpoints and are still refreshed.
             try:
-                raw_timetable = await client.get_timetable(
-                    start, end, elem_id=elem_id, elem_type=elem_type
-                )
+                latest_import = await client.get_latest_import_time()
             except UntisApiError as err:
-                raise UpdateFailed(f"Stundenplan-Abruf fehlgeschlagen: {err}") from err
+                _LOGGER.debug("getLatestImportTime failed: %s", err)
+                latest_import = None
+            previous_import = await self.hass.async_add_executor_job(
+                self.storage.get_latest_import_time, self.account_id
+            )
+            timetable_dirty = (
+                latest_import is None
+                or previous_import is None
+                or latest_import != previous_import
+            )
+
+            raw_timetable: list[dict[str, Any]] = []
+            if timetable_dirty:
+                try:
+                    raw_timetable = await client.get_timetable(
+                        start, end, elem_id=elem_id, elem_type=elem_type
+                    )
+                except UntisApiError as err:
+                    raise UpdateFailed(f"Stundenplan-Abruf fehlgeschlagen: {err}") from err
+            else:
+                _LOGGER.debug(
+                    "Stundenplan unverändert (import_time=%s), Pass übersprungen",
+                    latest_import,
+                )
 
             inserted = updated = unchanged = 0
             periods_needing_topic: list[dict[str, Any]] = []
@@ -154,17 +186,27 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     topic_failed += 1
                     continue
                 lstext = _extract_lstext(info)
-                if not lstext:
-                    continue
-                lesson_with_topic = {**lesson, "lstext": lstext}
-                # is_supervision_guess re-evaluated with the new lstext
-                lesson_with_topic["is_supervision_guess"] = bool(
-                    lesson["code"] == "irregular" and not lstext
-                )
+                # Archive the full period/info payload even when empty —
+                # it contains exam, attachments, lessonInfo etc. Only
+                # touch lstext / supervision_guess when we actually got
+                # a Lehrstoff body back, so no-op fetches don't show up
+                # as spurious change events.
+                update: dict[str, Any] = {
+                    "untis_period_id": lesson["untis_period_id"],
+                    "date": lesson["date"],
+                    "start_time": lesson["start_time"],
+                    "end_time": lesson["end_time"],
+                    "period_info_json": json.dumps(info, ensure_ascii=False, default=str),
+                }
+                if lstext:
+                    update["lstext"] = lstext
+                    update["is_supervision_guess"] = bool(
+                        lesson["code"] == "irregular" and not lstext
+                    )
+                    topic_fetched += 1
                 await self.hass.async_add_executor_job(
-                    self.storage.upsert_lesson, self.account_id, lesson_with_topic
+                    self.storage.upsert_lesson, self.account_id, update
                 )
-                topic_fetched += 1
 
             hw_inserted = hw_updated = hw_unchanged = 0
             try:
@@ -188,9 +230,102 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 else:
                     hw_unchanged += 1
 
+            abs_inserted = abs_updated = 0
+            try:
+                raw_absences = await client.get_absences(absence_start, absence_end)
+            except UntisApiError as err:
+                _LOGGER.warning("Fehlzeiten-Abruf fehlgeschlagen: %s", err)
+                raw_absences = {}
+
+            for absence in collect_absences(raw_absences):
+                try:
+                    res = await self.hass.async_add_executor_job(
+                        self.storage.upsert_absence, self.account_id, absence
+                    )
+                except Exception:  # noqa: BLE001
+                    _LOGGER.debug("absence upsert failed for %r", absence, exc_info=True)
+                    continue
+                if res == "inserted":
+                    abs_inserted += 1
+                elif res == "updated":
+                    abs_updated += 1
+
+            # Re-derive was_absent for every lesson in the pulled window so
+            # newly arrived absences immediately propagate to the sensors.
+            flagged_absent = await self.hass.async_add_executor_job(
+                self.storage.recompute_attendance,
+                self.account_id,
+                start.isoformat(),
+                end.isoformat(),
+            )
+
+            # Master / Stammdaten — refreshed once per pull cycle and
+            # accumulated across the entire school career. Mid-year
+            # changes (Klassenlehrer-Wechsel durch Langzeiterkrankung,
+            # Klassenwechsel, Wiederholung der Jahrgangsstufe) hinterlassen
+            # einen Snapshot in master_snapshots; die Enrollment-Tabelle
+            # bildet die (Schuljahr × Klasse)-Historie pro Kind ab.
+            schoolyear_id: int | None = None
+            try:
+                schoolyear = await client.get_current_schoolyear()
+                await self.hass.async_add_executor_job(
+                    self.storage.upsert_schoolyear, self.account_id, schoolyear
+                )
+                if isinstance(schoolyear, dict) and schoolyear.get("id"):
+                    schoolyear_id = int(schoolyear["id"])
+            except UntisApiError as err:
+                _LOGGER.warning("Schuljahr-Abruf fehlgeschlagen: %s", err)
+
+            try:
+                teachers = await client.get_teachers()
+                await self.hass.async_add_executor_job(
+                    self.storage.upsert_teachers, self.account_id, teachers
+                )
+            except UntisApiError as err:
+                _LOGGER.warning("Lehrer-Master-Abruf fehlgeschlagen: %s", err)
+
+            try:
+                klassen = await client.get_klassen()
+                await self.hass.async_add_executor_job(
+                    self.storage.upsert_own_klasse,
+                    self.account_id,
+                    klassen,
+                    session.klasse_id,
+                )
+            except UntisApiError as err:
+                _LOGGER.warning("Klassen-Master-Abruf fehlgeschlagen: %s", err)
+
+            try:
+                holidays = await client.get_holidays()
+                await self.hass.async_add_executor_job(
+                    self.storage.upsert_holidays, self.account_id, holidays
+                )
+            except UntisApiError as err:
+                _LOGGER.warning("Ferien-Abruf fehlgeschlagen: %s", err)
+
+            await self.hass.async_add_executor_job(
+                self.storage.record_enrollment,
+                self.account_id,
+                schoolyear_id,
+                session.klasse_id,
+            )
+
+            if latest_import is not None:
+                await self.hass.async_add_executor_job(
+                    self.storage.set_latest_import_time,
+                    self.account_id,
+                    latest_import,
+                )
+
+            # Mark this account as having completed a full pull so the
+            # next cycle can flag retroactive additions.
+            await self.hass.async_add_executor_job(
+                self.storage.mark_pull_complete, self.account_id
+            )
+
             _LOGGER.info(
                 "Pull %s: lessons %d/%d/%d (new/upd/same), topics %d (fail %d), "
-                "homework %d/%d/%d",
+                "homework %d/%d/%d, absences %d/%d, attendance flagged=%d",
                 self._entry.title,
                 inserted,
                 updated,
@@ -200,6 +335,9 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 hw_inserted,
                 hw_updated,
                 hw_unchanged,
+                abs_inserted,
+                abs_updated,
+                flagged_absent,
             )
 
             return {
@@ -210,6 +348,8 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "updated": hw_updated,
                     "unchanged": hw_unchanged,
                 },
+                "absences": {"inserted": abs_inserted, "updated": abs_updated},
+                "attendance": {"flagged_absent": flagged_absent},
             }
         finally:
             await client.close()
@@ -218,25 +358,43 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 def _extract_lstext(period_info: dict[str, Any]) -> str:
     """Pull the lesson topic body out of the /api/public/period/info payload.
 
-    Field names vary slightly between WebUntis versions. We try the
-    common candidates in order.
+    The shape we see on the GaW instance is::
+
+        {"data": {"blocks": [[{"lessonTopic": {"text": "..."}, ...}]]}}
+
+    `blocks` is a list of block-rows (one per parallel lesson grouping);
+    each row is a list of period blocks. We take the first non-empty
+    lessonTopic.text we encounter and also accept a few legacy shapes as
+    a fallback.
     """
     if not isinstance(period_info, dict):
         return ""
-    candidates: list[Any] = []
     data = period_info.get("data") if isinstance(period_info.get("data"), dict) else period_info
+    if not isinstance(data, dict):
+        return ""
+
+    # Primary: data.blocks[*][*].lessonTopic.text
+    blocks = data.get("blocks")
+    if isinstance(blocks, list):
+        for row in blocks:
+            items = row if isinstance(row, list) else [row]
+            for block in items:
+                if not isinstance(block, dict):
+                    continue
+                topic = block.get("lessonTopic")
+                if isinstance(topic, dict):
+                    text = (topic.get("text") or "").strip()
+                    if text:
+                        return text
+
+    # Legacy / alternative shapes seen in other WebUntis versions.
     for key in ("lessonTopic", "lstext", "topic", "lesson_text"):
-        if key in data and data[key]:
-            return str(data[key]).strip()
-    # Some installations wrap the body in a nested "topic" object.
-    nested = data.get("topic") if isinstance(data, dict) else None
-    if isinstance(nested, dict):
-        for key in ("text", "value", "topic"):
-            if key in nested and nested[key]:
-                return str(nested[key]).strip()
-    # last resort: look for any field that ends in "Text"
-    if isinstance(data, dict):
-        for key, value in data.items():
-            if key.lower().endswith("text") and isinstance(value, str) and value.strip():
-                candidates.append(value)
-    return (candidates[0].strip() if candidates else "")
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        if isinstance(value, dict):
+            for inner in ("text", "value", "topic"):
+                v = value.get(inner)
+                if isinstance(v, str) and v.strip():
+                    return v.strip()
+    return ""

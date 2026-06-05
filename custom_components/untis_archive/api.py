@@ -17,6 +17,7 @@ accept, as long as the ``schoolname`` cookie is set alongside.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 from dataclasses import dataclass
@@ -88,14 +89,27 @@ class UntisClient:
         self._username = username
         self._password = password
         self._client_name = client_name
+        # httpx.AsyncClient is created lazily inside _ensure_http() because
+        # its constructor loads the CA certificate bundle synchronously
+        # (ssl.SSLContext.load_verify_locations) — doing that on the event
+        # loop trips Home Assistant's "blocking call detected" guard.
+        self._http: httpx.AsyncClient | None = http_client
         self._owns_http = http_client is None
-        self._http = http_client or httpx.AsyncClient(
-            base_url=f"https://{self._server}",
-            timeout=30.0,
-            follow_redirects=True,
-            headers={"User-Agent": f"{client_name}/0.1"},
-        )
         self._session: UntisSession | None = None
+
+    async def _ensure_http(self) -> httpx.AsyncClient:
+        if self._http is None:
+            loop = asyncio.get_running_loop()
+            self._http = await loop.run_in_executor(
+                None,
+                lambda: httpx.AsyncClient(
+                    base_url=f"https://{self._server}",
+                    timeout=30.0,
+                    follow_redirects=True,
+                    headers={"User-Agent": f"{self._client_name}/0.1"},
+                ),
+            )
+        return self._http
 
     async def __aenter__(self) -> "UntisClient":
         await self.login()
@@ -126,8 +140,9 @@ class UntisClient:
             },
             "jsonrpc": "2.0",
         }
+        http = await self._ensure_http()
         try:
-            resp = await self._http.post(
+            resp = await http.post(
                 "/WebUntis/jsonrpc.do",
                 params={"school": self._school},
                 json=payload,
@@ -135,20 +150,22 @@ class UntisClient:
         except httpx.HTTPError as err:
             raise UntisAuthError(f"Login request failed: {err}") from err
 
-        if resp.status_code != 200:
-            raise UntisAuthError(f"Login HTTP {resp.status_code}: {resp.text[:200]}")
-
+        # WebUntis returns the JSON-RPC error envelope with non-200 statuses too
+        # (e.g. HTTP 404 for an unknown school carries code=-8500). Parse the body
+        # first; only fall back to a status-code message if it isn't JSON-RPC.
         try:
             data = resp.json()
         except ValueError as err:
             raise UntisAuthError(
-                f"Login response was not JSON (likely wrong server URL): {resp.text[:200]}"
+                f"Login HTTP {resp.status_code}: {resp.text[:200]}"
             ) from err
-        if "error" in data:
+        if isinstance(data, dict) and "error" in data:
             err_obj = data["error"] or {}
             code = err_obj.get("code") if isinstance(err_obj, dict) else None
             message = err_obj.get("message") if isinstance(err_obj, dict) else str(err_obj)
             raise UntisAuthError(message or f"Login error: {err_obj}", code=code)
+        if resp.status_code != 200:
+            raise UntisAuthError(f"Login HTTP {resp.status_code}: {resp.text[:200]}")
         result = data.get("result") or {}
         try:
             session = UntisSession(
@@ -162,7 +179,7 @@ class UntisClient:
 
         # The JSESSIONID is already in the cookie jar via Set-Cookie.
         # The schoolname cookie is needed by /api/public/* endpoints.
-        self._http.cookies.set("schoolname", _schoolname_cookie(self._school))
+        http.cookies.set("schoolname", _schoolname_cookie(self._school))
 
         self._session = session
         _LOGGER.debug("Logged in: personType=%s personId=%s", session.person_type, session.person_id)
@@ -180,8 +197,9 @@ class UntisClient:
 
     async def close(self) -> None:
         await self.logout()
-        if self._owns_http:
+        if self._owns_http and self._http is not None:
             await self._http.aclose()
+            self._http = None
 
     async def _rpc(self, method: str, params: dict[str, Any] | list[Any]) -> Any:
         body = {
@@ -276,11 +294,65 @@ class UntisClient:
             )
         return resp.json()
 
+    async def get_teachers(self) -> list[dict[str, Any]]:
+        """Master list of all teachers at the school (~99 at GaW).
+
+        Needed so we can resolve a Kürzel like 'BRU' (which Untis attaches
+        as ``orgname`` to substitutions) to a full name. Required because
+        the substitution payload only carries the Kürzel, not the longname.
+        """
+        return await self._rpc("getTeachers", {}) or []
+
+    async def get_klassen(self) -> list[dict[str, Any]]:
+        return await self._rpc("getKlassen", {}) or []
+
+    async def get_current_schoolyear(self) -> dict[str, Any]:
+        return await self._rpc("getCurrentSchoolyear", {}) or {}
+
+    async def get_holidays(self) -> list[dict[str, Any]]:
+        return await self._rpc("getHolidays", {}) or []
+
+    async def get_latest_import_time(self) -> int | None:
+        """Server-side timestamp (ms since epoch) of the most recent
+        timetable import. Used to skip the timetable pass when nothing
+        new has been imported since our last pull.
+        """
+        result = await self._rpc("getLatestImportTime", {})
+        return int(result) if isinstance(result, (int, float)) else None
+
+    async def get_absences(self, start: date, end: date) -> dict[str, Any]:
+        """Fetch absences for the logged-in student.
+
+        Endpoint: ``/WebUntis/api/classreg/absences/students``. Accepts the
+        whole school year, so this is the one place we can backfill from.
+        Requires YYYYMMDD integer dates and the student id from the session.
+        """
+        s = self.session
+        params = {
+            "startDate": _date_to_untis(start),
+            "endDate": _date_to_untis(end),
+            "studentId": s.person_id,
+            "excuseStatusId": -1,
+            "includeTodaysAbsence": "true",
+        }
+        try:
+            resp = await self._http.get(
+                "/WebUntis/api/classreg/absences/students", params=params
+            )
+        except httpx.HTTPError as err:
+            raise UntisApiError(f"absences fetch failed: {err}") from err
+        if resp.status_code != 200:
+            raise UntisApiError(
+                f"absences HTTP {resp.status_code}: {resp.text[:200]}"
+            )
+        return resp.json()
+
     async def get_homework(self, start: date, end: date) -> dict[str, Any]:
         """Fetch homework entries for the given window."""
+        # Endpoint requires YYYYMMDD integers; ISO strings trigger HTTP 500.
         params = {
-            "startDate": start.isoformat(),
-            "endDate": end.isoformat(),
+            "startDate": _date_to_untis(start),
+            "endDate": _date_to_untis(end),
         }
         try:
             resp = await self._http.get(
