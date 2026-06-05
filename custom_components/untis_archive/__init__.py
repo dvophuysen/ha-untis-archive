@@ -22,6 +22,7 @@ PLATFORMS: list[str] = ["sensor", "calendar"]
 
 SERVICE_EXPORT_MARKDOWN = "export_markdown"
 SERVICE_MARK_LESSON = "mark_lesson"
+SERVICE_REFRESH = "refresh"
 
 EXPORT_SCHEMA = vol.Schema(
     {
@@ -35,6 +36,12 @@ MARK_SCHEMA = vol.Schema(
         vol.Required("lesson_id"): vol.Coerce(int),
         vol.Optional("lstext"): cv.string,
         vol.Optional("is_supervision"): cv.boolean,
+    }
+)
+
+REFRESH_SCHEMA = vol.Schema(
+    {
+        vol.Optional("account"): cv.string,
     }
 )
 
@@ -154,9 +161,25 @@ def _register_services(hass: HomeAssistant) -> None:
         # Trigger a refresh so sensors update.
         await coordinator.async_request_refresh()
 
+    async def refresh(call: ServiceCall) -> None:
+        title = call.data.get("account")
+        if title:
+            coordinator = _find_coordinator_by_title(hass, title)
+            if coordinator is None:
+                raise HomeAssistantError(f"Kein UNTIS-Account mit Anzeigename '{title}'.")
+            await coordinator.async_request_refresh()
+            return
+        # No account given → refresh every configured one in parallel.
+        for bucket in hass.data.get(DOMAIN, {}).values():
+            coord: UntisCoordinator = bucket["coordinator"]
+            await coord.async_request_refresh()
+
     hass.services.async_register(
         DOMAIN, SERVICE_EXPORT_MARKDOWN, export_markdown, schema=EXPORT_SCHEMA
     )
     hass.services.async_register(
         DOMAIN, SERVICE_MARK_LESSON, mark_lesson, schema=MARK_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_REFRESH, refresh, schema=REFRESH_SCHEMA
     )

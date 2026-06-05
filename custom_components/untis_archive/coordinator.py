@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date, timedelta
 from pathlib import Path
@@ -160,17 +161,27 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     topic_failed += 1
                     continue
                 lstext = _extract_lstext(info)
-                if not lstext:
-                    continue
-                lesson_with_topic = {**lesson, "lstext": lstext}
-                # is_supervision_guess re-evaluated with the new lstext
-                lesson_with_topic["is_supervision_guess"] = bool(
-                    lesson["code"] == "irregular" and not lstext
-                )
+                # Archive the full period/info payload even when empty —
+                # it contains exam, attachments, lessonInfo etc. Only
+                # touch lstext / supervision_guess when we actually got
+                # a Lehrstoff body back, so no-op fetches don't show up
+                # as spurious change events.
+                update: dict[str, Any] = {
+                    "untis_period_id": lesson["untis_period_id"],
+                    "date": lesson["date"],
+                    "start_time": lesson["start_time"],
+                    "end_time": lesson["end_time"],
+                    "period_info_json": json.dumps(info, ensure_ascii=False, default=str),
+                }
+                if lstext:
+                    update["lstext"] = lstext
+                    update["is_supervision_guess"] = bool(
+                        lesson["code"] == "irregular" and not lstext
+                    )
+                    topic_fetched += 1
                 await self.hass.async_add_executor_job(
-                    self.storage.upsert_lesson, self.account_id, lesson_with_topic
+                    self.storage.upsert_lesson, self.account_id, update
                 )
-                topic_fetched += 1
 
             hw_inserted = hw_updated = hw_unchanged = 0
             try:
@@ -221,6 +232,12 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.account_id,
                 start.isoformat(),
                 end.isoformat(),
+            )
+
+            # Mark this account as having completed a full pull so the
+            # next cycle can flag retroactive additions.
+            await self.hass.async_add_executor_job(
+                self.storage.mark_pull_complete, self.account_id
             )
 
             _LOGGER.info(

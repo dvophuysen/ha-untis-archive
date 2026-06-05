@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import logging
 import os
 import sys
@@ -157,17 +158,20 @@ async def main() -> int:
                 topic_fail += 1
                 continue
             text = _extract_lstext(info)
-            if not text:
-                continue
-            with_topic = {
-                **lesson,
-                "lstext": text,
-                "is_supervision_guess": bool(
-                    lesson["code"] == "irregular" and not text
-                ),
+            update = {
+                "untis_period_id": lesson["untis_period_id"],
+                "date": lesson["date"],
+                "start_time": lesson["start_time"],
+                "end_time": lesson["end_time"],
+                "period_info_json": json.dumps(info, ensure_ascii=False, default=str),
             }
-            store.upsert_lesson(account_id, with_topic)
-            topic_ok += 1
+            if text:
+                update["lstext"] = text
+                update["is_supervision_guess"] = bool(
+                    lesson["code"] == "irregular" and not text
+                )
+                topic_ok += 1
+            store.upsert_lesson(account_id, update)
         print(f"  Lehrstoff nachgezogen: {topic_ok} (Fehler {topic_fail})")
 
         # --- Hausaufgaben ---
@@ -201,6 +205,7 @@ async def main() -> int:
         )
         print(f"  Lessons als 'abwesend' markiert: {flagged}")
 
+        store.mark_pull_complete(account_id)
         return 0
     finally:
         await client.close()

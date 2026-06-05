@@ -37,3 +37,14 @@ mark_lesson:
       required: false
       selector:
         boolean:
+
+refresh:
+  name: Sofort abrufen
+  description: Stößt einen sofortigen Pull aller (oder eines benannten) UNTIS-Accounts an. Holt Stundenplan, Lehrstoff, Hausaufgaben und Fehlzeiten.
+  fields:
+    account:
+      name: Kind (optional)
+      description: Wenn leer, werden alle eingerichteten Accounts aktualisiert.
+      required: false
+      selector:
+        text:
