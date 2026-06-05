@@ -42,6 +42,12 @@ Pro Kind / Account:
   Toggle mehr nötig)
 - Sensor **„Fehlzeiten Schuljahr"** — Gesamtzahl + unentschuldigte
 - Sensor **„Stundenplan-Änderungen (7 Tage)"** — Anzahl + Liste
+- Sensor **„Fach-Verlauf"** — Lehrstoff gruppiert pro Fach im Schuljahr,
+  Datenquelle für das Klassenarbeits-Lernen im Dashboard
+
+Optional gibt es ein vorgefertigtes Lovelace-Dashboard mit Kind-Umschaltung,
+Monatskalender, Fehlzeiten-Auswertung und Pro-Fach-Lernverlauf:
+[`docs/dashboard.md`](docs/dashboard.md).
 
 Services:
 
