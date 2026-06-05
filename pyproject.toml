@@ -1,0 +1,25 @@
+[project]
+name = "ha-untis-archive"
+version = "0.1.0"
+description = "Home Assistant custom component that archives WebUntis lessons, substitutions and homework into a local SQLite database."
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
