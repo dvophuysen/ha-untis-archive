@@ -1,7 +1,7 @@
 {
   "domain": "untis_archive",
   "name": "UNTIS Archive",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "config_flow": true,
   "documentation": "https://github.com/dvophuysen/ha-untis-archive",
   "issue_tracker": "https://github.com/dvophuysen/ha-untis-archive/issues",

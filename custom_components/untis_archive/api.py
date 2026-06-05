@@ -17,6 +17,7 @@ accept, as long as the ``schoolname`` cookie is set alongside.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 from dataclasses import dataclass
@@ -88,14 +89,27 @@ class UntisClient:
         self._username = username
         self._password = password
         self._client_name = client_name
+        # httpx.AsyncClient is created lazily inside _ensure_http() because
+        # its constructor loads the CA certificate bundle synchronously
+        # (ssl.SSLContext.load_verify_locations) — doing that on the event
+        # loop trips Home Assistant's "blocking call detected" guard.
+        self._http: httpx.AsyncClient | None = http_client
         self._owns_http = http_client is None
-        self._http = http_client or httpx.AsyncClient(
-            base_url=f"https://{self._server}",
-            timeout=30.0,
-            follow_redirects=True,
-            headers={"User-Agent": f"{client_name}/0.1"},
-        )
         self._session: UntisSession | None = None
+
+    async def _ensure_http(self) -> httpx.AsyncClient:
+        if self._http is None:
+            loop = asyncio.get_running_loop()
+            self._http = await loop.run_in_executor(
+                None,
+                lambda: httpx.AsyncClient(
+                    base_url=f"https://{self._server}",
+                    timeout=30.0,
+                    follow_redirects=True,
+                    headers={"User-Agent": f"{self._client_name}/0.1"},
+                ),
+            )
+        return self._http
 
     async def __aenter__(self) -> "UntisClient":
         await self.login()
@@ -126,8 +140,9 @@ class UntisClient:
             },
             "jsonrpc": "2.0",
         }
+        http = await self._ensure_http()
         try:
-            resp = await self._http.post(
+            resp = await http.post(
                 "/WebUntis/jsonrpc.do",
                 params={"school": self._school},
                 json=payload,
@@ -164,7 +179,7 @@ class UntisClient:
 
         # The JSESSIONID is already in the cookie jar via Set-Cookie.
         # The schoolname cookie is needed by /api/public/* endpoints.
-        self._http.cookies.set("schoolname", _schoolname_cookie(self._school))
+        http.cookies.set("schoolname", _schoolname_cookie(self._school))
 
         self._session = session
         _LOGGER.debug("Logged in: personType=%s personId=%s", session.person_type, session.person_id)
@@ -182,8 +197,9 @@ class UntisClient:
 
     async def close(self) -> None:
         await self.logout()
-        if self._owns_http:
+        if self._owns_http and self._http is not None:
             await self._http.aclose()
+            self._http = None
 
     async def _rpc(self, method: str, params: dict[str, Any] | list[Any]) -> Any:
         body = {
