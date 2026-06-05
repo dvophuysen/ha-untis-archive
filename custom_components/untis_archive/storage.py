@@ -181,6 +181,88 @@ CREATE TABLE IF NOT EXISTS absences (
 );
 CREATE INDEX IF NOT EXISTS idx_absences_account_date
     ON absences(account_id, start_date, end_date);
+
+-- ------------------------------------------------------------------
+-- Master / Stammdaten tables. Column names mirror the WebUntis JSON
+-- response shape 1:1 (camelCase) so the mapping back to the source
+-- API stays obvious and stable across schema migrations on their side.
+-- Each row also carries payload_json for forward compatibility.
+-- ------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS master_teachers (
+    account_id INTEGER NOT NULL,
+    id INTEGER NOT NULL,           -- Untis teacher id
+    name TEXT,                     -- Kürzel ("BRU")
+    foreName TEXT,                 -- Vorname
+    longName TEXT,                 -- Nachname
+    title TEXT,
+    active INTEGER,
+    dids_json TEXT,                -- array of department ids
+    payload_json TEXT NOT NULL,
+    first_seen_at TEXT NOT NULL,
+    last_updated_at TEXT NOT NULL,
+    PRIMARY KEY (account_id, id),
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS master_klasse (
+    account_id INTEGER NOT NULL,
+    id INTEGER NOT NULL,           -- Untis klasse id (only the own klasse is stored)
+    name TEXT,
+    longName TEXT,
+    active INTEGER,
+    teacher1 INTEGER,              -- Untis teacher id (Klassenlehrer)
+    teacher2 INTEGER,              -- Untis teacher id (Co-Klassenlehrer)
+    payload_json TEXT NOT NULL,
+    first_seen_at TEXT NOT NULL,
+    last_updated_at TEXT NOT NULL,
+    PRIMARY KEY (account_id, id),
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS master_schoolyear (
+    account_id INTEGER NOT NULL,
+    id INTEGER NOT NULL,
+    name TEXT,
+    startDate TEXT,                -- ISO YYYY-MM-DD
+    endDate TEXT,
+    payload_json TEXT NOT NULL,
+    first_seen_at TEXT NOT NULL,
+    last_updated_at TEXT NOT NULL,
+    PRIMARY KEY (account_id, id),
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS master_holidays (
+    account_id INTEGER NOT NULL,
+    id INTEGER NOT NULL,
+    name TEXT,
+    longName TEXT,
+    startDate TEXT,                -- ISO YYYY-MM-DD
+    endDate TEXT,
+    payload_json TEXT NOT NULL,
+    first_seen_at TEXT NOT NULL,
+    last_updated_at TEXT NOT NULL,
+    PRIMARY KEY (account_id, id),
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+-- Klassenzugehörigkeit pro Schuljahr. Eine Zeile pro (Kind, Schuljahr,
+-- Klasse) — bildet sowohl die normale Aufstockung Jahr-für-Jahr ab als
+-- auch Sonderfälle: Klassenwechsel innerhalb eines Schuljahrs oder
+-- Wiederholung einer Jahrgangsstufe (neuer schoolyear_id, ggf. selbe
+-- klasse_id).
+CREATE TABLE IF NOT EXISTS enrollment (
+    account_id INTEGER NOT NULL,
+    schoolyear_id INTEGER NOT NULL,
+    klasse_id INTEGER NOT NULL,
+    first_seen_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    PRIMARY KEY (account_id, schoolyear_id, klasse_id),
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_enrollment_account_year
+    ON enrollment(account_id, schoolyear_id);
 """
 
 
@@ -356,6 +438,7 @@ class UntisStorage:
             ],
             "accounts": [
                 ("last_pull_completed_at", "TEXT"),
+                ("latest_import_time", "INTEGER"),
             ],
         }
         for table, cols in _MIGRATIONS.items():
@@ -426,6 +509,217 @@ class UntisStorage:
                 (entry_id, name, server, school, username, student_id, student_type, _now()),
             )
             return int(cur.lastrowid)
+
+    # ---- master data ----------------------------------------------------
+
+    # Mapping: master table → (id column, copied scalar columns).
+    # Scalar columns mirror the WebUntis JSON field names verbatim so the
+    # 1:1 correspondence is obvious. Lists/dicts on the source side land
+    # in payload_json (always written) and, when relevant, in a *_json
+    # sidecar column.
+    _MASTER_TABLES: dict[str, tuple[str, ...]] = {
+        "master_teachers": ("name", "foreName", "longName", "title", "active"),
+        "master_klasse": ("name", "longName", "active", "teacher1", "teacher2"),
+        "master_schoolyear": ("name", "startDate", "endDate"),
+        "master_holidays": ("name", "longName", "startDate", "endDate"),
+    }
+
+    def _upsert_master(
+        self,
+        table: str,
+        account_id: int,
+        records: list[dict[str, Any]],
+        *,
+        date_cols: tuple[str, ...] = (),
+    ) -> tuple[int, int]:
+        """Upsert a list of master records, returning (seen, written).
+
+        Master rows accumulate across the kid's entire school career —
+        we never delete here. A teacher who leaves the school, an old
+        klasse the kid was previously in, or a schoolyear that ended:
+        all stay in the DB so the historical lessons referencing them
+        keep resolving. The ``last_updated_at`` column tells you when
+        we last saw a row alive in the API.
+        """
+        if records is None:
+            records = []
+        cols = self._MASTER_TABLES[table]
+        seen_ids: set[int] = set()
+        now = _now()
+        written = 0
+        with self._tx() as cur:
+            for rec in records:
+                rid = rec.get("id")
+                if rid is None:
+                    continue
+                rid = int(rid)
+                seen_ids.add(rid)
+
+                values: list[Any] = []
+                for col in cols:
+                    v = rec.get(col)
+                    if col in date_cols and isinstance(v, int):
+                        v = parse_untis_date(v)
+                    values.append(v)
+                # dids -> JSON sidecar where applicable
+                dids_json = (
+                    json.dumps(rec.get("dids"), ensure_ascii=False)
+                    if "dids" in rec
+                    else None
+                )
+
+                cur.execute(
+                    f"SELECT * FROM {table} WHERE account_id=? AND id=?",
+                    (account_id, rid),
+                )
+                existing = cur.fetchone()
+
+                extra_cols: tuple[str, ...] = ()
+                extra_vals: tuple[Any, ...] = ()
+                if table == "master_teachers":
+                    extra_cols = ("dids_json",)
+                    extra_vals = (dids_json,)
+
+                if existing is not None:
+                    # Master rows are overwritten in place — only the
+                    # current school view is kept. Historical context
+                    # (who taught what when) is already captured in the
+                    # lessons themselves (each lesson stores its
+                    # teacher_untis_id at the time it happened), so a
+                    # separate master snapshot would be redundant.
+                    set_clause = ", ".join(
+                        f"{c}=?" for c in (*cols, *extra_cols, "payload_json", "last_updated_at")
+                    )
+                    cur.execute(
+                        f"UPDATE {table} SET {set_clause} "
+                        f"WHERE account_id=? AND id=?",
+                        (
+                            *values,
+                            *extra_vals,
+                            json.dumps(rec, ensure_ascii=False, default=str),
+                            now,
+                            account_id,
+                            rid,
+                        ),
+                    )
+                else:
+                    all_cols = (
+                        "account_id",
+                        "id",
+                        *cols,
+                        *extra_cols,
+                        "payload_json",
+                        "first_seen_at",
+                        "last_updated_at",
+                    )
+                    placeholders = ", ".join(["?"] * len(all_cols))
+                    cur.execute(
+                        f"INSERT INTO {table} ({', '.join(all_cols)}) "
+                        f"VALUES ({placeholders})",
+                        (
+                            account_id,
+                            rid,
+                            *values,
+                            *extra_vals,
+                            json.dumps(rec, ensure_ascii=False, default=str),
+                            now,
+                            now,
+                        ),
+                    )
+                written += 1
+        return len(seen_ids), written
+
+    def upsert_teachers(
+        self, account_id: int, teachers: list[dict[str, Any]]
+    ) -> tuple[int, int]:
+        return self._upsert_master("master_teachers", account_id, teachers)
+
+    def upsert_own_klasse(
+        self, account_id: int, klassen: list[dict[str, Any]], own_klasse_id: int | None
+    ) -> tuple[int, int]:
+        """Persist the child's current klasse alongside any previous
+        klassen they were enrolled in. The full school-wide Klassen list
+        is filtered down to the one row the kid currently belongs to —
+        but historical rows from earlier years stay (no delete).
+        """
+        own: list[dict[str, Any]] = []
+        if own_klasse_id is not None:
+            own = [k for k in klassen if int(k.get("id", 0)) == int(own_klasse_id)]
+        return self._upsert_master("master_klasse", account_id, own)
+
+    def upsert_schoolyear(
+        self, account_id: int, schoolyear: dict[str, Any] | None
+    ) -> tuple[int, int]:
+        """Persist the current schoolyear. Past schoolyears accumulate
+        naturally as the kid progresses year by year.
+        """
+        records = [schoolyear] if schoolyear else []
+        return self._upsert_master(
+            "master_schoolyear",
+            account_id,
+            records,
+            date_cols=("startDate", "endDate"),
+        )
+
+    def upsert_holidays(
+        self, account_id: int, holidays: list[dict[str, Any]]
+    ) -> tuple[int, int]:
+        return self._upsert_master(
+            "master_holidays",
+            account_id,
+            holidays,
+            date_cols=("startDate", "endDate"),
+        )
+
+    def record_enrollment(
+        self,
+        account_id: int,
+        schoolyear_id: int | None,
+        klasse_id: int | None,
+    ) -> str:
+        """Record the (schoolyear, klasse) pair the kid is currently
+        enrolled in. Captures normal year transitions (5E → 6E),
+        repeating a grade (new schoolyear, possibly same klasse_id),
+        and mid-year class changes (new klasse_id, same schoolyear).
+        """
+        if schoolyear_id is None or klasse_id is None:
+            return "skipped"
+        now = _now()
+        with self._tx() as cur:
+            cur.execute(
+                """SELECT 1 FROM enrollment
+                   WHERE account_id=? AND schoolyear_id=? AND klasse_id=?""",
+                (account_id, schoolyear_id, klasse_id),
+            )
+            if cur.fetchone():
+                cur.execute(
+                    """UPDATE enrollment SET last_seen_at=?
+                       WHERE account_id=? AND schoolyear_id=? AND klasse_id=?""",
+                    (now, account_id, schoolyear_id, klasse_id),
+                )
+                return "updated"
+            cur.execute(
+                """INSERT INTO enrollment
+                   (account_id, schoolyear_id, klasse_id,
+                    first_seen_at, last_seen_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (account_id, schoolyear_id, klasse_id, now, now),
+            )
+            return "inserted"
+
+    def get_latest_import_time(self, account_id: int) -> int | None:
+        row = self._conn.execute(
+            "SELECT latest_import_time FROM accounts WHERE id=?",
+            (account_id,),
+        ).fetchone()
+        return int(row["latest_import_time"]) if row and row["latest_import_time"] else None
+
+    def set_latest_import_time(self, account_id: int, value: int) -> None:
+        with self._tx() as cur:
+            cur.execute(
+                "UPDATE accounts SET latest_import_time=? WHERE id=?",
+                (value, account_id),
+            )
 
     def mark_pull_complete(self, account_id: int) -> None:
         """Stamp the account as having completed at least one full pull.

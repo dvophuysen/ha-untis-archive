@@ -124,8 +124,18 @@ async def main() -> int:
         abs_end = today + timedelta(days=const.ABSENCE_WINDOW_DAYS_FORWARD)
 
         # --- Stundenplan ---
+        # Optimierung: skip wenn Untis seit dem letzten Pull nichts neu
+        # importiert hat. Lehrstoff/Periodinfo nur dann nachziehen.
+        latest_import = await client.get_latest_import_time()
+        previous_import = store.get_latest_import_time(account_id)
+        timetable_dirty = (latest_import is None or previous_import is None
+                           or latest_import != previous_import)
         print(f"\n--- Stundenplan {tt_start} – {tt_end} ---")
-        raw_tt = await client.get_timetable(tt_start, tt_end)
+        if not timetable_dirty:
+            print(f"  Stundenplan unverändert (import_time={latest_import}), Pass übersprungen")
+            raw_tt = []
+        else:
+            raw_tt = await client.get_timetable(tt_start, tt_end)
         ins = upd = same = 0
         need_topic: list[dict] = []
         for raw in raw_tt:
@@ -204,6 +214,47 @@ async def main() -> int:
             account_id, tt_start.isoformat(), tt_end.isoformat()
         )
         print(f"  Lessons als 'abwesend' markiert: {flagged}")
+
+        # --- Stammdaten ---
+        print("\n--- Stammdaten ---")
+        schoolyear_id = None
+        try:
+            sy = await client.get_current_schoolyear()
+            store.upsert_schoolyear(account_id, sy)
+            if isinstance(sy, dict) and sy.get("id"):
+                schoolyear_id = int(sy["id"])
+                print(f"  Schuljahr: {sy.get('name')} (id={schoolyear_id})")
+        except api.UntisApiError as e:
+            print(f"  Schuljahr FEHLER: {e}")
+        try:
+            teachers = await client.get_teachers()
+            seen, _ = store.upsert_teachers(account_id, teachers)
+            print(f"  Lehrer:    {seen} aktive Lehrer von der Schule")
+        except api.UntisApiError as e:
+            print(f"  Lehrer FEHLER: {e}")
+        try:
+            klassen = await client.get_klassen()
+            seen, _ = store.upsert_own_klasse(account_id, klassen, session.klasse_id)
+            print(f"  Klassen:   {seen} eigene Klasse(n) gespeichert (klasse_id={session.klasse_id})")
+        except api.UntisApiError as e:
+            print(f"  Klassen FEHLER: {e}")
+        try:
+            holidays = await client.get_holidays()
+            seen, _ = store.upsert_holidays(account_id, holidays)
+            print(f"  Ferien:    {seen} Einträge")
+        except api.UntisApiError as e:
+            print(f"  Ferien FEHLER: {e}")
+
+        result = store.record_enrollment(account_id, schoolyear_id, session.klasse_id)
+        print(f"  Enrollment-Eintrag: {result}")
+
+        try:
+            lit = await client.get_latest_import_time()
+            if lit is not None:
+                store.set_latest_import_time(account_id, lit)
+                print(f"  latest_import_time = {lit}")
+        except api.UntisApiError:
+            pass
 
         store.mark_pull_complete(account_id)
         return 0

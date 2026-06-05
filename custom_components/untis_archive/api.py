@@ -278,6 +278,32 @@ class UntisClient:
             )
         return resp.json()
 
+    async def get_teachers(self) -> list[dict[str, Any]]:
+        """Master list of all teachers at the school (~99 at GaW).
+
+        Needed so we can resolve a Kürzel like 'BRU' (which Untis attaches
+        as ``orgname`` to substitutions) to a full name. Required because
+        the substitution payload only carries the Kürzel, not the longname.
+        """
+        return await self._rpc("getTeachers", {}) or []
+
+    async def get_klassen(self) -> list[dict[str, Any]]:
+        return await self._rpc("getKlassen", {}) or []
+
+    async def get_current_schoolyear(self) -> dict[str, Any]:
+        return await self._rpc("getCurrentSchoolyear", {}) or {}
+
+    async def get_holidays(self) -> list[dict[str, Any]]:
+        return await self._rpc("getHolidays", {}) or []
+
+    async def get_latest_import_time(self) -> int | None:
+        """Server-side timestamp (ms since epoch) of the most recent
+        timetable import. Used to skip the timetable pass when nothing
+        new has been imported since our last pull.
+        """
+        result = await self._rpc("getLatestImportTime", {})
+        return int(result) if isinstance(result, (int, float)) else None
+
     async def get_absences(self, start: date, end: date) -> dict[str, Any]:
         """Fetch absences for the logged-in student.
 

@@ -110,12 +110,37 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             elem_id = data.get(CONF_STUDENT_ID) or session.person_id
             elem_type = session.person_type
 
+            # Polling optimisation: skip the (expensive) timetable +
+            # period/info pass when the server reports the same import
+            # timestamp as on our previous pull. Homework and absences
+            # come from independent endpoints and are still refreshed.
             try:
-                raw_timetable = await client.get_timetable(
-                    start, end, elem_id=elem_id, elem_type=elem_type
-                )
+                latest_import = await client.get_latest_import_time()
             except UntisApiError as err:
-                raise UpdateFailed(f"Stundenplan-Abruf fehlgeschlagen: {err}") from err
+                _LOGGER.debug("getLatestImportTime failed: %s", err)
+                latest_import = None
+            previous_import = await self.hass.async_add_executor_job(
+                self.storage.get_latest_import_time, self.account_id
+            )
+            timetable_dirty = (
+                latest_import is None
+                or previous_import is None
+                or latest_import != previous_import
+            )
+
+            raw_timetable: list[dict[str, Any]] = []
+            if timetable_dirty:
+                try:
+                    raw_timetable = await client.get_timetable(
+                        start, end, elem_id=elem_id, elem_type=elem_type
+                    )
+                except UntisApiError as err:
+                    raise UpdateFailed(f"Stundenplan-Abruf fehlgeschlagen: {err}") from err
+            else:
+                _LOGGER.debug(
+                    "Stundenplan unverändert (import_time=%s), Pass übersprungen",
+                    latest_import,
+                )
 
             inserted = updated = unchanged = 0
             periods_needing_topic: list[dict[str, Any]] = []
@@ -233,6 +258,64 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 start.isoformat(),
                 end.isoformat(),
             )
+
+            # Master / Stammdaten — refreshed once per pull cycle and
+            # accumulated across the entire school career. Mid-year
+            # changes (Klassenlehrer-Wechsel durch Langzeiterkrankung,
+            # Klassenwechsel, Wiederholung der Jahrgangsstufe) hinterlassen
+            # einen Snapshot in master_snapshots; die Enrollment-Tabelle
+            # bildet die (Schuljahr × Klasse)-Historie pro Kind ab.
+            schoolyear_id: int | None = None
+            try:
+                schoolyear = await client.get_current_schoolyear()
+                await self.hass.async_add_executor_job(
+                    self.storage.upsert_schoolyear, self.account_id, schoolyear
+                )
+                if isinstance(schoolyear, dict) and schoolyear.get("id"):
+                    schoolyear_id = int(schoolyear["id"])
+            except UntisApiError as err:
+                _LOGGER.warning("Schuljahr-Abruf fehlgeschlagen: %s", err)
+
+            try:
+                teachers = await client.get_teachers()
+                await self.hass.async_add_executor_job(
+                    self.storage.upsert_teachers, self.account_id, teachers
+                )
+            except UntisApiError as err:
+                _LOGGER.warning("Lehrer-Master-Abruf fehlgeschlagen: %s", err)
+
+            try:
+                klassen = await client.get_klassen()
+                await self.hass.async_add_executor_job(
+                    self.storage.upsert_own_klasse,
+                    self.account_id,
+                    klassen,
+                    session.klasse_id,
+                )
+            except UntisApiError as err:
+                _LOGGER.warning("Klassen-Master-Abruf fehlgeschlagen: %s", err)
+
+            try:
+                holidays = await client.get_holidays()
+                await self.hass.async_add_executor_job(
+                    self.storage.upsert_holidays, self.account_id, holidays
+                )
+            except UntisApiError as err:
+                _LOGGER.warning("Ferien-Abruf fehlgeschlagen: %s", err)
+
+            await self.hass.async_add_executor_job(
+                self.storage.record_enrollment,
+                self.account_id,
+                schoolyear_id,
+                session.klasse_id,
+            )
+
+            if latest_import is not None:
+                await self.hass.async_add_executor_job(
+                    self.storage.set_latest_import_time,
+                    self.account_id,
+                    latest_import,
+                )
 
             # Mark this account as having completed a full pull so the
             # next cycle can flag retroactive additions.
