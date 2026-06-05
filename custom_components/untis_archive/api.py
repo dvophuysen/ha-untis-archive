@@ -135,20 +135,22 @@ class UntisClient:
         except httpx.HTTPError as err:
             raise UntisAuthError(f"Login request failed: {err}") from err
 
-        if resp.status_code != 200:
-            raise UntisAuthError(f"Login HTTP {resp.status_code}: {resp.text[:200]}")
-
+        # WebUntis returns the JSON-RPC error envelope with non-200 statuses too
+        # (e.g. HTTP 404 for an unknown school carries code=-8500). Parse the body
+        # first; only fall back to a status-code message if it isn't JSON-RPC.
         try:
             data = resp.json()
         except ValueError as err:
             raise UntisAuthError(
-                f"Login response was not JSON (likely wrong server URL): {resp.text[:200]}"
+                f"Login HTTP {resp.status_code}: {resp.text[:200]}"
             ) from err
-        if "error" in data:
+        if isinstance(data, dict) and "error" in data:
             err_obj = data["error"] or {}
             code = err_obj.get("code") if isinstance(err_obj, dict) else None
             message = err_obj.get("message") if isinstance(err_obj, dict) else str(err_obj)
             raise UntisAuthError(message or f"Login error: {err_obj}", code=code)
+        if resp.status_code != 200:
+            raise UntisAuthError(f"Login HTTP {resp.status_code}: {resp.text[:200]}")
         result = data.get("result") or {}
         try:
             session = UntisSession(
@@ -278,9 +280,10 @@ class UntisClient:
 
     async def get_homework(self, start: date, end: date) -> dict[str, Any]:
         """Fetch homework entries for the given window."""
+        # Endpoint requires YYYYMMDD integers; ISO strings trigger HTTP 500.
         params = {
-            "startDate": start.isoformat(),
-            "endDate": end.isoformat(),
+            "startDate": _date_to_untis(start),
+            "endDate": _date_to_untis(end),
         }
         try:
             resp = await self._http.get(
