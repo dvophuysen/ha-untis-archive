@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add UNTIS account",
+        "description": "Credentials of one student account. Add one entry per child.",
+        "data": {
+          "display_name": "Display name (e.g. child's name)",
+          "server": "WebUntis server (e.g. gymnasium-am-wall.webuntis.com)",
+          "school": "School name (exactly as on untis.com)",
+          "username": "Username",
+          "password": "Password",
+          "student_id": "Student ID (optional, otherwise auto-discovery)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Login failed – check username, password and school name.",
+      "cannot_connect": "Could not reach the WebUntis server.",
+      "unknown": "Unexpected error. See the Home Assistant log."
+    },
+    "abort": {
+      "already_configured": "This account is already configured."
+    }
+  }
+}
