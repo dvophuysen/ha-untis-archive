@@ -363,7 +363,14 @@ def _now() -> str:
 
 def _connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path, isolation_level=None, timeout=30)
+    # check_same_thread=False because Home Assistant routes our calls
+    # through hass.async_add_executor_job, which uses a thread pool —
+    # the connection ends up touched from a different worker thread than
+    # the one that opened it. We still serialise access (the coordinator
+    # only fires one job at a time) so the lock contention is moot.
+    conn = sqlite3.connect(
+        db_path, isolation_level=None, timeout=30, check_same_thread=False
+    )
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
@@ -426,16 +433,34 @@ class UntisStorage:
             ],
         }
         for table, cols in _MIGRATIONS.items():
+            # PRAGMA table_info returns rows (cid, name, type, notnull,
+            # dflt_value, pk). Use the positional index instead of the
+            # column-name key — Row indexing has bitten us before when
+            # an existing DB was created by a half-migrated earlier
+            # version of this integration.
             existing = {
-                row["name"]
+                row[1]
                 for row in self._conn.execute(
                     f"PRAGMA table_info({table})"
                 ).fetchall()
             }
             for name, decl in cols:
-                if name not in existing:
+                if name in existing:
+                    continue
+                # Belt-and-suspenders: even if PRAGMA somehow misses the
+                # column (Row factory quirks, previous half-finished
+                # migration), the ALTER itself is the source of truth.
+                # "duplicate column name" means it's already there — fine,
+                # move on. Any other OperationalError still raises.
+                try:
                     self._conn.execute(
                         f"ALTER TABLE {table} ADD COLUMN {name} {decl}"
+                    )
+                except sqlite3.OperationalError as err:
+                    if "duplicate column name" not in str(err).lower():
+                        raise
+                    _LOGGER.debug(
+                        "Skipping ALTER %s.%s — column already present", table, name
                     )
 
     def close(self) -> None:
