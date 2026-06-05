@@ -39,26 +39,6 @@ CREATE TABLE IF NOT EXISTS accounts (
     last_pull_completed_at TEXT
 );
 
-CREATE TABLE IF NOT EXISTS subjects (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    account_id INTEGER NOT NULL,
-    untis_id INTEGER NOT NULL,
-    name TEXT,
-    longname TEXT,
-    UNIQUE(account_id, untis_id),
-    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS teachers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    account_id INTEGER NOT NULL,
-    untis_id INTEGER NOT NULL,
-    name TEXT,
-    longname TEXT,
-    UNIQUE(account_id, untis_id),
-    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
-);
-
 CREATE TABLE IF NOT EXISTS lessons (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account_id INTEGER NOT NULL,
@@ -399,6 +379,10 @@ class UntisStorage:
         # executescript runs its own COMMIT, so do schema and migrations
         # outside our BEGIN/COMMIT wrapper.
         self._conn.executescript(SCHEMA)
+        # Drop legacy scaffold tables that were never populated. They were
+        # superseded by master_teachers and the per-lesson payload_json.
+        self._conn.execute("DROP TABLE IF EXISTS subjects")
+        self._conn.execute("DROP TABLE IF EXISTS teachers")
         # SQLite has no IF NOT EXISTS for ADD COLUMN, so migrate idempotently
         # by checking PRAGMA table_info. Every column added after the
         # initial release goes through this list.
