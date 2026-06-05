@@ -1,0 +1,39 @@
+export_markdown:
+  name: Export Markdown
+  description: Rendert das Archiv eines Kindes nach /config/untis_archive/docs/.
+  fields:
+    account:
+      name: Kind
+      description: Anzeigename des Config-Eintrags.
+      required: true
+      selector:
+        text:
+    subject:
+      name: Fach (optional)
+      description: Nur dieses Fach exportieren.
+      required: false
+      selector:
+        text:
+
+mark_lesson:
+  name: Stunde markieren
+  description: Manuelle Korrektur einer Stunde (Lehrstoff oder Aufsichts-Flag).
+  fields:
+    lesson_id:
+      name: Lesson-ID
+      description: Datenbank-ID der Stunde.
+      required: true
+      selector:
+        number:
+          mode: box
+    lstext:
+      name: Lehrstoff
+      required: false
+      selector:
+        text:
+          multiline: true
+    is_supervision:
+      name: Nur Aufsicht
+      required: false
+      selector:
+        boolean:

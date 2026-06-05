@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "UNTIS-Konto hinzufügen",
+        "description": "Daten eines Kindes / Schüler-Accounts eingeben. Pro Kind einen Eintrag anlegen.",
+        "data": {
+          "display_name": "Anzeigename (z. B. Kindname)",
+          "server": "WebUntis-Server (z. B. herakles.webuntis.com)",
+          "school": "Schulname (exakt wie auf untis.com)",
+          "username": "Benutzername",
+          "password": "Passwort",
+          "student_id": "Schüler-ID (optional, sonst Auto-Discovery)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Dieses Konto ist bereits eingerichtet."
+    }
+  }
+}
