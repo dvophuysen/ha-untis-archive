@@ -1,0 +1,601 @@
+# Schul-Cockpit – Dashboard für zwei Kinder gegen das UNTIS-Archive.
+#
+# Voraussetzungen (siehe docs/dashboard.md):
+#   - HACS-Frontend-Karten: atomic-calendar-revive, mushroom, apexcharts-card,
+#     auto-entities.
+#   - Helper input_select.schul_cockpit_kind mit Optionen „Josia"/„Noah".
+#   - Helper input_select.schul_cockpit_fach (befüllt durch Automation aus
+#     dem Fach-Verlauf-Sensor des gerade gewählten Kindes).
+#
+# Entity-IDs gehen davon aus, dass die Untis-Config-Entries die Titel
+# „Josia" und „Noah" tragen (Device-Slug `untis_archive_josia` /
+# `untis_archive_noah`). Falls die Anzeigenamen anders gesetzt sind,
+# Such-und-Ersetzen `untis_archive_josia` → `untis_archive_<dein_slug>`.
+
+title: Schul-Cockpit
+views:
+  # ────────────────────────────────────────────────────────────────────
+  - title: Übersicht
+    path: uebersicht
+    icon: mdi:school
+    cards:
+      - type: custom:mushroom-chips-card
+        alignment: center
+        chips:
+          - type: entity
+            entity: input_select.schul_cockpit_kind
+            icon: mdi:account-switch
+            content_info: state
+            tap_action:
+              action: more-info
+          - type: template
+            entity: sensor.untis_archive_josia_fehlzeiten_schuljahr
+            icon: mdi:calendar-remove
+            content: >-
+              {% set u = state_attr(entity, 'unexcused_count') | int(0) %}
+              Fehlzeiten {{ states(entity) }}{% if u %} (⚠️ {{ u }} unentsch.){% endif %}
+            visibility:
+              - condition: state
+                entity: input_select.schul_cockpit_kind
+                state: Josia
+          - type: template
+            entity: sensor.untis_archive_noah_fehlzeiten_schuljahr
+            icon: mdi:calendar-remove
+            content: >-
+              {% set u = state_attr(entity, 'unexcused_count') | int(0) %}
+              Fehlzeiten {{ states(entity) }}{% if u %} (⚠️ {{ u }} unentsch.){% endif %}
+            visibility:
+              - condition: state
+                entity: input_select.schul_cockpit_kind
+                state: Noah
+          - type: template
+            entity: sensor.untis_archive_josia_hausaufgaben_offen
+            icon: mdi:notebook-edit
+            content: "HA offen: {{ states(entity) }}"
+            visibility:
+              - condition: state
+                entity: input_select.schul_cockpit_kind
+                state: Josia
+          - type: template
+            entity: sensor.untis_archive_noah_hausaufgaben_offen
+            icon: mdi:notebook-edit
+            content: "HA offen: {{ states(entity) }}"
+            visibility:
+              - condition: state
+                entity: input_select.schul_cockpit_kind
+                state: Noah
+          - type: template
+            entity: sensor.untis_archive_josia_stundenplan_aenderungen
+            icon: mdi:calendar-alert
+            content: "Änderungen 7T: {{ states(entity) }}"
+            visibility:
+              - condition: state
+                entity: input_select.schul_cockpit_kind
+                state: Josia
+          - type: template
+            entity: sensor.untis_archive_noah_stundenplan_aenderungen
+            icon: mdi:calendar-alert
+            content: "Änderungen 7T: {{ states(entity) }}"
+            visibility:
+              - condition: state
+                entity: input_select.schul_cockpit_kind
+                state: Noah
+
+      # ── Heutige Stunden ──────────────────────────────────────────────
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Josia
+        card: &heute_josia
+          type: markdown
+          title: Heute – Josia
+          content: |
+            {% set items = state_attr('sensor.untis_archive_josia_lehrstoff_heute', 'items') or [] %}
+            {% if items | count == 0 %}_Keine Stunden im Archiv für heute._{% else %}
+            {% for it in items | sort(attribute='start') -%}
+            {% set hh = (it.start // 100) | string %}{% set mm = '%02d' % (it.start % 100) %}
+            {% set badge = '❌ ' if it.code == 'cancelled' else ('↺ ' if it.code == 'irregular' else ('⚠️ ' if it.was_absent else '')) %}
+            **{{ hh }}:{{ mm }} – {{ badge }}{{ it.subject }}**{% if it.teacher %} · {{ it.teacher }}{% endif %}{% if it.room %} · Raum {{ it.room }}{% endif %}
+            {% if it.lstext %}> {{ it.lstext }}{% endif %}
+
+            {% endfor %}{% endif %}
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Noah
+        card:
+          type: markdown
+          title: Heute – Noah
+          content: |
+            {% set items = state_attr('sensor.untis_archive_noah_lehrstoff_heute', 'items') or [] %}
+            {% if items | count == 0 %}_Keine Stunden im Archiv für heute._{% else %}
+            {% for it in items | sort(attribute='start') -%}
+            {% set hh = (it.start // 100) | string %}{% set mm = '%02d' % (it.start % 100) %}
+            {% set badge = '❌ ' if it.code == 'cancelled' else ('↺ ' if it.code == 'irregular' else ('⚠️ ' if it.was_absent else '')) %}
+            **{{ hh }}:{{ mm }} – {{ badge }}{{ it.subject }}**{% if it.teacher %} · {{ it.teacher }}{% endif %}{% if it.room %} · Raum {{ it.room }}{% endif %}
+            {% if it.lstext %}> {{ it.lstext }}{% endif %}
+
+            {% endfor %}{% endif %}
+
+      # ── Letzte Änderungen ────────────────────────────────────────────
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Josia
+        card:
+          type: markdown
+          title: Letzte Änderungen am Stundenplan (Josia)
+          content: |
+            {% set items = state_attr('sensor.untis_archive_josia_stundenplan_aenderungen', 'items') or [] %}
+            {% if items | count == 0 %}_Keine Änderungen in den letzten 7 Tagen._{% else %}
+            {% for it in items[:8] -%}
+            {% set tags = it.change_types | join(' · ') %}
+            **{{ it.date }}** · {{ it.subject or '–' }}{% if it.code == 'cancelled' %} ❌{% elif it.code == 'irregular' %} ↺{% endif %}
+            `{{ tags }}`{% if it.teacher_orig and it.teacher and it.teacher_orig != it.teacher %} · Lehrer: {{ it.teacher_orig }} → {{ it.teacher }}{% endif %}{% if it.room_orig and it.room and it.room_orig != it.room %} · Raum: {{ it.room_orig }} → {{ it.room }}{% endif %}
+
+            {% endfor %}{% endif %}
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Noah
+        card:
+          type: markdown
+          title: Letzte Änderungen am Stundenplan (Noah)
+          content: |
+            {% set items = state_attr('sensor.untis_archive_noah_stundenplan_aenderungen', 'items') or [] %}
+            {% if items | count == 0 %}_Keine Änderungen in den letzten 7 Tagen._{% else %}
+            {% for it in items[:8] -%}
+            {% set tags = it.change_types | join(' · ') %}
+            **{{ it.date }}** · {{ it.subject or '–' }}{% if it.code == 'cancelled' %} ❌{% elif it.code == 'irregular' %} ↺{% endif %}
+            `{{ tags }}`{% if it.teacher_orig and it.teacher and it.teacher_orig != it.teacher %} · Lehrer: {{ it.teacher_orig }} → {{ it.teacher }}{% endif %}{% if it.room_orig and it.room and it.room_orig != it.room %} · Raum: {{ it.room_orig }} → {{ it.room }}{% endif %}
+
+            {% endfor %}{% endif %}
+
+      # ── Offene Hausaufgaben (Vorschau) ───────────────────────────────
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Josia
+        card:
+          type: markdown
+          title: Offene Hausaufgaben (Josia)
+          content: |
+            {% set items = state_attr('sensor.untis_archive_josia_hausaufgaben_offen', 'items') or [] %}
+            {% if items | count == 0 %}_Keine offenen Hausaufgaben._{% else %}
+            {% for it in items | sort(attribute='due_date') -%}
+            - **{{ it.due_date or '?' }}** · _{{ it.subject or '–' }}_ – {{ it.text }}
+            {% endfor %}{% endif %}
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Noah
+        card:
+          type: markdown
+          title: Offene Hausaufgaben (Noah)
+          content: |
+            {% set items = state_attr('sensor.untis_archive_noah_hausaufgaben_offen', 'items') or [] %}
+            {% if items | count == 0 %}_Keine offenen Hausaufgaben._{% else %}
+            {% for it in items | sort(attribute='due_date') -%}
+            - **{{ it.due_date or '?' }}** · _{{ it.subject or '–' }}_ – {{ it.text }}
+            {% endfor %}{% endif %}
+
+  # ────────────────────────────────────────────────────────────────────
+  - title: Monatskalender
+    path: kalender
+    icon: mdi:calendar-month
+    cards:
+      - type: custom:mushroom-chips-card
+        alignment: center
+        chips:
+          - type: entity
+            entity: input_select.schul_cockpit_kind
+            icon: mdi:account-switch
+            tap_action: { action: more-info }
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Josia
+        card:
+          type: custom:atomic-calendar-revive
+          name: Stundenplan – Josia
+          enableModeChange: true
+          defaultMode: Month
+          showMonth: true
+          showWeekNumber: true
+          firstDayOfWeek: 1
+          maxDaysToShow: 31
+          showLocation: true
+          showDescription: true
+          entities:
+            - entity: calendar.untis_archive_josia_stundenplan
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Noah
+        card:
+          type: custom:atomic-calendar-revive
+          name: Stundenplan – Noah
+          enableModeChange: true
+          defaultMode: Month
+          showMonth: true
+          showWeekNumber: true
+          firstDayOfWeek: 1
+          maxDaysToShow: 31
+          showLocation: true
+          showDescription: true
+          entities:
+            - entity: calendar.untis_archive_noah_stundenplan
+
+      # 7-Tage-Statistik
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Josia
+        card:
+          type: markdown
+          title: Diese Woche – Josia
+          content: |
+            {% set items = state_attr('sensor.untis_archive_josia_stundenplan_aenderungen', 'items') or [] %}
+            {% set cancelled = items | selectattr('code', 'eq', 'cancelled') | list | count %}
+            {% set irregular = items | selectattr('code', 'eq', 'irregular') | list | count %}
+            - Stundenplan-Änderungen (7 Tage): **{{ states('sensor.untis_archive_josia_stundenplan_aenderungen') }}**
+            - davon Ausfälle: **{{ cancelled }}**
+            - davon Vertretungen / unregelmäßig: **{{ irregular }}**
+            - Versäumte Stunden (14 Tage): **{{ states('sensor.untis_archive_josia_versaeumter_stoff') }}**
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Noah
+        card:
+          type: markdown
+          title: Diese Woche – Noah
+          content: |
+            {% set items = state_attr('sensor.untis_archive_noah_stundenplan_aenderungen', 'items') or [] %}
+            {% set cancelled = items | selectattr('code', 'eq', 'cancelled') | list | count %}
+            {% set irregular = items | selectattr('code', 'eq', 'irregular') | list | count %}
+            - Stundenplan-Änderungen (7 Tage): **{{ states('sensor.untis_archive_noah_stundenplan_aenderungen') }}**
+            - davon Ausfälle: **{{ cancelled }}**
+            - davon Vertretungen / unregelmäßig: **{{ irregular }}**
+            - Versäumte Stunden (14 Tage): **{{ states('sensor.untis_archive_noah_versaeumter_stoff') }}**
+
+  # ────────────────────────────────────────────────────────────────────
+  - title: Fehlzeiten
+    path: fehlzeiten
+    icon: mdi:emoticon-sick
+    cards:
+      - type: custom:mushroom-chips-card
+        alignment: center
+        chips:
+          - type: entity
+            entity: input_select.schul_cockpit_kind
+            icon: mdi:account-switch
+            tap_action: { action: more-info }
+
+      # Fehltage pro Monat (Schuljahr)
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Josia
+        card: &fehlzeiten_chart_josia
+          type: custom:apexcharts-card
+          header:
+            show: true
+            title: Fehltage pro Monat – Josia (laufendes Schuljahr)
+          graph_span: 365d
+          span:
+            start: month
+            offset: -11M
+          all_series_config:
+            type: column
+            group_by:
+              func: sum
+              duration: 1month
+          series:
+            - entity: sensor.untis_archive_josia_fehlzeiten_schuljahr
+              name: Entschuldigt
+              data_generator: |
+                const items = entity.attributes.items || [];
+                const buckets = {};
+                items.filter(i => i.is_excused).forEach(i => {
+                  const d = (i.start_date || '').slice(0,7) + '-01';
+                  buckets[d] = (buckets[d] || 0) + 1;
+                });
+                return Object.entries(buckets).map(([d, n]) => [new Date(d).getTime(), n]);
+            - entity: sensor.untis_archive_josia_fehlzeiten_schuljahr
+              name: Unentschuldigt
+              color: "#e53935"
+              data_generator: |
+                const items = entity.attributes.items || [];
+                const buckets = {};
+                items.filter(i => !i.is_excused).forEach(i => {
+                  const d = (i.start_date || '').slice(0,7) + '-01';
+                  buckets[d] = (buckets[d] || 0) + 1;
+                });
+                return Object.entries(buckets).map(([d, n]) => [new Date(d).getTime(), n]);
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Noah
+        card:
+          type: custom:apexcharts-card
+          header:
+            show: true
+            title: Fehltage pro Monat – Noah (laufendes Schuljahr)
+          graph_span: 365d
+          span:
+            start: month
+            offset: -11M
+          all_series_config:
+            type: column
+            group_by:
+              func: sum
+              duration: 1month
+          series:
+            - entity: sensor.untis_archive_noah_fehlzeiten_schuljahr
+              name: Entschuldigt
+              data_generator: |
+                const items = entity.attributes.items || [];
+                const buckets = {};
+                items.filter(i => i.is_excused).forEach(i => {
+                  const d = (i.start_date || '').slice(0,7) + '-01';
+                  buckets[d] = (buckets[d] || 0) + 1;
+                });
+                return Object.entries(buckets).map(([d, n]) => [new Date(d).getTime(), n]);
+            - entity: sensor.untis_archive_noah_fehlzeiten_schuljahr
+              name: Unentschuldigt
+              color: "#e53935"
+              data_generator: |
+                const items = entity.attributes.items || [];
+                const buckets = {};
+                items.filter(i => !i.is_excused).forEach(i => {
+                  const d = (i.start_date || '').slice(0,7) + '-01';
+                  buckets[d] = (buckets[d] || 0) + 1;
+                });
+                return Object.entries(buckets).map(([d, n]) => [new Date(d).getTime(), n]);
+
+      # Fehlzeiten-Tabelle
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Josia
+        card:
+          type: markdown
+          title: Alle Fehlzeiten – Josia
+          content: |
+            {% set items = state_attr('sensor.untis_archive_josia_fehlzeiten_schuljahr', 'items') or [] %}
+            {% if items | count == 0 %}_Keine Fehlzeiten im Schuljahr._{% else %}
+            | Datum | Zeit | Grund | Status |
+            |---|---|---|---|
+            {% for it in items -%}
+            | {{ it.start_date }}{% if it.end_date and it.end_date != it.start_date %}–{{ it.end_date }}{% endif %} | {{ '%04d' % it.start_time }}–{{ '%04d' % it.end_time }} | {{ it.reason or it.text or '–' }} | {% if it.is_excused %}✅ entschuldigt{% else %}⚠️ unentschuldigt{% endif %} |
+            {% endfor %}{% endif %}
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Noah
+        card:
+          type: markdown
+          title: Alle Fehlzeiten – Noah
+          content: |
+            {% set items = state_attr('sensor.untis_archive_noah_fehlzeiten_schuljahr', 'items') or [] %}
+            {% if items | count == 0 %}_Keine Fehlzeiten im Schuljahr._{% else %}
+            | Datum | Zeit | Grund | Status |
+            |---|---|---|---|
+            {% for it in items -%}
+            | {{ it.start_date }}{% if it.end_date and it.end_date != it.start_date %}–{{ it.end_date }}{% endif %} | {{ '%04d' % it.start_time }}–{{ '%04d' % it.end_time }} | {{ it.reason or it.text or '–' }} | {% if it.is_excused %}✅ entschuldigt{% else %}⚠️ unentschuldigt{% endif %} |
+            {% endfor %}{% endif %}
+
+      # Versäumter Stoff (gruppiert nach Fach)
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Josia
+        card:
+          type: markdown
+          title: Versäumter Stoff (letzte 14 Tage) – Josia
+          content: |
+            {% set items = state_attr('sensor.untis_archive_josia_versaeumter_stoff', 'items') or [] %}
+            {% if items | count == 0 %}_Kein versäumter Stoff in den letzten 14 Tagen._{% else %}
+            {% set fächer = items | map(attribute='subject') | unique | list | sort %}
+            {% for fach in fächer %}
+            **{{ fach }}**
+            {% for it in items if it.subject == fach -%}
+            - {{ it.date }}{% if it.absence_reason %} _({{ it.absence_reason }})_{% endif %}: {{ it.lstext or '_(kein Lehrstoff erfasst)_' }}
+            {% endfor %}
+            {% endfor %}{% endif %}
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Noah
+        card:
+          type: markdown
+          title: Versäumter Stoff (letzte 14 Tage) – Noah
+          content: |
+            {% set items = state_attr('sensor.untis_archive_noah_versaeumter_stoff', 'items') or [] %}
+            {% if items | count == 0 %}_Kein versäumter Stoff in den letzten 14 Tagen._{% else %}
+            {% set fächer = items | map(attribute='subject') | unique | list | sort %}
+            {% for fach in fächer %}
+            **{{ fach }}**
+            {% for it in items if it.subject == fach -%}
+            - {{ it.date }}{% if it.absence_reason %} _({{ it.absence_reason }})_{% endif %}: {{ it.lstext or '_(kein Lehrstoff erfasst)_' }}
+            {% endfor %}
+            {% endfor %}{% endif %}
+
+  # ────────────────────────────────────────────────────────────────────
+  - title: Klassenarbeit lernen
+    path: lernen
+    icon: mdi:bookshelf
+    cards:
+      - type: custom:mushroom-chips-card
+        alignment: center
+        chips:
+          - type: entity
+            entity: input_select.schul_cockpit_kind
+            icon: mdi:account-switch
+            tap_action: { action: more-info }
+          - type: entity
+            entity: input_select.schul_cockpit_fach
+            icon: mdi:book-open-variant
+            tap_action: { action: more-info }
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Josia
+        card:
+          type: markdown
+          title: Lehrstoff-Verlauf – Josia
+          content: |
+            {% set fach = states('input_select.schul_cockpit_fach') %}
+            {% set subjects = state_attr('sensor.untis_archive_josia_fach_verlauf', 'subjects') or {} %}
+            {% set items = subjects.get(fach, []) %}
+            {% if not items %}
+            _Wähle oben ein Fach._ (Verfügbar: {{ (state_attr('sensor.untis_archive_josia_fach_verlauf', 'subject_list') or []) | join(', ') }})
+            {% else %}
+            ### {{ fach }} – letzter Stoff zuerst
+            {% for it in items -%}
+            {% set marker = ('❌ ' if it.code == 'cancelled' else ('↺ ' if it.code == 'irregular' else ('⚠️ versäumt – ' if it.was_absent else ''))) %}
+            **{{ it.date }}** · {{ marker }}{{ it.topic or '_(kein Lehrstoff erfasst)_' }}{% if it.teacher %}  _· {{ it.teacher }}_{% endif %}
+
+            {% endfor %}{% endif %}
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Noah
+        card:
+          type: markdown
+          title: Lehrstoff-Verlauf – Noah
+          content: |
+            {% set fach = states('input_select.schul_cockpit_fach') %}
+            {% set subjects = state_attr('sensor.untis_archive_noah_fach_verlauf', 'subjects') or {} %}
+            {% set items = subjects.get(fach, []) %}
+            {% if not items %}
+            _Wähle oben ein Fach._ (Verfügbar: {{ (state_attr('sensor.untis_archive_noah_fach_verlauf', 'subject_list') or []) | join(', ') }})
+            {% else %}
+            ### {{ fach }} – letzter Stoff zuerst
+            {% for it in items -%}
+            {% set marker = ('❌ ' if it.code == 'cancelled' else ('↺ ' if it.code == 'irregular' else ('⚠️ versäumt – ' if it.was_absent else ''))) %}
+            **{{ it.date }}** · {{ marker }}{{ it.topic or '_(kein Lehrstoff erfasst)_' }}{% if it.teacher %}  _· {{ it.teacher }}_{% endif %}
+
+            {% endfor %}{% endif %}
+
+      # Markdown-Export Button
+      - type: horizontal-stack
+        cards:
+          - type: button
+            name: Als Markdown exportieren (Josia)
+            icon: mdi:file-export
+            tap_action:
+              action: call-service
+              service: untis_archive.export_markdown
+              service_data:
+                account: Josia
+                subject: "[[ states('input_select.schul_cockpit_fach') ]]"
+          - type: button
+            name: Als Markdown exportieren (Noah)
+            icon: mdi:file-export
+            tap_action:
+              action: call-service
+              service: untis_archive.export_markdown
+              service_data:
+                account: Noah
+                subject: "[[ states('input_select.schul_cockpit_fach') ]]"
+
+  # ────────────────────────────────────────────────────────────────────
+  - title: Änderungen
+    path: aenderungen
+    icon: mdi:calendar-alert
+    cards:
+      - type: custom:mushroom-chips-card
+        alignment: center
+        chips:
+          - type: entity
+            entity: input_select.schul_cockpit_kind
+            icon: mdi:account-switch
+            tap_action: { action: more-info }
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Josia
+        card:
+          type: markdown
+          title: Stundenplan-Änderungen (7 Tage) – Josia
+          content: |
+            {% set items = state_attr('sensor.untis_archive_josia_stundenplan_aenderungen', 'items') or [] %}
+            {% if items | count == 0 %}_Keine Änderungen._{% else %}
+            {% set tage = items | map(attribute='date') | unique | list %}
+            {% for tag in tage %}
+            #### {{ tag }}
+            {% for it in items if it.date == tag -%}
+            {% set hh = (it.start // 100) | string %}{% set mm = '%02d' % (it.start % 100) %}
+            - **{{ hh }}:{{ mm }}** · {{ it.subject or '–' }} · `{{ it.change_types | join(', ') }}`{% if it.teacher_orig and it.teacher and it.teacher_orig != it.teacher %} · Lehrer {{ it.teacher_orig }} → {{ it.teacher }}{% endif %}{% if it.room_orig and it.room and it.room_orig != it.room %} · Raum {{ it.room_orig }} → {{ it.room }}{% endif %}
+            {% endfor %}
+            {% endfor %}{% endif %}
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.schul_cockpit_kind
+            state: Noah
+        card:
+          type: markdown
+          title: Stundenplan-Änderungen (7 Tage) – Noah
+          content: |
+            {% set items = state_attr('sensor.untis_archive_noah_stundenplan_aenderungen', 'items') or [] %}
+            {% if items | count == 0 %}_Keine Änderungen._{% else %}
+            {% set tage = items | map(attribute='date') | unique | list %}
+            {% for tag in tage %}
+            #### {{ tag }}
+            {% for it in items if it.date == tag -%}
+            {% set hh = (it.start // 100) | string %}{% set mm = '%02d' % (it.start % 100) %}
+            - **{{ hh }}:{{ mm }}** · {{ it.subject or '–' }} · `{{ it.change_types | join(', ') }}`{% if it.teacher_orig and it.teacher and it.teacher_orig != it.teacher %} · Lehrer {{ it.teacher_orig }} → {{ it.teacher }}{% endif %}{% if it.room_orig and it.room and it.room_orig != it.room %} · Raum {{ it.room_orig }} → {{ it.room }}{% endif %}
+            {% endfor %}
+            {% endfor %}{% endif %}
+
+  # ────────────────────────────────────────────────────────────────────
+  - title: Hausaufgaben
+    path: hausaufgaben
+    icon: mdi:notebook-edit
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: markdown
+            title: Josia
+            content: |
+              {% set items = state_attr('sensor.untis_archive_josia_hausaufgaben_offen', 'items') or [] %}
+              {% set today = now().date().isoformat() %}
+              {% if items | count == 0 %}_Keine offenen Hausaufgaben._{% else %}
+              {% for it in items | sort(attribute='due_date') -%}
+              {% set overdue = it.due_date and it.due_date < today %}
+              - {% if overdue %}🔴{% else %}🟢{% endif %} **{{ it.due_date or '?' }}** · _{{ it.subject or '–' }}_ – {{ it.text }}
+              {% endfor %}{% endif %}
+          - type: markdown
+            title: Noah
+            content: |
+              {% set items = state_attr('sensor.untis_archive_noah_hausaufgaben_offen', 'items') or [] %}
+              {% set today = now().date().isoformat() %}
+              {% if items | count == 0 %}_Keine offenen Hausaufgaben._{% else %}
+              {% for it in items | sort(attribute='due_date') -%}
+              {% set overdue = it.due_date and it.due_date < today %}
+              - {% if overdue %}🔴{% else %}🟢{% endif %} **{{ it.due_date or '?' }}** · _{{ it.subject or '–' }}_ – {{ it.text }}
+              {% endfor %}{% endif %}

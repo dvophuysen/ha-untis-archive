@@ -25,5 +25,15 @@
     "abort": {
       "already_configured": "This account is already configured."
     }
+  },
+  "entity": {
+    "sensor": {
+      "lehrstoff_heute": { "name": "Lesson topic today" },
+      "hausaufgaben_offen": { "name": "Open homework" },
+      "versaeumter_stoff": { "name": "Missed lesson topics" },
+      "fehlzeiten_schuljahr": { "name": "Absences this school year" },
+      "stundenplan_aenderungen": { "name": "Timetable changes (7d)" },
+      "fach_verlauf": { "name": "Subject history" }
+    }
   }
 }

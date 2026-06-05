@@ -12,6 +12,8 @@ Per child:
                                 (Vertretungen, Raumwechsel, Ausfälle,
                                 Lehrstoff-Updates, retroaktive Einträge)
                                 in den letzten 7 Tagen
+- ``..._fach_verlauf``        – Lehrstoff-Verlauf gruppiert pro Fach,
+                                Quelle für die „Klassenarbeit lernen"-View
 """
 
 from __future__ import annotations
@@ -58,6 +60,7 @@ async def async_setup_entry(
             VersaeumterStoffSensor(coordinator, entry, slug),
             FehlzeitenSchuljahrSensor(coordinator, entry, slug),
             StundenplanAenderungenSensor(coordinator, entry, slug),
+            FachVerlaufSensor(coordinator, entry, slug),
         ]
     )
 
@@ -285,3 +288,75 @@ class StundenplanAenderungenSensor(_Base):
                 }
             )
         return {"items": items}
+
+
+class FachVerlaufSensor(_Base):
+    """Lehrstoff-Verlauf gruppiert pro Fach im laufenden Schuljahr.
+
+    Liefert in ``subjects`` ein Dict ``{Fachname: [Stunden …]}``,
+    neueste Stunde zuerst, ausgefallene Stunden ausgeblendet. ``state``
+    ist die Anzahl Fächer mit mindestens einem dokumentierten Eintrag.
+    Quelle für die „Klassenarbeit lernen"-Dashboardseite.
+    """
+
+    _attr_icon = "mdi:bookshelf"
+
+    def __init__(self, coordinator: UntisCoordinator, entry: ConfigEntry, slug: str) -> None:
+        super().__init__(coordinator, entry, slug)
+        self._attr_unique_id = f"{entry.entry_id}_fach_verlauf"
+        self._attr_translation_key = "fach_verlauf"
+        self._attr_name = "Fach-Verlauf"
+
+    def _rows(self) -> list[dict[str, Any]]:
+        today = date.today()
+        start = _school_year_start(today).isoformat()
+        end = today.isoformat()
+        return self.coordinator.storage.lessons_between(
+            self.coordinator.account_id, start, end
+        )
+
+    @property
+    def native_value(self) -> int:
+        rows = self._rows()
+        subjects: set[str] = set()
+        for r in rows:
+            if (r.get("code") or "") == "cancelled":
+                continue
+            name = r.get("subject_name")
+            if name:
+                subjects.add(name)
+        return len(subjects)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        rows = self._rows()
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for r in rows:
+            if (r.get("code") or "") == "cancelled":
+                continue
+            name = r.get("subject_name")
+            if not name:
+                continue
+            topic = r.get("lstext_manual_override") or r.get("lstext") or ""
+            grouped.setdefault(name, []).append(
+                {
+                    "date": r.get("date"),
+                    "start": r.get("start_time"),
+                    "code": r.get("code") or "",
+                    "was_absent": bool(r.get("was_absent")),
+                    "teacher": r.get("teacher_name"),
+                    "room": r.get("room"),
+                    "topic": topic,
+                }
+            )
+        # Neueste zuerst, pro Fach. Listen kappen, damit das Sensor-
+        # Attribut nicht ins Uferlose wächst (recorder speichert das
+        # bei jedem state-change).
+        subjects_capped: dict[str, list[dict[str, Any]]] = {}
+        for name, items in grouped.items():
+            items.sort(key=lambda x: (x["date"] or "", x["start"] or 0), reverse=True)
+            subjects_capped[name] = items[:80]
+        return {
+            "subject_list": sorted(subjects_capped.keys()),
+            "subjects": subjects_capped,
+        }
