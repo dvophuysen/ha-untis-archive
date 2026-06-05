@@ -278,6 +278,33 @@ class UntisClient:
             )
         return resp.json()
 
+    async def get_absences(self, start: date, end: date) -> dict[str, Any]:
+        """Fetch absences for the logged-in student.
+
+        Endpoint: ``/WebUntis/api/classreg/absences/students``. Accepts the
+        whole school year, so this is the one place we can backfill from.
+        Requires YYYYMMDD integer dates and the student id from the session.
+        """
+        s = self.session
+        params = {
+            "startDate": _date_to_untis(start),
+            "endDate": _date_to_untis(end),
+            "studentId": s.person_id,
+            "excuseStatusId": -1,
+            "includeTodaysAbsence": "true",
+        }
+        try:
+            resp = await self._http.get(
+                "/WebUntis/api/classreg/absences/students", params=params
+            )
+        except httpx.HTTPError as err:
+            raise UntisApiError(f"absences fetch failed: {err}") from err
+        if resp.status_code != 200:
+            raise UntisApiError(
+                f"absences HTTP {resp.status_code}: {resp.text[:200]}"
+            )
+        return resp.json()
+
     async def get_homework(self, start: date, end: date) -> dict[str, Any]:
         """Fetch homework entries for the given window."""
         # Endpoint requires YYYYMMDD integers; ISO strings trigger HTTP 500.

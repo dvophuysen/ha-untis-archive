@@ -74,6 +74,8 @@ CREATE TABLE IF NOT EXISTS lessons (
     is_supervision_guess INTEGER NOT NULL DEFAULT 0,
     supervision_manual_override INTEGER,
     lstext_manual_override TEXT,
+    was_absent INTEGER NOT NULL DEFAULT 0,
+    absence_reason TEXT,
     first_seen_at TEXT NOT NULL,
     last_updated_at TEXT NOT NULL,
     UNIQUE(account_id, untis_period_id),
@@ -115,6 +117,29 @@ CREATE TABLE IF NOT EXISTS homework_snapshots (
     diff_json TEXT NOT NULL,
     FOREIGN KEY(homework_id) REFERENCES homework(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS absences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    untis_absence_id INTEGER NOT NULL,
+    start_date TEXT NOT NULL,           -- ISO YYYY-MM-DD
+    end_date TEXT NOT NULL,
+    start_time INTEGER NOT NULL,        -- HHMM
+    end_time INTEGER NOT NULL,
+    reason_id INTEGER,
+    reason TEXT,
+    text TEXT,
+    excuse_status TEXT,
+    is_excused INTEGER NOT NULL DEFAULT 0,
+    created_user TEXT,
+    updated_user TEXT,
+    first_seen_at TEXT NOT NULL,
+    last_updated_at TEXT NOT NULL,
+    UNIQUE(account_id, untis_absence_id),
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_absences_account_date
+    ON absences(account_id, start_date, end_date);
 """
 
 
@@ -170,8 +195,20 @@ class UntisStorage:
     def __init__(self, db_path: Path) -> None:
         self._path = db_path
         self._conn = _connect(db_path)
-        with self._tx() as cur:
-            cur.executescript(SCHEMA)
+        # executescript runs its own COMMIT, so do schema and migrations
+        # outside our BEGIN/COMMIT wrapper.
+        self._conn.executescript(SCHEMA)
+        existing_cols = {
+            row["name"]
+            for row in self._conn.execute("PRAGMA table_info(lessons)").fetchall()
+        }
+        # SQLite has no IF NOT EXISTS for ADD COLUMN, so migrate idempotently.
+        if "was_absent" not in existing_cols:
+            self._conn.execute(
+                "ALTER TABLE lessons ADD COLUMN was_absent INTEGER NOT NULL DEFAULT 0"
+            )
+        if "absence_reason" not in existing_cols:
+            self._conn.execute("ALTER TABLE lessons ADD COLUMN absence_reason TEXT")
 
     def close(self) -> None:
         try:
@@ -401,6 +438,113 @@ class UntisStorage:
             )
             return "updated"
 
+    # ---- absences -------------------------------------------------------
+
+    def upsert_absence(self, account_id: int, absence: dict[str, Any]) -> str:
+        now = _now()
+        with self._tx() as cur:
+            cur.execute(
+                """SELECT id FROM absences
+                   WHERE account_id=? AND untis_absence_id=?""",
+                (account_id, absence["untis_absence_id"]),
+            )
+            existing = cur.fetchone()
+            if existing is None:
+                cur.execute(
+                    """INSERT INTO absences
+                       (account_id, untis_absence_id, start_date, end_date,
+                        start_time, end_time, reason_id, reason, text,
+                        excuse_status, is_excused, created_user, updated_user,
+                        first_seen_at, last_updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        account_id,
+                        absence["untis_absence_id"],
+                        absence["start_date"],
+                        absence["end_date"],
+                        absence["start_time"],
+                        absence["end_time"],
+                        absence.get("reason_id"),
+                        absence.get("reason"),
+                        absence.get("text"),
+                        absence.get("excuse_status"),
+                        1 if absence.get("is_excused") else 0,
+                        absence.get("created_user"),
+                        absence.get("updated_user"),
+                        now,
+                        now,
+                    ),
+                )
+                return "inserted"
+            cur.execute(
+                """UPDATE absences SET
+                       start_date=?, end_date=?, start_time=?, end_time=?,
+                       reason_id=?, reason=?, text=?, excuse_status=?,
+                       is_excused=?, created_user=?, updated_user=?,
+                       last_updated_at=?
+                   WHERE id=?""",
+                (
+                    absence["start_date"],
+                    absence["end_date"],
+                    absence["start_time"],
+                    absence["end_time"],
+                    absence.get("reason_id"),
+                    absence.get("reason"),
+                    absence.get("text"),
+                    absence.get("excuse_status"),
+                    1 if absence.get("is_excused") else 0,
+                    absence.get("created_user"),
+                    absence.get("updated_user"),
+                    now,
+                    int(existing["id"]),
+                ),
+            )
+            return "updated"
+
+    def recompute_attendance(
+        self, account_id: int, start_day: str, end_day: str
+    ) -> int:
+        """Mark every lesson in [start_day, end_day] as absent if it overlaps
+        an absence record. Returns the number of lessons flagged absent.
+
+        Overlap rule: lesson.date is within [absence.start_date, end_date]
+        and lesson's HHMM interval [start_time, end_time) intersects
+        [absence.start_time, absence.end_time).
+        """
+        with self._tx() as cur:
+            # Clear flags in range first so removed absences propagate.
+            cur.execute(
+                """UPDATE lessons
+                   SET was_absent=0, absence_reason=NULL
+                   WHERE account_id=? AND date BETWEEN ? AND ?""",
+                (account_id, start_day, end_day),
+            )
+            cur.execute(
+                """UPDATE lessons AS l
+                   SET was_absent = 1,
+                       absence_reason = (
+                         SELECT COALESCE(a.reason, '')
+                         FROM absences a
+                         WHERE a.account_id = l.account_id
+                           AND l.date BETWEEN a.start_date AND a.end_date
+                           AND l.start_time < a.end_time
+                           AND l.end_time   > a.start_time
+                         ORDER BY a.start_time
+                         LIMIT 1
+                       )
+                   WHERE l.account_id = ?
+                     AND l.date BETWEEN ? AND ?
+                     AND EXISTS (
+                       SELECT 1 FROM absences a
+                       WHERE a.account_id = l.account_id
+                         AND l.date BETWEEN a.start_date AND a.end_date
+                         AND l.start_time < a.end_time
+                         AND l.end_time   > a.start_time
+                     )""",
+                (account_id, start_day, end_day),
+            )
+            return cur.rowcount
+
     # ---- read helpers ---------------------------------------------------
 
     def lessons_for_day(self, account_id: int, day: str) -> list[dict[str, Any]]:
@@ -550,6 +694,48 @@ def normalize_homework(raw: dict[str, Any], lessons_lookup: dict[int, dict[str, 
         "due_date": to_iso_date(raw.get("dueDate")),
         "completed": bool(raw.get("completed")),
     }
+
+
+def normalize_absence(raw: dict[str, Any]) -> dict[str, Any]:
+    """Map an /api/classreg/absences/students entry to the storage shape."""
+    excuse = raw.get("excuse") or {}
+    excuse_status = ""
+    is_excused = False
+    if isinstance(excuse, dict):
+        excuse_status = (
+            excuse.get("excuseStatusName")
+            or excuse.get("statusName")
+            or excuse.get("status")
+            or ""
+        )
+        # When excuseStatus has any non-empty payload, Untis treats the
+        # absence as excused. Real records observed: empty dict {} = open,
+        # populated dict = excused.
+        is_excused = bool(excuse)
+    return {
+        "untis_absence_id": int(raw["id"]),
+        "start_date": parse_untis_date(raw["startDate"]),
+        "end_date": parse_untis_date(raw["endDate"]),
+        "start_time": int(raw["startTime"]),
+        "end_time": int(raw["endTime"]),
+        "reason_id": raw.get("reasonId"),
+        "reason": (raw.get("reason") or "").strip() or None,
+        "text": (raw.get("text") or "").strip() or None,
+        "excuse_status": excuse_status or None,
+        "is_excused": is_excused,
+        "created_user": raw.get("createdUser"),
+        "updated_user": raw.get("updatedUser"),
+    }
+
+
+def collect_absences(payload: dict[str, Any]) -> Iterable[dict[str, Any]]:
+    """Yield normalized absence dicts from the raw REST payload."""
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if data is None:
+        data = payload if isinstance(payload, dict) else {}
+    for entry in data.get("absences") or []:
+        if isinstance(entry, dict) and "id" in entry:
+            yield normalize_absence(entry)
 
 
 def collect_homework(payload: dict[str, Any]) -> Iterable[dict[str, Any]]:
