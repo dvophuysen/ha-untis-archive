@@ -1,4 +1,14 @@
-"""Config flow with live credential validation against WebUntis."""
+"""Config flow with live credential validation against WebUntis.
+
+UX choices:
+
+- Previously entered values (except the password) are pre-filled when the
+  form is shown again after an error – the user can fix a typo without
+  retyping everything.
+- The raw WebUntis error message is shown inside the form via
+  ``description_placeholders``, so the user can tell *which* field is
+  wrong instead of just seeing "Login failed".
+"""
 
 from __future__ import annotations
 
@@ -22,16 +32,41 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-USER_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_DISPLAY_NAME): str,
-        vol.Required(CONF_SERVER): str,
-        vol.Required(CONF_SCHOOL): str,
-        vol.Required(CONF_USERNAME): str,
-        vol.Required(CONF_PASSWORD): str,
-        vol.Optional(CONF_STUDENT_ID): int,
-    }
-)
+
+# WebUntis JSON-RPC error codes we want to translate into specific
+# user-facing messages. Anything not in this map falls back to the generic
+# ``invalid_auth`` plus the raw server message in the description.
+_ERR_CODES = {
+    -8504: "invalid_credentials",  # bad credentials
+    -8500: "invalid_school",       # no such school
+    -8502: "invalid_school",       # ambiguous / not found
+    -8998: "too_many_requests",
+}
+
+
+def _build_schema(defaults: dict[str, Any]) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_DISPLAY_NAME, default=defaults.get(CONF_DISPLAY_NAME, "")
+            ): str,
+            vol.Required(
+                CONF_SERVER,
+                default=defaults.get(CONF_SERVER, ""),
+            ): str,
+            vol.Required(
+                CONF_SCHOOL, default=defaults.get(CONF_SCHOOL, "")
+            ): str,
+            vol.Required(
+                CONF_USERNAME, default=defaults.get(CONF_USERNAME, "")
+            ): str,
+            vol.Required(CONF_PASSWORD): str,
+            vol.Optional(
+                CONF_STUDENT_ID,
+                description={"suggested_value": defaults.get(CONF_STUDENT_ID)},
+            ): int,
+        }
+    )
 
 
 class UntisArchiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -39,6 +74,8 @@ class UntisArchiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {"error_detail": ""}
+        defaults: dict[str, Any] = dict(user_input or {})
 
         if user_input is not None:
             unique = (
@@ -57,18 +94,23 @@ class UntisArchiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 await client.login()
             except UntisAuthError as err:
-                _LOGGER.warning("Login validation failed: %s", err)
-                errors["base"] = "invalid_auth"
+                _LOGGER.warning("Login validation failed: %s (code=%s)", err, err.code)
+                placeholders["error_detail"] = str(err)
+                errors["base"] = _ERR_CODES.get(err.code or 0, "invalid_auth")
             except UntisApiError as err:
                 _LOGGER.warning("API error during validation: %s", err)
+                placeholders["error_detail"] = str(err)
                 errors["base"] = "cannot_connect"
-            except Exception:  # noqa: BLE001
+            except Exception as err:  # noqa: BLE001
                 _LOGGER.exception("Unexpected error during validation")
+                placeholders["error_detail"] = repr(err)
                 errors["base"] = "unknown"
             finally:
                 await client.close()
 
             if not errors:
+                # Strip the password before storing? No – HA stores config
+                # entries securely; the password is needed for refreshes.
                 return self.async_create_entry(
                     title=user_input[CONF_DISPLAY_NAME],
                     data=user_input,
@@ -76,6 +118,7 @@ class UntisArchiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=USER_SCHEMA,
+            data_schema=_build_schema(defaults),
             errors=errors,
+            description_placeholders=placeholders,
         )

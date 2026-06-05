@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "UNTIS-Konto hinzufügen",
-        "description": "Daten eines Kindes / Schüler-Accounts eingeben. Pro Kind einen Eintrag anlegen.",
+        "description": "Daten eines Kindes / Schüler-Accounts eingeben. Pro Kind einen Eintrag anlegen.\n\n{error_detail}",
         "data": {
           "display_name": "Anzeigename (z. B. Kindname)",
           "server": "WebUntis-Server (z. B. gymnasium-am-wall.webuntis.com)",
@@ -15,8 +15,11 @@
       }
     },
     "error": {
-      "invalid_auth": "Login fehlgeschlagen – Benutzername, Passwort oder Schulname prüfen.",
-      "cannot_connect": "Verbindung zum WebUntis-Server fehlgeschlagen.",
+      "invalid_auth": "Login fehlgeschlagen. Details stehen oben in der Beschreibung.",
+      "invalid_credentials": "Benutzername oder Passwort falsch.",
+      "invalid_school": "Schulname wurde von WebUntis nicht erkannt. Bitte exakt wie auf untis.com schreiben.",
+      "too_many_requests": "WebUntis blockiert vorübergehend (zu viele Login-Versuche). Bitte 1–2 Minuten warten.",
+      "cannot_connect": "Verbindung zum WebUntis-Server fehlgeschlagen. Server-Adresse prüfen.",
       "unknown": "Unerwarteter Fehler. Details siehe Home-Assistant-Log."
     },
     "abort": {

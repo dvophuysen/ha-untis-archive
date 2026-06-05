@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Add UNTIS account",
-        "description": "Credentials of one student account. Add one entry per child.",
+        "description": "Credentials of one student account. Add one entry per child.\n\n{error_detail}",
         "data": {
           "display_name": "Display name (e.g. child's name)",
           "server": "WebUntis server (e.g. gymnasium-am-wall.webuntis.com)",
@@ -15,8 +15,11 @@
       }
     },
     "error": {
-      "invalid_auth": "Login failed – check username, password and school name.",
-      "cannot_connect": "Could not reach the WebUntis server.",
+      "invalid_auth": "Login failed. See the details above in the description.",
+      "invalid_credentials": "Wrong username or password.",
+      "invalid_school": "WebUntis did not recognise this school name. Use the exact spelling from untis.com.",
+      "too_many_requests": "WebUntis is rate-limiting (too many login attempts). Please wait 1–2 minutes.",
+      "cannot_connect": "Could not reach the WebUntis server. Check the server address.",
       "unknown": "Unexpected error. See the Home Assistant log."
     },
     "abort": {
