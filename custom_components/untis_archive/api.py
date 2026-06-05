@@ -37,6 +37,10 @@ class UntisError(Exception):
 class UntisAuthError(UntisError):
     """Login failed."""
 
+    def __init__(self, message: str, *, code: int | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+
 
 class UntisApiError(UntisError):
     """A WebUntis call returned an error or an unexpected payload."""
@@ -134,9 +138,17 @@ class UntisClient:
         if resp.status_code != 200:
             raise UntisAuthError(f"Login HTTP {resp.status_code}: {resp.text[:200]}")
 
-        data = resp.json()
+        try:
+            data = resp.json()
+        except ValueError as err:
+            raise UntisAuthError(
+                f"Login response was not JSON (likely wrong server URL): {resp.text[:200]}"
+            ) from err
         if "error" in data:
-            raise UntisAuthError(f"Login error: {data['error']}")
+            err_obj = data["error"] or {}
+            code = err_obj.get("code") if isinstance(err_obj, dict) else None
+            message = err_obj.get("message") if isinstance(err_obj, dict) else str(err_obj)
+            raise UntisAuthError(message or f"Login error: {err_obj}", code=code)
         result = data.get("result") or {}
         try:
             session = UntisSession(
