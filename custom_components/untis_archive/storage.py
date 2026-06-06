@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -20,6 +21,28 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 _LOGGER = logging.getLogger(__name__)
+
+
+# Process-wide write locks keyed by absolute DB path.  Multiple
+# ``UntisStorage`` instances (one per coordinator / config entry) end
+# up sharing the same SQLite file, and SQLite serialises writers at
+# the file level via OS locks.  Without an in-process lock the two
+# coordinators race during their first refresh — both try to write to
+# master tables at the same time and one of them dies with
+# ``database is locked``.  We coordinate them ourselves so the OS-level
+# busy timeout only ever guards against external readers / writers.
+_DB_LOCKS: dict[str, threading.RLock] = {}
+_DB_LOCKS_GUARD = threading.Lock()
+
+
+def _lock_for(db_path: Path) -> threading.RLock:
+    key = str(db_path.resolve())
+    with _DB_LOCKS_GUARD:
+        lock = _DB_LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _DB_LOCKS[key] = lock
+        return lock
 
 
 SCHEMA = """
@@ -366,14 +389,18 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     # check_same_thread=False because Home Assistant routes our calls
     # through hass.async_add_executor_job, which uses a thread pool —
     # the connection ends up touched from a different worker thread than
-    # the one that opened it. We still serialise access (the coordinator
-    # only fires one job at a time) so the lock contention is moot.
+    # the one that opened it. Cross-instance serialisation happens via
+    # the process-wide _DB_LOCKS, the OS-level busy_timeout below only
+    # exists as a last-resort guard against external writers.
     conn = sqlite3.connect(
         db_path, isolation_level=None, timeout=30, check_same_thread=False
     )
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    # 30 s — generous enough that a slow external reader doesn't blow
+    # up the coordinator, short enough that a deadlock surfaces.
+    conn.execute("PRAGMA busy_timeout=30000")
     return conn
 
 
@@ -382,6 +409,10 @@ class UntisStorage:
 
     def __init__(self, db_path: Path) -> None:
         self._path = db_path
+        # Process-wide lock keyed by DB path. Two coordinators sharing
+        # the same history.db will share this lock and therefore never
+        # try to write at the same time.
+        self._write_lock = _lock_for(db_path)
         self._conn = _connect(db_path)
         # executescript runs its own COMMIT, so do schema and migrations
         # outside our BEGIN/COMMIT wrapper.
@@ -471,16 +502,33 @@ class UntisStorage:
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Cursor]:
-        cur = self._conn.cursor()
-        cur.execute("BEGIN")
-        try:
-            yield cur
-            cur.execute("COMMIT")
-        except Exception:
-            cur.execute("ROLLBACK")
-            raise
-        finally:
-            cur.close()
+        # 1) Cross-instance serialisation. Without this, two
+        #    UntisStorage objects (one per child / config entry) racing
+        #    on the same SQLite file produce ``database is locked``
+        #    during the master-table upserts at startup.
+        # 2) BEGIN IMMEDIATE so we grab the RESERVED lock up front —
+        #    avoids the upgrade deadlock where two writers both start
+        #    in BEGIN-DEFERRED and then both try to escalate to a
+        #    write lock on first INSERT.
+        # 3) Only attempt ROLLBACK if BEGIN actually succeeded, else
+        #    we mask the original error with "no transaction is active".
+        with self._write_lock:
+            cur = self._conn.cursor()
+            began = False
+            try:
+                cur.execute("BEGIN IMMEDIATE")
+                began = True
+                try:
+                    yield cur
+                    cur.execute("COMMIT")
+                except Exception:
+                    cur.execute("ROLLBACK")
+                    raise
+            finally:
+                if not began:
+                    # BEGIN itself failed — no transaction to roll back.
+                    pass
+                cur.close()
 
     # ---- accounts -------------------------------------------------------
 
