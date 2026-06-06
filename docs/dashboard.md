@@ -20,6 +20,20 @@ Status aus Untis ist nicht zuverlässig, eine eigene Todo-Synchronisation
 Die Dashboard-Definition liegt im Repo unter
 `dashboards/schul-cockpit.yaml`.
 
+## Voraussetzung: Integration v0.4.0 oder neuer
+
+Das Dashboard nutzt Entities, die erst ab **v0.4.0** dieser Integration
+erzeugt werden:
+
+- `calendar.untis_archive_<kind>_ereignisse`
+- `sensor.untis_archive_<kind>_fach_verlauf`
+- `sensor.untis_archive_<kind>_krankheitsperioden`
+
+Wenn HACS noch v0.2.3 (oder älter) anzeigt: HACS → UNTIS Archive →
+„Neu downloaden" → die aktuellste Version wählen. Anschließend Home
+Assistant neu starten. Im Entwicklertools → Zustände nach `untis_archive`
+filtern, dort müssen die genannten Entities auftauchen.
+
 ## 1. HACS Frontend-Karten installieren
 
 HACS → Frontend, dann installieren:
