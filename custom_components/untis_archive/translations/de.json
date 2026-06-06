@@ -33,7 +33,8 @@
       "versaeumter_stoff": { "name": "Versäumter Stoff" },
       "fehlzeiten_schuljahr": { "name": "Fehlzeiten Schuljahr" },
       "stundenplan_aenderungen": { "name": "Stundenplan-Änderungen (7 Tage)" },
-      "fach_verlauf": { "name": "Fach-Verlauf" }
+      "fach_verlauf": { "name": "Fach-Verlauf" },
+      "krankheitsperioden": { "name": "Krankheitsperioden" }
     }
   }
 }

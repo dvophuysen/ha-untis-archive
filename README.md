@@ -35,18 +35,25 @@ Pro Kind / Account, stündlich gepollt:
 
 Pro Kind / Account:
 
-- **Kalender-Entity** mit allen Stunden, Lehrstoff im Termin-Text
+- **Kalender „Stundenplan"** — jede Stunde als Termin, Lehrstoff im
+  Description-Feld, Titel-Präfix bei ❌ Ausfall, ↺ Vertretung,
+  🤒 versäumt (Krankheit)
+- **Kalender „Ereignisse"** — Fehltage als ganztägige Markierung,
+  Klassenarbeiten / Klausuren aus `period_info_json.exam`
 - Sensor **„Lehrstoff heute"** — Anzahl + Liste mit Lehrer/Originallehrer/Raum
-- Sensor **„Hausaufgaben offen"** — Anzahl + Fälligkeit
+- Sensor **„Hausaufgaben offen"** — Anzahl + Fälligkeit (Hinweis:
+  `completed` aus Untis ist unzuverlässig — siehe Doku)
 - Sensor **„Versäumter Stoff"** — automatisch via Fehlzeiten (kein manueller
   Toggle mehr nötig)
 - Sensor **„Fehlzeiten Schuljahr"** — Gesamtzahl + unentschuldigte
 - Sensor **„Stundenplan-Änderungen (7 Tage)"** — Anzahl + Liste
-- Sensor **„Fach-Verlauf"** — Lehrstoff gruppiert pro Fach im Schuljahr,
-  Datenquelle für das Klassenarbeits-Lernen im Dashboard
+- Sensor **„Fach-Verlauf"** — Lehrstoff gruppiert pro Fach im Schuljahr
+- Sensor **„Krankheitsperioden"** — pro Periode der verpasste Stoff,
+  gruppiert nach Fach
 
-Optional gibt es ein vorgefertigtes Lovelace-Dashboard mit Kind-Umschaltung,
-Monatskalender, Fehlzeiten-Auswertung und Pro-Fach-Lernverlauf:
+Vorgefertigtes Lovelace-Dashboard mit zentralem Kind-Umschalter,
+Monatskalender (Stundenplan + Fehltage + Klassenarbeiten in einer
+Ansicht), Pro-Fach-Lernverlauf und Krankheits-Aufstellung:
 [`docs/dashboard.md`](docs/dashboard.md).
 
 Services:

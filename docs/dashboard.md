@@ -1,43 +1,56 @@
 # Dashboard "Schul-Cockpit"
 
-Spezialisiertes Lovelace-Dashboard für zwei Kinder mit Kind-Umschaltung,
-Monatskalender, Fehlzeiten-Auswertung, Pro-Fach-Lernverlauf,
-Vertretungs-Timeline und Hausaufgaben-Inbox.
+Spezialisiertes Lovelace-Dashboard für zwei Kinder mit drei Hauptseiten
+und einem zentralen Kind-Umschalter:
 
-Die Dashboard-Definition liegt in `dashboards/schul-cockpit.yaml` im
-Repo. Bei HACS-Installation kommt sie nicht automatisch in deine HA –
-du registrierst die Datei einmal in `configuration.yaml`.
+1. **Übersicht** – Monatskalender mit dem kompletten Stundenplan
+   (Vergangenheit + nächste Tage), Fehltagen und Klassenarbeiten in
+   einer Ansicht. Termin anklicken öffnet die Untis-typische
+   Detailansicht (Lehrstoff, Lehrer / Originallehrer, Raum,
+   Vertretungs-Hinweis, Fehlgrund).
+2. **Fächer** – Fach auswählen, chronologische Lehrstoff-Historie mit
+   Markierung von Vertretungs- und Ausfall-Stunden.
+3. **Krankheits-Ausfälle** – Pro Krankheits-Periode der versäumte
+   Stoff, gruppiert nach Fach.
+
+Hausaufgaben tauchen im Dashboard bewusst nicht auf — der `completed`-
+Status aus Untis ist nicht zuverlässig, eine eigene Todo-Synchronisation
+übernimmt das.
+
+Die Dashboard-Definition liegt im Repo unter
+`dashboards/schul-cockpit.yaml`.
 
 ## 1. HACS Frontend-Karten installieren
 
-HACS → Frontend → Custom Repositories oder Suche, dann installieren:
+HACS → Frontend, dann installieren:
 
-- `atomic-calendar-revive` – Monatskalender mit Terminvorschau
-- `mushroom` – Chips für die Kind-/Fach-Umschaltung
-- `apexcharts-card` – Fehltage pro Monat als Balkendiagramm
-- `auto-entities` – (optional, falls du dynamische Listen erweitern willst)
+- `atomic-calendar-revive` – Monatskalender, kann beide Untis-Kalender
+  (Stundenplan + Ereignisse) gleichzeitig anzeigen.
+- `mushroom` – Karten für den Kind-Umschalter und Fach-Auswahl.
 
-Nach der Installation: einmal Browser-Cache leeren (Lovelace lädt
-Custom-Card-JS).
+Nach der Installation: Browser-Cache leeren (Lovelace lädt das
+Custom-Card-JavaScript).
 
-## 2. Sensoren prüfen
+## 2. Sensoren und Kalender prüfen
 
-Pro Kind gibt es seit Version 0.3.0 sechs Sensoren plus einen Kalender.
-Beispiel für Anzeigename `Josia` (Device-Slug `untis_archive_josia`):
+Pro Kind erzeugt die Integration zwei Calendar-Entities und sechs
+Sensoren (Beispiel für Anzeigename `Josia`, Device-Slug
+`untis_archive_josia`):
 
 | Entity-ID | Inhalt |
 |---|---|
-| `calendar.untis_archive_josia_stundenplan` | Stundenplan-Kalender |
-| `sensor.untis_archive_josia_lehrstoff_heute` | Heutige Stunden mit Lehrstoff |
-| `sensor.untis_archive_josia_hausaufgaben_offen` | Offene Hausaufgaben |
-| `sensor.untis_archive_josia_versaeumter_stoff` | Versäumter Stoff (14 Tage) |
-| `sensor.untis_archive_josia_fehlzeiten_schuljahr` | Fehlzeiten im Schuljahr (mit `unexcused_count`) |
-| `sensor.untis_archive_josia_stundenplan_aenderungen` | Vertretungen/Ausfälle/Lehrstoff-Updates (7 Tage) |
-| `sensor.untis_archive_josia_fach_verlauf` | Lehrstoff-Verlauf gruppiert pro Fach |
+| `calendar.untis_archive_josia_stundenplan` | Stundenplan mit Lehrstoff im Termin |
+| `calendar.untis_archive_josia_ereignisse` | Fehltage (ganztägig) + Klassenarbeiten |
+| `sensor.untis_archive_josia_fach_verlauf` | Lehrstoff-Historie gruppiert pro Fach |
+| `sensor.untis_archive_josia_krankheitsperioden` | Krankheits-Perioden mit versäumtem Stoff |
+| `sensor.untis_archive_josia_versaeumter_stoff` | Versäumter Stoff letzte 14 Tage |
+| `sensor.untis_archive_josia_fehlzeiten_schuljahr` | Fehlzeiten-Zähler |
+| `sensor.untis_archive_josia_stundenplan_aenderungen` | Vertretungs-/Ausfall-Zähler |
+| `sensor.untis_archive_josia_lehrstoff_heute` | Lehrstoff der heutigen Stunden |
 
-Heißen deine Config-Entries anders, ersetze in `schul-cockpit.yaml`
-`untis_archive_josia` / `untis_archive_noah` durch die tatsächlichen
-Slugs (Entwicklertools → Zustände, nach `untis_archive` filtern).
+Heißen die Untis-Config-Entries anders, in `schul-cockpit.yaml` die
+Slugs `untis_archive_josia` / `untis_archive_noah` durch deine
+ersetzen (Entwicklertools → Zustände, nach `untis_archive` filtern).
 
 ## 3. Helper anlegen
 
@@ -46,19 +59,22 @@ Einstellungen → Geräte & Dienste → **Helfer** → Helfer hinzufügen →
 
 - Name: `Schul-Cockpit – Kind`
   Entity-ID: `input_select.schul_cockpit_kind`
-  Optionen: `Josia`, `Noah` (genau wie die Untis-Anzeigenamen)
+  Optionen: `Josia`, `Noah` — exakt wie die Anzeigenamen der
+  Untis-Konten.
 - Name: `Schul-Cockpit – Fach`
   Entity-ID: `input_select.schul_cockpit_fach`
-  Optionen: zunächst irgendetwas (z. B. `–`); wird durch die Automation
-  unten dynamisch befüllt.
+  Optionen: zunächst irgendetwas (z. B. `–`); wird durch die
+  Automation unten automatisch passend zum aktuellen Kind befüllt.
 
 ## 4. Automation: Fach-Liste pro Kind nachladen
 
-Wenn das Kind gewechselt wird, sollen die Optionen von
-`input_select.schul_cockpit_fach` auf die Fächer des Kindes umschalten:
+Sobald das Kind gewechselt wird, sollen die Optionen von
+`input_select.schul_cockpit_fach` auf die tatsächlich vorhandenen
+Fächer des Kindes umschalten.
+
+Einstellungen → Automationen → ☰ → YAML-Editor:
 
 ```yaml
-# Einstellungen → Automationen → YAML-Editor
 alias: Schul-Cockpit – Fachliste pflegen
 trigger:
   - platform: state
@@ -100,42 +116,48 @@ lovelace:
 ```
 
 Datei `dashboards/schul-cockpit.yaml` aus diesem Repo nach
-`/config/dashboards/schul-cockpit.yaml` kopieren. Home Assistant einmal
-neu starten oder `Einstellungen → Hardware → Dienste → Konfiguration
-neu laden → Lovelace-Dashboards`.
+`/config/dashboards/schul-cockpit.yaml` kopieren. Anschließend
+Einstellungen → Hardware → Dienste → Konfiguration neu laden →
+**Lovelace-Dashboards**, oder Home Assistant einmal neu starten.
 
 ## 6. Verifikation
 
 - Sidebar zeigt „Schul-Cockpit" – Dashboard öffnet sich ohne Fehler.
-- Kind-Chip oben wechselt zwischen Josia und Noah.
-- View „Übersicht" zeigt KPIs (Fehlzeiten, HA offen, Änderungen 7T) und
-  die heutigen Stunden mit Vertretungs-Badges (❌ Ausfall, ↺ Vertretung,
-  ⚠️ versäumt).
-- View „Monatskalender" rendert atomic-calendar-revive im Monatsmodus.
-- View „Fehlzeiten" zeigt das Balkendiagramm + Tabelle aller
-  Schuljahres-Fehlzeiten + gruppierten versäumten Stoff.
-- View „Klassenarbeit lernen": Fach-Chip auswählen → chronologische
-  Lehrstoff-Liste (neueste zuerst). Button „Als Markdown exportieren"
-  ruft `untis_archive.export_markdown` mit dem aktuell gewählten Fach.
-- View „Änderungen": Vertretungen/Ausfälle/Raumwechsel gruppiert nach
-  Tag, jeweils mit Change-Type-Labels.
-- View „Hausaufgaben": beide Kinder nebeneinander, überfällige Einträge
-  mit 🔴 markiert.
+- Oben in jeder View stehen zwei große Mushroom-Karten „Josia" / „Noah";
+  Antippen wechselt das Kind, die aktive Karte ist farbig hervorgehoben.
+- **Übersicht**: Monatskalender rendert. Sichtbar sind
+  - normale Stunden,
+  - ❌ Ausfälle (Titel-Präfix),
+  - ↺ Vertretungen,
+  - 🤒 versäumte Stunden (Krankheit),
+  - rote ganztägige Balken auf Krankheitstagen,
+  - 📝 Klassenarbeiten (sofern die Schule sie in der Untis-API
+    ausliefert – bei GaW noch nicht beobachtet, der Code zieht sie
+    automatisch, sobald sie auftauchen).
+
+  Termin anklicken → Detail-Popup mit Lehrstoff, Lehrer (inkl.
+  Originallehrer bei Vertretung), Raum und Fehlgrund.
+- **Fächer**: Mushroom-Karte „Fach wählen" antippen → input_select
+  öffnet sich, alle Fächer des aktuellen Kindes sind dort. Auswahl
+  rendert chronologische Stoff-Liste, neueste zuerst, mit
+  Vertretungs-/Ausfall-/Versäumt-Markern.
+- **Krankheits-Ausfälle**: Pro Krankheits-Periode (Datumsbereich) ein
+  Block mit Entschuldigungs-Status, Grund, Anzahl versäumter Stunden
+  und der Stoff-Liste gruppiert nach Fach.
 
 ## 7. Bekannte Grenzen
 
 - **Stundenplan-Fenster:** Untis liefert je nach Schule nur ein
-  beschränktes Vergangenheits-/Zukunftsfenster (bei GaW −5/+9 Tage). Das
-  Archiv akkumuliert ab dem Tag der Installation, ältere Tage davor
-  bleiben im Monatskalender leer.
-- **Fehlzeiten-Fenster:** −400/+30 Tage. Reicht für die Schuljahr-
-  Übersicht aus.
-- **Klassenarbeiten-Liste:** noch nicht eingebaut. Sobald die Schule
-  `exam`-Einträge in der Untis-API freigibt, kann eine zusätzliche View
-  ergänzt werden – die Rohdaten sind in `lessons.period_info_json`
-  bereits archiviert.
-- **Markdown-Export-Button** ist in der Lovelace-Action eingebunden,
-  aber Lovelace evaluiert das `[[ ]]`-Template-Syntax nur in einigen
-  Card-Typen zuverlässig. Falls der `subject`-Parameter nicht
-  übernommen wird, ruf den Service `untis_archive.export_markdown` mit
-  `account: Josia, subject: <Fach>` direkt aus den Entwicklertools auf.
+  begrenztes Vergangenheits-/Zukunftsfenster (bei GaW −5/+9 Tage). Das
+  Archiv akkumuliert ab dem Tag der Installation; Tage davor bleiben
+  im Monatskalender leer.
+- **Fehlzeiten-Fenster:** −400/+30 Tage. Reicht für die
+  Schuljahr-Übersicht.
+- **Klassenarbeiten**: Werden aus `lessons.period_info_json.exam`
+  defensiv extrahiert. Wenn die Schule den `exam`-Block nicht
+  ausliefert, sind im Ereignis-Kalender einfach keine 📝-Einträge
+  sichtbar — Stundenplan und Fehltage funktionieren trotzdem.
+- **Hausaufgaben**: Bewusst nicht im Dashboard. Untis markiert
+  Hausaufgaben praktisch nie als `completed=1`, deshalb sind die Zähler
+  irreführend. Stattdessen läuft die Todo-Synchronisation außerhalb
+  dieses Dashboards.
