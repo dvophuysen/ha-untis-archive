@@ -14,6 +14,10 @@ Per child:
                                 in den letzten 7 Tagen
 - ``..._fach_verlauf``        – Lehrstoff-Verlauf gruppiert pro Fach,
                                 Quelle für die „Klassenarbeit lernen"-View
+- ``..._krankheitsperioden``  – Krankheits-Perioden im Schuljahr mit
+                                verpasstem Stoff pro Periode (gruppiert
+                                nach Fach), Quelle für die Krankheits-
+                                Ansicht im Dashboard
 """
 
 from __future__ import annotations
@@ -61,6 +65,7 @@ async def async_setup_entry(
             FehlzeitenSchuljahrSensor(coordinator, entry, slug),
             StundenplanAenderungenSensor(coordinator, entry, slug),
             FachVerlaufSensor(coordinator, entry, slug),
+            KrankheitsperiodenSensor(coordinator, entry, slug),
         ]
     )
 
@@ -360,3 +365,78 @@ class FachVerlaufSensor(_Base):
             "subject_list": sorted(subjects_capped.keys()),
             "subjects": subjects_capped,
         }
+
+
+class KrankheitsperiodenSensor(_Base):
+    """Krankheits-Perioden im Schuljahr mit verpasstem Stoff pro Periode.
+
+    Jede Absence aus Untis bildet eine Periode (start_date – end_date).
+    Pro Periode werden die ``was_absent=1``-Stunden in dem Zeitraum
+    gesammelt und nach Fach gruppiert, damit man im Dashboard sofort
+    sieht „in der Krankheit vom 03.–07.06. habe ich in Mathe x, y, z
+    verpasst".
+    """
+
+    _attr_icon = "mdi:bed"
+
+    def __init__(self, coordinator: UntisCoordinator, entry: ConfigEntry, slug: str) -> None:
+        super().__init__(coordinator, entry, slug)
+        self._attr_unique_id = f"{entry.entry_id}_krankheitsperioden"
+        self._attr_translation_key = "krankheitsperioden"
+        self._attr_name = "Krankheitsperioden"
+
+    def _build(self) -> list[dict[str, Any]]:
+        today = date.today()
+        start = _school_year_start(today).isoformat()
+        end = (today + timedelta(days=14)).isoformat()
+        absences = self.coordinator.storage.absences_between(
+            self.coordinator.account_id, start, end
+        )
+        periods: list[dict[str, Any]] = []
+        for ab in absences:
+            ab_start = ab.get("start_date") or ""
+            ab_end = ab.get("end_date") or ab_start
+            if not ab_start:
+                continue
+            missed = self.coordinator.storage.missed_lessons(
+                self.coordinator.account_id, ab_start, ab_end
+            )
+            # Auf das tatsächliche Krankheitsfenster zuschneiden — die
+            # storage-Abfrage liefert alle was_absent=1-Stunden im Datums-
+            # Bereich, was bei mehreren Absences am selben Tag genügt.
+            by_subject: dict[str, list[dict[str, Any]]] = {}
+            for r in missed:
+                name = r.get("subject_name") or "—"
+                topic = r.get("lstext_manual_override") or r.get("lstext") or ""
+                by_subject.setdefault(name, []).append(
+                    {
+                        "date": r.get("date"),
+                        "start": r.get("start_time"),
+                        "code": r.get("code") or "",
+                        "teacher": r.get("teacher_name"),
+                        "room": r.get("room"),
+                        "topic": topic,
+                    }
+                )
+            for items in by_subject.values():
+                items.sort(key=lambda x: (x["date"] or "", x["start"] or 0))
+            periods.append(
+                {
+                    "start_date": ab_start,
+                    "end_date": ab_end,
+                    "reason": ab.get("reason") or ab.get("text") or "",
+                    "is_excused": bool(ab.get("is_excused")),
+                    "lessons_count": sum(len(v) for v in by_subject.values()),
+                    "subjects": by_subject,
+                }
+            )
+        periods.sort(key=lambda p: p["start_date"], reverse=True)
+        return periods
+
+    @property
+    def native_value(self) -> int:
+        return len(self._build())
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"periods": self._build()}

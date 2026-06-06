@@ -33,7 +33,8 @@
       "versaeumter_stoff": { "name": "Missed lesson topics" },
       "fehlzeiten_schuljahr": { "name": "Absences this school year" },
       "stundenplan_aenderungen": { "name": "Timetable changes (7d)" },
-      "fach_verlauf": { "name": "Subject history" }
+      "fach_verlauf": { "name": "Subject history" },
+      "krankheitsperioden": { "name": "Sickness periods" }
     }
   }
 }
