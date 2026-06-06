@@ -74,7 +74,7 @@ views:
           type: custom:atomic-calendar-revive
           name: Stundenplan – Kind B
           enableModeChange: true
-          defaultMode: Month
+          defaultMode: Calendar
           showMonth: true
           showWeekNumber: true
           firstDayOfWeek: 1
@@ -99,7 +99,7 @@ views:
           type: custom:atomic-calendar-revive
           name: Stundenplan – Kind A
           enableModeChange: true
-          defaultMode: Month
+          defaultMode: Calendar
           showMonth: true
           showWeekNumber: true
           firstDayOfWeek: 1
