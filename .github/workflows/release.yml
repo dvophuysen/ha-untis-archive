@@ -7,6 +7,10 @@ on:
         description: 'Tag/version (e.g. v0.2.2). If empty, read from manifest.'
         required: false
         type: string
+  push:
+    branches: [main]
+    paths:
+      - 'custom_components/untis_archive/manifest.json'
 
 permissions:
   contents: write
