@@ -52,7 +52,7 @@ def login_user_list() -> dict:
 
 
 @router.post("/auth/login")
-def login(body: LoginIn, response: Response) -> dict:
+def login(body: LoginIn, request: Request, response: Response) -> dict:
     conn = webapp_conn()
     try:
         try:
@@ -64,6 +64,15 @@ def login(body: LoginIn, response: Response) -> dict:
         token, expires = create_session(conn, body.user_id)
     finally:
         conn.close()
+
+    # Reverse-proxy aware: if the request reached us over HTTPS (directly or
+    # via Cloudflare Tunnel / NGINX setting X-Forwarded-Proto), mark the
+    # cookie Secure so it cannot leak over plain HTTP. In a local LAN-only
+    # setup over HTTP, we must not set Secure or the browser drops the
+    # cookie entirely.
+    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").lower()
+    is_https = request.url.scheme == "https" or forwarded_proto == "https"
+
     response.set_cookie(
         SESSION_COOKIE,
         token,
@@ -71,7 +80,7 @@ def login(body: LoginIn, response: Response) -> dict:
         httponly=True,
         samesite="lax",
         path="/",
-        secure=False,
+        secure=is_https,
     )
     return {"ok": True, "expires_at": expires.isoformat()}
 

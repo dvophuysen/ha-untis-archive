@@ -79,14 +79,49 @@ HA-Oberfläche eingebettet und lässt sich auf dem iPhone nicht als
 eigenständige App installieren. Dafür gibt es den **Direkt-Zugriff**:
 
 1. Im Setup (Zahnrad oben rechts) für jedes Kind einen **PIN** vergeben.
-2. Auf dem iPhone in **Safari** die Direkt-Adresse öffnen:
-   `http://<HA-IP>:8099/` bzw. deine feste HA-URL mit Port `:8099`.
+2. Auf dem iPhone in **Safari** die Direkt-Adresse öffnen
+   (siehe nächster Abschnitt — je nach Setup im LAN oder über Cloudflare).
 3. Mit dem PIN des Kindes anmelden (30 Tage gültig).
 4. Teilen-Symbol → **„Zum Home-Bildschirm"**.
 
 Ergebnis: eigenes Icon, Vollbild ohne Safari-Leiste, offline-fähig
 (zuletzt geladene Ansicht bleibt sichtbar). Innerhalb von HA über die
 Seitenleiste funktioniert die App weiterhin ohne PIN.
+
+### Direkt-URL im Heim-WLAN
+
+`http://<HA-IP>:8099/` — z.B. `http://192.168.178.42:8099/`.
+Funktioniert ohne weitere Konfiguration, ist aber nur im eigenen
+Netzwerk erreichbar.
+
+### Direkt-URL über Cloudflare Tunnel
+
+Mit einem zweiten Public Hostname im bestehenden Tunnel bekommt die App
+eine eigene öffentliche Subdomain (z.B. `https://schule.deinedomain.de`).
+
+Schritt für Schritt im Cloudflare-Dashboard:
+
+1. **Zero Trust → Networks → Tunnels** öffnen und den bestehenden
+   Tunnel anklicken.
+2. **Configure → Public Hostname** → **Add a public hostname**.
+3. Felder:
+   - **Subdomain:** z.B. `schule`
+   - **Domain:** deine Domain (Dropdown)
+   - **Path:** leer lassen
+   - **Service – Type:** `HTTP` (nicht HTTPS! Der Tunnel terminiert TLS;
+     intern spricht das Add-on Klartext-HTTP)
+   - **URL:** `homeassistant.local:8099` (oder die feste IP, z.B.
+     `192.168.178.42:8099`)
+4. Speichern. Nach ein paar Sekunden ist `https://schule.deinedomain.de`
+   live und zeigt direkt die App ohne HA-Rahmen.
+
+**Wichtig — Cloudflare Access NICHT aktivieren** für diese Subdomain:
+Der PIN-Login der App ist die einzige Auth-Schicht. Doppelte Anmeldung
+(Cloudflare Access + PIN) ist für die Kinder verwirrend.
+
+**Sicherheit der Session-Cookies:** Sobald Cloudflare HTTPS terminiert,
+markiert das Add-on das Login-Cookie automatisch als `Secure`, sodass es
+nie über unverschlüsseltes HTTP übertragen wird.
 
 ## Datensicherheit & Persistenz
 
