@@ -9,9 +9,39 @@
   let accounts = $state([]);
   let todoEntities = $state([]);
   let todoLists = $state([]);
+  let notifyTokens = $state({});  // {account_id: token}
   let loading = $state(true);
   let error = $state(null);
   let savingFor = $state(null);
+
+  async function loadToken(accountId) {
+    if (notifyTokens[accountId]) return;
+    try {
+      const r = await api.get(`/api/accounts/${accountId}/notify-token`);
+      notifyTokens = { ...notifyTokens, [accountId]: r.token };
+    } catch (e) {
+      // ignore — token only relevant for admins/parents anyway
+    }
+  }
+
+  async function rotateToken(accountId) {
+    if (!confirm('Token neu generieren? Bestehende HA-Automationen verlieren ihren Zugriff bis der neue Token dort eingetragen ist.')) return;
+    try {
+      const r = await api.post(`/api/accounts/${accountId}/notify-token/rotate`);
+      notifyTokens = { ...notifyTokens, [accountId]: r.token };
+    } catch (e) {
+      error = e.message;
+    }
+  }
+
+  function copyText(s) {
+    navigator.clipboard?.writeText(s);
+  }
+
+  function exampleUrl(accountId, token) {
+    const base = window.location.origin;
+    return `${base}/api/notify/${accountId}/summary?token=${token}`;
+  }
 
   async function load() {
     loading = true;
@@ -205,4 +235,57 @@
       </div>
     </div>
   {/each}
+
+  <div class="section-title">Benachrichtigungen per HA-Automation</div>
+  <div class="banner">
+    Statt eingebauter Push-Benachrichtigungen kannst du HA-Cron-Jobs nutzen, die per
+    WhatsApp/Telegram/SMS an die Kinder schicken — mit aktuellen Zahlen aus dieser App
+    und einem Direktlink, der die richtige Unterseite öffnet.
+    <br><br>
+    Pro Kind gibt es einen <strong>Notify-Token</strong>. Damit kann HA serverseitig
+    <code>/api/notify/&lt;id&gt;/summary?token=&lt;token&gt;</code> abrufen — liefert offene
+    Aufgaben, unbewertete Stunden, nächste Klausur, Deep-Links etc. zurück.
+  </div>
+
+  {#each accounts as a}
+    <div class="card">
+      <div class="row between" style="margin-bottom:0.4rem;">
+        <strong>{a.name}</strong>
+        {#if !notifyTokens[a.id]}
+          <button onclick={() => loadToken(a.id)} style="font-size:0.85rem; min-height:34px;">Token anzeigen</button>
+        {:else}
+          <button class="ghost" onclick={() => rotateToken(a.id)} style="font-size:0.85rem; min-height:34px;">↻ neu generieren</button>
+        {/if}
+      </div>
+      {#if notifyTokens[a.id]}
+        {@const url = exampleUrl(a.id, notifyTokens[a.id])}
+        <div class="muted" style="font-size:0.8rem;">Token (geheim halten!):</div>
+        <code class="code-box">{notifyTokens[a.id]}</code>
+        <button class="ghost" onclick={() => copyText(notifyTokens[a.id])} style="font-size:0.8rem; min-height:32px;">Token kopieren</button>
+
+        <div class="muted" style="font-size:0.8rem; margin-top:0.6rem;">Beispiel-URL (HA <code>rest_command</code>):</div>
+        <code class="code-box">{url}</code>
+        <button class="ghost" onclick={() => copyText(url)} style="font-size:0.8rem; min-height:32px;">URL kopieren</button>
+      {/if}
+    </div>
+  {/each}
+
+  <div class="banner">
+    💡 Damit die Deep-Links in den Nachrichten klickbar werden, trage in
+    den <strong>Add-on-Optionen</strong> die externe URL ein (z.B. <code>https://schule.deinedomain.de</code>).
+    Sobald gesetzt, liefert der Endpoint fertige Links zurück.
+  </div>
 {/if}
+
+<style>
+  .code-box {
+    display: block;
+    word-break: break-all;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.78rem;
+    margin: 0.2rem 0;
+  }
+</style>

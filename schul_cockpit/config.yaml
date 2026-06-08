@@ -1,5 +1,5 @@
 name: Schul-Cockpit
-version: "0.8.8"
+version: "0.9.0"
 slug: schul_cockpit
 description: Mobile Schul-App für Kinder und Eltern, basierend auf dem UNTIS-Archive-Datenbestand.
 url: https://github.com/dvophuysen/ha-untis-archive/tree/main/schul_cockpit
@@ -34,5 +34,10 @@ map:
   - config:ro
 options:
   log_level: info
+  external_url: ""
 schema:
   log_level: list(trace|debug|info|notice|warning|error|fatal)?
+  # Public URL the app is reachable at from outside HA (e.g. your Cloudflare
+  # hostname for port 8099). When set, the notify-summary endpoint returns
+  # full clickable deep links — perfect for WhatsApp/Telegram automations.
+  external_url: str?

@@ -118,6 +118,10 @@ _MIGRATIONS: list[tuple[str, str]] = [
         "016_push_subs_user_idx",
         "CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id)",
     ),
+    (
+        "017_account_settings_notify_token",
+        "ALTER TABLE account_settings ADD COLUMN notify_token TEXT",
+    ),
 ]
 
 

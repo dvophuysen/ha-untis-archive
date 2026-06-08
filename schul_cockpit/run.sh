@@ -3,6 +3,8 @@ set -e
 
 LOG_LEVEL="$(bashio::config 'log_level')"
 export WEBAPP_LOG_LEVEL="${LOG_LEVEL:-info}"
+EXTERNAL_URL="$(bashio::config 'external_url')"
+export WEBAPP_EXTERNAL_URL="${EXTERNAL_URL:-}"
 
 bashio::log.info "Starting Schul-Cockpit on ${WEBAPP_HOST}:${WEBAPP_PORT}"
 bashio::log.info "history.db: ${WEBAPP_HISTORY_DB}"
