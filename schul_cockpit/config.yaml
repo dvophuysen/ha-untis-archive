@@ -1,5 +1,5 @@
 name: Schul-Cockpit
-version: "0.4.2"
+version: "0.5.0"
 slug: schul_cockpit
 description: Mobile Schul-App für Kinder und Eltern, basierend auf dem UNTIS-Archive-Datenbestand.
 url: https://github.com/dvophuysen/ha-untis-archive/tree/main/schul_cockpit
@@ -20,6 +20,13 @@ panel_title: Schul-Cockpit
 hassio_api: true
 homeassistant_api: true
 auth_api: true
+# Direct port: lets the kids open the app on its own URL (http://<ha>:8099/)
+# so iOS can install it as a real PWA (full-screen, offline). Protected by
+# per-child PIN login. Inside HA the app still works via Ingress (no PIN).
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: Direkter App-Zugriff (PIN-Login) für die Installation auf dem Home-Bildschirm
 map:
   - config:ro
 options:

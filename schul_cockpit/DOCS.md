@@ -72,8 +72,35 @@ und welche Wochentage abweichen.
   `homeassistant_api: true` (ist in `config.yaml` gesetzt). Add-on
   neu starten.
 
-## Datenschutz
+## Als App auf den Home-Bildschirm (PWA)
 
-- Alle Daten bleiben auf deiner HA-Instanz. Es gibt keine
-  externen Verbindungen.
-- Backups: `webapp.db` liegt in `/data/` und ist Teil jedes HA-Backups.
+Innerhalb von HA läuft die App über Ingress — dabei ist sie aber in die
+HA-Oberfläche eingebettet und lässt sich auf dem iPhone nicht als
+eigenständige App installieren. Dafür gibt es den **Direkt-Zugriff**:
+
+1. Im Setup (Zahnrad oben rechts) für jedes Kind einen **PIN** vergeben.
+2. Auf dem iPhone in **Safari** die Direkt-Adresse öffnen:
+   `http://<HA-IP>:8099/` bzw. deine feste HA-URL mit Port `:8099`.
+3. Mit dem PIN des Kindes anmelden (30 Tage gültig).
+4. Teilen-Symbol → **„Zum Home-Bildschirm"**.
+
+Ergebnis: eigenes Icon, Vollbild ohne Safari-Leiste, offline-fähig
+(zuletzt geladene Ansicht bleibt sichtbar). Innerhalb von HA über die
+Seitenleiste funktioniert die App weiterhin ohne PIN.
+
+## Datensicherheit & Persistenz
+
+- **Alle Daten bleiben auf deiner HA-Instanz** — keine externen
+  Verbindungen.
+- `webapp.db` (Check-ins, Aufgaben, PINs, Einstellungen) liegt in
+  `/data/` und ist Teil **jedes HA-Backups**.
+- **Add-on-Updates** (auch automatische) lassen `/data/` unangetastet.
+- **Verknüpfung zum UNTIS-Archiv ist dauerhaft**: Zu jedem Check-in und
+  jeder Aufgabe wird zusätzlich die stabile Untis-Kennung
+  (`untis_period_id`, `entry_id`) gespeichert. Selbst wenn die
+  UNTIS-Archive-Integration komplett entfernt und neu eingerichtet wird
+  (was die internen Datenbank-IDs neu vergibt), erkennt die App das beim
+  Start und repariert die Verknüpfungen automatisch — kein Datenverlust.
+- **Einziger echter Löschfall**: Beim Deinstallieren des Add-ons fragt
+  HA „Daten löschen?" — mit „Nein" überlebt `webapp.db` eine spätere
+  Neuinstallation.

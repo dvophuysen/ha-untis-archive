@@ -49,6 +49,56 @@ _MIGRATIONS: list[tuple[str, str]] = [
         "004_audit_log_user_idx",
         "CREATE INDEX IF NOT EXISTS idx_audit_user_time ON audit_log(user_id, created_at)",
     ),
+    # --- ID-stability hardening: keep the stable Untis identifiers next to
+    # the internal history.db ids, so links survive even a full re-setup of
+    # the UNTIS Archive integration (which would re-number lessons/accounts).
+    (
+        "005_checkins_untis_period_id",
+        "ALTER TABLE lesson_checkins ADD COLUMN untis_period_id INTEGER",
+    ),
+    (
+        "006_caught_up_untis_period_id",
+        "ALTER TABLE caught_up ADD COLUMN untis_period_id INTEGER",
+    ),
+    (
+        "007_tasks_untis_period_id",
+        "ALTER TABLE tasks ADD COLUMN untis_period_id INTEGER",
+    ),
+    (
+        "008_account_ref",
+        """
+        CREATE TABLE IF NOT EXISTS account_ref (
+            entry_id TEXT PRIMARY KEY,       -- stable HA config entry id
+            account_id INTEGER NOT NULL,     -- current history.db accounts.id
+            name TEXT,
+            updated_at TEXT
+        )
+        """,
+    ),
+    # --- PIN auth for direct (non-Ingress) access → installable PWA.
+    ("009_users_pin_hash", "ALTER TABLE users ADD COLUMN pin_hash TEXT"),
+    ("010_users_pin_salt", "ALTER TABLE users ADD COLUMN pin_salt TEXT"),
+    (
+        "011_users_pin_failed",
+        "ALTER TABLE users ADD COLUMN pin_failed_attempts INTEGER NOT NULL DEFAULT 0",
+    ),
+    ("012_users_pin_locked_until", "ALTER TABLE users ADD COLUMN pin_locked_until TEXT"),
+    (
+        "013_sessions",
+        """
+        CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL
+        )
+        """,
+    ),
+    (
+        "014_sessions_user_idx",
+        "CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)",
+    ),
 ]
 
 

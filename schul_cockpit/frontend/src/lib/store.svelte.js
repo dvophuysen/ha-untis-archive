@@ -1,12 +1,13 @@
 // Tiny rune-based global appState.
 
-import { api } from './api.js';
+import { api, ApiError } from './api.js';
 
 export const appState = $state({
   loading: true,
   me: null,
   activeAccountId: null,
   error: null,
+  needsLogin: false,
 });
 
 export async function loadMe() {
@@ -14,6 +15,7 @@ export async function loadMe() {
   appState.error = null;
   try {
     appState.me = await api.get('/api/me');
+    appState.needsLogin = false;
     if (appState.me.accounts.length > 0 && appState.activeAccountId == null) {
       const saved = localStorage.getItem('activeAccountId');
       const savedNum = saved ? Number(saved) : null;
@@ -23,7 +25,12 @@ export async function loadMe() {
       appState.activeAccountId = null;
     }
   } catch (e) {
-    appState.error = e.message;
+    if (e instanceof ApiError && e.status === 401) {
+      appState.needsLogin = true;
+      appState.me = null;
+    } else {
+      appState.error = e.message;
+    }
   } finally {
     appState.loading = false;
   }

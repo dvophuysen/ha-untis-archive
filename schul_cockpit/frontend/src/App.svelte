@@ -10,6 +10,13 @@
   import Setup from './routes/Setup.svelte';
   import Settings from './routes/Settings.svelte';
   import MyChanges from './routes/MyChanges.svelte';
+  import Login from './routes/Login.svelte';
+  import { api } from './lib/api.js';
+
+  async function logout() {
+    try { await api.post('/api/auth/logout'); } catch (_) { /* ignore */ }
+    await loadMe();
+  }
 
   let route = $state(parseHash());
 
@@ -43,6 +50,9 @@
   ];
 </script>
 
+{#if appState.needsLogin}
+  <Login />
+{:else}
 <div class="app-shell">
   <header class="top-bar">
     <div class="col" style="gap: 0">
@@ -68,6 +78,9 @@
       {/if}
       {#if acc}
         <button class="ghost" onclick={() => navigate('settings')} title="Einstellungen">🛠</button>
+      {/if}
+      {#if appState.me?.auth_source === 'pin'}
+        <button class="ghost" onclick={logout} title="Abmelden">⏻</button>
       {/if}
     </div>
   </header>
@@ -143,3 +156,4 @@
     </nav>
   {/if}
 </div>
+{/if}
