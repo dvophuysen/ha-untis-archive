@@ -115,15 +115,11 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
   padding: 0.5rem 1rem 1rem;
 }
 
-/* Sticky (not fixed) so the bottom-nav participates in the document flow
-   and isn't overlaid by Safari's URL bar in tab mode. Padding accounts for
-   the iPhone home indicator (safe-area-inset-bottom) in a standalone PWA
-   and for Safari's URL bar in tab mode.
-
-   matchMedia-based detection in JS is more reliable than CSS
-   @media (display-mode: …), which iOS Safari has historically gotten
-   wrong for installed-PWA contexts. The .standalone class is toggled on
-   <body> from main.js. */
+/* The nav sticks to the bottom of the document, which together with
+   min-height: 100dvh on .app-shell means it always sits at the visible
+   viewport bottom — above Safari's URL bar in tab mode, above the home
+   indicator in a standalone PWA. Only the home-indicator safe area gets
+   added on top of the normal padding; no Safari-chrome workaround needed. */
 .bottom-nav {
   position: sticky;
   bottom: 0;
@@ -133,10 +129,6 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
   background: var(--bg-card);
   border-top: 1px solid var(--border);
   z-index: 10;
-}
-/* Only when actually inside a Safari tab — add room for the URL toolbar. */
-body:not(.standalone) .bottom-nav {
-  padding-bottom: calc(0.4rem + env(safe-area-inset-bottom) + 56px);
 }
 .bottom-nav button {
   flex: 1;
@@ -278,9 +270,6 @@ body:not(.standalone) .bottom-nav {
   box-shadow: 0 4px 12px rgba(37,99,235,0.4);
   display: flex; align-items: center; justify-content: center;
   z-index: 5;
-}
-body:not(.standalone) .fab {
-  bottom: calc(76px + env(safe-area-inset-bottom) + 56px);
 }
 
 .empty {
