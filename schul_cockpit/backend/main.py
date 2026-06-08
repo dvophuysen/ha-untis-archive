@@ -7,11 +7,12 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import SETTINGS
+from .pin_auth import SESSION_COOKIE, SESSION_TTL_DAYS
 from .db import init_webapp_db
 from .history_schema import SchemaMismatch, assert_compatible
 from .reconcile import reconcile_all
@@ -72,6 +73,33 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Schul-Cockpit", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def slide_pin_cookie(request: Request, call_next):
+    """Refresh the PIN session cookie on every successful authenticated
+    request, so the kid stays logged in indefinitely as long as they keep
+    using the app. Skipped when the request authenticated via Ingress
+    headers (HA-internal access doesn't need our cookie)."""
+    response = await call_next(request)
+    cookie = request.cookies.get(SESSION_COOKIE)
+    used_pin = cookie and not request.headers.get("x-remote-user-id")
+    if used_pin and 200 <= response.status_code < 400:
+        is_https = (
+            request.url.scheme == "https"
+            or (request.headers.get("x-forwarded-proto") or "").lower() == "https"
+        )
+        response.set_cookie(
+            SESSION_COOKIE,
+            cookie,
+            max_age=SESSION_TTL_DAYS * 24 * 60 * 60,
+            httponly=True,
+            samesite="lax",
+            path="/",
+            secure=is_https,
+        )
+    return response
+
 
 API = "/api"
 app.include_router(health.router, prefix=API)
