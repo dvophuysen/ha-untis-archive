@@ -1,5 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
+  import LessonDetail from '../lib/LessonDetail.svelte';
 
   let { accountId } = $props();
 
@@ -118,40 +119,12 @@
 {/if}
 
 {#if selected}
-  <div class="modal-backdrop" onclick={() => (selected = null)} role="presentation">
-    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog">
-      <div class="row between" style="margin-bottom:0.5rem;">
-        <h2 style="margin:0; font-size:1.1rem;">{selected.subject_name ?? selected.subject_short ?? 'Stunde'}</h2>
-        <button class="ghost" onclick={() => (selected = null)}>✕</button>
-      </div>
-      <div class="muted">{selected.date} · {selected.start_hhmm}–{selected.end_hhmm}</div>
-      <div class="row gap-sm" style="margin:0.4rem 0; flex-wrap:wrap;">
-        {#if selected.is_cancelled}<span class="badge cancelled">❌ Ausfall</span>{/if}
-        {#if selected.is_irregular && !selected.is_cancelled}<span class="badge substitution">↺ Vertretung</span>{/if}
-        {#if selected.was_absent}<span class="badge absent">🤒 gefehlt</span>{/if}
-        {#if selected.exam}<span class="badge exam">📝 Klausur</span>{/if}
-        {#if selected.rating === 4}<span class="badge">👀 nur Aufsicht</span>{/if}
-      </div>
-      <div class="card compact" style="margin:0;">
-        <div>👤 {selected.teacher_name ?? '—'}
-          {#if selected.is_teacher_substituted && selected.teacher_orig_name}
-            <span class="dim">(statt {selected.teacher_orig_name})</span>
-          {/if}
-        </div>
-        {#if selected.room}<div>📍 {selected.room}
-          {#if selected.is_room_substituted && selected.room_orig}<span class="dim">(statt {selected.room_orig})</span>{/if}
-        </div>{/if}
-        {#if selected.exam?.name}<div style="color:var(--exam)">📝 {selected.exam.name}</div>{/if}
-        {#if selected.lstext}<div style="margin-top:0.4rem;">{selected.lstext}</div>{/if}
-        {#if selected.subst_text && selected.subst_text !== selected.lstext}
-          <div class="dim" style="margin-top:0.3rem;">ℹ️ {selected.subst_text}</div>
-        {/if}
-        {#if selected.rating}
-          <div class="muted" style="margin-top:0.4rem;">Deine Bewertung: {['','😟','😐','😀','👀'][selected.rating] ?? ''}</div>
-        {/if}
-      </div>
-    </div>
-  </div>
+  <LessonDetail
+    {accountId}
+    lesson={selected}
+    onclose={() => (selected = null)}
+    onsaved={load}
+  />
 {/if}
 
 <style>

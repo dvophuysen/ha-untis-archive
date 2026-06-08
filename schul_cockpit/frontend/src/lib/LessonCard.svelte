@@ -1,5 +1,6 @@
 <script>
   import { api } from './api.js';
+  import LessonDetail from './LessonDetail.svelte';
 
   let { accountId, lesson } = $props();
 
@@ -103,61 +104,11 @@
 </div>
 
 {#if showDetail}
-  <div class="modal-backdrop" onclick={() => (showDetail = false)} role="presentation">
-    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog">
-      <div class="row between" style="margin-bottom:0.4rem;">
-        <h2 style="margin:0; font-size:1.1rem;">{lesson.subject_name ?? subjectLabel}</h2>
-        <button class="ghost" onclick={() => (showDetail = false)}>✕</button>
-      </div>
-      <div class="muted">{lesson.date ?? ''} {lesson.start_hhmm}–{lesson.end_hhmm}</div>
-      <div class="row gap-sm" style="margin:0.4rem 0; flex-wrap:wrap;">
-        {#if isCancelled}<span class="badge cancelled">❌ Ausfall</span>{/if}
-        {#if lesson.is_irregular && !isCancelled}<span class="badge substitution">↺ Vertretung</span>{/if}
-        {#if wasAbsent}<span class="badge absent">🤒 gefehlt</span>{/if}
-        {#if hasExam}<span class="badge exam">📝 Klausur</span>{/if}
-      </div>
-
-      <div class="card compact" style="margin:0 0 0.6rem;">
-        <div>👤 {lesson.teacher_name ?? '—'}
-          {#if lesson.is_teacher_substituted && lesson.teacher_orig_name}
-            <span class="dim">(statt {lesson.teacher_orig_name})</span>
-          {/if}
-        </div>
-        {#if lesson.room}<div>📍 {lesson.room}
-          {#if lesson.is_room_substituted && lesson.room_orig}<span class="dim">(statt {lesson.room_orig})</span>{/if}
-        </div>{/if}
-        {#if hasExam && lesson.exam.name}<div style="color:var(--exam)">📝 {lesson.exam.name}</div>{/if}
-        {#if lesson.lstext}<div style="margin-top:0.4rem;">{lesson.lstext}</div>{/if}
-        {#if lesson.subst_text && lesson.subst_text !== lesson.lstext}
-          <div class="dim" style="margin-top:0.3rem;">ℹ️ {lesson.subst_text}</div>
-        {/if}
-      </div>
-
-      {#if canRate}
-        <label>Wie lief die Stunde?</label>
-        <div class="checkins detail-checkins" class:three={!isSubst}>
-          <button class="ci r3" class:active={rating === 3} disabled={busy} onclick={() => checkin(3)}>😀</button>
-          <button class="ci r2" class:active={rating === 2} disabled={busy} onclick={() => checkin(2)}>😐</button>
-          <button class="ci r1" class:active={rating === 1} disabled={busy} onclick={() => checkin(1)}>😟</button>
-          {#if isSubst}
-            <button class="ci r4" class:active={rating === 4} disabled={busy} onclick={() => checkin(4)}>👀</button>
-          {/if}
-        </div>
-
-        <label style="margin-top:0.6rem;">Kommentar</label>
-        <textarea bind:value={note} rows="3" placeholder="z.B. Hausaufgabe nicht verstanden, nochmal fragen…"></textarea>
-        <button class="primary" style="width:100%; margin-top:0.5rem;" disabled={busy} onclick={saveNote}>
-          Kommentar speichern
-        </button>
-      {/if}
-
-      {#if wasAbsent && lesson.lstext}
-        <button style="width:100%; margin-top:0.5rem;" onclick={markCaughtUp} disabled={busy}>
-          {lesson.caught_up ? '✓ nachgeholt — rückgängig' : 'Versäumten Stoff als nachgeholt markieren'}
-        </button>
-      {/if}
-    </div>
-  </div>
+  <LessonDetail
+    {accountId}
+    {lesson}
+    onclose={() => (showDetail = false)}
+  />
 {/if}
 
 <style>
