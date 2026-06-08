@@ -1,6 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
-  import { loadMe } from '../lib/store.svelte.js';
+  import { appState, loadMe } from '../lib/store.svelte.js';
 
   let users = $state([]);
   let loading = $state(true);
@@ -29,14 +29,19 @@
   function back() { pin = pin.slice(0, -1); }
 
   async function submit() {
-    if (pin.length < 4) return;
+    if (pin.length < 4 || busy) return;
     busy = true;
     error = null;
     try {
       await api.post('/api/auth/login', { user_id: selected.id, pin });
       await loadMe();
+      // If we're still on the login screen, the cookie didn't stick.
+      if (appState.needsLogin) {
+        error = 'Anmeldung gespeichert, aber Sitzung wird nicht gehalten. '
+              + 'Bitte private-Modus/Cookies prüfen oder App neu installieren.';
+      }
     } catch (e) {
-      error = e.message;
+      error = e.message || 'Anmeldung fehlgeschlagen';
       pin = '';
     } finally {
       busy = false;
