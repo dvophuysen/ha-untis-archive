@@ -52,12 +52,15 @@
     {/each}
   {/if}
 
-  <div class="section-title">Alle Fächer</div>
+  <div class="section-title">Fächer</div>
   {#each subjects as s}
-    <button class="card" style="width:100%; text-align:left;" onclick={() => navigate('subject', s.subject_id)}>
+    <button class="card compact" style="width:100%; text-align:left;" onclick={() => navigate('subject', s.subject_id)}>
       <div class="row between">
-        <strong>{s.name}</strong>
-        <span class="dim">{s.lessons_total} Stunden</span>
+        <div class="row gap-sm" style="min-width:0;">
+          {#if s.short}<span class="badge" style="font-weight:600;">{s.short}</span>{/if}
+          <strong style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{s.name}</strong>
+        </div>
+        <span class="dim" style="white-space:nowrap;">{s.lessons_total}×</span>
       </div>
     </button>
   {/each}

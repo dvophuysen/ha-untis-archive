@@ -104,8 +104,8 @@
 
     <div class="form-grid">
       <div>
-        <label>Titel</label>
-        <input bind:value={title} placeholder="z.B. Mathe S. 42 Nr. 1-5" />
+        <label>Titel {#if isHaTask}<span class="dim">(aus Untis)</span>{/if}</label>
+        <input bind:value={title} placeholder="z.B. Mathe S. 42 Nr. 1-5" disabled={isHaTask} />
       </div>
 
       <div>
@@ -125,8 +125,8 @@
       </div>
 
       <div>
-        <label>Fällig am</label>
-        <input type="date" bind:value={dueDate} />
+        <label>Fällig am {#if isHaTask}<span class="dim">(aus Untis — nicht änderbar)</span>{/if}</label>
+        <input type="date" bind:value={dueDate} disabled={isHaTask} />
       </div>
 
       <div>
