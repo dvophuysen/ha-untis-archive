@@ -39,12 +39,6 @@
 html, body {
   margin: 0;
   padding: 0;
-  /* The body itself does NOT scroll. The scrollable area lives inside
-     .content. This locks the top bar and bottom nav to the viewport edges
-     and removes the iOS rubber-band that otherwise drags the sticky nav
-     up with the page. */
-  height: 100%;
-  overflow: hidden;
   background: var(--bg);
   color: var(--fg);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -84,19 +78,18 @@ input, select, textarea {
 textarea { min-height: 80px; resize: vertical; }
 label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-bottom: 0.3rem; }
 
+/* Layout is back to the simple v0.1 model: body scrolls normally, the
+   top-bar sticks, and the bottom-nav is fixed at the viewport bottom.
+   This is the only model that reliably keeps the nav flush at the edge
+   in an installed iOS PWA — every attempt at fancier sticky/flex
+   gymnastics produced either a phantom gap or rubber-band drift. */
 .app-shell {
   display: flex;
   flex-direction: column;
-  /* Fill the visible viewport precisely. svh is the *smallest* viewport
-     (Safari URL bar showing) — using it means the nav never sits behind
-     Safari's chrome and the layout doesn't jitter as the URL bar shows
-     and hides during scroll. Fallbacks for older browsers. */
-  height: 100vh;
-  height: 100dvh;
-  height: 100svh;
+  min-height: 100vh;
+  min-height: 100dvh;
   max-width: 720px;
   margin: 0 auto;
-  overflow: hidden;
 }
 
 .top-bar {
@@ -108,11 +101,10 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
     max(1rem, env(safe-area-inset-right))
     0.6rem
     max(1rem, env(safe-area-inset-left));
-  /* Not sticky anymore — it's the first flex item of the shell, always
-     at the top. */
-  flex-shrink: 0;
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: color-mix(in oklab, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(150%) blur(8px);
   z-index: 5;
 }
 .top-bar h1 {
@@ -124,19 +116,19 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
 
 .content {
   flex: 1;
-  min-height: 0;       /* lets the flex child scroll instead of growing */
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  padding: 0.5rem 1rem 1rem;
+  /* Bottom padding reserves room for the fixed bottom-nav so content
+     doesn't get hidden behind it. ~72px nav + home-indicator safe area. */
+  padding: 0.5rem 1rem calc(82px + env(safe-area-inset-bottom));
 }
 
-/* Bottom nav is now a normal flex item — locked at the bottom of the
-   shell, doesn't move when the user rubber-band-scrolls. */
 .bottom-nav {
-  flex-shrink: 0;
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 0;
   display: flex;
   justify-content: space-around;
+  max-width: 720px;
+  margin: 0 auto;
   padding: 0.4rem 0 calc(0.4rem + env(safe-area-inset-bottom));
   background: var(--bg-card);
   border-top: 1px solid var(--border);

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 
@@ -108,13 +108,16 @@ def afternoon_plan(
             exam_lookup[sid] = d
 
     today_iso = today.isoformat()
+    tomorrow_iso = (today + timedelta(days=1)).isoformat()
     tasks = [dict(r) for r in rows]
 
+    # "Pflicht heute" = überfällig + heute + morgen fällig. Eine HA mit
+    # Fälligkeit morgen muss heute erledigt werden — alles andere zu spät.
     must_do = []
     candidates = []
     for t in tasks:
         due = t.get("due_date")
-        if due and due <= today_iso:
+        if due and due <= tomorrow_iso:
             must_do.append(t)
         else:
             candidates.append(t)
