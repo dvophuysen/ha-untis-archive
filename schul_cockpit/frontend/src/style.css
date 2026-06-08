@@ -85,7 +85,9 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
   min-height: 100dvh;
   max-width: 720px;
   margin: 0 auto;
-  padding-bottom: env(safe-area-inset-bottom);
+  /* No bottom padding here: the bottom-nav already reserves the home-
+     indicator safe area itself. A second one on the shell produced an
+     empty white band below the nav and pushed it off the bottom edge. */
 }
 
 .top-bar {
