@@ -1,6 +1,7 @@
 <script>
   import { api } from '../lib/api.js';
   import { loadMe } from '../lib/store.svelte.js';
+  import { APP_VERSION } from '../lib/version.js';
 
   let { navigate } = $props();
 
@@ -95,6 +96,10 @@
 <div class="row between" style="margin-bottom:0.6rem;">
   <h2 style="margin:0; font-size:1.1rem;">Setup</h2>
   <button class="ghost" onclick={() => navigate('today')}>← zurück</button>
+</div>
+
+<div class="dim" style="text-align:center; margin-bottom:0.6rem;">
+  App-Version <strong>{APP_VERSION}</strong>
 </div>
 
 {#if error}<div class="error-box">{error}</div>{/if}

@@ -143,6 +143,18 @@ _PLACEHOLDER_HTML = (
 )
 
 
+# Files that must never be cached by Cloudflare or the browser, otherwise
+# a stale service worker / index.html keeps serving old code forever. The
+# hashed /assets/* bundles get the opposite treatment (immutable, 1 year).
+_NO_CACHE = {"index.html", "sw.js", "manifest.webmanifest"}
+_NO_CACHE_HEADERS = {
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+_IMMUTABLE_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
+
+
 if _FRONTEND_DIR and (_FRONTEND_DIR / "index.html").exists():
     if (_FRONTEND_DIR / "assets").exists():
         app.mount(
@@ -155,8 +167,16 @@ if _FRONTEND_DIR and (_FRONTEND_DIR / "index.html").exists():
     def spa(full_path: str):
         target = _FRONTEND_DIR / full_path
         if full_path and target.exists() and target.is_file():
+            name = target.name
+            if name in _NO_CACHE:
+                return FileResponse(target, headers=_NO_CACHE_HEADERS)
+            if "/assets/" in f"/{full_path}":
+                return FileResponse(target, headers=_IMMUTABLE_HEADERS)
             return FileResponse(target)
-        return FileResponse(_FRONTEND_DIR / "index.html")
+        # SPA fallback → always the (uncached) index.html
+        return FileResponse(
+            _FRONTEND_DIR / "index.html", headers=_NO_CACHE_HEADERS
+        )
 
 else:
     from fastapi.responses import HTMLResponse
