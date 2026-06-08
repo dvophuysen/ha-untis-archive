@@ -80,8 +80,13 @@ async def slide_pin_cookie(request: Request, call_next):
     """Refresh the PIN session cookie on every successful authenticated
     request, so the kid stays logged in indefinitely as long as they keep
     using the app. Skipped when the request authenticated via Ingress
-    headers (HA-internal access doesn't need our cookie)."""
+    headers (HA-internal access doesn't need our cookie), and skipped on
+    the auth routes themselves — login/logout set their own cookies and
+    must not be overwritten by stale incoming-cookie values."""
     response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/api/auth/"):
+        return response
     cookie = request.cookies.get(SESSION_COOKIE)
     used_pin = cookie and not request.headers.get("x-remote-user-id")
     if used_pin and 200 <= response.status_code < 400:
