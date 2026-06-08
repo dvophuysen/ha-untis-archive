@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from ..audit import is_demo, log as audit_log, snapshot_task
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..db import webapp_conn
 from ..sync_worker import sync_account
@@ -160,6 +161,17 @@ def create_task(
                     (task_id, st, i),
                 )
         row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        after = dict(row)
+        audit_log(
+            conn,
+            user_id=user.id,
+            account_id=account_id,
+            op_type="insert",
+            target_kind="task",
+            target_id=task_id,
+            label=f"Aufgabe angelegt: {body.title}",
+            after=after,
+        )
         return _row_to_task(row)
     finally:
         conn.close()
@@ -187,6 +199,8 @@ async def patch_task(
             raise HTTPException(status_code=404, detail="task not found")
         assert_account_access(user, existing["account_id"])
 
+        before = snapshot_task(conn, task_id)
+
         fields = []
         params: list = []
         for col in (
@@ -213,10 +227,27 @@ async def patch_task(
         conn.execute(f"UPDATE tasks SET {', '.join(fields)} WHERE id = ?", params)
         account_id = existing["account_id"]
         is_ha_task = existing["source"] == "ha_todo"
+        after = snapshot_task(conn, task_id)
+        label = f"Aufgabe geändert: {after.get('title') if after else ''}"
+        if body.status is not None and body.status != existing["status"]:
+            label = f"{after.get('title')}: {existing['status']} → {body.status}"
+        audit_log(
+            conn,
+            user_id=user.id,
+            account_id=account_id,
+            op_type="update",
+            target_kind="task",
+            target_id=task_id,
+            label=label,
+            before=before,
+            after=after,
+        )
+        demo = is_demo(conn, user.id)
     finally:
         conn.close()
 
-    if is_ha_task and body.status is not None:
+    # In demo mode, never push changes back to HA — keeps the kid's real list clean.
+    if is_ha_task and body.status is not None and not demo:
         try:
             await sync_account(account_id)
         except Exception:
@@ -244,7 +275,18 @@ def delete_task(
                 detail="HA-stämmige Tasks können nicht aus der App gelöscht werden; "
                        "bitte in HA-ToDo-Liste löschen",
             )
+        before = snapshot_task(conn, task_id)
         conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        audit_log(
+            conn,
+            user_id=user.id,
+            account_id=existing["account_id"],
+            op_type="delete",
+            target_kind="task",
+            target_id=task_id,
+            label=f"Aufgabe gelöscht: {before.get('title') if before else ''}",
+            before=before,
+        )
     finally:
         conn.close()
     return {"ok": True}

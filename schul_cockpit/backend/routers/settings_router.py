@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from ..audit import log as audit_log, snapshot_settings
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..db import webapp_conn
 
@@ -69,6 +70,7 @@ def patch_settings(
     now = datetime.now(timezone.utc).isoformat()
     conn = webapp_conn()
     try:
+        before = snapshot_settings(conn, account_id)
         existing = conn.execute(
             "SELECT 1 FROM account_settings WHERE account_id = ?", (account_id,)
         ).fetchone()
@@ -102,6 +104,18 @@ def patch_settings(
                     f"UPDATE account_settings SET {', '.join(fields)} WHERE account_id = ?",
                     params,
                 )
+        after = snapshot_settings(conn, account_id)
+        audit_log(
+            conn,
+            user_id=user.id,
+            account_id=account_id,
+            op_type="insert" if before is None else "update",
+            target_kind="settings",
+            target_id=account_id,
+            label="Lernzeit-Einstellungen geändert",
+            before=before,
+            after=after,
+        )
     finally:
         conn.close()
     return {"ok": True}

@@ -16,6 +16,7 @@ from .db import init_webapp_db
 from .history_schema import SchemaMismatch, assert_compatible
 from .routers import (
     afternoon,
+    audit,
     checkins,
     health,
     me,
@@ -78,6 +79,7 @@ app.include_router(checkins.router, prefix=API)
 app.include_router(tasks.router, prefix=API)
 app.include_router(afternoon.router, prefix=API)
 app.include_router(settings_router.router, prefix=API)
+app.include_router(audit.router, prefix=API)
 
 
 @app.get("/api/schema-status")
