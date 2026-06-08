@@ -16,7 +16,7 @@ def lessons_for_date(
         "room, room_orig, subject_orig_name, "
         "is_teacher_substituted, is_room_substituted, is_subject_substituted, "
         "code, lstext, subst_text, info, was_absent, absence_reason, "
-        "is_late_addition, period_info_json "
+        "is_late_addition, period_info_json, payload_json "
         "FROM lessons WHERE account_id = ? AND date = ? "
         "ORDER BY start_time, end_time",
         (account_id, date_iso),
@@ -36,7 +36,7 @@ def lessons_in_range(
         "room, room_orig, subject_orig_name, "
         "is_teacher_substituted, is_room_substituted, is_subject_substituted, "
         "code, lstext, subst_text, info, was_absent, absence_reason, "
-        "is_late_addition, period_info_json "
+        "is_late_addition, period_info_json, payload_json "
         "FROM lessons WHERE account_id = ? AND date BETWEEN ? AND ? "
         "ORDER BY date, start_time",
         (account_id, date_from_iso, date_to_iso),
@@ -44,9 +44,25 @@ def lessons_in_range(
     return [_lesson_row(r) for r in rows]
 
 
+def _subject_short_from_payload(payload_json: str | None) -> str | None:
+    """The real Untis subject Kürzel (su[0].name), not the long name."""
+    if not payload_json:
+        return None
+    try:
+        parsed = json.loads(payload_json)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    su = parsed.get("su")
+    if isinstance(su, list) and su and isinstance(su[0], dict):
+        return su[0].get("name") or None
+    return None
+
+
 def _lesson_row(r: sqlite3.Row) -> dict[str, Any]:
     info = dict(r)
     pj = info.pop("period_info_json", None)
+    payload = info.pop("payload_json", None)
+    info["subject_short"] = _subject_short_from_payload(payload)
     info["exam"] = None
     info["lesson_topic"] = None
     if pj:

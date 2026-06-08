@@ -2,6 +2,7 @@
   import { api } from '../lib/api.js';
   import LessonCard from '../lib/LessonCard.svelte';
   import TaskRow from '../lib/TaskRow.svelte';
+  import TaskEditor from '../lib/TaskEditor.svelte';
 
   let { accountId } = $props();
 
@@ -9,6 +10,7 @@
   let tasks = $state([]);
   let error = $state(null);
   let loading = $state(true);
+  let editing = $state(null);
 
   async function load() {
     if (!accountId) return;
@@ -55,7 +57,7 @@
     <div class="section-title">Heute fällig</div>
     <div class="card" style="padding:0.2rem 0.6rem;">
       {#each dueToday as task (task.id)}
-        <TaskRow {accountId} {task} onchange={load} />
+        <TaskRow {accountId} {task} onchange={load} onopen={(t) => (editing = t)} />
       {/each}
     </div>
   {/if}
@@ -68,4 +70,8 @@
       <LessonCard {accountId} {lesson} />
     {/each}
   {/if}
+{/if}
+
+{#if editing}
+  <TaskEditor {accountId} task={editing} onclose={() => (editing = null)} onsaved={load} />
 {/if}
