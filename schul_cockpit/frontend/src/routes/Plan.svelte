@@ -1,7 +1,10 @@
 <script>
   import { api } from '../lib/api.js';
+  import { dueLabel, stripUntisMetadata, isoToday } from '../lib/format.js';
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskEditor from '../lib/TaskEditor.svelte';
+
+  const today = isoToday();
 
   let { accountId } = $props();
 
@@ -75,11 +78,14 @@
   {#if plan.must_do.length > 0}
     <div class="section-title">Pflicht <span class="dim">· {plan.must_do_minutes} min</span></div>
     {#each plan.must_do as task (task.id)}
+      {@const clean = stripUntisMetadata(task.notes)}
       <div class="timeline-block must">
         <button class="ghost" style="text-align:left; flex:1; padding:0; min-height:auto; display:block;" onclick={() => (editing = task)}>
-          <strong>{task.title}</strong>
-          {#if task.subject_name && task.subject_name !== task.title}<span class="dim"> · {task.subject_name}</span>{/if}
-          {#if task.notes}<div class="muted" style="font-size:0.8rem; margin-top:2px; white-space:pre-wrap;">{task.notes}</div>{/if}
+          <div class="plan-head">
+            <strong>{task.title}</strong>
+            {#if task.due_date}<span class="due-tag">{dueLabel(task.due_date, today)}</span>{/if}
+          </div>
+          {#if clean}<div class="muted" style="font-size:0.85rem; margin-top:3px; white-space:pre-wrap;">{clean}</div>{/if}
         </button>
         <span class="badge">{task.estimated_minutes ?? '?'}m</span>
       </div>
@@ -89,11 +95,14 @@
   {#if plan.suggested.length > 0}
     <div class="section-title">Vorschläge <span class="dim">· {plan.suggested_minutes} min</span></div>
     {#each plan.suggested as task (task.id)}
+      {@const clean = stripUntisMetadata(task.notes)}
       <div class="timeline-block suggested">
         <button class="ghost" style="text-align:left; flex:1; padding:0; min-height:auto; display:block;" onclick={() => (editing = task)}>
-          <strong>{task.title}</strong>
-          {#if task.subject_name && task.subject_name !== task.title}<span class="dim"> · {task.subject_name}</span>{/if}
-          {#if task.notes}<div class="muted" style="font-size:0.8rem; margin-top:2px; white-space:pre-wrap;">{task.notes}</div>{/if}
+          <div class="plan-head">
+            <strong>{task.title}</strong>
+            {#if task.due_date}<span class="due-tag">{dueLabel(task.due_date, today)}</span>{/if}
+          </div>
+          {#if clean}<div class="muted" style="font-size:0.85rem; margin-top:3px; white-space:pre-wrap;">{clean}</div>{/if}
         </button>
         <span class="badge">{task.estimated_minutes ?? '?'}m</span>
       </div>
@@ -115,3 +124,18 @@
 {#if editing}
   <TaskEditor {accountId} task={editing} onclose={() => (editing = null)} onsaved={load} />
 {/if}
+
+<style>
+  .plan-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+  .due-tag {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    color: var(--fg-muted);
+    white-space: nowrap;
+  }
+</style>
