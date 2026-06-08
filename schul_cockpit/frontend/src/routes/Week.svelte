@@ -3,11 +3,15 @@
 
   let { accountId } = $props();
 
-  let start = $state(mondayOf(new Date()).toISOString().slice(0, 10));
-  let data = $state(null);
-  let loading = $state(true);
-  let error = $state(null);
-  let selected = $state(null);
+  // Local-timezone date string (YYYY-MM-DD). NEVER use toISOString() here —
+  // it converts to UTC and shifts the date back a day in positive-offset
+  // zones (e.g. CEST), which made "Heute" jump to the previous week.
+  function isoLocal(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
 
   function mondayOf(d) {
     const x = new Date(d);
@@ -16,6 +20,12 @@
     x.setHours(0, 0, 0, 0);
     return x;
   }
+
+  let start = $state(isoLocal(mondayOf(new Date())));
+  let data = $state(null);
+  let loading = $state(true);
+  let error = $state(null);
+  let selected = $state(null);
 
   async function load() {
     if (!accountId) return;
@@ -32,10 +42,14 @@
 
   $effect(() => { void accountId; void start; load(); });
 
+  function goToday() {
+    start = isoLocal(mondayOf(new Date()));
+  }
+
   function shiftWeek(deltaDays) {
-    const d = new Date(start);
+    const d = new Date(start + 'T00:00:00');
     d.setDate(d.getDate() + deltaDays);
-    start = d.toISOString().slice(0, 10);
+    start = isoLocal(d);
   }
 
   const grid = $derived.by(() => {
@@ -43,7 +57,7 @@
     const byDayTime = new Map();
     const times = new Set();
     for (const l of data.lessons) {
-      const dayIdx = new Date(l.date).getDay();
+      const dayIdx = new Date(l.date + 'T00:00:00').getDay();
       const colIdx = (dayIdx + 6) % 7;
       if (colIdx > 4) continue;
       const key = l.start_hhmm;
@@ -61,7 +75,7 @@
 
 <div class="row between" style="margin: 0.3rem 0.2rem 0.6rem;">
   <button onclick={() => shiftWeek(-7)}>←</button>
-  <button onclick={() => (start = mondayOf(new Date()).toISOString().slice(0, 10))}>Heute</button>
+  <button onclick={goToday}>Heute</button>
   <button onclick={() => shiftWeek(7)}>→</button>
 </div>
 
