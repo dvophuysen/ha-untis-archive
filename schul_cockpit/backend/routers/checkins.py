@@ -5,6 +5,11 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from ..audit import (
+    log as audit_log,
+    snapshot_caught_up,
+    snapshot_checkin,
+)
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..db import history_conn, webapp_conn
 
@@ -45,6 +50,7 @@ def post_checkin(
     now = datetime.now(timezone.utc).isoformat()
     conn = webapp_conn()
     try:
+        before = snapshot_checkin(conn, account_id, lesson_id, user.id)
         conn.execute(
             "INSERT INTO lesson_checkins "
             "(account_id, lesson_id, user_id, rating, note, created_at, updated_at) "
@@ -54,6 +60,18 @@ def post_checkin(
             "  note = excluded.note, "
             "  updated_at = excluded.updated_at",
             (account_id, lesson_id, user.id, body.rating, body.note, now, now),
+        )
+        after = snapshot_checkin(conn, account_id, lesson_id, user.id)
+        audit_log(
+            conn,
+            user_id=user.id,
+            account_id=account_id,
+            op_type="insert" if before is None else "update",
+            target_kind="checkin",
+            target_id=after["id"] if after else None,
+            label=f"Check-in Stunde #{lesson_id} → {body.rating}",
+            before=before,
+            after=after,
         )
     finally:
         conn.close()
@@ -69,11 +87,23 @@ def delete_checkin(
     assert_account_access(user, account_id)
     conn = webapp_conn()
     try:
+        before = snapshot_checkin(conn, account_id, lesson_id, user.id)
         conn.execute(
             "DELETE FROM lesson_checkins "
             "WHERE account_id = ? AND lesson_id = ? AND user_id = ?",
             (account_id, lesson_id, user.id),
         )
+        if before:
+            audit_log(
+                conn,
+                user_id=user.id,
+                account_id=account_id,
+                op_type="delete",
+                target_kind="checkin",
+                target_id=before["id"],
+                label=f"Check-in Stunde #{lesson_id} entfernt",
+                before=before,
+            )
     finally:
         conn.close()
     return {"ok": True}
@@ -91,6 +121,7 @@ def post_caught_up(
     now = datetime.now(timezone.utc).isoformat()
     conn = webapp_conn()
     try:
+        before = snapshot_caught_up(conn, account_id, lesson_id, user.id)
         conn.execute(
             "INSERT INTO caught_up "
             "(account_id, lesson_id, user_id, caught_up_at, note) "
@@ -99,6 +130,18 @@ def post_caught_up(
             "  caught_up_at = excluded.caught_up_at, "
             "  note = excluded.note",
             (account_id, lesson_id, user.id, now, body.note),
+        )
+        after = snapshot_caught_up(conn, account_id, lesson_id, user.id)
+        audit_log(
+            conn,
+            user_id=user.id,
+            account_id=account_id,
+            op_type="insert" if before is None else "update",
+            target_kind="caught_up",
+            target_id=after["id"] if after else None,
+            label=f"Stunde #{lesson_id} als nachgeholt markiert",
+            before=before,
+            after=after,
         )
     finally:
         conn.close()
@@ -114,11 +157,23 @@ def delete_caught_up(
     assert_account_access(user, account_id)
     conn = webapp_conn()
     try:
+        before = snapshot_caught_up(conn, account_id, lesson_id, user.id)
         conn.execute(
             "DELETE FROM caught_up "
             "WHERE account_id = ? AND lesson_id = ? AND user_id = ?",
             (account_id, lesson_id, user.id),
         )
+        if before:
+            audit_log(
+                conn,
+                user_id=user.id,
+                account_id=account_id,
+                op_type="delete",
+                target_kind="caught_up",
+                target_id=before["id"],
+                label=f"Nachgeholt-Markierung Stunde #{lesson_id} entfernt",
+                before=before,
+            )
     finally:
         conn.close()
     return {"ok": True}

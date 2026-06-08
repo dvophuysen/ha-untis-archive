@@ -1,7 +1,19 @@
 <script>
   import { api } from '../lib/api.js';
+  import { appState, loadMe } from '../lib/store.svelte.js';
 
   let { accountId } = $props();
+  let togglingDemo = $state(false);
+
+  async function toggleDemo() {
+    togglingDemo = true;
+    try {
+      await api.patch('/api/me/demo-mode', { enabled: !appState.me.demo_mode });
+      await loadMe();
+    } finally {
+      togglingDemo = false;
+    }
+  }
 
   const DAYS = [
     { key: 'mon', label: 'Mo' },
@@ -90,5 +102,29 @@
     <button class="primary" disabled={saving} onclick={save} style="margin-top:0.6rem; width:100%;">
       {saving ? 'Speichere…' : 'Speichern'}
     </button>
+  </div>
+
+  <div class="section-title">Demo-Modus</div>
+  <div class="banner">
+    Im Demo-Modus werden alle deine Änderungen geloggt und können einzeln oder gesammelt zurückgenommen werden.
+    Außerdem wird der HA-ToDo-Sync für deine Änderungen pausiert — du kannst also gefahrlos ausprobieren, ohne
+    in der HA-ToDo-Liste der Kinder etwas zu verändern.
+  </div>
+  <div class="card">
+    <div class="row between">
+      <div>
+        <strong>Demo-Modus</strong>
+        <div class="dim">{appState.me?.demo_mode ? 'Aktiv — Änderungen werden geloggt, HA-Sync pausiert.' : 'Aus'}</div>
+      </div>
+      <button
+        class:primary={appState.me?.demo_mode}
+        onclick={toggleDemo}
+        disabled={togglingDemo}
+      >{appState.me?.demo_mode ? '✓ AN' : 'AUS'}</button>
+    </div>
+    <button
+      style="width:100%; margin-top:0.5rem;"
+      onclick={() => (window.location.hash = '#/changes')}
+    >Meine Änderungen ansehen ({appState.me?.open_audit_count ?? 0})</button>
   </div>
 {/if}

@@ -9,6 +9,7 @@
   import SubjectDetail from './routes/SubjectDetail.svelte';
   import Setup from './routes/Setup.svelte';
   import Settings from './routes/Settings.svelte';
+  import MyChanges from './routes/MyChanges.svelte';
 
   let route = $state(parseHash());
 
@@ -71,6 +72,19 @@
     </div>
   </header>
 
+  {#if appState.me?.demo_mode}
+    <div
+      style="background: var(--substitution); color: #fff; padding: 0.5rem 1rem; font-size: 0.85rem; display:flex; justify-content:space-between; align-items:center; gap:0.5rem;"
+    >
+      <span>🧪 <strong>Demo-Modus</strong> · {appState.me.open_audit_count ?? 0} Änderungen geloggt</span>
+      <button
+        class="ghost"
+        style="color:#fff; border-color:rgba(255,255,255,0.4); padding:0.2rem 0.6rem; min-height:32px; font-size:0.8rem;"
+        onclick={() => navigate('changes')}
+      >Verwalten</button>
+    </div>
+  {/if}
+
   <main class="content">
     {#if appState.loading}
       <div class="empty"><span class="spinner"></span><br>lade…</div>
@@ -96,6 +110,8 @@
       <Setup {navigate} />
     {:else if route.name === 'settings'}
       <Settings accountId={appState.activeAccountId} />
+    {:else if route.name === 'changes'}
+      <MyChanges />
     {:else if route.name === 'today'}
       <Today accountId={appState.activeAccountId} />
     {:else if route.name === 'plan'}
