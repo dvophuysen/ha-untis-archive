@@ -50,6 +50,14 @@
     onclick={() => onopen?.(task)}
   >
     <div class="task-title" class:done={task.status === 'done'}>{task.title}</div>
+    {#if task.notes}
+      <div class="muted" style="font-size:0.8rem; margin-top:1px; white-space:pre-wrap;">{task.notes}</div>
+    {/if}
+    {#if task.subitems && task.subitems.length > 0}
+      <div class="dim" style="font-size:0.75rem; margin-top:1px;">
+        ☑ {task.subitems.filter((s) => s.done).length}/{task.subitems.length} Teilaufgaben
+      </div>
+    {/if}
     <div class="task-meta">
       {#if task.subject_name}<span class="pill">{task.subject_name}</span>{/if}
       {#if isExam}<span class="pill exam">📝 Klausur</span>{/if}

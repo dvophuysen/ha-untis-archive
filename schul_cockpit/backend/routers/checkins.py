@@ -17,7 +17,9 @@ router = APIRouter()
 
 
 class CheckinIn(BaseModel):
-    rating: int = Field(ge=1, le=3)
+    # 1 = nicht verstanden, 2 = teilweise, 3 = verstanden,
+    # 4 = nur Aufsicht / kein neuer Stoff (zählt nicht als Verständnis)
+    rating: int = Field(ge=1, le=4)
     note: str | None = None
 
 

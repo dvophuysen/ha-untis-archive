@@ -29,6 +29,21 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _split_due(due: str | None) -> tuple[str | None, str | None]:
+    """HA todo `due` can be a date (YYYY-MM-DD) or a datetime. Return
+    (date, time) where time is HH:MM or None for all-day items."""
+    if not due:
+        return None, None
+    due = str(due)
+    if "T" in due:
+        date_part, _, time_part = due.partition("T")
+        return date_part or None, time_part[:5] if time_part else None
+    if " " in due:
+        date_part, _, time_part = due.partition(" ")
+        return date_part or None, time_part[:5] if time_part else None
+    return due, None
+
+
 def _get_account_lists(conn: sqlite3.Connection) -> list[tuple[int, str]]:
     return [
         (r["account_id"], r["ha_entity_id"])
@@ -51,7 +66,8 @@ async def _sync_one(account_id: int, entity_id: str, sup: SupervisorClient) -> N
         existing = {
             r["ha_uid"]: dict(r)
             for r in conn.execute(
-                "SELECT id, ha_uid, status, updated_at, completed_at, title, due_date "
+                "SELECT id, ha_uid, status, updated_at, completed_at, title, "
+                "due_date, due_time, notes "
                 "FROM tasks WHERE account_id = ? AND ha_uid IS NOT NULL",
                 (account_id,),
             ).fetchall()
@@ -66,7 +82,8 @@ async def _sync_one(account_id: int, entity_id: str, sup: SupervisorClient) -> N
             ha_seen_uids.add(uid)
             ha_status = item.get("status", "needs_action")
             ha_summary = item.get("summary") or ""
-            ha_due = item.get("due")
+            ha_description = item.get("description") or None
+            ha_due_date, ha_due_time = _split_due(item.get("due"))
 
             new_status = "done" if ha_status == "completed" else "open"
 
@@ -75,14 +92,17 @@ async def _sync_one(account_id: int, entity_id: str, sup: SupervisorClient) -> N
                 conn.execute(
                     "INSERT INTO tasks "
                     "(account_id, ha_uid, title, task_type, status, due_date, "
-                    " source, created_at, updated_at, completed_at, ha_last_synced_at) "
-                    "VALUES (?, ?, ?, 'homework', ?, ?, 'ha_todo', ?, ?, ?, ?)",
+                    " due_time, notes, source, created_at, updated_at, "
+                    " completed_at, ha_last_synced_at) "
+                    "VALUES (?, ?, ?, 'homework', ?, ?, ?, ?, 'ha_todo', ?, ?, ?, ?)",
                     (
                         account_id,
                         uid,
                         ha_summary,
                         new_status,
-                        ha_due,
+                        ha_due_date,
+                        ha_due_time,
+                        ha_description,
                         now,
                         now,
                         now if new_status == "done" else None,
@@ -100,6 +120,18 @@ async def _sync_one(account_id: int, entity_id: str, sup: SupervisorClient) -> N
                         updates.append(("completed_at", now))
                     else:
                         updates.append(("completed_at", None))
+
+            # Untis owns title + due date: keep them authoritative on every
+            # sync (the app cannot override them). Notes/description fill in
+            # only when still empty so a user's own note is never clobbered.
+            if (row.get("title") or "") != ha_summary and ha_summary:
+                updates.append(("title", ha_summary))
+            if (row.get("due_date") or None) != ha_due_date:
+                updates.append(("due_date", ha_due_date))
+            if (row.get("due_time") or None) != ha_due_time:
+                updates.append(("due_time", ha_due_time))
+            if ha_description and not (row.get("notes") or ""):
+                updates.append(("notes", ha_description))
 
             if updates:
                 set_clause = ", ".join(f"{c} = ?" for c, _ in updates) + ", updated_at = ?, ha_last_synced_at = ?"
