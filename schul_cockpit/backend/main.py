@@ -17,6 +17,7 @@ from .db import init_webapp_db
 from .history_schema import SchemaMismatch, assert_compatible
 from .reconcile import reconcile_all
 from .routers import (
+    absences,
     afternoon,
     audit,
     auth_router,
@@ -116,6 +117,7 @@ app.include_router(week.router, prefix=API)
 app.include_router(subjects.router, prefix=API)
 app.include_router(search.router, prefix=API)
 app.include_router(oral.router, prefix=API)
+app.include_router(absences.router, prefix=API)
 app.include_router(checkins.router, prefix=API)
 app.include_router(tasks.router, prefix=API)
 app.include_router(afternoon.router, prefix=API)

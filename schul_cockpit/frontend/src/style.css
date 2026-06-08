@@ -135,19 +135,26 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
 }
 .bottom-nav button {
   flex: 1;
+  min-width: 0;
   border: none;
   background: transparent;
   color: var(--fg-muted);
-  padding: 0.4rem 0.2rem;
+  padding: 0.4rem 0.1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   min-height: 56px;
   gap: 2px;
 }
 .bottom-nav button.active { color: var(--accent); }
-.bottom-nav button .icon { font-size: 1.25rem; line-height: 1; }
+.bottom-nav button .icon { font-size: 1.2rem; line-height: 1; }
+.bottom-nav button span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .card {
   background: var(--bg-card);
