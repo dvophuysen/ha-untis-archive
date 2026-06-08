@@ -146,6 +146,11 @@ def afternoon_plan(
         if (d - today).days <= 7:
             upcoming_exam_block.append(ex)
 
+    remaining_minutes = max(0, budget - used - sum(_est(t) for t in suggested))
+    free_learning = _free_learning_suggestions(
+        account_id, user.id, today, remaining_minutes
+    )
+
     return {
         "date": today_iso,
         "budget_minutes": budget,
@@ -153,6 +158,145 @@ def afternoon_plan(
         "must_do_minutes": used,
         "suggested": suggested,
         "suggested_minutes": sum(_est(t) for t in suggested),
-        "remaining_minutes": max(0, budget - used - sum(_est(t) for t in suggested)),
+        "remaining_minutes": remaining_minutes,
+        "free_learning": free_learning,
         "upcoming_exams_7d": upcoming_exam_block,
     }
+
+
+# Subjects that don't make sense to "prepare" or learn for at home.
+_NON_ACADEMIC = ("sport", "schwimm", "mittag", "pause", "förder", "klassenrat", "klassenlehrer")
+# Language subjects → vocab practice makes sense.
+_LANGUAGES = ("englisch", "franz", "spanisch", "latein", "italien", "russisch", "griechisch")
+
+
+def _is_non_academic(name: str | None, short: str | None) -> bool:
+    hay = f"{(name or '').lower()} {(short or '').lower()}"
+    return any(w in hay for w in _NON_ACADEMIC)
+
+
+def _language_of(name: str | None) -> str | None:
+    low = (name or "").lower()
+    for lang in _LANGUAGES:
+        if lang in low:
+            return name
+    return None
+
+
+def _free_learning_suggestions(
+    account_id: int, user_id: int, today, remaining_minutes: int
+) -> list[dict]:
+    """Fill leftover study time with useful, low-pressure ideas:
+    1) revisit recently hard-to-understand subjects,
+    2) prep tomorrow's (real, non-cancelled, non-sport) lessons,
+    3) vocab for language subjects.
+    Deduplicated by subject; understanding > prep > vocab."""
+    if remaining_minutes < 5:
+        return []
+
+    from ..queries import _subject_short_from_payload  # local import, avoid cycle
+
+    horizon = (today - timedelta(days=21)).isoformat()
+    tomorrow_iso = (today + timedelta(days=1)).isoformat()
+
+    suggestions: list[dict] = []
+    seen_subjects: set[str] = set()
+
+    # 1) Recently hard (rating 1 or 2) — per user.
+    wconn = webapp_conn()
+    try:
+        hard_rows = wconn.execute(
+            "SELECT lesson_id, rating, updated_at FROM lesson_checkins "
+            "WHERE account_id = ? AND user_id = ? AND rating <= 2 "
+            "AND updated_at >= ? ORDER BY rating ASC, updated_at DESC LIMIT 30",
+            (account_id, user_id, horizon),
+        ).fetchall()
+    finally:
+        wconn.close()
+
+    hconn = history_conn()
+    try:
+        if hard_rows:
+            ids = [r["lesson_id"] for r in hard_rows]
+            placeholder = ",".join("?" for _ in ids)
+            meta = {
+                m["id"]: m
+                for m in hconn.execute(
+                    f"SELECT id, subject_untis_id, subject_name, payload_json "
+                    f"FROM lessons WHERE id IN ({placeholder})",
+                    ids,
+                ).fetchall()
+            }
+            for r in hard_rows:
+                m = meta.get(r["lesson_id"])
+                if not m or not m["subject_name"]:
+                    continue
+                name = m["subject_name"]
+                if name in seen_subjects or _is_non_academic(name, None):
+                    continue
+                seen_subjects.add(name)
+                suggestions.append({
+                    "type": "understanding",
+                    "subject_id": m["subject_untis_id"],
+                    "subject_name": name,
+                    "subject_short": _subject_short_from_payload(m["payload_json"]),
+                    "reason": "zuletzt schwer verständlich",
+                    "suggested_minutes": 20,
+                })
+                if len(suggestions) >= 4:
+                    break
+
+        # 2) Prepare tomorrow's real lessons (skip cancelled/substituted).
+        tmrw = hconn.execute(
+            "SELECT subject_untis_id, subject_name, payload_json, code, "
+            "is_teacher_substituted, is_subject_substituted "
+            "FROM lessons WHERE account_id = ? AND date = ? "
+            "AND (code IS NULL OR LOWER(code) != 'cancelled')",
+            (account_id, tomorrow_iso),
+        ).fetchall()
+        for m in tmrw:
+            name = m["subject_name"]
+            if not name or name in seen_subjects:
+                continue
+            if (m["code"] or "").lower() == "irregular" \
+                    or m["is_teacher_substituted"] or m["is_subject_substituted"]:
+                continue
+            if _is_non_academic(name, None):
+                continue
+            seen_subjects.add(name)
+            suggestions.append({
+                "type": "prep_tomorrow",
+                "subject_id": m["subject_untis_id"],
+                "subject_name": name,
+                "subject_short": _subject_short_from_payload(m["payload_json"]),
+                "reason": "morgen Unterricht",
+                "suggested_minutes": 15,
+            })
+
+        # 3) Vocab for language subjects seen recently.
+        langs = hconn.execute(
+            "SELECT DISTINCT subject_untis_id, subject_name, payload_json "
+            "FROM lessons WHERE account_id = ? AND date >= ? "
+            "AND subject_name IS NOT NULL",
+            (account_id, (today - timedelta(days=60)).isoformat()),
+        ).fetchall()
+        for m in langs:
+            name = _language_of(m["subject_name"])
+            if not name or name in seen_subjects:
+                continue
+            seen_subjects.add(name)
+            suggestions.append({
+                "type": "vocab",
+                "subject_id": m["subject_untis_id"],
+                "subject_name": name,
+                "subject_short": _subject_short_from_payload(m["payload_json"]),
+                "reason": "Vokabeln üben",
+                "suggested_minutes": 15,
+            })
+    finally:
+        hconn.close()
+
+    # Order: understanding first, then prep, then vocab; keep it digestible.
+    order = {"understanding": 0, "prep_tomorrow": 1, "vocab": 2}
+    suggestions.sort(key=lambda s: order.get(s["type"], 9))
+    return suggestions[:6]

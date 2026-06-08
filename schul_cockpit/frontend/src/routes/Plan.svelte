@@ -13,6 +13,46 @@
   let error = $state(null);
   let budgetOverride = $state(null);
   let editing = $state(null);
+  let addedKeys = $state(new Set());
+  let addingKey = $state(null);
+
+  const TYPE_MAP = {
+    understanding: { task_type: 'catch_up', verb: 'üben' },
+    prep_tomorrow: { task_type: 'practice', verb: 'für morgen vorbereiten' },
+    vocab: { task_type: 'practice', verb: 'Vokabeln üben' },
+  };
+
+  function suggestionKey(s) {
+    return `${s.type}:${s.subject_name}`;
+  }
+
+  function suggestionTitle(s) {
+    const map = TYPE_MAP[s.type];
+    if (s.type === 'vocab') return `${s.subject_name}: Vokabeln üben`;
+    if (s.type === 'prep_tomorrow') return `${s.subject_name} für morgen vorbereiten`;
+    return `${s.subject_name} üben`;
+  }
+
+  async function addSuggestion(s) {
+    const key = suggestionKey(s);
+    addingKey = key;
+    try {
+      await api.post(`/api/accounts/${accountId}/tasks`, {
+        title: suggestionTitle(s),
+        task_type: TYPE_MAP[s.type]?.task_type ?? 'practice',
+        estimated_minutes: s.suggested_minutes,
+        subject_untis_id: s.subject_id ?? null,
+        subject_name: s.subject_name,
+        due_date: today,
+      });
+      addedKeys = new Set(addedKeys).add(key);
+      await load();
+    } catch (e) {
+      error = e.message;
+    } finally {
+      addingKey = null;
+    }
+  }
 
   async function load() {
     if (!accountId) return;
@@ -109,6 +149,40 @@
     {/each}
   {/if}
 
+  {#if plan.remaining_minutes > 0}
+    <div class="section-title">
+      Freie Lernzeit <span class="dim">· noch {plan.remaining_minutes} min</span>
+    </div>
+    {#if plan.free_learning && plan.free_learning.filter((s) => !addedKeys.has(suggestionKey(s))).length > 0}
+      <div class="muted" style="margin: 0 0.2rem 0.4rem;">Vorschläge — mit + als Aufgabe übernehmen:</div>
+      {#each plan.free_learning.filter((s) => !addedKeys.has(suggestionKey(s))) as s (suggestionKey(s))}
+        <div class="timeline-block free">
+          <div style="flex:1; min-width:0;">
+            <div class="plan-head">
+              <strong>{suggestionTitle(s)}</strong>
+              <span class="due-tag">{s.suggested_minutes}m</span>
+            </div>
+            <div class="muted" style="font-size:0.8rem; margin-top:2px;">
+              {#if s.type === 'understanding'}🧠 {s.reason}
+              {:else if s.type === 'prep_tomorrow'}📖 {s.reason}
+              {:else}🗂 {s.reason}{/if}
+            </div>
+          </div>
+          <button
+            class="primary add-btn"
+            disabled={addingKey === suggestionKey(s)}
+            onclick={() => addSuggestion(s)}
+            aria-label="als Aufgabe übernehmen"
+          >+</button>
+        </div>
+      {/each}
+    {:else}
+      <div class="muted" style="margin: 0 0.2rem 0.6rem;">
+        Keine offenen Vorschläge — Zeit frei zum Lesen, Üben oder Entspannen. 🙂
+      </div>
+    {/if}
+  {/if}
+
   {#if plan.upcoming_exams_7d.length > 0}
     <div class="section-title">Klausuren in 7 Tagen</div>
     {#each plan.upcoming_exams_7d as ex}
@@ -137,5 +211,15 @@
     font-size: 0.72rem;
     color: var(--fg-muted);
     white-space: nowrap;
+  }
+  .timeline-block.free { border-left: 3px solid var(--rating-3); align-items: center; }
+  .add-btn {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 1.3rem;
+    padding: 0;
+    line-height: 1;
   }
 </style>
