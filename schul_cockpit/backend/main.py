@@ -25,6 +25,7 @@ from .routers import (
     health,
     me,
     oral,
+    push as push_router,
     search,
     settings_router,
     setup,
@@ -123,6 +124,7 @@ app.include_router(tasks.router, prefix=API)
 app.include_router(afternoon.router, prefix=API)
 app.include_router(settings_router.router, prefix=API)
 app.include_router(audit.router, prefix=API)
+app.include_router(push_router.router, prefix=API)
 
 
 @app.get("/api/schema-status")

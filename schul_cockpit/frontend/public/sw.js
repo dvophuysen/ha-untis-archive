@@ -7,7 +7,7 @@
 // The cache name carries a build marker so a new add-on version invalidates
 // the old cache automatically on activate.
 
-const CACHE = 'schul-cockpit-2026-06-08-m';
+const CACHE = 'schul-cockpit-2026-06-08-n';
 const SHELL = [
   './',
   './manifest.webmanifest',

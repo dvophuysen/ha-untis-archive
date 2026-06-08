@@ -99,6 +99,25 @@ _MIGRATIONS: list[tuple[str, str]] = [
         "014_sessions_user_idx",
         "CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)",
     ),
+    (
+        "015_push_subscriptions",
+        """
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            endpoint TEXT NOT NULL UNIQUE,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            ua_label TEXT,
+            created_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL
+        )
+        """,
+    ),
+    (
+        "016_push_subs_user_idx",
+        "CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id)",
+    ),
 ]
 
 
