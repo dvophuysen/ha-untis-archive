@@ -92,7 +92,11 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.9rem 1rem 0.6rem;
+  padding:
+    calc(0.9rem + env(safe-area-inset-top))
+    max(1rem, env(safe-area-inset-right))
+    0.6rem
+    max(1rem, env(safe-area-inset-left));
   position: sticky;
   top: 0;
   background: color-mix(in oklab, var(--bg) 88%, transparent);
@@ -112,9 +116,14 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
 }
 
 /* Sticky (not fixed) so the bottom-nav participates in the document flow
-   and isn't overlaid by Safari's URL bar in browser/tab mode. In a real
-   installed PWA there is no Safari chrome and the nav simply sits at the
-   bottom of the viewport. */
+   and isn't overlaid by Safari's URL bar in tab mode. Padding accounts for
+   the iPhone home indicator (safe-area-inset-bottom) in a standalone PWA
+   and for Safari's URL bar in tab mode.
+
+   matchMedia-based detection in JS is more reliable than CSS
+   @media (display-mode: …), which iOS Safari has historically gotten
+   wrong for installed-PWA contexts. The .standalone class is toggled on
+   <body> from main.js. */
 .bottom-nav {
   position: sticky;
   bottom: 0;
@@ -125,10 +134,9 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
   border-top: 1px solid var(--border);
   z-index: 10;
 }
-/* Inside the Safari tab (not installed as PWA), reserve extra space so
-   the URL toolbar at the bottom doesn't overlap the nav buttons. */
-@media (display-mode: browser) {
-  .bottom-nav { padding-bottom: calc(0.4rem + env(safe-area-inset-bottom) + 56px); }
+/* Only when actually inside a Safari tab — add room for the URL toolbar. */
+body:not(.standalone) .bottom-nav {
+  padding-bottom: calc(0.4rem + env(safe-area-inset-bottom) + 56px);
 }
 .bottom-nav button {
   flex: 1;
@@ -255,9 +263,7 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
 .task-meta .pill.today { background: var(--rating-2); color: #fff; border-color: transparent; }
 .task-meta .pill.exam { background: var(--exam); color: #fff; border-color: transparent; }
 
-/* Floating action button: sits at the bottom-right of the content area,
-   above the sticky nav, with enough offset so Safari's URL bar in
-   browser mode doesn't sit on top of it. */
+/* Floating action button: sits above the sticky nav. */
 .fab {
   position: sticky;
   align-self: flex-end;
@@ -273,8 +279,8 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
   display: flex; align-items: center; justify-content: center;
   z-index: 5;
 }
-@media (display-mode: browser) {
-  .fab { bottom: calc(76px + env(safe-area-inset-bottom) + 56px); }
+body:not(.standalone) .fab {
+  bottom: calc(76px + env(safe-area-inset-bottom) + 56px);
 }
 
 .empty {
