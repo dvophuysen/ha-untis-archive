@@ -7,6 +7,7 @@
   import Week from './routes/Week.svelte';
   import Subjects from './routes/Subjects.svelte';
   import SubjectDetail from './routes/SubjectDetail.svelte';
+  import Absences from './routes/Absences.svelte';
   import Setup from './routes/Setup.svelte';
   import Settings from './routes/Settings.svelte';
   import MyChanges from './routes/MyChanges.svelte';
@@ -47,6 +48,7 @@
     { name: 'tasks', icon: '✅', label: 'Aufgaben' },
     { name: 'week', icon: '📊', label: 'Woche' },
     { name: 'subjects', icon: '📚', label: 'Fächer' },
+    { name: 'absences', icon: '🤒', label: 'Fehlt' },
   ];
 </script>
 
@@ -133,6 +135,8 @@
       <Tasks accountId={appState.activeAccountId} />
     {:else if route.name === 'week'}
       <Week accountId={appState.activeAccountId} />
+    {:else if route.name === 'absences'}
+      <Absences accountId={appState.activeAccountId} />
     {:else if route.name === 'subjects'}
       <Subjects accountId={appState.activeAccountId} {navigate} />
     {:else if route.name === 'subject'}
