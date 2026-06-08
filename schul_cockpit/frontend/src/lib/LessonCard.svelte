@@ -13,6 +13,11 @@
   const rating = $derived(lesson.checkin?.rating ?? null);
   const subjectLabel = $derived(lesson.subject_short || lesson.subject_name || '—');
   const canRate = $derived(!isCancelled && !wasAbsent);
+  // 👀 "nur Aufsicht" makes sense only for actual substitution lessons,
+  // not for the regular teacher delivering the regular subject.
+  const isSubst = $derived(
+    !!(lesson.is_irregular || lesson.is_teacher_substituted || lesson.is_subject_substituted),
+  );
 
   async function checkin(r) {
     busy = true;
@@ -81,11 +86,13 @@
   <!-- RIGHT: quick check-in -->
   {#if canRate}
     <div class="lesson-right">
-      <div class="checkins">
+      <div class="checkins" class:three={!isSubst}>
         <button class="ci r3" class:active={rating === 3} disabled={busy} onclick={() => checkin(3)} title="verstanden">😀</button>
         <button class="ci r2" class:active={rating === 2} disabled={busy} onclick={() => checkin(2)} title="teils verstanden">😐</button>
         <button class="ci r1" class:active={rating === 1} disabled={busy} onclick={() => checkin(1)} title="nicht verstanden">😟</button>
-        <button class="ci r4" class:active={rating === 4} disabled={busy} onclick={() => checkin(4)} title="nur Aufsicht / kein neuer Stoff">👀</button>
+        {#if isSubst}
+          <button class="ci r4" class:active={rating === 4} disabled={busy} onclick={() => checkin(4)} title="nur Aufsicht / kein neuer Stoff">👀</button>
+        {/if}
       </div>
     </div>
   {:else}
@@ -128,11 +135,13 @@
 
       {#if canRate}
         <label>Wie lief die Stunde?</label>
-        <div class="checkins detail-checkins">
+        <div class="checkins detail-checkins" class:three={!isSubst}>
           <button class="ci r3" class:active={rating === 3} disabled={busy} onclick={() => checkin(3)}>😀</button>
           <button class="ci r2" class:active={rating === 2} disabled={busy} onclick={() => checkin(2)}>😐</button>
           <button class="ci r1" class:active={rating === 1} disabled={busy} onclick={() => checkin(1)}>😟</button>
-          <button class="ci r4" class:active={rating === 4} disabled={busy} onclick={() => checkin(4)}>👀</button>
+          {#if isSubst}
+            <button class="ci r4" class:active={rating === 4} disabled={busy} onclick={() => checkin(4)}>👀</button>
+          {/if}
         </div>
 
         <label style="margin-top:0.6rem;">Kommentar</label>
@@ -203,7 +212,9 @@
     overflow: hidden;
   }
   .checkins { display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; }
+  .checkins.three { grid-template-columns: 1fr 1fr 1fr; }
   .detail-checkins { grid-template-columns: repeat(4, 1fr); }
+  .detail-checkins.three { grid-template-columns: repeat(3, 1fr); }
   .ci {
     font-size: 1.2rem;
     padding: 0.3rem 0;
