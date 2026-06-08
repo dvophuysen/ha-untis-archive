@@ -59,6 +59,34 @@
     await load();
   }
 
+  async function setPin(u) {
+    const pin = prompt(`PIN für ${u.display_name} festlegen (4–8 Ziffern):`);
+    if (pin == null) return;
+    if (!/^\d{4,8}$/.test(pin)) { alert('PIN muss 4–8 Ziffern haben.'); return; }
+    savingFor = u.id;
+    try {
+      await api.put(`/api/users/${u.id}/pin`, { pin });
+      await load();
+    } catch (e) {
+      error = e.message;
+    } finally {
+      savingFor = null;
+    }
+  }
+
+  async function clearPin(u) {
+    if (!confirm(`PIN für ${u.display_name} entfernen? Damit ist kein direkter App-Login mehr möglich.`)) return;
+    savingFor = u.id;
+    try {
+      await api.delete(`/api/users/${u.id}/pin`);
+      await load();
+    } catch (e) {
+      error = e.message;
+    } finally {
+      savingFor = null;
+    }
+  }
+
   function todoListFor(accountId) {
     return todoLists.find((t) => t.account_id === accountId);
   }
@@ -109,8 +137,29 @@
           >{a.name}</button>
         {/each}
       </div>
+
+      <div class="row between" style="margin-top:0.6rem; padding-top:0.5rem; border-top:1px solid var(--border);">
+        <div class="dim">
+          App-Login (PIN): {u.has_pin ? '✓ gesetzt' : 'kein PIN'}
+        </div>
+        <div class="row gap-sm">
+          <button onclick={() => setPin(u)} disabled={savingFor === u.id} style="font-size:0.85rem; min-height:36px;">
+            {u.has_pin ? 'PIN ändern' : 'PIN setzen'}
+          </button>
+          {#if u.has_pin}
+            <button class="ghost" onclick={() => clearPin(u)} disabled={savingFor === u.id} style="font-size:0.85rem; min-height:36px;">✕</button>
+          {/if}
+        </div>
+      </div>
     </div>
   {/each}
+
+  <div class="banner">
+    💡 Der PIN ermöglicht die <strong>Installation als App</strong> auf dem Home-Bildschirm:
+    Die Kinder öffnen die Direkt-Adresse <code>http://&lt;HA-IP&gt;:8099/</code> (oder deine feste
+    URL mit Port 8099), melden sich mit ihrem PIN an, und können „Zum Home-Bildschirm" nutzen —
+    Vollbild, eigenes Icon, offline-fähig.
+  </div>
 
   <div class="section-title">HA-ToDo-Liste pro Kind</div>
   <div class="banner">

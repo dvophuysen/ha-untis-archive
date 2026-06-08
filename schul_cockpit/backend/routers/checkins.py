@@ -27,17 +27,20 @@ class CaughtUpIn(BaseModel):
     note: str | None = None
 
 
-def _verify_lesson_exists(account_id: int, lesson_id: int) -> None:
+def _period_id_or_404(account_id: int, lesson_id: int) -> int | None:
+    """Verify the lesson belongs to the account and return its stable
+    Untis period id (for durable referencing)."""
     conn = history_conn()
     try:
         row = conn.execute(
-            "SELECT 1 FROM lessons WHERE id = ? AND account_id = ?",
+            "SELECT untis_period_id FROM lessons WHERE id = ? AND account_id = ?",
             (lesson_id, account_id),
         ).fetchone()
     finally:
         conn.close()
     if row is None:
         raise HTTPException(status_code=404, detail="Lesson not found for this account")
+    return row["untis_period_id"]
 
 
 @router.post("/accounts/{account_id}/lessons/{lesson_id}/checkin")
@@ -48,20 +51,22 @@ def post_checkin(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     assert_account_access(user, account_id)
-    _verify_lesson_exists(account_id, lesson_id)
+    period_id = _period_id_or_404(account_id, lesson_id)
     now = datetime.now(timezone.utc).isoformat()
     conn = webapp_conn()
     try:
         before = snapshot_checkin(conn, account_id, lesson_id, user.id)
         conn.execute(
             "INSERT INTO lesson_checkins "
-            "(account_id, lesson_id, user_id, rating, note, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?) "
+            "(account_id, lesson_id, user_id, rating, note, untis_period_id, "
+            " created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(account_id, lesson_id, user_id) DO UPDATE SET "
             "  rating = excluded.rating, "
             "  note = excluded.note, "
+            "  untis_period_id = excluded.untis_period_id, "
             "  updated_at = excluded.updated_at",
-            (account_id, lesson_id, user.id, body.rating, body.note, now, now),
+            (account_id, lesson_id, user.id, body.rating, body.note, period_id, now, now),
         )
         after = snapshot_checkin(conn, account_id, lesson_id, user.id)
         audit_log(
@@ -119,19 +124,20 @@ def post_caught_up(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     assert_account_access(user, account_id)
-    _verify_lesson_exists(account_id, lesson_id)
+    period_id = _period_id_or_404(account_id, lesson_id)
     now = datetime.now(timezone.utc).isoformat()
     conn = webapp_conn()
     try:
         before = snapshot_caught_up(conn, account_id, lesson_id, user.id)
         conn.execute(
             "INSERT INTO caught_up "
-            "(account_id, lesson_id, user_id, caught_up_at, note) "
-            "VALUES (?, ?, ?, ?, ?) "
+            "(account_id, lesson_id, user_id, caught_up_at, note, untis_period_id) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(account_id, lesson_id, user_id) DO UPDATE SET "
             "  caught_up_at = excluded.caught_up_at, "
-            "  note = excluded.note",
-            (account_id, lesson_id, user.id, now, body.note),
+            "  note = excluded.note, "
+            "  untis_period_id = excluded.untis_period_id",
+            (account_id, lesson_id, user.id, now, body.note, period_id),
         )
         after = snapshot_caught_up(conn, account_id, lesson_id, user.id)
         audit_log(

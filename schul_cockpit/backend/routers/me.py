@@ -59,4 +59,5 @@ def get_me(user: CurrentUser = Depends(get_current_user)) -> dict:
         "setup_needed": setup_needed,
         "demo_mode": demo_mode,
         "open_audit_count": open_audit_count,
+        "auth_source": user.auth_source,
     }

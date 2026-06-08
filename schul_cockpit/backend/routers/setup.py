@@ -37,7 +37,8 @@ def list_users(user: CurrentUser = Depends(get_current_user)) -> dict:
     try:
         users = conn.execute(
             "SELECT id, ha_user_id, display_name, role, is_admin, "
-            "first_seen_at, last_seen_at FROM users ORDER BY first_seen_at"
+            "first_seen_at, last_seen_at, "
+            "(pin_hash IS NOT NULL) AS has_pin FROM users ORDER BY first_seen_at"
         ).fetchall()
         links = conn.execute(
             "SELECT user_id, account_id FROM user_account_links"
@@ -57,6 +58,7 @@ def list_users(user: CurrentUser = Depends(get_current_user)) -> dict:
                 "is_admin": bool(u["is_admin"]),
                 "first_seen_at": u["first_seen_at"],
                 "last_seen_at": u["last_seen_at"],
+                "has_pin": bool(u["has_pin"]),
                 "account_ids": sorted(by_user.get(u["id"], [])),
             }
             for u in users

@@ -14,9 +14,11 @@ from fastapi.staticfiles import StaticFiles
 from .config import SETTINGS
 from .db import init_webapp_db
 from .history_schema import SchemaMismatch, assert_compatible
+from .reconcile import reconcile_all
 from .routers import (
     afternoon,
     audit,
+    auth_router,
     checkins,
     health,
     me,
@@ -51,6 +53,11 @@ async def lifespan(app: FastAPI):
         _SCHEMA_ERROR = str(exc)
         _LOGGER.error("history.db schema check failed: %s", exc)
 
+    # Keep references to history.db durable (handles a full integration
+    # re-setup that re-numbers account/lesson ids). Best-effort.
+    if _SCHEMA_OK:
+        reconcile_all()
+
     _BG_TASK = asyncio.create_task(background_sync_loop())
     _LOGGER.info("Background HA-todo sync loop started")
     try:
@@ -68,6 +75,7 @@ app = FastAPI(title="Schul-Cockpit", lifespan=lifespan)
 
 API = "/api"
 app.include_router(health.router, prefix=API)
+app.include_router(auth_router.router, prefix=API)
 app.include_router(me.router, prefix=API)
 app.include_router(setup.router, prefix=API)
 app.include_router(today.router, prefix=API)

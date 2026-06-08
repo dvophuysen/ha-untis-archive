@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from ..audit import is_demo, log as audit_log, snapshot_task
 from ..auth import CurrentUser, assert_account_access, get_current_user
-from ..db import webapp_conn
+from ..db import history_conn, webapp_conn
 from ..sync_worker import sync_account
 
 router = APIRouter()
@@ -128,14 +128,27 @@ def create_task(
     if body.task_type not in VALID_TYPES:
         raise HTTPException(status_code=400, detail="invalid task_type")
     now = _now()
+    # If linked to a lesson, store the stable Untis period id too.
+    period_id = None
+    if body.lesson_id is not None:
+        hconn = history_conn()
+        try:
+            r = hconn.execute(
+                "SELECT untis_period_id FROM lessons WHERE id = ? AND account_id = ?",
+                (body.lesson_id, account_id),
+            ).fetchone()
+            period_id = r["untis_period_id"] if r else None
+        finally:
+            hconn.close()
     conn = webapp_conn()
     try:
         cur = conn.execute(
             "INSERT INTO tasks "
             "(account_id, ha_uid, title, subject_untis_id, subject_name, "
             " task_type, status, estimated_minutes, due_date, due_time, "
-            " lesson_id, notes, source, created_by_user_id, created_at, updated_at) "
-            "VALUES (?, NULL, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, 'manual', ?, ?, ?)",
+            " lesson_id, untis_period_id, notes, source, created_by_user_id, "
+            " created_at, updated_at) "
+            "VALUES (?, NULL, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, 'manual', ?, ?, ?)",
             (
                 account_id,
                 body.title,
@@ -146,6 +159,7 @@ def create_task(
                 body.due_date,
                 body.due_time,
                 body.lesson_id,
+                period_id,
                 body.notes,
                 user.id,
                 now,
