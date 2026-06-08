@@ -49,6 +49,29 @@ _MIGRATIONS: list[tuple[str, str]] = [
         "004_audit_log_user_idx",
         "CREATE INDEX IF NOT EXISTS idx_audit_user_time ON audit_log(user_id, created_at)",
     ),
+    ("005_users_pin_hash", "ALTER TABLE users ADD COLUMN pin_hash TEXT"),
+    ("006_users_pin_salt", "ALTER TABLE users ADD COLUMN pin_salt TEXT"),
+    (
+        "007_users_pin_failed",
+        "ALTER TABLE users ADD COLUMN pin_failed_attempts INTEGER NOT NULL DEFAULT 0",
+    ),
+    ("008_users_pin_locked_until", "ALTER TABLE users ADD COLUMN pin_locked_until TEXT"),
+    (
+        "009_sessions",
+        """
+        CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL
+        )
+        """,
+    ),
+    (
+        "010_sessions_user_idx",
+        "CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)",
+    ),
 ]
 
 
