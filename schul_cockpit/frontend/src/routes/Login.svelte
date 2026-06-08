@@ -1,6 +1,7 @@
 <script>
   import { api } from '../lib/api.js';
   import { appState, loadMe } from '../lib/store.svelte.js';
+  import { APP_VERSION } from '../lib/version.js';
 
   let users = $state([]);
   let loading = $state(true);
@@ -103,6 +104,7 @@
         <button class="key go" onclick={submit} disabled={busy || pin.length < 4} aria-label="anmelden">→</button>
       </div>
     {/if}
+    <div class="dim" style="text-align:center; margin-top:1rem;">v{APP_VERSION}</div>
   </div>
 </div>
 
