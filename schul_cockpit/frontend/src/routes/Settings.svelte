@@ -104,6 +104,7 @@
     </button>
   </div>
 
+  {#if appState.me?.is_admin}
   <div class="section-title">Demo-Modus</div>
   <div class="banner">
     Im Demo-Modus werden alle deine Änderungen geloggt und können einzeln oder gesammelt zurückgenommen werden.
@@ -127,4 +128,5 @@
       onclick={() => (window.location.hash = '#/changes')}
     >Meine Änderungen ansehen ({appState.me?.open_audit_count ?? 0})</button>
   </div>
+  {/if}
 {/if}

@@ -200,6 +200,12 @@ async def patch_task(
         assert_account_access(user, existing["account_id"])
 
         before = snapshot_task(conn, task_id)
+        is_ha_task = existing["source"] == "ha_todo"
+
+        # For Untis-sourced tasks, title and due date/time are owned by Untis
+        # and must not be overwritten from the app — the next sync would
+        # re-assert them anyway, so we reject silently here.
+        ha_locked = {"title", "due_date", "due_time"} if is_ha_task else set()
 
         fields = []
         params: list = []
@@ -207,6 +213,8 @@ async def patch_task(
             "title", "task_type", "status", "estimated_minutes",
             "due_date", "due_time", "subject_untis_id", "subject_name", "notes",
         ):
+            if col in ha_locked:
+                continue
             val = getattr(body, col)
             if val is not None:
                 fields.append(f"{col} = ?")
@@ -226,7 +234,6 @@ async def patch_task(
         params.append(task_id)
         conn.execute(f"UPDATE tasks SET {', '.join(fields)} WHERE id = ?", params)
         account_id = existing["account_id"]
-        is_ha_task = existing["source"] == "ha_todo"
         after = snapshot_task(conn, task_id)
         label = f"Aufgabe geändert: {after.get('title') if after else ''}"
         if body.status is not None and body.status != existing["status"]:

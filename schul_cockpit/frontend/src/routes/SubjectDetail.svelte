@@ -25,6 +25,7 @@
     if (r === 1) return '😟';
     if (r === 2) return '😐';
     if (r === 3) return '😀';
+    if (r === 4) return '👀';
     return '·';
   }
 </script>
@@ -34,7 +35,10 @@
 {:else if error}
   <div class="error-box">{error}</div>
 {:else if data}
-  <h2 style="margin-bottom:0.4rem;">{data.name}</h2>
+  <h2 style="margin-bottom:0.4rem;">
+    {#if data.short}<span class="badge" style="font-weight:600; vertical-align:middle;">{data.short}</span>{/if}
+    {data.name}
+  </h2>
   <div class="dim" style="margin-bottom:0.6rem;">{data.timeline.length} Stunden in den letzten 120 Tagen</div>
 
   {#each data.timeline as l (l.lesson_id)}

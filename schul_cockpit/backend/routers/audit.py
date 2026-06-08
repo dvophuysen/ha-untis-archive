@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..auth import CurrentUser, get_current_user
+from ..auth import CurrentUser, get_current_user, require_admin
 from ..db import webapp_conn
 
 router = APIRouter()
@@ -67,6 +67,7 @@ def toggle_demo(
     body: DemoToggle,
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
+    require_admin(user)
     now = _now()
     conn = webapp_conn()
     try:
