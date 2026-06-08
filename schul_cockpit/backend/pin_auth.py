@@ -24,7 +24,7 @@ import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
-SESSION_TTL_DAYS = 30
+SESSION_TTL_DAYS = 365
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_MINUTES = 5
 PBKDF2_ITERS = 200_000
@@ -135,9 +135,14 @@ def lookup_session(conn: sqlite3.Connection, token: str) -> int | None:
     if datetime.fromisoformat(row["expires_at"]) < _utc_now():
         conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
         return None
+    # Sliding expiration: every successful auth pushes the expiry forward
+    # by another full TTL. As long as the kid opens the app at least once
+    # within SESSION_TTL_DAYS, they stay logged in indefinitely.
+    new_expires = (_utc_now() + timedelta(days=SESSION_TTL_DAYS)).isoformat()
+    now = _utc_now().isoformat()
     conn.execute(
-        "UPDATE sessions SET last_seen_at = ? WHERE token = ?",
-        (_utc_now().isoformat(), token),
+        "UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE token = ?",
+        (now, new_expires, token),
     )
     return row["user_id"]
 
