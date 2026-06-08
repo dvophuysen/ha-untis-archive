@@ -15,12 +15,18 @@ ENV LANG=C.UTF-8 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-RUN apk add --no-cache sqlite-libs
+RUN apk add --no-cache sqlite-libs libffi openssl
 
 WORKDIR /app
 
 COPY backend/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Need build tools transiently for cryptography on architectures without
+# a prebuilt wheel (mostly armv7/armhf). Remove them again afterwards to
+# keep the image small.
+RUN apk add --no-cache --virtual .build-deps \
+        gcc musl-dev libffi-dev openssl-dev python3-dev cargo \
+    && pip install --no-cache-dir -r requirements.txt \
+    && apk del .build-deps
 
 COPY backend/ ./backend/
 COPY --from=frontend /build/dist ./frontend_dist

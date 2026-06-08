@@ -111,6 +111,11 @@
   <div class="banner">
     Jeder HA-Nutzer kann mit einem oder mehreren UNTIS-Kindern verknüpft werden. Eltern haben in der Regel alle Kinder, ein Kind nur sich selbst.
   </div>
+  <div class="banner" style="background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.4);">
+    💡 <strong>Es fehlt jemand?</strong>
+    Hier erscheinen nur HA-User, die sich <strong>schon einmal über die HA-Seitenleiste „Schul-Cockpit"</strong> in der App eingeloggt haben.
+    Bitte jedes Familienmitglied einmal mit seinem eigenen HA-Login das Add-on öffnen lassen — danach taucht es hier auf und du kannst Rolle, Kinder und einen PIN für die direkte App vergeben.
+  </div>
 
   {#each users as u}
     <div class="card">
