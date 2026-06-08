@@ -1,5 +1,5 @@
 name: Schul-Cockpit
-version: "0.8.2"
+version: "0.8.3"
 slug: schul_cockpit
 description: Mobile Schul-App für Kinder und Eltern, basierend auf dem UNTIS-Archive-Datenbestand.
 url: https://github.com/dvophuysen/ha-untis-archive/tree/main/schul_cockpit
@@ -17,6 +17,9 @@ ingress_port: 8099
 ingress_stream: false
 panel_icon: mdi:school
 panel_title: Schul-Cockpit
+# Default is admin-only; flip to false so kids and the non-admin parent
+# also see the entry in the HA sidebar.
+panel_admin: false
 hassio_api: true
 homeassistant_api: true
 auth_api: true

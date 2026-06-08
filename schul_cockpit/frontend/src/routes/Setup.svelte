@@ -113,8 +113,15 @@
   </div>
   <div class="banner" style="background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.4);">
     💡 <strong>Es fehlt jemand?</strong>
-    Hier erscheinen nur HA-User, die sich <strong>schon einmal über die HA-Seitenleiste „Schul-Cockpit"</strong> in der App eingeloggt haben.
-    Bitte jedes Familienmitglied einmal mit seinem eigenen HA-Login das Add-on öffnen lassen — danach taucht es hier auf und du kannst Rolle, Kinder und einen PIN für die direkte App vergeben.
+    Hier erscheinen nur HA-User, die sich schon einmal in der App eingeloggt haben.
+    <br><br>
+    <strong>So funktioniert das pro Familienmitglied:</strong>
+    <ol style="margin: 0.4rem 0 0 1.1rem; padding: 0;">
+      <li>In Home Assistant <em>mit dem eigenen HA-Login</em> einloggen (z.B. Noahs HA-Account).</li>
+      <li>In der HA-Seitenleiste auf „Schul-Cockpit" tippen.</li>
+      <li>Sobald die App geöffnet ist, ist der HA-User registriert — danach hier im Setup mit Rolle, Kind und PIN versorgen.</li>
+    </ol>
+    Falls „Schul-Cockpit" beim Kind nicht in der Seitenleiste auftaucht: einmal die HA-App / den Browser neu laden — das Add-on darf jetzt auch Nicht-Admin-Nutzer einlassen.
   </div>
 
   {#each users as u}
