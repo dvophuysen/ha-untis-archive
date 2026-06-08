@@ -2,14 +2,24 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from ..auth import CurrentUser, get_current_user
 from ..db import webapp_conn
-from ..webpush_setup import ensure_keys, send_push
+
+_LOGGER = logging.getLogger("schul_cockpit.push")
+
+# Heavy crypto import is lazy so the rest of the app keeps running even
+# when cryptography isn't installed locally (the add-on container always
+# has it via requirements.txt).
+def _wp():
+    from .. import webpush_setup
+    return webpush_setup
+
 
 router = APIRouter()
 
@@ -28,7 +38,7 @@ class SubscribeIn(BaseModel):
 @router.get("/push/vapid-key")
 def vapid_key() -> dict:
     """Public — frontend uses this to subscribe at the browser's push service."""
-    return {"public_key": ensure_keys()["public_b64url"]}
+    return {"public_key": _wp().ensure_keys()["public_b64url"]}
 
 
 @router.post("/push/subscribe")
@@ -135,7 +145,7 @@ def send_test(user: CurrentUser = Depends(get_current_user)) -> dict:
             "endpoint": s["endpoint"],
             "keys": {"p256dh": s["p256dh"], "auth": s["auth"]},
         }
-        ok, status = send_push(sub_info, payload)
+        ok, status = _wp().send_push(sub_info, payload)
         if ok:
             sent += 1
         elif status in (404, 410):

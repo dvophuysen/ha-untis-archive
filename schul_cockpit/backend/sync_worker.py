@@ -112,14 +112,22 @@ async def _sync_one(account_id: int, entity_id: str, sup: SupervisorClient) -> N
                 continue
 
             updates: list[tuple[str, str | None]] = []
+            push_done_to_ha = False
             if row["status"] != new_status:
-                last_sync = row.get("ha_last_synced_at") or row["updated_at"]
-                if not row["updated_at"] or row["updated_at"] <= last_sync:
-                    updates.append(("status", new_status))
-                    if new_status == "done":
-                        updates.append(("completed_at", now))
-                    else:
-                        updates.append(("completed_at", None))
+                # Conflict resolution:
+                #   App=done, HA=needs_action → App wins. The user just
+                #     ticked it off here; HA may still report the old state
+                #     for a moment due to the eventual-consistency lag.
+                #     We push 'completed' to HA below instead of reverting
+                #     the local state.
+                #   App=open, HA=completed → HA wins. The item was ticked
+                #     off externally (HA UI, another device, automation),
+                #     so we mirror that into the app.
+                if row["status"] == "open" and new_status == "done":
+                    updates.append(("status", "done"))
+                    updates.append(("completed_at", now))
+                elif row["status"] == "done" and new_status == "open":
+                    push_done_to_ha = True
 
             # Untis owns title + due date: keep them authoritative on every
             # sync (the app cannot override them). Notes/description fill in
@@ -145,6 +153,19 @@ async def _sync_one(account_id: int, entity_id: str, sup: SupervisorClient) -> N
                     "UPDATE tasks SET ha_last_synced_at = ? WHERE id = ?",
                     (now, row["id"]),
                 )
+
+            if push_done_to_ha:
+                try:
+                    await sup.update_todo_item(
+                        entity_id,
+                        row["title"],
+                        status="completed",
+                    )
+                except SupervisorError as exc:
+                    _LOGGER.warning(
+                        "todo.update_item %s for %s failed: %s",
+                        entity_id, row["title"], exc,
+                    )
 
         for uid, row in existing.items():
             if uid in ha_seen_uids:
