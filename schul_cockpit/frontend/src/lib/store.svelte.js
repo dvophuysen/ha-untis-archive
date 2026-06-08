@@ -17,10 +17,21 @@ export async function loadMe() {
     appState.me = await api.get('/api/me');
     appState.needsLogin = false;
     if (appState.me.accounts.length > 0 && appState.activeAccountId == null) {
+      // Deep-link override: ?acc=<id> in the URL wins over the saved one.
+      // Useful for HA-cron WhatsApp links so they jump straight to the
+      // right child (e.g. https://schule.example.com/?acc=1#/today).
+      const fromQuery = new URLSearchParams(window.location.search).get('acc');
+      const queryNum = fromQuery ? Number(fromQuery) : null;
       const saved = localStorage.getItem('activeAccountId');
       const savedNum = saved ? Number(saved) : null;
-      const valid = appState.me.accounts.find((a) => a.id === savedNum);
-      appState.activeAccountId = valid ? valid.id : appState.me.accounts[0].id;
+      const preferred =
+        appState.me.accounts.find((a) => a.id === queryNum) ||
+        appState.me.accounts.find((a) => a.id === savedNum) ||
+        appState.me.accounts[0];
+      appState.activeAccountId = preferred.id;
+      if (queryNum && preferred.id === queryNum) {
+        localStorage.setItem('activeAccountId', String(queryNum));
+      }
     } else if (appState.me.accounts.length === 0) {
       appState.activeAccountId = null;
     }

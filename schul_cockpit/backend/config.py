@@ -20,6 +20,7 @@ class Settings:
     dev_fake_user_id: str | None
     dev_fake_user_name: str | None
     is_dev: bool
+    external_url: str
 
 
 def load() -> Settings:
@@ -45,6 +46,7 @@ def load() -> Settings:
         dev_fake_user_id=os.environ.get("DEV_FAKE_USER_ID"),
         dev_fake_user_name=os.environ.get("DEV_FAKE_USER_NAME"),
         is_dev=os.environ.get("WEBAPP_DEV", "0") == "1",
+        external_url=(os.environ.get("WEBAPP_EXTERNAL_URL") or "").rstrip("/"),
     )
 
 
