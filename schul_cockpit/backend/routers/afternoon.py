@@ -87,6 +87,17 @@ def afternoon_plan(
             "ORDER BY (due_date IS NULL), due_date",
             (account_id,),
         ).fetchall()
+        # Time already invested today: sum estimated_minutes of tasks the
+        # kid completed since local midnight. Counts toward the budget so
+        # the planner doesn't keep refilling free time with new suggestions
+        # whenever something gets ticked off.
+        completed_today_minutes = conn.execute(
+            "SELECT COALESCE(SUM(estimated_minutes), 0) FROM tasks "
+            "WHERE account_id = ? AND status = 'done' "
+            "AND estimated_minutes IS NOT NULL "
+            "AND date(completed_at) = date('now')",
+            (account_id,),
+        ).fetchone()[0]
     finally:
         conn.close()
 
@@ -129,8 +140,11 @@ def afternoon_plan(
         return t.get("estimated_minutes") or 20
 
     used = sum(_est(t) for t in must_do)
+    # Already-done minutes today eat into the budget BEFORE we look for
+    # suggestions, so a kid who already studied 60min doesn't keep getting
+    # fresh proposals.
     suggested: list[dict] = []
-    remaining = max(0, budget - used)
+    remaining = max(0, budget - used - completed_today_minutes)
     for t in candidates:
         est = _est(t)
         if est <= remaining:
@@ -146,7 +160,9 @@ def afternoon_plan(
         if (d - today).days <= 7:
             upcoming_exam_block.append(ex)
 
-    remaining_minutes = max(0, budget - used - sum(_est(t) for t in suggested))
+    remaining_minutes = max(
+        0, budget - used - completed_today_minutes - sum(_est(t) for t in suggested)
+    )
     free_learning = _free_learning_suggestions(
         account_id, user.id, today, remaining_minutes
     )
@@ -154,6 +170,7 @@ def afternoon_plan(
     return {
         "date": today_iso,
         "budget_minutes": budget,
+        "completed_today_minutes": completed_today_minutes,
         "must_do": must_do,
         "must_do_minutes": used,
         "suggested": suggested,

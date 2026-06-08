@@ -1,10 +1,17 @@
 <script>
   import { api } from '../lib/api.js';
+  import { appState } from '../lib/store.svelte.js';
   import { dueLabel, stripUntisMetadata, isoToday } from '../lib/format.js';
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskEditor from '../lib/TaskEditor.svelte';
 
   const today = isoToday();
+  // Only the adult side gets the quick-budget pickers. For the kid, the
+  // budget is fixed by what the parent set in Settings — they shouldn't
+  // be able to silently double their study time from the planner screen.
+  const canEditBudget = $derived(
+    appState.me?.role === 'admin' || appState.me?.role === 'parent',
+  );
 
   let { accountId } = $props();
 
@@ -89,14 +96,18 @@
 </script>
 
 <div class="row between" style="margin: 0.3rem 0.2rem 0.6rem;">
-  <div class="row gap-sm">
-    {#each [30, 45, 60, 90, 120] as m}
-      <button
-        class:primary={plan?.budget_minutes === m}
-        onclick={() => { budgetOverride = m; load(); }}
-      >{m}m</button>
-    {/each}
-  </div>
+  {#if canEditBudget}
+    <div class="row gap-sm">
+      {#each [30, 45, 60, 90, 120] as m}
+        <button
+          class:primary={plan?.budget_minutes === m}
+          onclick={() => { budgetOverride = m; load(); }}
+        >{m}m</button>
+      {/each}
+    </div>
+  {:else}
+    <div class="muted">Tagesbudget: <strong>{plan?.budget_minutes ?? '…'} min</strong></div>
+  {/if}
   <button class="ghost" onclick={copyToClipboard} title="Liste kopieren">📋</button>
 </div>
 
@@ -106,8 +117,11 @@
   <div class="error-box">{error}</div>
 {:else if plan}
   <div class="banner">
-    Budget heute: <strong>{plan.budget_minutes} min</strong> ·
-    eingeplant: <strong>{plan.must_do_minutes + plan.suggested_minutes} min</strong>
+    Budget heute: <strong>{plan.budget_minutes} min</strong>
+    {#if plan.completed_today_minutes > 0}
+      · ✓ erledigt: <strong>{plan.completed_today_minutes} min</strong>
+    {/if}
+    · eingeplant: <strong>{plan.must_do_minutes + plan.suggested_minutes} min</strong>
     {#if overBudget}<span style="color:var(--rating-1)"> · ⚠️ Pflicht überschreitet Budget</span>{/if}
   </div>
 
