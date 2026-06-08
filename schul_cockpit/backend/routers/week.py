@@ -38,22 +38,34 @@ def week(
         conn.close()
 
     lesson_ids = [l["id"] for l in lessons]
-    ratings: dict[int, int] = {}
+    checkins: dict[int, dict] = {}
+    caught_up: set[int] = set()
     if lesson_ids:
         wconn = webapp_conn()
         try:
             placeholder = ",".join("?" for _ in lesson_ids)
             for r in wconn.execute(
-                f"SELECT lesson_id, rating FROM lesson_checkins "
+                f"SELECT lesson_id, rating, note FROM lesson_checkins "
                 f"WHERE account_id = ? AND user_id = ? AND lesson_id IN ({placeholder})",
                 [account_id, user.id, *lesson_ids],
             ).fetchall():
-                ratings[r["lesson_id"]] = r["rating"]
+                checkins[r["lesson_id"]] = {"rating": r["rating"], "note": r["note"]}
+            for r in wconn.execute(
+                f"SELECT lesson_id FROM caught_up "
+                f"WHERE account_id = ? AND user_id = ? AND lesson_id IN ({placeholder})",
+                [account_id, user.id, *lesson_ids],
+            ).fetchall():
+                caught_up.add(r["lesson_id"])
         finally:
             wconn.close()
 
     for lesson in lessons:
-        lesson["rating"] = ratings.get(lesson["id"])
+        ck = checkins.get(lesson["id"])
+        # `rating` is what the grid colour-codes; full `checkin` lets the
+        # detail sheet pre-fill the comment field.
+        lesson["rating"] = ck["rating"] if ck else None
+        lesson["checkin"] = ck
+        lesson["caught_up"] = lesson["id"] in caught_up
 
     return {
         "start": start_date.isoformat(),
