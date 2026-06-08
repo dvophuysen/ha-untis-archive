@@ -76,9 +76,10 @@
     <div class="section-title">Pflicht <span class="dim">· {plan.must_do_minutes} min</span></div>
     {#each plan.must_do as task (task.id)}
       <div class="timeline-block must">
-        <button class="ghost" style="text-align:left; flex:1; padding:0; min-height:auto;" onclick={() => (editing = task)}>
+        <button class="ghost" style="text-align:left; flex:1; padding:0; min-height:auto; display:block;" onclick={() => (editing = task)}>
           <strong>{task.title}</strong>
-          {#if task.subject_name}<span class="dim"> · {task.subject_name}</span>{/if}
+          {#if task.subject_name && task.subject_name !== task.title}<span class="dim"> · {task.subject_name}</span>{/if}
+          {#if task.notes}<div class="muted" style="font-size:0.8rem; margin-top:2px; white-space:pre-wrap;">{task.notes}</div>{/if}
         </button>
         <span class="badge">{task.estimated_minutes ?? '?'}m</span>
       </div>
@@ -89,9 +90,10 @@
     <div class="section-title">Vorschläge <span class="dim">· {plan.suggested_minutes} min</span></div>
     {#each plan.suggested as task (task.id)}
       <div class="timeline-block suggested">
-        <button class="ghost" style="text-align:left; flex:1; padding:0; min-height:auto;" onclick={() => (editing = task)}>
+        <button class="ghost" style="text-align:left; flex:1; padding:0; min-height:auto; display:block;" onclick={() => (editing = task)}>
           <strong>{task.title}</strong>
-          {#if task.subject_name}<span class="dim"> · {task.subject_name}</span>{/if}
+          {#if task.subject_name && task.subject_name !== task.title}<span class="dim"> · {task.subject_name}</span>{/if}
+          {#if task.notes}<div class="muted" style="font-size:0.8rem; margin-top:2px; white-space:pre-wrap;">{task.notes}</div>{/if}
         </button>
         <span class="badge">{task.estimated_minutes ?? '?'}m</span>
       </div>
