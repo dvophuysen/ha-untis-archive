@@ -1,0 +1,28 @@
+name: Schul-Cockpit
+version: "0.1.0"
+slug: schul_cockpit
+description: Mobile Schul-App für Kinder und Eltern, basierend auf dem UNTIS-Archive-Datenbestand.
+url: https://github.com/dvophuysen/ha-untis-archive/tree/main/schul_cockpit
+arch:
+  - aarch64
+  - amd64
+  - armv7
+  - armhf
+  - i386
+init: false
+startup: services
+boot: auto
+ingress: true
+ingress_port: 8099
+ingress_stream: false
+panel_icon: mdi:school
+panel_title: Schul-Cockpit
+hassio_api: true
+homeassistant_api: true
+auth_api: true
+map:
+  - config:ro
+options:
+  log_level: info
+schema:
+  log_level: list(trace|debug|info|notice|warning|error|fatal)?

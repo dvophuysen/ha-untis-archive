@@ -13,3 +13,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# Frontend build artifacts (built inside Docker)
+schul_cockpit/frontend/node_modules/
+schul_cockpit/frontend/dist/
+

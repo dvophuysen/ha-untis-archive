@@ -5,6 +5,13 @@ SQLite-Datenbank archiviert — angelegt für den langen Zeitraum bis zum
 Abitur, mit vollständiger Änderungs-Historie und automatischer Verknüpfung
 von Fehlzeiten mit den dadurch verpassten Stunden.
 
+> 📱 **Dazu im selben Repo: [Schul-Cockpit Add-on](schul_cockpit/)** —
+> eine mobile Web-App für Kinder und Eltern, die auf dieser Datenbasis
+> aufsetzt. Stundenplan, Verständnis-Check-ins, Aufgaben-Management mit
+> bidirektionalem HA-ToDo-Sync und Nachmittagsplaner mit Zeitbudget.
+> Installation über den HA-Add-on-Store (dieses Repo als Repository
+> hinzufügen).
+
 ## Was archiviert wird
 
 Pro Kind / Account, stündlich gepollt:
