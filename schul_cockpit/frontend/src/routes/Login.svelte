@@ -108,8 +108,10 @@
 
 <style>
   .login-wrap {
-    min-height: 100vh;
-    min-height: 100dvh;
+    height: 100vh;
+    height: 100dvh;
+    height: 100svh;
+    overflow-y: auto;
     display: flex;
     align-items: center;
     justify-content: center;
