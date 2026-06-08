@@ -108,19 +108,27 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
 
 .content {
   flex: 1;
-  padding: 0.5rem 1rem 6rem;
+  padding: 0.5rem 1rem 1rem;
 }
 
+/* Sticky (not fixed) so the bottom-nav participates in the document flow
+   and isn't overlaid by Safari's URL bar in browser/tab mode. In a real
+   installed PWA there is no Safari chrome and the nav simply sits at the
+   bottom of the viewport. */
 .bottom-nav {
-  position: fixed;
+  position: sticky;
   bottom: 0;
-  left: 0; right: 0;
   display: flex;
   justify-content: space-around;
   padding: 0.4rem 0 calc(0.4rem + env(safe-area-inset-bottom));
   background: var(--bg-card);
   border-top: 1px solid var(--border);
   z-index: 10;
+}
+/* Inside the Safari tab (not installed as PWA), reserve extra space so
+   the URL toolbar at the bottom doesn't overlap the nav buttons. */
+@media (display-mode: browser) {
+  .bottom-nav { padding-bottom: calc(0.4rem + env(safe-area-inset-bottom) + 56px); }
 }
 .bottom-nav button {
   flex: 1;
@@ -247,10 +255,14 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
 .task-meta .pill.today { background: var(--rating-2); color: #fff; border-color: transparent; }
 .task-meta .pill.exam { background: var(--exam); color: #fff; border-color: transparent; }
 
+/* Floating action button: sits at the bottom-right of the content area,
+   above the sticky nav, with enough offset so Safari's URL bar in
+   browser mode doesn't sit on top of it. */
 .fab {
-  position: fixed;
+  position: sticky;
+  align-self: flex-end;
   bottom: calc(76px + env(safe-area-inset-bottom));
-  right: 1rem;
+  margin: -56px 1rem 0.5rem auto;
   width: 56px; height: 56px;
   border-radius: 50%;
   background: var(--accent);
@@ -260,6 +272,9 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
   box-shadow: 0 4px 12px rgba(37,99,235,0.4);
   display: flex; align-items: center; justify-content: center;
   z-index: 5;
+}
+@media (display-mode: browser) {
+  .fab { bottom: calc(76px + env(safe-area-inset-bottom) + 56px); }
 }
 
 .empty {
