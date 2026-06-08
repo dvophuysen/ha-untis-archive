@@ -9,7 +9,11 @@ function joinUrl(path) {
 }
 
 async function request(method, path, body) {
-  const opts = { method, headers: {} };
+  // credentials: 'include' makes the browser send AND store the session
+  // cookie reliably — without it, some iOS/PWA contexts drop the
+  // Set-Cookie from the login response, so the next /api/me 401s and the
+  // login screen just reappears ("button does nothing").
+  const opts = { method, headers: {}, credentials: 'include' };
   if (body !== undefined) {
     opts.headers['content-type'] = 'application/json';
     opts.body = JSON.stringify(body);
