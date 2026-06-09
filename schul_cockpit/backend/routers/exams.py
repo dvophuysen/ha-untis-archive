@@ -40,6 +40,95 @@ async def get_exams(
     return await resolve_exams(account_id, days_ahead=days_ahead)
 
 
+def _progress_map(account_id: int) -> dict:
+    conn = webapp_conn()
+    try:
+        rows = conn.execute(
+            "SELECT exam_key, learn_state, learn_note, grade FROM exam_progress "
+            "WHERE account_id = ?",
+            (account_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return {r["exam_key"]: dict(r) for r in rows}
+
+
+@router.get("/accounts/{account_id}/exams/all")
+async def exams_all(
+    account_id: int,
+    past_days: int = 365,
+    days_ahead: int = 180,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Dedicated exam page feed: upcoming (soonest first) + past (most
+    recent first), each merged with learn-state / grade progress."""
+    assert_account_access(user, account_id)
+    data = await resolve_exams(account_id, days_ahead=days_ahead, past_days=past_days)
+    prog = _progress_map(account_id)
+    from datetime import date as _d
+    today_iso = _d.today().isoformat()
+
+    upcoming, past = [], []
+    for e in data["exams"]:
+        p = prog.get(e.get("exam_key"), {})
+        e = {
+            **e,
+            "learn_state": p.get("learn_state"),
+            "learn_note": p.get("learn_note"),
+            "grade": p.get("grade"),
+        }
+        (upcoming if e["date"] >= today_iso else past).append(e)
+
+    upcoming.sort(key=lambda e: e["date"])              # soonest first
+    past.sort(key=lambda e: e["date"], reverse=True)    # most recent first
+    return {
+        "calendar_error": data.get("calendar_error"),
+        "entity_id": data.get("entity_id"),
+        "upcoming": upcoming,
+        "past": past,
+    }
+
+
+class ProgressIn(BaseModel):
+    exam_key: str
+    learn_state: int | None = Field(default=None, ge=0, le=3)
+    learn_note: str | None = None
+    grade: str | None = None
+
+
+@router.post("/accounts/{account_id}/exam-progress")
+def set_progress(
+    account_id: int,
+    body: ProgressIn,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    # Any linked user (kid for self-assessment, parent for grade) may set it.
+    assert_account_access(user, account_id)
+    now = _now()
+    conn = webapp_conn()
+    try:
+        existing = conn.execute(
+            "SELECT learn_state, learn_note, grade FROM exam_progress "
+            "WHERE account_id = ? AND exam_key = ?",
+            (account_id, body.exam_key),
+        ).fetchone()
+        # Merge: only overwrite fields that were provided (None = leave as-is).
+        learn_state = body.learn_state if body.learn_state is not None else (existing["learn_state"] if existing else None)
+        learn_note = body.learn_note if body.learn_note is not None else (existing["learn_note"] if existing else None)
+        grade = body.grade if body.grade is not None else (existing["grade"] if existing else None)
+        conn.execute(
+            "INSERT INTO exam_progress (account_id, exam_key, learn_state, learn_note, grade, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(account_id, exam_key) DO UPDATE SET "
+            "  learn_state = excluded.learn_state, learn_note = excluded.learn_note, "
+            "  grade = excluded.grade, updated_at = excluded.updated_at",
+            (account_id, body.exam_key, learn_state, learn_note, grade, now),
+        )
+    finally:
+        conn.close()
+    return {"ok": True}
+
+
 # ---- Diagnostic + curation (parent) -------------------------------------
 
 @router.get("/accounts/{account_id}/exams/diagnostic")
