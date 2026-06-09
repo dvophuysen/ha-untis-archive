@@ -2,6 +2,15 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.17.0 — iPhone-Bildschirmzeit-Hilfe + Webclip
+- Neue Sektion „iPhone-Bildschirmzeit" in den Einstellungen mit
+  Klick-Anleitung: App-Domain zum Kopieren für „Erlaubte Websites".
+- **Webclip-Download** pro Kind (unsigniertes .mobileconfig): legt ein
+  Vollbild-App-Icon mit Deep-Link auf das richtige Kind an und erscheint
+  als eigener Eintrag in Bildschirmzeit → App-Limits (dort auf „Immer
+  erlaubt" setzbar, ohne ganz Safari freizugeben). Nur Admin; erfordert
+  gesetzte externe URL.
+
 ## 0.16.0 — Datensicherung (Backup/Restore)
 - Neue Admin-Sektion „Datensicherung" in den Einstellungen.
 - **Backup-Download** als ein ZIP mit **beiden** Datenbanken (App-Daten
