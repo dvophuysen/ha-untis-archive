@@ -32,7 +32,9 @@
         exam_key: exam.exam_key,
         ...patch,
       });
-      Object.assign(exam, patch);
+      if (patch.clear_grade) exam.grade_points = null;
+      else if ('grade_points' in patch) exam.grade_points = patch.grade_points;
+      if ('learn_state' in patch) exam.learn_state = patch.learn_state;
       data = { ...data };
     } catch (e) {
       error = e.message;
@@ -128,12 +130,20 @@
             <div class="dim">{formatShortDate(e.date)}</div>
           </div>
           <div class="grade-box">
-            <input
+            <select
               class="grade-input"
-              placeholder="Note"
-              value={e.grade ?? ''}
-              onchange={(ev) => saveProgress(e, { grade: ev.currentTarget.value })}
-            />
+              value={e.grade_points ?? ''}
+              onchange={(ev) => {
+                const v = ev.currentTarget.value;
+                if (v === '') saveProgress(e, { clear_grade: true });
+                else saveProgress(e, { grade_points: Number(v) });
+              }}
+            >
+              <option value="">– Note –</option>
+              {#each (data.grade_options ?? []) as o}
+                <option value={o.points}>{o.label}</option>
+              {/each}
+            </select>
           </div>
         </div>
       </div>
@@ -154,5 +164,5 @@
   .when.soon { background: var(--rating-1); color: #fff; border-color: transparent; }
   .when.mid { background: var(--rating-2); color: #fff; border-color: transparent; }
   .grade-box { flex-shrink: 0; }
-  .grade-input { width: 70px; text-align: center; font-weight: 600; min-height: 40px; }
+  .grade-input { width: 110px; text-align: center; font-weight: 600; min-height: 40px; }
 </style>

@@ -203,11 +203,18 @@ _MIGRATIONS: list[tuple[str, str]] = [
             exam_key TEXT NOT NULL,            -- calendar source_key or 'manual:<id>'
             learn_state INTEGER,               -- 0 nicht begonnen,1 viel offen,2 mittel,3 sicher
             learn_note TEXT,
-            grade TEXT,                        -- freie Note: '2', '3-', '11 P.' …
+            grade TEXT,                        -- legacy free text (kept, unused)
             updated_at TEXT NOT NULL,
             PRIMARY KEY (account_id, exam_key)
         )
         """,
+    ),
+    (
+        "026_exam_progress_grade_points",
+        # Canonical grade as KMK points 0..15 (15 = 1+, 0 = 6). Note vs.
+        # points is a pure display choice per school section; storing points
+        # keeps everything convertible for a later Notenausgleich.
+        "ALTER TABLE exam_progress ADD COLUMN grade_points INTEGER",
     ),
 ]
 

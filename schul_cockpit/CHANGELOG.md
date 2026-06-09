@@ -2,6 +2,15 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.14.0 — Plan & Aufgaben zusammengeführt, Note als Dropdown
+- **Plan und Aufgaben sind jetzt eine Seite** (Tab „Plan"). Der separate
+  „Aufgaben"-Tab entfällt → wieder 6 Tabs, Platz für „Klausur".
+  Aufbau: Pensum · Heute zu erledigen · Sollte heute · Demnächst (diese
+  Woche / später / ohne Datum) · „erledigte anzeigen" · + anlegen · Sync.
+- **Klausur-Note als Dropdown** statt Freitext. Intern als KMK-Punkte
+  0–15 gespeichert (umrechenbar). Sek I zeigt Noten mit Tendenz
+  (1+ … 5− · 6), Sek II Punkte — Grundlage für späteren Notenausgleich.
+
 ## 0.13.0 — Eigene Klausuren-Seite (Lernstand + Noten)
 - Neuer Tab **„Klausur"** mit zwei Blöcken:
   - **Ausstehend** (nächste zuerst): pro Klausur ein Lernstand-Wahlfeld

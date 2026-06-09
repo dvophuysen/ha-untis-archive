@@ -3,7 +3,6 @@
   import { appState, loadMe, setActiveAccount, activeAccount } from './lib/store.svelte.js';
   import Today from './routes/Today.svelte';
   import Plan from './routes/Plan.svelte';
-  import Tasks from './routes/Tasks.svelte';
   import Week from './routes/Week.svelte';
   import Subjects from './routes/Subjects.svelte';
   import SubjectDetail from './routes/SubjectDetail.svelte';
@@ -47,7 +46,6 @@
   const navItems = [
     { name: 'today', icon: '📅', label: 'Heute' },
     { name: 'plan', icon: '🎯', label: 'Plan' },
-    { name: 'tasks', icon: '✅', label: 'Aufgaben' },
     { name: 'week', icon: '📊', label: 'Woche' },
     { name: 'subjects', icon: '📚', label: 'Fächer' },
     { name: 'klausuren', icon: '📝', label: 'Klausur' },
@@ -134,10 +132,8 @@
       <MyChanges />
     {:else if route.name === 'today'}
       <Today accountId={appState.activeAccountId} />
-    {:else if route.name === 'plan'}
+    {:else if route.name === 'plan' || route.name === 'tasks'}
       <Plan accountId={appState.activeAccountId} />
-    {:else if route.name === 'tasks'}
-      <Tasks accountId={appState.activeAccountId} />
     {:else if route.name === 'week'}
       <Week accountId={appState.activeAccountId} />
     {:else if route.name === 'klausuren'}

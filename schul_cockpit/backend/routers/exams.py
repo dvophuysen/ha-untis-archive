@@ -44,7 +44,7 @@ def _progress_map(account_id: int) -> dict:
     conn = webapp_conn()
     try:
         rows = conn.execute(
-            "SELECT exam_key, learn_state, learn_note, grade FROM exam_progress "
+            "SELECT exam_key, learn_state, learn_note, grade_points FROM exam_progress "
             "WHERE account_id = ?",
             (account_id,),
         ).fetchall()
@@ -66,16 +66,23 @@ async def exams_all(
     data = await resolve_exams(account_id, days_ahead=days_ahead, past_days=past_days)
     prog = _progress_map(account_id)
     from datetime import date as _d
+
+    from ..erlass import resolve_section
+    from ..grades import display_label, options as grade_options
+
     today_iso = _d.today().isoformat()
+    section, _kl, _src = resolve_section(account_id)
 
     upcoming, past = [], []
     for e in data["exams"]:
         p = prog.get(e.get("exam_key"), {})
+        gp = p.get("grade_points")
         e = {
             **e,
             "learn_state": p.get("learn_state"),
             "learn_note": p.get("learn_note"),
-            "grade": p.get("grade"),
+            "grade_points": gp,
+            "grade_label": display_label(gp, section),
         }
         (upcoming if e["date"] >= today_iso else past).append(e)
 
@@ -84,6 +91,8 @@ async def exams_all(
     return {
         "calendar_error": data.get("calendar_error"),
         "entity_id": data.get("entity_id"),
+        "section": section,
+        "grade_options": grade_options(section),
         "upcoming": upcoming,
         "past": past,
     }
@@ -93,7 +102,9 @@ class ProgressIn(BaseModel):
     exam_key: str
     learn_state: int | None = Field(default=None, ge=0, le=3)
     learn_note: str | None = None
-    grade: str | None = None
+    grade_points: int | None = Field(default=None, ge=0, le=15)
+    # Sentinel to explicitly clear the grade (since None = "leave as-is").
+    clear_grade: bool = False
 
 
 @router.post("/accounts/{account_id}/exam-progress")
@@ -108,21 +119,26 @@ def set_progress(
     conn = webapp_conn()
     try:
         existing = conn.execute(
-            "SELECT learn_state, learn_note, grade FROM exam_progress "
+            "SELECT learn_state, learn_note, grade_points FROM exam_progress "
             "WHERE account_id = ? AND exam_key = ?",
             (account_id, body.exam_key),
         ).fetchone()
         # Merge: only overwrite fields that were provided (None = leave as-is).
         learn_state = body.learn_state if body.learn_state is not None else (existing["learn_state"] if existing else None)
         learn_note = body.learn_note if body.learn_note is not None else (existing["learn_note"] if existing else None)
-        grade = body.grade if body.grade is not None else (existing["grade"] if existing else None)
+        if body.clear_grade:
+            grade_points = None
+        elif body.grade_points is not None:
+            grade_points = body.grade_points
+        else:
+            grade_points = existing["grade_points"] if existing else None
         conn.execute(
-            "INSERT INTO exam_progress (account_id, exam_key, learn_state, learn_note, grade, updated_at) "
+            "INSERT INTO exam_progress (account_id, exam_key, learn_state, learn_note, grade_points, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(account_id, exam_key) DO UPDATE SET "
             "  learn_state = excluded.learn_state, learn_note = excluded.learn_note, "
-            "  grade = excluded.grade, updated_at = excluded.updated_at",
-            (account_id, body.exam_key, learn_state, learn_note, grade, now),
+            "  grade_points = excluded.grade_points, updated_at = excluded.updated_at",
+            (account_id, body.exam_key, learn_state, learn_note, grade_points, now),
         )
     finally:
         conn.close()
