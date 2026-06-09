@@ -1,73 +1,23 @@
 <script>
   import { api } from '../lib/api.js';
-  import { appState } from '../lib/store.svelte.js';
-  import { dueLabel, stripUntisMetadata, isoToday } from '../lib/format.js';
+  import { dueLabel, stripUntisMetadata, isoToday, formatShortDate } from '../lib/format.js';
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskEditor from '../lib/TaskEditor.svelte';
 
-  const today = isoToday();
-  // Only the adult side gets the quick-budget pickers. For the kid, the
-  // budget is fixed by what the parent set in Settings — they shouldn't
-  // be able to silently double their study time from the planner screen.
-  const canEditBudget = $derived(
-    appState.me?.role === 'admin' || appState.me?.role === 'parent',
-  );
-
   let { accountId } = $props();
+  const today = isoToday();
 
-  let plan = $state(null);
+  let data = $state(null);
   let loading = $state(true);
   let error = $state(null);
-  let budgetOverride = $state(null);
   let editing = $state(null);
-  let addedKeys = $state(new Set());
-  let addingKey = $state(null);
-
-  const TYPE_MAP = {
-    understanding: { task_type: 'catch_up', verb: 'üben' },
-    prep_tomorrow: { task_type: 'practice', verb: 'für morgen vorbereiten' },
-    vocab: { task_type: 'practice', verb: 'Vokabeln üben' },
-  };
-
-  function suggestionKey(s) {
-    return `${s.type}:${s.subject_name}`;
-  }
-
-  function suggestionTitle(s) {
-    const map = TYPE_MAP[s.type];
-    if (s.type === 'vocab') return `${s.subject_name}: Vokabeln üben`;
-    if (s.type === 'prep_tomorrow') return `${s.subject_name} für morgen vorbereiten`;
-    return `${s.subject_name} üben`;
-  }
-
-  async function addSuggestion(s) {
-    const key = suggestionKey(s);
-    addingKey = key;
-    try {
-      await api.post(`/api/accounts/${accountId}/tasks`, {
-        title: suggestionTitle(s),
-        task_type: TYPE_MAP[s.type]?.task_type ?? 'practice',
-        estimated_minutes: s.suggested_minutes,
-        subject_untis_id: s.subject_id ?? null,
-        subject_name: s.subject_name,
-        due_date: today,
-      });
-      addedKeys = new Set(addedKeys).add(key);
-      await load();
-    } catch (e) {
-      error = e.message;
-    } finally {
-      addingKey = null;
-    }
-  }
 
   async function load() {
     if (!accountId) return;
     loading = true;
     error = null;
     try {
-      const q = budgetOverride != null ? `?budget_minutes=${budgetOverride}` : '';
-      plan = await api.get(`/api/accounts/${accountId}/afternoon-plan${q}`);
+      data = await api.get(`/api/accounts/${accountId}/plan`);
     } catch (e) {
       error = e.message;
     } finally {
@@ -77,135 +27,96 @@
 
   $effect(() => { void accountId; load(); });
 
-  const overBudget = $derived(plan && plan.must_do_minutes > plan.budget_minutes);
+  const WORKLOAD = {
+    frei: { label: 'nichts Pflicht heute 🎉', cls: 'ok' },
+    wenig: { label: 'wenig zu tun', cls: 'ok' },
+    überschaubar: { label: 'überschaubar', cls: 'mid' },
+    viel: { label: 'viel — fang mit den schnellen Sachen an', cls: 'high' },
+  };
 
-  function copyToClipboard() {
-    if (!plan) return;
-    const lines = [`# Nachmittagsplan ${plan.date}`, `Budget: ${plan.budget_minutes} min`, ''];
-    if (plan.must_do.length) {
-      lines.push('## Pflicht (überfällig / heute)');
-      for (const t of plan.must_do) lines.push(`- [ ] ${t.title}${t.estimated_minutes ? ` (${t.estimated_minutes} min)` : ''}`);
-      lines.push('');
-    }
-    if (plan.suggested.length) {
-      lines.push('## Vorschläge');
-      for (const t of plan.suggested) lines.push(`- [ ] ${t.title}${t.estimated_minutes ? ` (${t.estimated_minutes} min)` : ''}`);
-    }
-    navigator.clipboard.writeText(lines.join('\n'));
+  function gotoExam() { window.location.hash = '#/subjects'; }
+  function gotoAbsences() { window.location.hash = '#/absences'; }
+  function followLink(link) {
+    window.location.hash = link === 'absences' ? '#/absences' : '#/subjects';
+  }
+
+  function examUrgencyClass(days) {
+    if (days <= 2) return 'soon';
+    if (days <= 7) return 'mid';
+    return '';
+  }
+  function examWhen(days) {
+    if (days === 0) return 'heute';
+    if (days === 1) return 'morgen';
+    if (days === 2) return 'übermorgen';
+    return `in ${days} Tagen`;
   }
 </script>
-
-<div class="row between" style="margin: 0.3rem 0.2rem 0.6rem;">
-  {#if canEditBudget}
-    <div class="row gap-sm">
-      {#each [30, 45, 60, 90, 120] as m}
-        <button
-          class:primary={plan?.budget_minutes === m}
-          onclick={() => { budgetOverride = m; load(); }}
-        >{m}m</button>
-      {/each}
-    </div>
-  {:else}
-    <div class="muted">Tagesbudget: <strong>{plan?.budget_minutes ?? '…'} min</strong></div>
-  {/if}
-  <button class="ghost" onclick={copyToClipboard} title="Liste kopieren">📋</button>
-</div>
 
 {#if loading}
   <div class="empty"><span class="spinner"></span></div>
 {:else if error}
   <div class="error-box">{error}</div>
-{:else if plan}
-  <div class="banner">
-    Budget heute: <strong>{plan.budget_minutes} min</strong>
-    {#if plan.completed_today_minutes > 0}
-      · ✓ erledigt: <strong>{plan.completed_today_minutes} min</strong>
-    {/if}
-    · eingeplant: <strong>{plan.must_do_minutes + plan.suggested_minutes} min</strong>
-    {#if overBudget}<span style="color:var(--rating-1)"> · ⚠️ Pflicht überschreitet Budget</span>{/if}
+{:else if data}
+  <div class="pensum {WORKLOAD[data.workload]?.cls ?? ''}">
+    Heute: <strong>{WORKLOAD[data.workload]?.label ?? data.workload}</strong>
   </div>
 
-  {#if plan.must_do.length === 0 && plan.suggested.length === 0}
-    <div class="empty">🎉 Nichts zu tun für heute.</div>
-  {/if}
-
-  {#if plan.must_do.length > 0}
-    <div class="section-title">Pflicht <span class="dim">· {plan.must_do_minutes} min</span></div>
-    {#each plan.must_do as task (task.id)}
-      {@const clean = stripUntisMetadata(task.notes)}
-      <div class="timeline-block must">
-        <button class="ghost" style="text-align:left; flex:1; padding:0; min-height:auto; display:block;" onclick={() => (editing = task)}>
-          <div class="plan-head">
-            <strong>{task.title}</strong>
-            {#if task.due_date}<span class="due-tag">{dueLabel(task.due_date, today)}</span>{/if}
-          </div>
-          {#if clean}<div class="muted" style="font-size:0.85rem; margin-top:3px; white-space:pre-wrap;">{clean}</div>{/if}
-        </button>
-        <span class="badge">{task.estimated_minutes ?? '?'}m</span>
-      </div>
-    {/each}
-  {/if}
-
-  {#if plan.suggested.length > 0}
-    <div class="section-title">Vorschläge <span class="dim">· {plan.suggested_minutes} min</span></div>
-    {#each plan.suggested as task (task.id)}
-      {@const clean = stripUntisMetadata(task.notes)}
-      <div class="timeline-block suggested">
-        <button class="ghost" style="text-align:left; flex:1; padding:0; min-height:auto; display:block;" onclick={() => (editing = task)}>
-          <div class="plan-head">
-            <strong>{task.title}</strong>
-            {#if task.due_date}<span class="due-tag">{dueLabel(task.due_date, today)}</span>{/if}
-          </div>
-          {#if clean}<div class="muted" style="font-size:0.85rem; margin-top:3px; white-space:pre-wrap;">{clean}</div>{/if}
-        </button>
-        <span class="badge">{task.estimated_minutes ?? '?'}m</span>
-      </div>
-    {/each}
-  {/if}
-
-  {#if plan.remaining_minutes > 0}
-    <div class="section-title">
-      Freie Lernzeit <span class="dim">· noch {plan.remaining_minutes} min</span>
-    </div>
-    {#if plan.free_learning && plan.free_learning.filter((s) => !addedKeys.has(suggestionKey(s))).length > 0}
-      <div class="muted" style="margin: 0 0.2rem 0.4rem;">Vorschläge — mit + als Aufgabe übernehmen:</div>
-      {#each plan.free_learning.filter((s) => !addedKeys.has(suggestionKey(s))) as s (suggestionKey(s))}
-        <div class="timeline-block free">
-          <div style="flex:1; min-width:0;">
-            <div class="plan-head">
-              <strong>{suggestionTitle(s)}</strong>
-              <span class="due-tag">{s.suggested_minutes}m</span>
-            </div>
-            <div class="muted" style="font-size:0.8rem; margin-top:2px;">
-              {#if s.type === 'understanding'}🧠 {s.reason}
-              {:else if s.type === 'prep_tomorrow'}📖 {s.reason}
-              {:else}🗂 {s.reason}{/if}
-            </div>
-          </div>
-          <button
-            class="primary add-btn"
-            disabled={addingKey === suggestionKey(s)}
-            onclick={() => addSuggestion(s)}
-            aria-label="als Aufgabe übernehmen"
-          >+</button>
-        </div>
+  <!-- MUSS -->
+  {#if data.must.length > 0}
+    <div class="section-title">Muss heute</div>
+    <div class="card" style="padding:0.2rem 0.6rem;">
+      {#each data.must as task (task.id)}
+        <TaskRow {accountId} {task} onchange={load} onopen={(t) => (editing = t)} />
       {/each}
-    {:else}
-      <div class="muted" style="margin: 0 0.2rem 0.6rem;">
-        Keine offenen Vorschläge — Zeit frei zum Lesen, Üben oder Entspannen. 🙂
-      </div>
-    {/if}
+    </div>
   {/if}
 
-  {#if plan.upcoming_exams_7d.length > 0}
-    <div class="section-title">Klausuren in 7 Tagen</div>
-    {#each plan.upcoming_exams_7d as ex}
-      <div class="card compact">
-        <strong>{ex.subject_name}</strong>
-        <span class="dim">· {ex.date}</span>
-        {#if ex.name}<div class="muted">{ex.name}</div>{/if}
+  <!-- SOLLTE -->
+  {#if data.should.length > 0}
+    <div class="section-title">Sollte heute</div>
+    {#each data.should as s}
+      <button class="card compact should-item" onclick={() => followLink(s.link)}>
+        <div class="row between" style="align-items:flex-start;">
+          <div style="flex:1; min-width:0; text-align:left;">
+            <strong>{s.title}</strong>
+            <div class="muted" style="margin-top:1px;">
+              {#if s.type === 'exam_prep'}📝{:else if s.type === 'catch_up'}🤒{:else}🧠{/if}
+              {s.reason}
+            </div>
+          </div>
+          <span class="chev">›</span>
+        </div>
+      </button>
+    {/each}
+  {/if}
+
+  <!-- Anstehende Klausuren (Übersicht) -->
+  <div class="section-title">Anstehende Klausuren</div>
+  {#if data.upcoming_exams.length === 0}
+    <div class="empty" style="padding:1rem;">
+      Keine Klausuren in den nächsten 4 Wochen erkannt.<br>
+      <span class="dim">Kalender verknüpfen/Termine ergänzen: Setup → Klausuren verwalten.</span>
+    </div>
+  {:else}
+    {#each data.upcoming_exams as e}
+      <div class="card compact exam-row">
+        <div class="row between">
+          <div>
+            <strong>{e.subject_name ?? e.title}</strong>
+            {#if e.subject_name && e.title && e.title !== e.subject_name}
+              <span class="dim"> · {e.title}</span>
+            {/if}
+            <div class="dim">{formatShortDate(e.date)}{#if e.source === 'manual'} · manuell{/if}</div>
+          </div>
+          <span class="badge exam-when {examUrgencyClass(e.days_until)}">{examWhen(e.days_until)}</span>
+        </div>
       </div>
     {/each}
+  {/if}
+
+  {#if data.must.length === 0 && data.should.length === 0}
+    <div class="empty" style="margin-top:1rem;">Nichts Dringendes — Zeit zum Durchatmen. 🙂</div>
   {/if}
 {/if}
 
@@ -214,26 +125,19 @@
 {/if}
 
 <style>
-  .plan-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 0.5rem;
+  .pensum {
+    border-radius: var(--radius);
+    padding: 0.6rem 0.85rem;
+    margin: 0.4rem 0 0.6rem;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    font-size: 0.9rem;
   }
-  .due-tag {
-    flex-shrink: 0;
-    font-size: 0.72rem;
-    color: var(--fg-muted);
-    white-space: nowrap;
-  }
-  .timeline-block.free { border-left: 3px solid var(--rating-3); align-items: center; }
-  .add-btn {
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    font-size: 1.3rem;
-    padding: 0;
-    line-height: 1;
-  }
+  .pensum.ok { border-left: 4px solid var(--rating-3); }
+  .pensum.mid { border-left: 4px solid var(--rating-2); }
+  .pensum.high { border-left: 4px solid var(--rating-1); }
+  .should-item { width: 100%; cursor: pointer; }
+  .chev { color: var(--fg-dim); font-size: 1.2rem; }
+  .exam-when.soon { background: var(--rating-1); color: #fff; border-color: transparent; }
+  .exam-when.mid { background: var(--rating-2); color: #fff; border-color: transparent; }
 </style>

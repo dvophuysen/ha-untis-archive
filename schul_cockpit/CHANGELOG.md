@@ -2,6 +2,18 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.12.0 — Neuer Plan: MUSS/SOLLTE/KANN + Klausuren statt Budget
+- **Budget-Knöpfe entfernt.** Der Plan zeigt stattdessen oben einen
+  Pensum-Indikator (nichts/wenig/überschaubar/viel).
+- **Muss heute**: überfällige + heute/morgen fällige Hausaufgaben,
+  schnellste zuerst (damit Kleinkram nicht zum Berg wird).
+- **Sollte heute** (max. 3, bedarfsgetrieben): Klausur-Vorbereitung
+  (Frühwarnung „Klausur in X Tagen" aus den erkannten Terminen),
+  versäumter Stoff nachholen, wiederkehrende Verständnislücken.
+- **Anstehende Klausuren**: sichtbare Übersicht der nächsten 4 Wochen
+  direkt im Plan — aus verknüpftem Kalender + manuellen Terminen.
+- Damit nutzt der Plan jetzt die in 0.11 eingeführte Klausur-Erkennung.
+
 ## 0.11.1 — Changelog nachgeholt
 - Diese `CHANGELOG.md` angelegt, damit HA den Verlauf im Add-on-Store
   anzeigt. Inhaltlich keine Funktionsänderung gegenüber 0.11.0.
