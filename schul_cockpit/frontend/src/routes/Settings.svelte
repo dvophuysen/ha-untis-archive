@@ -96,23 +96,15 @@
     navigator.clipboard?.writeText(appHost);
     copied = true; setTimeout(() => (copied = false), 1500);
   }
-  async function downloadWebclip() {
-    try {
-      const resp = await fetch(`./api/admin/webclip?account_id=${accountId}`, { credentials: 'include' });
-      if (!resp.ok) {
-        const d = await resp.json().catch(() => ({}));
-        throw new Error(d.detail || `Fehler ${resp.status}`);
-      }
-      const blob = await resp.blob();
-      const cd = resp.headers.get('content-disposition') || '';
-      const m = cd.match(/filename="?([^"]+)"?/);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = m ? m[1] : 'schul-cockpit.mobileconfig'; a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      error = e.message;
-    }
+  function downloadWebclip() {
+    // iOS installs .mobileconfig profiles ONLY via direct navigation —
+    // Settings.app hooks the response MIME type. fetch + blob + <a download>
+    // is silently ignored in standalone PWAs (and Safari's tab-mode), which
+    // matches the "Webclip lädt nicht herunter"-symptom.
+    // Open in a new tab so the PWA's own state stays put; on iOS this still
+    // triggers the system profile installer.
+    const url = `./api/admin/webclip?account_id=${accountId}`;
+    window.open(url, '_blank');
   }
 
   const DAYS = [
