@@ -99,6 +99,13 @@
 {#if loading || !settings}
   <div class="empty"><span class="spinner"></span></div>
 {:else}
+  <button class="card" style="width:100%; text-align:left; cursor:pointer;" onclick={() => (window.location.hash = '#/courses')}>
+    <div class="row between">
+      <div><strong>🎵 Kurse / Wahlfächer</strong><div class="dim">Nicht belegte Kurse ausblenden (z.B. Instrumental, Gesang)</div></div>
+      <span>›</span>
+    </div>
+  </button>
+
   <div class="section-title">Tagesbudget Lernzeit</div>
 
   {@const erl = settings.erlass ?? {}}

@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth import CurrentUser, assert_account_access, get_current_user
+from ..courses import hidden_keys, lesson_is_hidden, visible_subject_ids
 from ..db import history_conn, webapp_conn
 from ..queries import _fmt_hhmm
 
@@ -60,6 +61,7 @@ def list_subjects(
             shorts[sid] = _subject_short(prow["payload_json"]) if prow else None
     finally:
         conn.close()
+    visible = visible_subject_ids(account_id)
     return {
         "subjects": [
             {
@@ -70,6 +72,7 @@ def list_subjects(
                 "last_date": r["last_date"],
             }
             for r in rows
+            if visible is None or r["subject_untis_id"] in visible
         ]
     }
 
@@ -98,8 +101,8 @@ def subject_detail(
         # Timeline: only lessons that have already happened (<= today), so we
         # don't clutter the view with empty future slots.
         rows = conn.execute(
-            "SELECT id, date, start_time, teacher_name, room, code, "
-            "lstext, was_absent, absence_reason "
+            "SELECT id, date, start_time, subject_untis_id, teacher_untis_id, "
+            "teacher_name, room, code, lstext, was_absent, absence_reason "
             "FROM lessons "
             "WHERE account_id = ? AND subject_untis_id = ? "
             "  AND date >= ? AND date <= ? "
@@ -108,6 +111,9 @@ def subject_detail(
         ).fetchall()
     finally:
         conn.close()
+
+    hidden = hidden_keys(account_id)
+    rows = [r for r in rows if not lesson_is_hidden(dict(r), hidden)]
 
     lesson_ids = [r["id"] for r in rows]
     ratings: dict[int, dict] = {}
