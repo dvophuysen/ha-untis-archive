@@ -2,6 +2,15 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.15.1 — Stundenkarte: Marker & Check-in-Reihe
+- Vertretungs-/Änderungs-/Ausfall-/Klausur-Markierung wieder als
+  deutliche farbige Badges (statt blasser Mini-Emojis): ❌ Ausfall,
+  ↺ Vertretung (auch bei Lehrer-/Raum-/Fachwechsel, mit „statt …"),
+  🤒 versäumt, 📝 Klausur.
+- Check-in-Emojis einheitlich in EINER Zeile: 👀 links als optionaler
+  Slot (nur bei Vertretung), bei normalen Stunden leer freigehalten,
+  dann 😀 😐 😟 — immer an derselben Position.
+
 ## 0.15.0 — Nicht belegte Kurse/Wahlfächer ausblenden
 - Neue Einstellungs-Sektion **„Kurse / Wahlfächer"** (🛠 Einstellungen):
   jeder Kurs (Fach + Lehrer) mit Häufigkeit und Schalter belegt /

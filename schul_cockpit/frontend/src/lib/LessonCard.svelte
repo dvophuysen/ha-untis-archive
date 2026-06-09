@@ -67,14 +67,14 @@
     <div class="lesson-head">
       <span class="lesson-time">{lesson.start_hhmm}</span>
       <span class="lesson-subj" title={lesson.subject_name}>{subjectLabel}</span>
-      {#if isCancelled}<span class="mini">❌</span>{/if}
-      {#if lesson.is_irregular && !isCancelled}<span class="mini">↺</span>{/if}
-      {#if wasAbsent}<span class="mini">🤒</span>{/if}
-      {#if hasExam}<span class="mini">📝</span>{/if}
-      {#if lesson.checkin?.note}<span class="mini">💬</span>{/if}
+      {#if isCancelled}<span class="badge cancelled">❌ Ausfall</span>{/if}
+      {#if isSubst && !isCancelled}<span class="badge substitution">↺ Vertretung</span>{/if}
+      {#if wasAbsent}<span class="badge absent">🤒 versäumt</span>{/if}
+      {#if hasExam}<span class="badge exam">📝 Klausur</span>{/if}
+      {#if lesson.checkin?.note}<span class="mini" title="Kommentar">💬</span>{/if}
     </div>
     <div class="lesson-sub">
-      {lesson.teacher_name ?? '—'}{#if lesson.room} · {lesson.room}{/if}
+      {lesson.teacher_name ?? '—'}{#if lesson.is_teacher_substituted && lesson.teacher_orig_name}<span class="orig"> (statt {lesson.teacher_orig_name})</span>{/if}{#if lesson.room} · {lesson.room}{#if lesson.is_room_substituted && lesson.room_orig}<span class="orig"> (statt {lesson.room_orig})</span>{/if}{/if}
     </div>
     {#if hasExam && lesson.exam.name}
       <div class="lesson-exam">📝 {lesson.exam.name}</div>
@@ -84,16 +84,19 @@
     {/if}
   </button>
 
-  <!-- RIGHT: quick check-in -->
+  <!-- RIGHT: quick check-in — fixed 4-column row, 👀 slot first (empty
+       when not a substitution) so 😀😐😟 always align across cards. -->
   {#if canRate}
     <div class="lesson-right">
-      <div class="checkins" class:three={!isSubst}>
+      <div class="checkins">
+        {#if isSubst}
+          <button class="ci r4" class:active={rating === 4} disabled={busy} onclick={() => checkin(4)} title="nur Aufsicht / kein neuer Stoff">👀</button>
+        {:else}
+          <span class="ci-empty"></span>
+        {/if}
         <button class="ci r3" class:active={rating === 3} disabled={busy} onclick={() => checkin(3)} title="verstanden">😀</button>
         <button class="ci r2" class:active={rating === 2} disabled={busy} onclick={() => checkin(2)} title="teils verstanden">😐</button>
         <button class="ci r1" class:active={rating === 1} disabled={busy} onclick={() => checkin(1)} title="nicht verstanden">😟</button>
-        {#if isSubst}
-          <button class="ci r4" class:active={rating === 4} disabled={busy} onclick={() => checkin(4)} title="nur Aufsicht / kein neuer Stoff">👀</button>
-        {/if}
       </div>
     </div>
   {:else}
@@ -134,7 +137,7 @@
     cursor: pointer;
   }
   .lesson-right {
-    width: 124px;
+    width: 144px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
@@ -162,21 +165,23 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  .checkins { display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; }
-  .checkins.three { grid-template-columns: 1fr 1fr 1fr; }
-  .detail-checkins { grid-template-columns: repeat(4, 1fr); }
-  .detail-checkins.three { grid-template-columns: repeat(3, 1fr); }
+  /* Fixed 4 columns; first column is the optional 👀 slot (kept empty on
+     normal lessons so the other three always line up across cards). */
+  .checkins { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.2rem; }
   .ci {
-    font-size: 1.2rem;
+    font-size: 1.05rem;
     padding: 0.3rem 0;
-    min-height: 40px;
+    min-width: 0;
+    min-height: 38px;
     background: var(--bg-elevated);
     border: 1px solid var(--border);
     border-radius: 8px;
   }
+  .ci-empty { min-height: 38px; }
   .ci.active { color: #fff; }
   .ci.r3.active { background: var(--rating-3); border-color: var(--rating-3); }
   .ci.r2.active { background: var(--rating-2); border-color: var(--rating-2); }
   .ci.r1.active { background: var(--rating-1); border-color: var(--rating-1); }
   .ci.r4.active { background: var(--cancelled); border-color: var(--cancelled); }
+  .orig { color: var(--fg-dim); }
 </style>
