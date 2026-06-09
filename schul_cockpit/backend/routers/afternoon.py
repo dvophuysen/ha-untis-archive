@@ -16,31 +16,67 @@ router = APIRouter()
 WEEKDAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
 
-def _budget_for_today(account_id: int, today: date) -> int:
+def _budget_for_today(account_id: int, today: date) -> tuple[int, dict]:
+    """Returns (minutes, source_info) where source_info describes how the
+    value was derived — surfaced in the UI banner."""
+    from ..erlass import (
+        ERLASS_DAILY_MIN,
+        erlass_budget_minutes,
+        has_afternoon_school,
+        resolve_section,
+    )
+
     conn = webapp_conn()
     try:
         row = conn.execute(
-            "SELECT default_daily_budget_minutes, budget_overrides_json "
+            "SELECT default_daily_budget_minutes, budget_overrides_json, "
+            "auto_budget, school_section_override "
             "FROM account_settings WHERE account_id = ?",
             (account_id,),
         ).fetchone()
     finally:
         conn.close()
-    if row is None:
-        return 60
-    default = row["default_daily_budget_minutes"] or 60
-    overrides_raw = row["budget_overrides_json"]
+
+    auto = True if row is None else bool(row["auto_budget"])
+    override_section = row["school_section_override"] if row else None
+
+    if auto:
+        section, klasse_name, src = resolve_section(account_id, override_section)
+        if section is None:
+            # Fall back to the manual value so we don't return 0 minutes
+            # while the admin assigns the right section.
+            default = (row and row["default_daily_budget_minutes"]) or 60
+            return default, {
+                "source": "fallback_manual",
+                "reason": "Klasse konnte nicht erkannt werden",
+            }
+        afternoon = has_afternoon_school(account_id, today)
+        minutes = erlass_budget_minutes(section, today, has_afternoon=afternoon)
+        return minutes, {
+            "source": "erlass",
+            "section": section,
+            "section_source": src,
+            "klasse_name": klasse_name,
+            "weekend": today.weekday() >= 5,
+            "afternoon_reduced": afternoon and today.weekday() < 5,
+            "erlass_max_workday": ERLASS_DAILY_MIN[section],
+        }
+
+    # Manual override branch — unchanged behaviour from before.
+    default = (row and row["default_daily_budget_minutes"]) or 60
+    overrides_raw = row["budget_overrides_json"] if row else None
+    info = {"source": "manual"}
     if not overrides_raw:
-        return default
+        return default, info
     try:
         overrides = json.loads(overrides_raw)
     except json.JSONDecodeError:
-        return default
+        return default, info
     key = WEEKDAY_KEYS[today.weekday()]
     val = overrides.get(key)
     if val is None:
-        return default
-    return int(val)
+        return default, info
+    return int(val), {"source": "manual_override"}
 
 
 def _priority(task: dict, today: date, exam_lookup: dict[int, date]) -> int:
@@ -77,7 +113,11 @@ def afternoon_plan(
 ) -> dict:
     assert_account_access(user, account_id)
     today = date.today()
-    budget = budget_minutes if budget_minutes is not None else _budget_for_today(account_id, today)
+    if budget_minutes is not None:
+        budget = budget_minutes
+        budget_source = {"source": "ad_hoc_override"}
+    else:
+        budget, budget_source = _budget_for_today(account_id, today)
 
     conn = webapp_conn()
     try:
@@ -170,6 +210,7 @@ def afternoon_plan(
     return {
         "date": today_iso,
         "budget_minutes": budget,
+        "budget_source": budget_source,
         "completed_today_minutes": completed_today_minutes,
         "must_do": must_do,
         "must_do_minutes": used,
