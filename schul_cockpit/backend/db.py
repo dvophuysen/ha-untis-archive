@@ -195,6 +195,20 @@ _MIGRATIONS: list[tuple[str, str]] = [
         "024_manual_exams_idx",
         "CREATE INDEX IF NOT EXISTS idx_manual_exams_acc ON manual_exams(account_id, exam_date)",
     ),
+    (
+        "025_exam_progress",
+        """
+        CREATE TABLE IF NOT EXISTS exam_progress (
+            account_id INTEGER NOT NULL,
+            exam_key TEXT NOT NULL,            -- calendar source_key or 'manual:<id>'
+            learn_state INTEGER,               -- 0 nicht begonnen,1 viel offen,2 mittel,3 sicher
+            learn_note TEXT,
+            grade TEXT,                        -- freie Note: '2', '3-', '11 P.' …
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (account_id, exam_key)
+        )
+        """,
+    ),
 ]
 
 

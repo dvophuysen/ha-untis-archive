@@ -2,6 +2,16 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.13.0 — Eigene Klausuren-Seite (Lernstand + Noten)
+- Neuer Tab **„Klausur"** mit zwei Blöcken:
+  - **Ausstehend** (nächste zuerst): pro Klausur ein Lernstand-Wahlfeld
+    (nicht begonnen / viel offen / mittel / sicher) als Selbsteinschätzung.
+  - **Vergangen** (jüngste zuerst): Feld zum Eintragen der erhaltenen
+    **Note**.
+- Quelle wie gehabt: verknüpfter Kalender + manuelle Termine.
+- Lernstand/Note werden pro Klausur gespeichert (Kind setzt Lernstand,
+  Eltern/Kind die Note).
+
 ## 0.12.0 — Neuer Plan: MUSS/SOLLTE/KANN + Klausuren statt Budget
 - **Budget-Knöpfe entfernt.** Der Plan zeigt stattdessen oben einen
   Pensum-Indikator (nichts/wenig/überschaubar/viel).

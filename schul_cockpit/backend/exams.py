@@ -227,12 +227,20 @@ def _manual_exams(account_id: int, today_iso: str, end_iso: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-async def resolve_exams(account_id: int, *, days_ahead: int = 90, diagnostic: bool = False) -> dict:
-    """Return resolved exams. With diagnostic=True, also include hidden
-    (excluded/dismissed/unmatched/ambiguous) calendar entries so the user
-    can curate them."""
+async def resolve_exams(
+    account_id: int,
+    *,
+    days_ahead: int = 90,
+    past_days: int = 0,
+    diagnostic: bool = False,
+) -> dict:
+    """Return resolved exams in [today - past_days, today + days_ahead].
+    With diagnostic=True, also include hidden (excluded/dismissed/
+    unmatched/ambiguous) calendar entries so the user can curate them."""
     today = date.today()
     today_iso = today.isoformat()
+    start = today - timedelta(days=past_days)
+    start_iso = start.isoformat()
     end = today + timedelta(days=days_ahead)
     end_iso = end.isoformat()
 
@@ -251,7 +259,7 @@ async def resolve_exams(account_id: int, *, days_ahead: int = 90, diagnostic: bo
             try:
                 events = await sup.get_calendar_events(
                     entity_id,
-                    datetime.combine(today, datetime.min.time()).isoformat(),
+                    datetime.combine(start, datetime.min.time()).isoformat(),
                     datetime.combine(end, datetime.min.time()).isoformat(),
                 )
             except SupervisorError as exc:
@@ -267,6 +275,7 @@ async def resolve_exams(account_id: int, *, days_ahead: int = 90, diagnostic: bo
                 entry = {
                     "source": "calendar",
                     "source_key": key,
+                    "exam_key": key,
                     "date": d,
                     "title": summary,
                     "subject_name": None,
@@ -294,10 +303,11 @@ async def resolve_exams(account_id: int, *, days_ahead: int = 90, diagnostic: bo
                 diag.append(entry)
 
     # --- Manual exams ---
-    for m in _manual_exams(account_id, today_iso, end_iso):
+    for m in _manual_exams(account_id, start_iso, end_iso):
         entry = {
             "source": "manual",
             "manual_id": m["id"],
+            "exam_key": f"manual:{m['id']}",
             "date": m["exam_date"],
             "title": m["title"] or m["subject_name"],
             "subject_name": m["subject_name"],
