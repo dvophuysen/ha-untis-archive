@@ -137,6 +137,13 @@
 {#if loading}
   <div class="empty"><span class="spinner"></span></div>
 {:else}
+  <button class="card" style="width:100%; text-align:left; cursor:pointer;" onclick={() => navigate('exams')}>
+    <div class="row between">
+      <div><strong>📝 Klausuren verwalten</strong><div class="dim">Kalender verknüpfen, Fächer zuordnen, Termine ergänzen</div></div>
+      <span>›</span>
+    </div>
+  </button>
+
   <div class="section-title">Kinder zuordnen</div>
   <div class="banner">
     Jeder HA-Nutzer kann mit einem oder mehreren UNTIS-Kindern verknüpft werden. Eltern haben in der Regel alle Kinder, ein Kind nur sich selbst.

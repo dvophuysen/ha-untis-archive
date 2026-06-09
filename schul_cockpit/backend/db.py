@@ -135,6 +135,66 @@ _MIGRATIONS: list[tuple[str, str]] = [
         # heuristics get it wrong (e.g. an exotic class label).
         "ALTER TABLE account_settings ADD COLUMN school_section_override TEXT",
     ),
+    (
+        "020_account_exam_calendars",
+        """
+        CREATE TABLE IF NOT EXISTS account_exam_calendars (
+            account_id INTEGER PRIMARY KEY,
+            ha_entity_id TEXT NOT NULL,        -- e.g. 'calendar.klausuren_noah'
+            exclude_keywords TEXT,             -- comma-separated, case-insensitive
+            updated_at TEXT NOT NULL
+        )
+        """,
+    ),
+    (
+        "021_subject_aliases",
+        """
+        CREATE TABLE IF NOT EXISTS subject_aliases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id INTEGER NOT NULL,
+            alias TEXT NOT NULL,               -- lower-cased trigger word/phrase
+            subject_name TEXT NOT NULL,        -- canonical subject it maps to
+            subject_untis_id INTEGER,
+            created_at TEXT NOT NULL,
+            UNIQUE(account_id, alias)
+        )
+        """,
+    ),
+    (
+        "022_exam_overrides",
+        """
+        CREATE TABLE IF NOT EXISTS exam_overrides (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id INTEGER NOT NULL,
+            source_key TEXT NOT NULL,          -- stable id of the calendar event
+            decision TEXT NOT NULL,            -- 'assigned' | 'dismissed'
+            subject_name TEXT,                 -- when assigned
+            subject_untis_id INTEGER,
+            updated_at TEXT NOT NULL,
+            UNIQUE(account_id, source_key)
+        )
+        """,
+    ),
+    (
+        "023_manual_exams",
+        """
+        CREATE TABLE IF NOT EXISTS manual_exams (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id INTEGER NOT NULL,
+            exam_date TEXT NOT NULL,           -- YYYY-MM-DD
+            subject_name TEXT NOT NULL,
+            subject_untis_id INTEGER,
+            title TEXT,
+            note TEXT,
+            created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            created_at TEXT NOT NULL
+        )
+        """,
+    ),
+    (
+        "024_manual_exams_idx",
+        "CREATE INDEX IF NOT EXISTS idx_manual_exams_acc ON manual_exams(account_id, exam_date)",
+    ),
 ]
 
 
