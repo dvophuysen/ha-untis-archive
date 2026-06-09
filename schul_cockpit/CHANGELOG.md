@@ -2,6 +2,17 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.15.0 — Nicht belegte Kurse/Wahlfächer ausblenden
+- Neue Einstellungs-Sektion **„Kurse / Wahlfächer"** (🛠 Einstellungen):
+  jeder Kurs (Fach + Lehrer) mit Häufigkeit und Schalter belegt /
+  nicht belegt; pro Fach ein „ganzes Fach aus/ein"-Knopf.
+- Ausgeblendete Kurse verschwinden aus Heute, Woche, Fächern,
+  „mündlich punkten"-Vorschlägen und der Klausur-Fach-Erkennung.
+- Behebt die überzähligen Parallelkurse aus dem WebUntis-Kursband
+  (z.B. mehrere Instrumental-/Gesang-Kurse, die das Kind nicht belegt).
+- Wer genau einen Parallelkurs belegt, lässt den an und blendet die
+  anderen aus.
+
 ## 0.14.0 — Plan & Aufgaben zusammengeführt, Note als Dropdown
 - **Plan und Aufgaben sind jetzt eine Seite** (Tab „Plan"). Der separate
   „Aufgaben"-Tab entfällt → wieder 6 Tabs, Platz für „Klausur".

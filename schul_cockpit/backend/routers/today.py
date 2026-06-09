@@ -5,6 +5,7 @@ from datetime import date
 from fastapi import APIRouter, Depends
 
 from ..auth import CurrentUser, assert_account_access, get_current_user
+from ..courses import hidden_keys, lesson_is_hidden
 from ..db import history_conn, webapp_conn
 from ..queries import lessons_for_date, upcoming_exams
 
@@ -24,6 +25,9 @@ def today(
         exams = upcoming_exams(conn, account_id, days_ahead=7)
     finally:
         conn.close()
+
+    hidden = hidden_keys(account_id)
+    lessons = [l for l in lessons if not lesson_is_hidden(l, hidden)]
 
     lesson_ids = [lesson_row["id"] for lesson_row in lessons]
     checkins_by_lesson: dict[int, dict] = {}

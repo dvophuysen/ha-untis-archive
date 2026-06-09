@@ -45,8 +45,8 @@ def oral_suggestions(
         # hasn't started yet — today after now_hhmm, or any later day up
         # to the horizon.
         upcoming = conn.execute(
-            "SELECT subject_untis_id, subject_name, payload_json, "
-            "  date, start_time, end_time "
+            "SELECT subject_untis_id, subject_name, teacher_untis_id, teacher_name, "
+            "  payload_json, date, start_time, end_time "
             "FROM lessons "
             "WHERE account_id = ? AND subject_untis_id IS NOT NULL "
             "  AND (code IS NULL OR LOWER(code) != 'cancelled') "
@@ -58,9 +58,14 @@ def oral_suggestions(
     finally:
         conn.close()
 
-    # Keep only the EARLIEST upcoming lesson per subject.
+    from ..courses import hidden_keys, lesson_is_hidden
+    hidden = hidden_keys(account_id)
+
+    # Keep only the EARLIEST upcoming (non-hidden) lesson per subject.
     next_per_subject: dict[int, dict] = {}
     for r in upcoming:
+        if lesson_is_hidden(dict(r), hidden):
+            continue
         sid = r["subject_untis_id"]
         if sid in next_per_subject:
             continue

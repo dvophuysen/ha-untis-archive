@@ -10,6 +10,7 @@
   import Klausuren from './routes/Klausuren.svelte';
   import Setup from './routes/Setup.svelte';
   import Settings from './routes/Settings.svelte';
+  import Courses from './routes/Courses.svelte';
   import MyChanges from './routes/MyChanges.svelte';
   import Login from './routes/Login.svelte';
   import ExamSetup from './routes/ExamSetup.svelte';
@@ -128,6 +129,8 @@
       <Settings accountId={appState.activeAccountId} />
     {:else if route.name === 'exams'}
       <ExamSetup />
+    {:else if route.name === 'courses'}
+      <Courses accountId={appState.activeAccountId} />
     {:else if route.name === 'changes'}
       <MyChanges />
     {:else if route.name === 'today'}

@@ -216,6 +216,21 @@ _MIGRATIONS: list[tuple[str, str]] = [
         # keeps everything convertible for a later Notenausgleich.
         "ALTER TABLE exam_progress ADD COLUMN grade_points INTEGER",
     ),
+    (
+        "027_hidden_courses",
+        """
+        CREATE TABLE IF NOT EXISTS hidden_courses (
+            account_id INTEGER NOT NULL,
+            course_key TEXT NOT NULL,          -- '<subjectId>:<teacherId>' or 'n:<subj>|<teacher>'
+            subject_untis_id INTEGER,
+            subject_name TEXT,
+            teacher_untis_id INTEGER,
+            teacher_name TEXT,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (account_id, course_key)
+        )
+        """,
+    ),
 ]
 
 

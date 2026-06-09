@@ -77,8 +77,12 @@ def account_subjects(account_id: int) -> list[dict]:
         ).fetchall()
     finally:
         hconn.close()
+    from .courses import visible_subject_ids
+    visible = visible_subject_ids(account_id)
     out = []
     for r in rows:
+        if visible is not None and r["subject_untis_id"] not in visible:
+            continue
         short = None
         if r["payload_json"]:
             try:

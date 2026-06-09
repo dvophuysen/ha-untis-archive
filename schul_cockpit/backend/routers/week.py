@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, Query
 
 from ..auth import CurrentUser, assert_account_access, get_current_user
+from ..courses import hidden_keys, lesson_is_hidden
 from ..db import history_conn, webapp_conn
 from ..queries import lessons_in_range
 
@@ -36,6 +37,9 @@ def week(
         )
     finally:
         conn.close()
+
+    hidden = hidden_keys(account_id)
+    lessons = [l for l in lessons if not lesson_is_hidden(l, hidden)]
 
     lesson_ids = [l["id"] for l in lessons]
     checkins: dict[int, dict] = {}

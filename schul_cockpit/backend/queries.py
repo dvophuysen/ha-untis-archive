@@ -12,7 +12,7 @@ def lessons_for_date(
 ) -> list[dict[str, Any]]:
     rows = conn.execute(
         "SELECT id, untis_period_id, date, start_time, end_time, "
-        "subject_untis_id, subject_name, teacher_name, teacher_orig_name, "
+        "subject_untis_id, subject_name, teacher_untis_id, teacher_name, teacher_orig_name, "
         "room, room_orig, subject_orig_name, "
         "is_teacher_substituted, is_room_substituted, is_subject_substituted, "
         "code, lstext, subst_text, info, was_absent, absence_reason, "
@@ -32,7 +32,7 @@ def lessons_in_range(
 ) -> list[dict[str, Any]]:
     rows = conn.execute(
         "SELECT id, untis_period_id, date, start_time, end_time, "
-        "subject_untis_id, subject_name, teacher_name, teacher_orig_name, "
+        "subject_untis_id, subject_name, teacher_untis_id, teacher_name, teacher_orig_name, "
         "room, room_orig, subject_orig_name, "
         "is_teacher_substituted, is_room_substituted, is_subject_substituted, "
         "code, lstext, subst_text, info, was_absent, absence_reason, "
