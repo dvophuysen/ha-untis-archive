@@ -79,12 +79,38 @@ class SupervisorClient:
 
     async def list_todo_entities(self) -> list[dict[str, Any]]:
         """All todo.* entities currently known to HA (for setup-screen pickers)."""
+        return await self._states_with_prefix("todo.")
+
+    async def list_calendar_entities(self) -> list[dict[str, Any]]:
+        """All calendar.* entities (for the exam-calendar picker)."""
+        return await self._states_with_prefix("calendar.")
+
+    async def _states_with_prefix(self, prefix: str) -> list[dict[str, Any]]:
         url = f"{self._base}/states"
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(url, headers=self._headers())
         if resp.status_code >= 400:
             raise SupervisorError(f"GET /states failed: {resp.status_code}")
-        return [s for s in resp.json() if s.get("entity_id", "").startswith("todo.")]
+        return [s for s in resp.json() if s.get("entity_id", "").startswith(prefix)]
+
+    async def get_calendar_events(
+        self, entity_id: str, start: str, end: str
+    ) -> list[dict[str, Any]]:
+        """Events of a calendar entity in [start, end] (ISO datetimes).
+
+        Uses the Core REST endpoint GET /calendars/<entity>?start&end, which
+        works for ICS subscription calendars (e.g. an iServ exam calendar).
+        """
+        url = f"{self._base}/calendars/{entity_id}"
+        params = {"start": start, "end": end}
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.get(url, headers=self._headers(), params=params)
+        if resp.status_code >= 400:
+            raise SupervisorError(
+                f"GET /calendars/{entity_id} failed: {resp.status_code} {resp.text[:200]}"
+            )
+        data = resp.json()
+        return data if isinstance(data, list) else []
 
 
 _CLIENT: SupervisorClient | None = None

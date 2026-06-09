@@ -12,6 +12,7 @@
   import Settings from './routes/Settings.svelte';
   import MyChanges from './routes/MyChanges.svelte';
   import Login from './routes/Login.svelte';
+  import ExamSetup from './routes/ExamSetup.svelte';
   import { api } from './lib/api.js';
 
   async function logout() {
@@ -125,6 +126,8 @@
       <Setup {navigate} />
     {:else if route.name === 'settings'}
       <Settings accountId={appState.activeAccountId} />
+    {:else if route.name === 'exams'}
+      <ExamSetup />
     {:else if route.name === 'changes'}
       <MyChanges />
     {:else if route.name === 'today'}
