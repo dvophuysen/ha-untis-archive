@@ -2,6 +2,12 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.17.2 — Webclip: inline statt attachment (iOS-Installer öffnen)
+- Profil wird jetzt mit `Content-Disposition: inline` ausgeliefert. iOS
+  hat keinen Download-Manager — `attachment` führte zu einer leeren
+  Seite. Mit `inline` erkennt Safari den MIME-Typ und übergibt das
+  Profil direkt an Settings.app („Profil installieren?").
+
 ## 0.17.1 — Webclip-Download für iOS-PWA gefixt
 - Webclip-Knopf nutzt jetzt direkte Navigation statt fetch+Blob —
   iOS-Standalone-PWAs ignorieren den `<a download>`-Trick still, sodass

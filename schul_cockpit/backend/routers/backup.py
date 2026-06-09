@@ -113,11 +113,14 @@ async def webclip(
     name = row["name"]
     data = build_webclip(account_id, name, base)
     safe = "".join(ch for ch in name if ch.isalnum()) or str(account_id)
+    # iOS has no download manager — `Content-Disposition: attachment` makes
+    # Safari render a blank page instead of triggering Settings.app. Serve
+    # the profile inline so the system installer picks up the MIME type.
     return Response(
         content=data,
         media_type="application/x-apple-aspen-config",
         headers={
-            "Content-Disposition": f'attachment; filename="schul-cockpit-{safe}.mobileconfig"',
+            "Content-Disposition": f'inline; filename="schul-cockpit-{safe}.mobileconfig"',
             "Cache-Control": "no-store",
         },
     )
