@@ -122,6 +122,19 @@ _MIGRATIONS: list[tuple[str, str]] = [
         "017_account_settings_notify_token",
         "ALTER TABLE account_settings ADD COLUMN notify_token TEXT",
     ),
+    (
+        "018_account_settings_auto_budget",
+        # When 1, the daily budget is derived live from the official
+        # Niedersachsen Hausaufgaben-Erlass + the kid's current class
+        # instead of the manual default_daily_budget_minutes field.
+        "ALTER TABLE account_settings ADD COLUMN auto_budget INTEGER NOT NULL DEFAULT 1",
+    ),
+    (
+        "019_account_settings_section_override",
+        # Optional: force a school section (primar/sek1/sek2) if class-name
+        # heuristics get it wrong (e.g. an exotic class label).
+        "ALTER TABLE account_settings ADD COLUMN school_section_override TEXT",
+    ),
 ]
 
 

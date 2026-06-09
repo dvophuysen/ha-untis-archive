@@ -52,12 +52,41 @@
           Object.entries(settings.budget_overrides).filter(([_, v]) => v !== '' && v !== null),
         ),
       });
+      await load();
     } catch (e) {
       error = e.message;
     } finally {
       saving = false;
     }
   }
+
+  async function toggleAuto() {
+    try {
+      await api.patch(`/api/accounts/${accountId}/settings`, {
+        auto_budget: !settings.auto_budget,
+      });
+      await load();
+    } catch (e) {
+      error = e.message;
+    }
+  }
+
+  async function setSectionOverride(value) {
+    try {
+      await api.patch(`/api/accounts/${accountId}/settings`, {
+        school_section_override: value || '',
+      });
+      await load();
+    } catch (e) {
+      error = e.message;
+    }
+  }
+
+  const SECTION_LABEL = {
+    primar: 'Primarbereich (Klassen 1–4)',
+    sek1: 'Sekundarbereich I (Klassen 5–10)',
+    sek2: 'Sekundarbereich II (Klassen 11–13)',
+  };
 </script>
 
 <div class="row between" style="margin-bottom:0.6rem;">
@@ -71,37 +100,88 @@
   <div class="empty"><span class="spinner"></span></div>
 {:else}
   <div class="section-title">Tagesbudget Lernzeit</div>
-  <div class="banner">
-    Wie viele Minuten pro Tag stehen üblicherweise zum Lernen zur Verfügung? Der Nachmittagsplaner nutzt diesen Wert für seine Vorschläge.
-  </div>
+
+  {@const erl = settings.erlass ?? {}}
 
   <div class="card">
-    <label>Standard (alle Wochentage)</label>
-    <input type="number" min="0" step="15" bind:value={settings.default_daily_budget_minutes} />
-
-    <div class="section-title">Abweichungen pro Wochentag</div>
-    {#each DAYS as d}
-      <div class="row gap-sm" style="margin-bottom:0.3rem;">
-        <span style="width:34px;">{d.label}</span>
-        <input
-          type="number"
-          min="0"
-          step="15"
-          placeholder={`= ${settings.default_daily_budget_minutes}`}
-          value={settings.budget_overrides[d.key] ?? ''}
-          oninput={(e) => {
-            const v = e.currentTarget.value;
-            if (v === '') delete settings.budget_overrides[d.key];
-            else settings.budget_overrides[d.key] = Number(v);
-            settings.budget_overrides = { ...settings.budget_overrides };
-          }}
-        />
+    <div class="row between">
+      <div>
+        <strong>An Niedersächsischem Hausaufgaben-Erlass orientieren</strong>
+        <div class="dim">RdErl. d. MK v. 12.09.2019 — verbindliche Richtwerte</div>
       </div>
-    {/each}
+      <button class:primary={settings.auto_budget} onclick={toggleAuto}>
+        {settings.auto_budget ? '✓ AN' : 'AUS'}
+      </button>
+    </div>
 
-    <button class="primary" disabled={saving} onclick={save} style="margin-top:0.6rem; width:100%;">
-      {saving ? 'Speichere…' : 'Speichern'}
-    </button>
+    {#if settings.auto_budget}
+      <div class="banner" style="margin-top:0.6rem;">
+        {#if erl.section}
+          <div>
+            <strong>{SECTION_LABEL[erl.section]}</strong>
+            {#if erl.klasse_name}<span class="dim">— aktuell {erl.klasse_name}</span>{/if}
+          </div>
+          <div style="margin-top:0.3rem;">
+            Werktags: <strong>{erl.max_workday_minutes} min</strong>
+            · Wochenende: <strong>{erl.weekend_minutes} min</strong>
+            · mit Nachmittagsunterricht: <strong>{Math.round(erl.max_workday_minutes * erl.afternoon_reduction_factor / 15) * 15} min</strong>
+          </div>
+          {#if erl.has_afternoon_today}
+            <div style="margin-top:0.3rem; color: var(--accent);">
+              Heute Nachmittagsunterricht erkannt → reduziertes Budget.
+            </div>
+          {/if}
+        {:else}
+          <div style="color: var(--rating-1);">
+            Klasse konnte nicht automatisch erkannt werden{#if erl.klasse_name} (gefundener Name: {erl.klasse_name}){/if}.
+            Bitte unten manuell festlegen.
+          </div>
+        {/if}
+      </div>
+
+      <label style="margin-top:0.4rem;">Klassenstufe (falls Auto-Erkennung daneben liegt)</label>
+      <select
+        value={settings.school_section_override ?? ''}
+        onchange={(e) => setSectionOverride(e.currentTarget.value)}
+      >
+        <option value="">Auto ({erl.section ? SECTION_LABEL[erl.section] : 'unbekannt'})</option>
+        <option value="primar">{SECTION_LABEL.primar}</option>
+        <option value="sek1">{SECTION_LABEL.sek1}</option>
+        <option value="sek2">{SECTION_LABEL.sek2}</option>
+      </select>
+    {:else}
+      <div class="banner" style="margin-top:0.6rem;">
+        Eigene Werte aktiv — der Erlass-Standard wird ignoriert. Sinnvoll, wenn ein
+        Kind mehr/weniger Konzentration mitbringt als der Durchschnitt.
+      </div>
+
+      <label>Standard (alle Wochentage)</label>
+      <input type="number" min="0" step="15" bind:value={settings.default_daily_budget_minutes} />
+
+      <div class="section-title">Abweichungen pro Wochentag</div>
+      {#each DAYS as d}
+        <div class="row gap-sm" style="margin-bottom:0.3rem;">
+          <span style="width:34px;">{d.label}</span>
+          <input
+            type="number"
+            min="0"
+            step="15"
+            placeholder={`= ${settings.default_daily_budget_minutes}`}
+            value={settings.budget_overrides[d.key] ?? ''}
+            oninput={(e) => {
+              const v = e.currentTarget.value;
+              if (v === '') delete settings.budget_overrides[d.key];
+              else settings.budget_overrides[d.key] = Number(v);
+              settings.budget_overrides = { ...settings.budget_overrides };
+            }}
+          />
+        </div>
+      {/each}
+
+      <button class="primary" disabled={saving} onclick={save} style="margin-top:0.6rem; width:100%;">
+        {saving ? 'Speichere…' : 'Speichern'}
+      </button>
+    {/if}
   </div>
 
   {#if appState.me?.is_admin}
