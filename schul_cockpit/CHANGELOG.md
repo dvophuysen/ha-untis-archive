@@ -2,6 +2,21 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.16.0 — Datensicherung (Backup/Restore)
+- Neue Admin-Sektion „Datensicherung" in den Einstellungen.
+- **Backup-Download** als ein ZIP mit **beiden** Datenbanken (App-Daten
+  `webapp.db` + UNTIS-Archiv `history.db`) plus Manifest — konsistent
+  per SQLite-Online-Backup (sauberer WAL-Checkpoint). Die beiden DBs
+  sind voneinander abhängig und werden so zum selben Zeitpunkt gesichert.
+- **Restore**: spielt aus ZIP oder .db die `webapp.db` zurück (Schema
+  geprüft; alte DB wird vorher als `.bak` gesichert, die letzten 3
+  bleiben erhalten). `history.db` wird bewusst NICHT überschrieben
+  (Integration hält sie live offen) — Wiederherstellung über
+  HA-Backup-Restore, mit Hinweis in der App.
+- **Statusanzeige**: Zähler (Aufgaben/Check-ins/Klausuren/Noten), DB-
+  Größe, Zeitpunkt des letzten HA-Backups; Warnung, wenn noch kein
+  HA-Backup gefunden wurde. Nur für Admin.
+
 ## 0.15.1 — Stundenkarte: Marker & Check-in-Reihe
 - Vertretungs-/Änderungs-/Ausfall-/Klausur-Markierung wieder als
   deutliche farbige Badges (statt blasser Mini-Emojis): ❌ Ausfall,
