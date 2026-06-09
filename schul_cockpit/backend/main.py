@@ -27,6 +27,7 @@ from .routers import (
     me,
     notify,
     oral,
+    plan as plan_router,
     push as push_router,
     search,
     settings_router,
@@ -129,6 +130,7 @@ app.include_router(audit.router, prefix=API)
 app.include_router(push_router.router, prefix=API)
 app.include_router(notify.router, prefix=API)
 app.include_router(exams.router, prefix=API)
+app.include_router(plan_router.router, prefix=API)
 
 
 @app.get("/api/schema-status")
