@@ -2,6 +2,14 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.17.1 — Webclip-Download für iOS-PWA gefixt
+- Webclip-Knopf nutzt jetzt direkte Navigation statt fetch+Blob —
+  iOS-Standalone-PWAs ignorieren den `<a download>`-Trick still, sodass
+  vorher gar nichts passierte. Direkte Navigation triggert den System-
+  Profile-Installer zuverlässig.
+- Service-Worker-Cache invalidiert, damit der Fix auch in installierten
+  PWAs ankommt.
+
 ## 0.17.0 — iPhone-Bildschirmzeit-Hilfe + Webclip
 - Neue Sektion „iPhone-Bildschirmzeit" in den Einstellungen mit
   Klick-Anleitung: App-Domain zum Kopieren für „Erlaubte Websites".
