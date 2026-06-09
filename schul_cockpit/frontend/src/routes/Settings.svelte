@@ -15,6 +15,77 @@
     }
   }
 
+  // --- Datensicherung (Admin) ---
+  let backupStatus = $state(null);
+  let restoreBusy = $state(false);
+  let restoreMsg = $state(null);
+  let fileInput;
+
+  async function loadBackupStatus() {
+    if (!appState.me?.is_admin) return;
+    try {
+      backupStatus = await api.get('/api/admin/backup/status');
+    } catch (_) { /* ignore */ }
+  }
+
+  $effect(() => { void appState.me?.is_admin; loadBackupStatus(); });
+
+  async function doDownload() {
+    // Fetch as blob so it works behind ingress, then trigger a save.
+    restoreMsg = null;
+    try {
+      const resp = await fetch('./api/admin/backup/download', { credentials: 'include' });
+      if (!resp.ok) throw new Error(`Download fehlgeschlagen (${resp.status})`);
+      const blob = await resp.blob();
+      const cd = resp.headers.get('content-disposition') || '';
+      const m = cd.match(/filename="?([^"]+)"?/);
+      const name = m ? m[1] : 'schul-cockpit-backup.zip';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      restoreMsg = { ok: false, text: e.message };
+    }
+  }
+
+  async function doRestore(ev) {
+    const f = ev.currentTarget.files?.[0];
+    if (!f) return;
+    if (!confirm('Backup einspielen? Die aktuelle App-Datenbank wird ersetzt (eine Sicherungskopie wird automatisch angelegt). history.db wird NICHT überschrieben.')) {
+      ev.currentTarget.value = '';
+      return;
+    }
+    restoreBusy = true;
+    restoreMsg = null;
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      const resp = await fetch('./api/admin/backup/restore', { method: 'POST', body: fd, credentials: 'include' });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.detail || `Fehler ${resp.status}`);
+      restoreMsg = { ok: true, text: 'Wiederhergestellt. Bitte das Add-on in Home Assistant neu starten, damit alles sauber geladen wird.' };
+      await loadBackupStatus();
+    } catch (e) {
+      restoreMsg = { ok: false, text: e.message };
+    } finally {
+      restoreBusy = false;
+      ev.currentTarget.value = '';
+    }
+  }
+
+  function fmtBytes(n) {
+    if (!n) return '0 B';
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+    return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  }
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' }); }
+    catch { return iso; }
+  }
+
   const DAYS = [
     { key: 'mon', label: 'Mo' },
     { key: 'tue', label: 'Di' },
@@ -214,6 +285,51 @@
       style="width:100%; margin-top:0.5rem;"
       onclick={() => (window.location.hash = '#/changes')}
     >Meine Änderungen ansehen ({appState.me?.open_audit_count ?? 0})</button>
+  </div>
+
+  <div class="section-title">Datensicherung</div>
+  <div class="banner">
+    Lade ein vollständiges Backup beider Datenbanken herunter (App-Daten +
+    UNTIS-Archiv, als ein ZIP). Das Add-on-Datenverzeichnis ist ohnehin in
+    jedem Home-Assistant-Backup enthalten — dieser Download macht dich
+    zusätzlich unabhängig.
+  </div>
+  <div class="card">
+    {#if backupStatus}
+      <div class="muted" style="margin-bottom:0.5rem;">
+        Gespeichert:
+        <strong>{backupStatus.counts?.tasks ?? 0}</strong> Aufgaben ·
+        <strong>{backupStatus.counts?.checkins ?? 0}</strong> Check-ins ·
+        <strong>{backupStatus.counts?.manual_exams ?? 0}</strong> man. Klausuren ·
+        <strong>{backupStatus.counts?.exam_progress ?? 0}</strong> Noten/Lernstände
+        <br>App-DB: {fmtBytes(backupStatus.db_size_bytes)} ·
+        letztes HA-Backup: {fmtDate(backupStatus.last_ha_backup)}
+      </div>
+      {#if backupStatus.last_ha_backup === null}
+        <div class="error-box" style="margin-bottom:0.5rem;">
+          ⚠️ Es wurde noch kein Home-Assistant-Backup gefunden. Richte in HA
+          (Einstellungen → System → Sicherungen) ein automatisches Backup ein —
+          das ist deine wichtigste Absicherung.
+        </div>
+      {/if}
+    {/if}
+
+    <button class="primary" style="width:100%;" onclick={doDownload}>⬇︎ Backup herunterladen (ZIP)</button>
+
+    <input type="file" accept=".zip,.db" bind:this={fileInput} onchange={doRestore} style="display:none;" />
+    <button style="width:100%; margin-top:0.5rem;" disabled={restoreBusy} onclick={() => fileInput.click()}>
+      {restoreBusy ? 'Stelle wieder her…' : '⬆︎ Backup einspielen'}
+    </button>
+    <div class="dim" style="margin-top:0.4rem;">
+      Beim Einspielen wird nur die App-Datenbank ersetzt (mit Sicherungskopie).
+      Das UNTIS-Archiv (history.db) stellst du über ein HA-Backup-Restore wieder her.
+    </div>
+
+    {#if restoreMsg}
+      <div class={restoreMsg.ok ? 'banner' : 'error-box'} style="margin-top:0.5rem;">
+        {restoreMsg.text}
+      </div>
+    {/if}
   </div>
   {/if}
 {/if}

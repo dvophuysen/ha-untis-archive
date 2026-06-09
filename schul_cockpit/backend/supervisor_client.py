@@ -93,6 +93,16 @@ class SupervisorClient:
             raise SupervisorError(f"GET /states failed: {resp.status_code}")
         return [s for s in resp.json() if s.get("entity_id", "").startswith(prefix)]
 
+    async def list_backups(self) -> dict[str, Any]:
+        """Supervisor backups list (for 'last HA backup' status). This hits
+        the Supervisor root API, not the Core proxy."""
+        url = f"{SETTINGS.supervisor_url}/backups"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, headers=self._headers())
+        if resp.status_code >= 400:
+            raise SupervisorError(f"GET /backups failed: {resp.status_code}")
+        return resp.json().get("data", {}) or {}
+
     async def get_calendar_events(
         self, entity_id: str, start: str, end: str
     ) -> list[dict[str, Any]]:
