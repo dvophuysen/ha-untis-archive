@@ -7,12 +7,14 @@ import tempfile
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 
 from ..auth import CurrentUser, get_current_user, require_admin
 from ..backup import make_combined_zip, restore_from_file, status
+from ..db import history_conn
 from ..supervisor_client import SupervisorError, get_supervisor
+from ..webclip import build_webclip, external_url_or_none
 
 router = APIRouter()
 
@@ -83,3 +85,39 @@ async def backup_restore(
         "restart_required": True,
         **info,
     }
+
+
+@router.get("/admin/webclip")
+async def webclip(
+    account_id: int,
+    user: CurrentUser = Depends(get_current_user),
+):
+    """Unsigned .mobileconfig that installs a full-screen home-screen icon
+    for this child — handy under Screen Time → App Limits (Always Allowed)."""
+    require_admin(user)
+    base = external_url_or_none()
+    if not base:
+        raise HTTPException(
+            status_code=400,
+            detail="Bitte zuerst die externe URL in den Add-on-Optionen setzen.",
+        )
+    conn = history_conn()
+    try:
+        row = conn.execute(
+            "SELECT name FROM accounts WHERE id = ?", (account_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="account not found")
+    name = row["name"]
+    data = build_webclip(account_id, name, base)
+    safe = "".join(ch for ch in name if ch.isalnum()) or str(account_id)
+    return Response(
+        content=data,
+        media_type="application/x-apple-aspen-config",
+        headers={
+            "Content-Disposition": f'attachment; filename="schul-cockpit-{safe}.mobileconfig"',
+            "Cache-Control": "no-store",
+        },
+    )

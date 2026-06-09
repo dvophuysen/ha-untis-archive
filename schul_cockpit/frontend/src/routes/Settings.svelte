@@ -86,6 +86,35 @@
     catch { return iso; }
   }
 
+  // --- Bildschirmzeit / Webclip ---
+  const appHost = window.location.host;     // e.g. schule.ophuysen.de
+  const activeName = $derived(
+    appState.me?.accounts?.find((a) => a.id === accountId)?.name ?? 'das Kind',
+  );
+  let copied = $state(false);
+  function copyHost() {
+    navigator.clipboard?.writeText(appHost);
+    copied = true; setTimeout(() => (copied = false), 1500);
+  }
+  async function downloadWebclip() {
+    try {
+      const resp = await fetch(`./api/admin/webclip?account_id=${accountId}`, { credentials: 'include' });
+      if (!resp.ok) {
+        const d = await resp.json().catch(() => ({}));
+        throw new Error(d.detail || `Fehler ${resp.status}`);
+      }
+      const blob = await resp.blob();
+      const cd = resp.headers.get('content-disposition') || '';
+      const m = cd.match(/filename="?([^"]+)"?/);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = m ? m[1] : 'schul-cockpit.mobileconfig'; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      error = e.message;
+    }
+  }
+
   const DAYS = [
     { key: 'mon', label: 'Mo' },
     { key: 'tue', label: 'Di' },
@@ -287,6 +316,40 @@
     >Meine Änderungen ansehen ({appState.me?.open_audit_count ?? 0})</button>
   </div>
 
+  <div class="section-title">iPhone-Bildschirmzeit</div>
+  <div class="banner">
+    Auf iPhones mit Bildschirmzeit-Beschränkungen zählt die App als
+    Safari-Webseite. So machst du sie nutzbar:
+  </div>
+  <div class="card">
+    <strong>1. Seite freigeben</strong>
+    <div class="muted" style="margin:0.2rem 0 0.5rem;">
+      Bildschirmzeit → Beschränkungen → Inhaltsbeschränkungen → Webinhalt →
+      „Nur erlaubte Websites" → diese Adresse hinzufügen:
+    </div>
+    <div class="row gap-sm" style="align-items:center;">
+      <code class="code-box" style="flex:1;">{appHost}</code>
+      <button onclick={copyHost} style="min-height:38px;">{copied ? '✓' : 'Kopieren'}</button>
+    </div>
+
+    <strong style="display:block; margin-top:0.8rem;">2. Immer erlauben (optional)</strong>
+    <div class="muted" style="margin:0.2rem 0 0.5rem;">
+      Damit die Schul-App auch in der Auszeit / trotz Safari-Limit offen ist:
+      installiere unten das Webclip-Profil — danach erscheint „Schule …" in
+      Bildschirmzeit → App-Limits und kann auf <em>Immer erlaubt</em> gesetzt
+      werden, ohne ganz Safari freizugeben.
+    </div>
+    <button style="width:100%;" onclick={downloadWebclip}>
+      ⬇︎ Webclip für {activeName} laden (.mobileconfig)
+    </button>
+    <div class="dim" style="margin-top:0.4rem;">
+      Auf dem iPhone öffnen → installieren (iOS zeigt eine „Nicht verifiziert"-
+      Warnung, das ist bei unsignierten Profilen normal und ok). Hinweis: das
+      „Immer erlaubt" greift je nach iOS-Version unterschiedlich — Schritt 1
+      ist der verlässliche Weg.
+    </div>
+  </div>
+
   <div class="section-title">Datensicherung</div>
   <div class="banner">
     Lade ein vollständiges Backup beider Datenbanken herunter (App-Daten +
@@ -333,3 +396,15 @@
   </div>
   {/if}
 {/if}
+
+<style>
+  .code-box {
+    display: block;
+    word-break: break-all;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+  }
+</style>
