@@ -61,7 +61,7 @@
   }
 </script>
 
-<div class="lesson" class:cancelled={isCancelled}>
+<div id="lesson-{lesson.id}" class="lesson" class:cancelled={isCancelled}>
   <!-- LEFT: system info, tappable to open detail/comment -->
   <button class="lesson-left" onclick={openDetail} aria-label="Details und Kommentar">
     <div class="lesson-head">
