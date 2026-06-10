@@ -6,6 +6,10 @@ WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm install --no-audit --no-fund
 COPY frontend/ ./
+# vite.config.js liest die Add-on-Version aus ../config.yaml (relativ zu
+# vite.config.js) — im Docker-Build-Kontext fehlt sie sonst und der Bundle
+# zeigt "vdev". Diese Kopie sorgt dafür, dass __APP_VERSION__ stimmt.
+COPY config.yaml /config.yaml
 RUN npm run build
 
 # ---------- runtime stage ----------
