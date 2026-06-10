@@ -2,6 +2,15 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.1 — Bugfix: PWAs der Kinder bekamen die 0.19.0-Chips nicht
+- In 0.19.0 wurde nur das Frontend-Bundle neu gebaut, `sw.js` selbst
+  blieb byte-identisch. Damit registriert der Browser keinen neuen
+  Service Worker → kein `skipWaiting`, kein automatischer Reload, die
+  installierten PWAs zeigten weiter den alten Heute-Header.
+- Cache-Marker in `sw.js` gebumpt; beim nächsten Öffnen der App
+  installiert sich der SW neu, leert den alten Cache und lädt die Seite
+  einmalig automatisch nach.
+
 ## 0.19.0 — Heute-Header: Aktions-Chips statt Status-Banner
 - Die alte „X heute · Y bald · N Klausuren"-Zeile auf „Heute" ist weg.
   Stattdessen oben eine handlungs-orientierte Kopfleiste.
