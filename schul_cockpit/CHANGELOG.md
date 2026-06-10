@@ -2,6 +2,14 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.4 — Alle anstehenden Klausuren als eigene Chips
+- Bisher hat der Header nur die **nächste** Klausur als 📝-Chip gezeigt.
+  Wer zwei Klausuren in zwei Tagen schreibt, sah nur die erste — genau
+  das war der Auslöser: Noah hatte morgen Spanisch und übermorgen die
+  zweite, im Header tauchte nur Spanisch auf.
+- Jetzt bekommt jede Klausur in den nächsten 7 Tagen einen eigenen
+  Chip. Das harte 4-Chip-Limit ist weg; die Reihe wickelt sich um.
+
 ## 0.19.3 — Klausur-Chip nutzt jetzt die kuratierte Klausur-Quelle
 - **Bugfix:** Der neue 📝-Chip und die rote "Heute Klausur"-Leiste lasen
   Untis' eigenes `period_info_json.exam`-Feld — das ist für die

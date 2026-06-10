@@ -104,13 +104,12 @@
     return { icon: '⚡', text: `${items.length}× Planänderung` };
   }
 
-  // Nächste Klausur in 7 Tagen, ohne heute (heute hat eigene rote Leiste).
-  const nextExam = $derived.by(() => {
-    for (const e of curatedExams) {
-      if (e.date && e.date > todayIso) return e;
-    }
-    return null;
-  });
+  // Alle Klausuren in den nächsten 7 Tagen außer heute (heute hat die rote
+  // Leiste). Jede bekommt einen eigenen Chip — zwei Klausuren in zwei Tagen
+  // sind genau der Moment, in dem beide sichtbar sein müssen.
+  const nextExams = $derived(
+    curatedExams.filter((e) => e.date && e.date > todayIso),
+  );
 
   // 🗣 nur wenn nächste Stunde des Faches noch heute kommt.
   const oralToday = $derived.by(() => {
@@ -126,13 +125,16 @@
     const subj = ex.subject_name || ex.title || 'Klausur';
     const when = d === 1 ? 'morgen' : `in ${d} Tagen`;
     return {
-      key: 'exam',
+      key: 'exam:' + (ex.exam_key ?? ex.date + '|' + subj),
       icon: '📝',
       text: `${subj} ${when}`,
       action: () => onNavigate('klausuren'),
     };
   }
 
+  // Reihenfolge: zuerst zeitkritisches, danach jede anstehende Klausur.
+  // Kein hartes Limit mehr — die Chip-Reihe ist flex-wrap, mehrere
+  // Klausuren in einer Woche dürfen alle stehen.
   const chips = $derived.by(() => {
     const all = [];
     if (phase === 'before') {
@@ -153,27 +155,17 @@
           action: () => onNavigate('subjects/' + oralToday.subject_id),
         });
       }
-      if (dueTodayCount > 0) {
-        all.push({
-          key: 'ha',
-          icon: '📚',
-          text: `${dueTodayCount} HA bis morgen`,
-          action: onJumpDueToday,
-        });
-      }
-      if (nextExam) all.push(examChip(nextExam));
-    } else {
-      if (dueTodayCount > 0) {
-        all.push({
-          key: 'ha',
-          icon: '📚',
-          text: `${dueTodayCount} HA bis morgen`,
-          action: onJumpDueToday,
-        });
-      }
-      if (nextExam) all.push(examChip(nextExam));
     }
-    return all.slice(0, 4);
+    if (dueTodayCount > 0) {
+      all.push({
+        key: 'ha',
+        icon: '📚',
+        text: `${dueTodayCount} HA bis morgen`,
+        action: onJumpDueToday,
+      });
+    }
+    for (const ex of nextExams) all.push(examChip(ex));
+    return all;
   });
 </script>
 
