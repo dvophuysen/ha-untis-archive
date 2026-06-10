@@ -1,9 +1,10 @@
 <script>
   import { api } from '../lib/api.js';
-  import { shiftDateIso, daysBetween } from '../lib/format.js';
+  import { shiftDateIso } from '../lib/format.js';
   import LessonCard from '../lib/LessonCard.svelte';
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskEditor from '../lib/TaskEditor.svelte';
+  import HeaderChips from '../lib/HeaderChips.svelte';
 
   let { accountId } = $props();
 
@@ -36,23 +37,18 @@
   const todayIso = $derived(data?.date);
   // "Heute zu erledigen" = überfällig + heute fällig + MORGEN fällig.
   // Eine HA mit Fälligkeit morgen muss heute gemacht werden — alles andere
-  // wäre zu spät. Würde sie unter "bald" stehen, übersehen die Kinder sie.
-  // (Datumsmathematik geht über shiftDateIso, NICHT über toISOString() —
-  // letzteres rechnet in UTC um und schiebt in MESZ den Tag falsch.)
+  // wäre zu spät. (Datumsmathematik geht über shiftDateIso, NICHT über
+  // toISOString() — letzteres rechnet in UTC um und schiebt in MESZ den Tag.)
   const dueToday = $derived.by(() => {
     if (!todayIso) return [];
     const tom = shiftDateIso(todayIso, 1);
     return tasks.filter((t) => t.due_date && t.due_date <= tom);
   });
-  const dueSoon = $derived.by(() => {
-    if (!todayIso) return [];
-    const tom = shiftDateIso(todayIso, 1);
-    return tasks.filter((t) => {
-      if (!t.due_date) return false;
-      if (t.due_date <= tom) return false;
-      return daysBetween(todayIso, t.due_date) <= 3;
-    });
-  });
+
+  function scrollTo(id) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 </script>
 
 {#if loading}
@@ -60,17 +56,18 @@
 {:else if error}
   <div class="error-box">{error}</div>
 {:else if data}
-  <div class="banner">
-    {#if dueToday.length > 0}<strong>{dueToday.length}</strong> heute zu erledigen · {/if}
-    {#if dueSoon.length > 0}<strong>{dueSoon.length}</strong> bald · {/if}
-    {#if data.summary.upcoming_exams_7d > 0}📝 <strong>{data.summary.upcoming_exams_7d}</strong> Klausuren in 7 Tagen{/if}
-    {#if dueToday.length === 0 && dueSoon.length === 0 && data.summary.upcoming_exams_7d === 0}
-      Alles im grünen Bereich.
-    {/if}
-  </div>
+  <HeaderChips
+    {accountId}
+    todayIso={data.date}
+    lessons={data.lessons}
+    upcomingExams={data.upcoming_exams ?? []}
+    dueTodayCount={dueToday.length}
+    onJumpDueToday={() => scrollTo('section-due-today')}
+    onJumpLesson={(id) => scrollTo('lesson-' + id)}
+  />
 
   {#if dueToday.length > 0}
-    <div class="section-title">Heute zu erledigen</div>
+    <div id="section-due-today" class="section-title">Heute zu erledigen</div>
     <div class="card" style="padding:0.2rem 0.6rem;">
       {#each dueToday as task (task.id)}
         <TaskRow {accountId} {task} onchange={load} onopen={(t) => (editing = t)} />
