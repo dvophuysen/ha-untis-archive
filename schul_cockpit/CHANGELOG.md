@@ -2,6 +2,15 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.2 — Versionsanzeige im Frontend repariert (war immer "dev")
+- `vite.config.js` las die Add-on-Version aus `../config.yaml`, im
+  Docker-Build-Kontext fehlte die Datei aber — also fiel die Anzeige
+  immer auf `dev` zurück. Damit war im Login/Setup nicht erkennbar,
+  welche Version wirklich läuft, was Cache-Probleme schwer
+  diagnostizierbar machte. Jetzt wird `config.yaml` in den
+  Frontend-Build-Stage kopiert, die Versionsanzeige zeigt die echte
+  Add-on-Version.
+
 ## 0.19.1 — Bugfix: PWAs der Kinder bekamen die 0.19.0-Chips nicht
 - In 0.19.0 wurde nur das Frontend-Bundle neu gebaut, `sw.js` selbst
   blieb byte-identisch. Damit registriert der Browser keinen neuen
