@@ -3,8 +3,11 @@
   // Zwei Phasen, Grenze = Ende der letzten heutigen Stunde:
   //   "before" → was kommt heute noch, worauf reagieren
   //   "after"  → was muss bis morgen vorbereitet sein
-  // Daten kommen aus dem bereits geladenen today-Endpoint + tasks; nur die
-  // Mündlich-Vorschläge werden separat nachgeholt.
+  //
+  // Klausuren stammen aus dem KURATIERTEN Quellsystem (HA-Kalender +
+  // manuelle Einträge via /exams). Untis' eigenes period_info_json.exam
+  // ist für Schüler-Rollen tot — der frühere Today-Banner zählte nichts
+  // davon, und dieser Header darf den Fehler nicht wiederholen.
 
   import { api } from './api.js';
   import { daysBetween } from './format.js';
@@ -13,7 +16,6 @@
     accountId,
     todayIso,
     lessons = [],
-    upcomingExams = [],
     dueTodayCount = 0,
     onJumpDueToday = () => {},
     onJumpLesson = () => {},
@@ -21,6 +23,7 @@
   } = $props();
 
   let oralGroups = $state([]);
+  let curatedExams = $state([]);
 
   $effect(() => {
     if (!accountId) return;
@@ -28,6 +31,10 @@
       .get(`/api/accounts/${accountId}/oral-suggestions?horizon_days=7`)
       .then((r) => (oralGroups = r.groups || []))
       .catch(() => (oralGroups = []));
+    api
+      .get(`/api/accounts/${accountId}/exams?days_ahead=7`)
+      .then((r) => (curatedExams = r.exams || []))
+      .catch(() => (curatedExams = []));
   });
 
   // Snapshot der Uhrzeit beim Mount — die Seite wird ohnehin bei jedem
@@ -61,15 +68,24 @@
     );
   }
 
+  // Die zur Klausur passende Stunde finden, damit der rote Banner die
+  // richtige Karte anspringt. Fällt zurück auf die erste Stunde des Tages.
+  function lessonForExam(ex) {
+    if (ex.subject_untis_id) {
+      for (const l of lessons) {
+        if (l.subject_untis_id === ex.subject_untis_id) return l;
+      }
+    }
+    return lessons[0] || null;
+  }
+
+  // 🚨 Klausuren heute (egal welche Stunde — wir wissen aus dem Kalender
+  // nur das Datum, nicht die Periode).
   const examsToday = $derived(
-    phase === 'before'
-      ? lessons.filter(
-          (l) => l.exam && typeof l.start_time === 'number' && l.start_time > now,
-        )
-      : [],
+    curatedExams.filter((e) => e.date === todayIso),
   );
 
-  // ⚡ nur noch nicht erlebte Änderungen.
+  // ⚡ nur noch nicht erlebte Plan-Änderungen.
   const futureChanges = $derived(
     phase === 'before'
       ? lessons.filter(
@@ -90,7 +106,7 @@
 
   // Nächste Klausur in 7 Tagen, ohne heute (heute hat eigene rote Leiste).
   const nextExam = $derived.by(() => {
-    for (const e of upcomingExams) {
+    for (const e of curatedExams) {
       if (e.date && e.date > todayIso) return e;
     }
     return null;
@@ -107,7 +123,7 @@
 
   function examChip(ex) {
     const d = daysBetween(todayIso, ex.date);
-    const subj = ex.subject_name || 'Klausur';
+    const subj = ex.subject_name || ex.title || 'Klausur';
     const when = d === 1 ? 'morgen' : `in ${d} Tagen`;
     return {
       key: 'exam',
@@ -161,9 +177,13 @@
   });
 </script>
 
-{#each examsToday as ex (ex.id)}
-  <button class="exam-bar" onclick={() => onJumpLesson(ex.id)}>
-    🚨 Heute Klausur: {ex.subject_short || ex.subject_name} ({ex.start_hhmm})
+{#each examsToday as ex (ex.exam_key ?? ex.date + '|' + (ex.subject_name ?? ex.title ?? ''))}
+  {@const target = lessonForExam(ex)}
+  <button
+    class="exam-bar"
+    onclick={() => target && onJumpLesson(target.id)}
+  >
+    🚨 Heute Klausur: {ex.subject_name || ex.title || 'Klausur'}
   </button>
 {/each}
 

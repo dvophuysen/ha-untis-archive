@@ -2,6 +2,15 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.3 — Klausur-Chip nutzt jetzt die kuratierte Klausur-Quelle
+- **Bugfix:** Der neue 📝-Chip und die rote "Heute Klausur"-Leiste lasen
+  Untis' eigenes `period_info_json.exam`-Feld — das ist für die
+  Schüler-Rolle bekanntermaßen tot und liefert keine Klausuren. Folge:
+  Kinder mit anstehenden Klausuren sahen nichts. Beide ziehen jetzt aus
+  `/api/accounts/{id}/exams` (HA-Kalender + manuelle Einträge), wie die
+  Klausuren-Seite selbst.
+- Rote Leiste springt zur ersten heutigen Stunde des passenden Faches.
+
 ## 0.19.2 — Versionsanzeige im Frontend repariert (war immer "dev")
 - `vite.config.js` las die Add-on-Version aus `../config.yaml`, im
   Docker-Build-Kontext fehlte die Datei aber — also fiel die Anzeige

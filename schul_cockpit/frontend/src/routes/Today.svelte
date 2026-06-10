@@ -60,7 +60,6 @@
     {accountId}
     todayIso={data.date}
     lessons={data.lessons}
-    upcomingExams={data.upcoming_exams ?? []}
     dueTodayCount={dueToday.length}
     onJumpDueToday={() => scrollTo('section-due-today')}
     onJumpLesson={(id) => scrollTo('lesson-' + id)}
