@@ -62,14 +62,14 @@ def absences(
     if not absent_dates:
         return {"blocks": []}
 
-    # caught-up status for this user.
+    # caught-up status — shared per account.
     wconn = webapp_conn()
     try:
         caught = {
             row["lesson_id"]
             for row in wconn.execute(
-                "SELECT lesson_id FROM caught_up WHERE account_id = ? AND user_id = ?",
-                (account_id, user.id),
+                "SELECT lesson_id FROM caught_up WHERE account_id = ?",
+                (account_id,),
             ).fetchall()
         }
     finally:

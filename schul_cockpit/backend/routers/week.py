@@ -50,14 +50,14 @@ def week(
             placeholder = ",".join("?" for _ in lesson_ids)
             for r in wconn.execute(
                 f"SELECT lesson_id, rating, note FROM lesson_checkins "
-                f"WHERE account_id = ? AND user_id = ? AND lesson_id IN ({placeholder})",
-                [account_id, user.id, *lesson_ids],
+                f"WHERE account_id = ? AND lesson_id IN ({placeholder})",
+                [account_id, *lesson_ids],
             ).fetchall():
                 checkins[r["lesson_id"]] = {"rating": r["rating"], "note": r["note"]}
             for r in wconn.execute(
                 f"SELECT lesson_id FROM caught_up "
-                f"WHERE account_id = ? AND user_id = ? AND lesson_id IN ({placeholder})",
-                [account_id, user.id, *lesson_ids],
+                f"WHERE account_id = ? AND lesson_id IN ({placeholder})",
+                [account_id, *lesson_ids],
             ).fetchall():
                 caught_up.add(r["lesson_id"])
         finally:
