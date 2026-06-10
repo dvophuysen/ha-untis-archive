@@ -2,6 +2,20 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.0 — Heute-Header: Aktions-Chips statt Status-Banner
+- Die alte „X heute · Y bald · N Klausuren"-Zeile auf „Heute" ist weg.
+  Stattdessen oben eine handlungs-orientierte Kopfleiste.
+- Phase „vor Unterrichtsschluss" (= solange noch eine Stunde aussteht):
+  Chips zeigen ⚡ Plan-Änderungen für die noch kommenden Stunden, 🗣
+  mündlich-Tipps für Fächer, die heute noch dran sind, 📚 HA bis morgen,
+  und 📝 die nächste Klausur in ≤ 7 Tagen.
+- Phase „nach Schluss" (auch an Wochenenden / freien Tagen): nur 📚 und
+  📝 — was bis morgen vorbereitet sein muss.
+- Steht heute noch eine Klausur an, gibt es eine eigene rote Leiste
+  „🚨 Heute Klausur: <Fach>" über den Chips.
+- Chips sind klickbar und springen direkt ans Ziel (Stundenkarte,
+  Klausur-Seite, Fach-Detail oder zur „Heute zu erledigen"-Sektion).
+
 ## 0.18.0 — Check-ins gehören dem Kind, nicht der eintragenden Person
 - **Bugfix:** Wenn Eltern Stunden-Feedback (😀 😐 😟) für ein Kind
   eintrugen, sah das Kind weiterhin alles unausgefüllt — und umgekehrt.
