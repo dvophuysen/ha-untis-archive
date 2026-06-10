@@ -159,9 +159,9 @@ async def plan(
             ph = ",".join("?" for _ in gap_lesson_ids)
             for r in wconn.execute(
                 f"SELECT lesson_id FROM lesson_checkins "
-                f"WHERE account_id = ? AND user_id = ? AND rating <= 2 "
+                f"WHERE account_id = ? AND rating <= 2 "
                 f"AND lesson_id IN ({ph})",
-                [account_id, user.id, *gap_lesson_ids],
+                [account_id, *gap_lesson_ids],
             ).fetchall():
                 s = subj_of.get(r["lesson_id"])
                 if s:

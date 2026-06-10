@@ -80,16 +80,17 @@ def oral_suggestions(
     if not next_per_subject:
         return {"horizon_days": horizon_days, "groups": []}
 
-    # Recent rough check-ins by this user (😟 or 😐). We look back ~6 weeks.
+    # Recent rough check-ins (😟 or 😐). Shared per account — both Kind und
+    # Eltern sehen dieselben Bewertungen. Wir schauen ~6 Wochen zurück.
     horizon_back = (today - timedelta(days=42)).isoformat()
     wconn = webapp_conn()
     try:
         rough = wconn.execute(
             "SELECT lesson_id, rating, note FROM lesson_checkins "
-            "WHERE account_id = ? AND user_id = ? AND rating <= 2 "
+            "WHERE account_id = ? AND rating <= 2 "
             "AND updated_at >= ? "
             "ORDER BY rating ASC, updated_at DESC LIMIT 150",
-            (account_id, user.id, horizon_back),
+            (account_id, horizon_back),
         ).fetchall()
     finally:
         wconn.close()

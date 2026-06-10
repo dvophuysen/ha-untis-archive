@@ -55,20 +55,21 @@ def post_checkin(
     now = datetime.now(timezone.utc).isoformat()
     conn = webapp_conn()
     try:
-        before = snapshot_checkin(conn, account_id, lesson_id, user.id)
+        before = snapshot_checkin(conn, account_id, lesson_id)
         conn.execute(
             "INSERT INTO lesson_checkins "
             "(account_id, lesson_id, user_id, rating, note, untis_period_id, "
             " created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(account_id, lesson_id, user_id) DO UPDATE SET "
+            "ON CONFLICT(account_id, lesson_id) DO UPDATE SET "
             "  rating = excluded.rating, "
             "  note = excluded.note, "
+            "  user_id = excluded.user_id, "
             "  untis_period_id = excluded.untis_period_id, "
             "  updated_at = excluded.updated_at",
             (account_id, lesson_id, user.id, body.rating, body.note, period_id, now, now),
         )
-        after = snapshot_checkin(conn, account_id, lesson_id, user.id)
+        after = snapshot_checkin(conn, account_id, lesson_id)
         audit_log(
             conn,
             user_id=user.id,
@@ -94,11 +95,11 @@ def delete_checkin(
     assert_account_access(user, account_id)
     conn = webapp_conn()
     try:
-        before = snapshot_checkin(conn, account_id, lesson_id, user.id)
+        before = snapshot_checkin(conn, account_id, lesson_id)
         conn.execute(
             "DELETE FROM lesson_checkins "
-            "WHERE account_id = ? AND lesson_id = ? AND user_id = ?",
-            (account_id, lesson_id, user.id),
+            "WHERE account_id = ? AND lesson_id = ?",
+            (account_id, lesson_id),
         )
         if before:
             audit_log(
@@ -128,18 +129,19 @@ def post_caught_up(
     now = datetime.now(timezone.utc).isoformat()
     conn = webapp_conn()
     try:
-        before = snapshot_caught_up(conn, account_id, lesson_id, user.id)
+        before = snapshot_caught_up(conn, account_id, lesson_id)
         conn.execute(
             "INSERT INTO caught_up "
             "(account_id, lesson_id, user_id, caught_up_at, note, untis_period_id) "
             "VALUES (?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(account_id, lesson_id, user_id) DO UPDATE SET "
+            "ON CONFLICT(account_id, lesson_id) DO UPDATE SET "
             "  caught_up_at = excluded.caught_up_at, "
             "  note = excluded.note, "
+            "  user_id = excluded.user_id, "
             "  untis_period_id = excluded.untis_period_id",
             (account_id, lesson_id, user.id, now, body.note, period_id),
         )
-        after = snapshot_caught_up(conn, account_id, lesson_id, user.id)
+        after = snapshot_caught_up(conn, account_id, lesson_id)
         audit_log(
             conn,
             user_id=user.id,
@@ -165,11 +167,11 @@ def delete_caught_up(
     assert_account_access(user, account_id)
     conn = webapp_conn()
     try:
-        before = snapshot_caught_up(conn, account_id, lesson_id, user.id)
+        before = snapshot_caught_up(conn, account_id, lesson_id)
         conn.execute(
             "DELETE FROM caught_up "
-            "WHERE account_id = ? AND lesson_id = ? AND user_id = ?",
-            (account_id, lesson_id, user.id),
+            "WHERE account_id = ? AND lesson_id = ?",
+            (account_id, lesson_id),
         )
         if before:
             audit_log(

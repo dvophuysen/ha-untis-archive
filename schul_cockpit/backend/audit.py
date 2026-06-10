@@ -65,23 +65,21 @@ def snapshot_task(conn: sqlite3.Connection, task_id: int) -> dict | None:
 
 
 def snapshot_checkin(
-    conn: sqlite3.Connection, account_id: int, lesson_id: int, user_id: int
+    conn: sqlite3.Connection, account_id: int, lesson_id: int
 ) -> dict | None:
     row = conn.execute(
-        "SELECT * FROM lesson_checkins "
-        "WHERE account_id = ? AND lesson_id = ? AND user_id = ?",
-        (account_id, lesson_id, user_id),
+        "SELECT * FROM lesson_checkins WHERE account_id = ? AND lesson_id = ?",
+        (account_id, lesson_id),
     ).fetchone()
     return dict(row) if row else None
 
 
 def snapshot_caught_up(
-    conn: sqlite3.Connection, account_id: int, lesson_id: int, user_id: int
+    conn: sqlite3.Connection, account_id: int, lesson_id: int
 ) -> dict | None:
     row = conn.execute(
-        "SELECT * FROM caught_up "
-        "WHERE account_id = ? AND lesson_id = ? AND user_id = ?",
-        (account_id, lesson_id, user_id),
+        "SELECT * FROM caught_up WHERE account_id = ? AND lesson_id = ?",
+        (account_id, lesson_id),
     ).fetchone()
     return dict(row) if row else None
 

@@ -45,6 +45,9 @@ CREATE TABLE IF NOT EXISTS account_settings (
     updated_at TEXT NOT NULL
 );
 
+-- Check-ins gehören dem Kind (account), nicht dem eintragenden User.
+-- Eltern und Kind sehen denselben Check-in; user_id ist nur die zuletzt
+-- bearbeitende Person (für das Audit-Log).
 CREATE TABLE IF NOT EXISTS lesson_checkins (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account_id INTEGER NOT NULL,
@@ -54,7 +57,7 @@ CREATE TABLE IF NOT EXISTS lesson_checkins (
     note TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    UNIQUE(account_id, lesson_id, user_id)
+    UNIQUE(account_id, lesson_id)
 );
 CREATE INDEX IF NOT EXISTS idx_checkins_account_lesson
     ON lesson_checkins(account_id, lesson_id);
@@ -66,7 +69,7 @@ CREATE TABLE IF NOT EXISTS caught_up (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     caught_up_at TEXT NOT NULL,
     note TEXT,
-    UNIQUE(account_id, lesson_id, user_id)
+    UNIQUE(account_id, lesson_id)
 );
 
 CREATE TABLE IF NOT EXISTS tasks (

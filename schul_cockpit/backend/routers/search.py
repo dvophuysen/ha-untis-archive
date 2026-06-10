@@ -38,9 +38,9 @@ def search(
     try:
         for r in wconn.execute(
             "SELECT lesson_id, note FROM lesson_checkins "
-            "WHERE account_id = ? AND user_id = ? AND note IS NOT NULL "
+            "WHERE account_id = ? AND note IS NOT NULL "
             "AND LOWER(note) LIKE ?",
-            (account_id, user.id, pattern),
+            (account_id, pattern),
         ).fetchall():
             note_rows.append(r)
     finally:

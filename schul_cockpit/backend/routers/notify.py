@@ -199,6 +199,19 @@ def notify_summary(
         users_summary = []
         if linked_users and real_lesson_ids:
             lid_placeholder = ",".join("?" for _ in real_lesson_ids)
+            # Check-ins gehören dem Account, nicht der einzelnen Person —
+            # einmal abfragen, derselbe „unrated"-Stand gilt für alle
+            # verlinkten User. Wir lassen die User-Liste in der Antwort,
+            # damit bestehende HA-Automationen nicht brechen.
+            rated_ids = {
+                r["lesson_id"]
+                for r in wconn.execute(
+                    f"SELECT lesson_id FROM lesson_checkins "
+                    f"WHERE account_id = ? AND lesson_id IN ({lid_placeholder})",
+                    [account_id, *real_lesson_ids],
+                ).fetchall()
+            }
+            unrated_ended = sum(1 for lid in already_ended_ids if lid not in rated_ids)
             for uid in linked_users:
                 u = wconn.execute(
                     "SELECT id, display_name, role FROM users WHERE id = ?",
@@ -206,16 +219,6 @@ def notify_summary(
                 ).fetchone()
                 if not u:
                     continue
-                rated_ids = {
-                    r["lesson_id"]
-                    for r in wconn.execute(
-                        f"SELECT lesson_id FROM lesson_checkins "
-                        f"WHERE account_id = ? AND user_id = ? "
-                        f"AND lesson_id IN ({lid_placeholder})",
-                        [account_id, uid, *real_lesson_ids],
-                    ).fetchall()
-                }
-                unrated_ended = sum(1 for lid in already_ended_ids if lid not in rated_ids)
                 users_summary.append(
                     {
                         "user_id": uid,

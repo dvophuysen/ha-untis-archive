@@ -260,14 +260,14 @@ def _free_learning_suggestions(
     suggestions: list[dict] = []
     seen_subjects: set[str] = set()
 
-    # 1) Recently hard (rating 1 or 2) — per user.
+    # 1) Recently hard (rating 1 or 2) — shared across the account.
     wconn = webapp_conn()
     try:
         hard_rows = wconn.execute(
             "SELECT lesson_id, rating, updated_at FROM lesson_checkins "
-            "WHERE account_id = ? AND user_id = ? AND rating <= 2 "
+            "WHERE account_id = ? AND rating <= 2 "
             "AND updated_at >= ? ORDER BY rating ASC, updated_at DESC LIMIT 30",
-            (account_id, user_id, horizon),
+            (account_id, horizon),
         ).fetchall()
     finally:
         wconn.close()

@@ -231,6 +231,75 @@ _MIGRATIONS: list[tuple[str, str]] = [
         )
         """,
     ),
+    # --- Check-ins gehören dem Kind, nicht dem eintragenden User. Vorher
+    # war (account_id, lesson_id, user_id) unique, sodass Eltern und Kind
+    # je eigene Check-in-Reihen hatten und einander nicht sahen. Jetzt eine
+    # geteilte Reihe pro Stunde; user_id bleibt als "letzte:r Bearbeiter:in"
+    # erhalten. Beim Dedupen gewinnt der neueste Eintrag.
+    (
+        "028_lesson_checkins_shared_per_account",
+        """
+        CREATE TABLE lesson_checkins_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id INTEGER NOT NULL,
+            lesson_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            rating INTEGER NOT NULL,
+            note TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            untis_period_id INTEGER,
+            UNIQUE(account_id, lesson_id)
+        );
+        INSERT INTO lesson_checkins_new
+            (id, account_id, lesson_id, user_id, rating, note,
+             created_at, updated_at, untis_period_id)
+        SELECT id, account_id, lesson_id, user_id, rating, note,
+               created_at, updated_at, untis_period_id
+        FROM (
+            SELECT *,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY account_id, lesson_id
+                       ORDER BY updated_at DESC, id DESC
+                   ) AS rn
+            FROM lesson_checkins
+        )
+        WHERE rn = 1;
+        DROP TABLE lesson_checkins;
+        ALTER TABLE lesson_checkins_new RENAME TO lesson_checkins;
+        CREATE INDEX IF NOT EXISTS idx_checkins_account_lesson
+            ON lesson_checkins(account_id, lesson_id);
+        """,
+    ),
+    (
+        "029_caught_up_shared_per_account",
+        """
+        CREATE TABLE caught_up_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_id INTEGER NOT NULL,
+            lesson_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            caught_up_at TEXT NOT NULL,
+            note TEXT,
+            untis_period_id INTEGER,
+            UNIQUE(account_id, lesson_id)
+        );
+        INSERT INTO caught_up_new
+            (id, account_id, lesson_id, user_id, caught_up_at, note, untis_period_id)
+        SELECT id, account_id, lesson_id, user_id, caught_up_at, note, untis_period_id
+        FROM (
+            SELECT *,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY account_id, lesson_id
+                       ORDER BY caught_up_at DESC, id DESC
+                   ) AS rn
+            FROM caught_up
+        )
+        WHERE rn = 1;
+        DROP TABLE caught_up;
+        ALTER TABLE caught_up_new RENAME TO caught_up;
+        """,
+    ),
 ]
 
 

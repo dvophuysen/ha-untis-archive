@@ -2,6 +2,21 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.18.0 — Check-ins gehören dem Kind, nicht der eintragenden Person
+- **Bugfix:** Wenn Eltern Stunden-Feedback (😀 😐 😟) für ein Kind
+  eintrugen, sah das Kind weiterhin alles unausgefüllt — und umgekehrt.
+  Grund: die Check-in-Reihe war pro `(Account, Stunde, User)` eindeutig,
+  also bekam jede:r eine eigene Kopie. Jetzt ist sie pro `(Account,
+  Stunde)` eindeutig: alle, die Zugriff auf das Kind haben, sehen
+  dasselbe Feedback und können sich gegenseitig ergänzen/korrigieren.
+- Migration läuft beim ersten Start: bestehende Doppel-Reihen werden
+  zusammengeführt, der **neueste** Eintrag (nach `updated_at`) gewinnt.
+  `user_id` bleibt als „zuletzt bearbeitet von" für das Audit-Log.
+- Gleicher Fix für „Stoff nachgeholt"-Häkchen (caught_up).
+- Mündlich-Vorschläge, Plan-Frühwarnung, Nachmittags-Vorschläge und
+  Notiz-Suche profitieren automatisch — sie sehen jetzt alles Feedback
+  zum Kind, egal wer es eingetragen hat.
+
 ## 0.17.2 — Webclip: inline statt attachment (iOS-Installer öffnen)
 - Profil wird jetzt mit `Content-Disposition: inline` ausgeliefert. iOS
   hat keinen Download-Manager — `attachment` führte zu einer leeren
