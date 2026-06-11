@@ -2,7 +2,10 @@
   import { api } from './api.js';
   import LessonDetail from './LessonDetail.svelte';
 
-  let { accountId, lesson } = $props();
+  // preview=true wird für die "Morgen"-Vorschau verwendet: nur Anzeige,
+  // keine Bewertung, kein Detail-Modal — der Stoff hat noch nicht
+  // stattgefunden, da gibt's nichts zu bewerten.
+  let { accountId, lesson, preview = false } = $props();
 
   let busy = $state(false);
   let note = $state(lesson.checkin?.note ?? '');
@@ -61,52 +64,75 @@
   }
 </script>
 
-<div id="lesson-{lesson.id}" class="lesson" class:cancelled={isCancelled}>
-  <!-- LEFT: system info, tappable to open detail/comment -->
-  <button class="lesson-left" onclick={openDetail} aria-label="Details und Kommentar">
-    <div class="lesson-head">
-      <span class="lesson-time">{lesson.start_hhmm}</span>
-      <span class="lesson-subj" title={lesson.subject_name}>{subjectLabel}</span>
-      {#if isCancelled}<span class="badge cancelled">❌ Ausfall</span>{/if}
-      {#if isSubst && !isCancelled}<span class="badge substitution">↺ Vertretung</span>{/if}
-      {#if wasAbsent}<span class="badge absent">🤒 versäumt</span>{/if}
-      {#if hasExam}<span class="badge exam">📝 Klausur</span>{/if}
-      {#if lesson.checkin?.note}<span class="mini" title="Kommentar">💬</span>{/if}
-    </div>
-    <div class="lesson-sub">
-      {lesson.teacher_name ?? '—'}{#if lesson.is_teacher_substituted && lesson.teacher_orig_name}<span class="orig"> (statt {lesson.teacher_orig_name})</span>{/if}{#if lesson.room} · {lesson.room}{#if lesson.is_room_substituted && lesson.room_orig}<span class="orig"> (statt {lesson.room_orig})</span>{/if}{/if}
-    </div>
-    {#if hasExam && lesson.exam.name}
-      <div class="lesson-exam">📝 {lesson.exam.name}</div>
-    {/if}
-    {#if lesson.lstext}
-      <div class="lesson-ls">{lesson.lstext}</div>
-    {/if}
-  </button>
-
-  <!-- RIGHT: quick check-in — fixed 4-column row, 👀 slot first (empty
-       when not a substitution) so 😀😐😟 always align across cards. -->
-  {#if canRate}
-    <div class="lesson-right">
-      <div class="checkins">
-        {#if isSubst}
-          <button class="ci r4" class:active={rating === 4} disabled={busy} onclick={() => checkin(4)} title="nur Aufsicht / kein neuer Stoff">👀</button>
-        {:else}
-          <span class="ci-empty"></span>
-        {/if}
-        <button class="ci r3" class:active={rating === 3} disabled={busy} onclick={() => checkin(3)} title="verstanden">😀</button>
-        <button class="ci r2" class:active={rating === 2} disabled={busy} onclick={() => checkin(2)} title="teils verstanden">😐</button>
-        <button class="ci r1" class:active={rating === 1} disabled={busy} onclick={() => checkin(1)} title="nicht verstanden">😟</button>
+<div id="lesson-{lesson.id}" class="lesson" class:cancelled={isCancelled} class:preview>
+  <!-- LEFT: system info. Im Preview-Modus nicht klickbar (nichts zu
+       bewerten an einer Stunde, die noch nicht stattgefunden hat). -->
+  {#if preview}
+    <div class="lesson-left">
+      <div class="lesson-head">
+        <span class="lesson-time">{lesson.start_hhmm}</span>
+        <span class="lesson-subj" title={lesson.subject_name}>{subjectLabel}</span>
+        {#if isCancelled}<span class="badge cancelled">❌ Ausfall</span>{/if}
+        {#if isSubst && !isCancelled}<span class="badge substitution">↺ Vertretung</span>{/if}
+        {#if hasExam}<span class="badge exam">📝 Klausur</span>{/if}
       </div>
+      <div class="lesson-sub">
+        {lesson.teacher_name ?? '—'}{#if lesson.is_teacher_substituted && lesson.teacher_orig_name}<span class="orig"> (statt {lesson.teacher_orig_name})</span>{/if}{#if lesson.room} · {lesson.room}{#if lesson.is_room_substituted && lesson.room_orig}<span class="orig"> (statt {lesson.room_orig})</span>{/if}{/if}
+      </div>
+      {#if hasExam && lesson.exam.name}
+        <div class="lesson-exam">📝 {lesson.exam.name}</div>
+      {/if}
+      {#if lesson.lstext}
+        <div class="lesson-ls">{lesson.lstext}</div>
+      {/if}
     </div>
   {:else}
-    <div class="lesson-right muted-right">
-      {#if isCancelled}entfällt{:else if wasAbsent}gefehlt{/if}
-    </div>
+    <button class="lesson-left" onclick={openDetail} aria-label="Details und Kommentar">
+      <div class="lesson-head">
+        <span class="lesson-time">{lesson.start_hhmm}</span>
+        <span class="lesson-subj" title={lesson.subject_name}>{subjectLabel}</span>
+        {#if isCancelled}<span class="badge cancelled">❌ Ausfall</span>{/if}
+        {#if isSubst && !isCancelled}<span class="badge substitution">↺ Vertretung</span>{/if}
+        {#if wasAbsent}<span class="badge absent">🤒 versäumt</span>{/if}
+        {#if hasExam}<span class="badge exam">📝 Klausur</span>{/if}
+        {#if lesson.checkin?.note}<span class="mini" title="Kommentar">💬</span>{/if}
+      </div>
+      <div class="lesson-sub">
+        {lesson.teacher_name ?? '—'}{#if lesson.is_teacher_substituted && lesson.teacher_orig_name}<span class="orig"> (statt {lesson.teacher_orig_name})</span>{/if}{#if lesson.room} · {lesson.room}{#if lesson.is_room_substituted && lesson.room_orig}<span class="orig"> (statt {lesson.room_orig})</span>{/if}{/if}
+      </div>
+      {#if hasExam && lesson.exam.name}
+        <div class="lesson-exam">📝 {lesson.exam.name}</div>
+      {/if}
+      {#if lesson.lstext}
+        <div class="lesson-ls">{lesson.lstext}</div>
+      {/if}
+    </button>
+  {/if}
+
+  <!-- RIGHT: quick check-in — entfällt im Preview-Modus. -->
+  {#if !preview}
+    {#if canRate}
+      <div class="lesson-right">
+        <div class="checkins">
+          {#if isSubst}
+            <button class="ci r4" class:active={rating === 4} disabled={busy} onclick={() => checkin(4)} title="nur Aufsicht / kein neuer Stoff">👀</button>
+          {:else}
+            <span class="ci-empty"></span>
+          {/if}
+          <button class="ci r3" class:active={rating === 3} disabled={busy} onclick={() => checkin(3)} title="verstanden">😀</button>
+          <button class="ci r2" class:active={rating === 2} disabled={busy} onclick={() => checkin(2)} title="teils verstanden">😐</button>
+          <button class="ci r1" class:active={rating === 1} disabled={busy} onclick={() => checkin(1)} title="nicht verstanden">😟</button>
+        </div>
+      </div>
+    {:else}
+      <div class="lesson-right muted-right">
+        {#if isCancelled}entfällt{:else if wasAbsent}gefehlt{/if}
+      </div>
+    {/if}
   {/if}
 </div>
 
-{#if showDetail}
+{#if showDetail && !preview}
   <LessonDetail
     {accountId}
     {lesson}
@@ -125,6 +151,13 @@
     margin: 0.35rem 0;
   }
   .lesson.cancelled { opacity: 0.6; }
+  /* Vorschau für morgen: dezenter, damit der Heute-Stundenplan oben
+     visuell führend bleibt. */
+  .lesson.preview {
+    background: transparent;
+    border-style: dashed;
+  }
+  .lesson.preview .lesson-left { cursor: default; }
   .lesson-left {
     flex: 1;
     min-width: 0;

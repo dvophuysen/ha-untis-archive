@@ -52,8 +52,11 @@
     return n.getHours() * 100 + n.getMinutes();
   })();
 
-  // "before" solange noch eine nicht-ausgefallene Stunde aussteht.
-  // Sonst (Schulschluss erreicht / Wochenende / schulfrei) "after".
+  // "before" solange noch eine nicht-ausgefallene Stunde aussteht. Sonst
+  // (Schulschluss erreicht / Wochenende / schulfrei) "after". HeaderChips
+  // braucht das, um die rote Klausur-Leiste / ⚡ / 🗣 phasenabhängig zu
+  // schalten. Der Stundenplan-Block bleibt unabhängig davon "Heute" —
+  // nachmittags muss man noch 😀/😐/😟-Feedback geben können.
   const phase = $derived.by(() => {
     const ls = data?.lessons ?? [];
     let max = -1;
@@ -64,14 +67,6 @@
     if (max < 0) return 'after';
     return nowHhmm > max ? 'after' : 'before';
   });
-
-  // Stundenplan-Block: nach Schulschluss zeigt die Seite den NÄCHSTEN
-  // Schultag. Wenn nichts dafür da ist (Ferien o.ä.), bleiben wir bei
-  // heute mit Hinweis "kein Unterricht".
-  const showNext = $derived(phase === 'after' && !!data?.next);
-  const planDate = $derived(showNext ? data.next.date : data?.date);
-  const planLessons = $derived(showNext ? data.next.lessons : (data?.lessons ?? []));
-  const planLabel = $derived(showNext ? 'Morgen' : 'Heute');
 
   function scrollTo(id) {
     const el = document.getElementById(id);
@@ -104,13 +99,23 @@
   {/if}
 
   <h2 class="day-heading">
-    {planLabel} <span class="day-heading-date">· {formatShortDate(planDate)}</span>
+    Heute <span class="day-heading-date">· {formatShortDate(data.date)}</span>
   </h2>
-  {#if planLessons.length === 0}
+  {#if data.lessons.length === 0}
     <div class="empty">Kein Unterricht.</div>
   {:else}
-    {#each planLessons as lesson (lesson.id)}
+    {#each data.lessons as lesson (lesson.id)}
       <LessonCard {accountId} {lesson} />
+    {/each}
+  {/if}
+
+  {#if data.next}
+    <h2 class="day-heading next">
+      Morgen <span class="day-heading-date">· {formatShortDate(data.next.date)}</span>
+      <span class="preview-hint">Vorschau zum Tasche packen</span>
+    </h2>
+    {#each data.next.lessons as lesson (lesson.id)}
+      <LessonCard {accountId} {lesson} preview />
     {/each}
   {/if}
 {/if}
@@ -125,9 +130,17 @@
     font-weight: 700;
     margin: 1.2rem 0.2rem 0.5rem;
   }
+  .day-heading.next { margin-top: 1.6rem; }
   .day-heading-date {
     font-weight: 500;
     color: var(--fg-muted);
     font-size: 0.95rem;
+  }
+  .preview-hint {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: var(--fg-dim);
+    margin-top: 2px;
   }
 </style>

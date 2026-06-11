@@ -2,6 +2,19 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.10 — Heute-Stundenplan bleibt, Morgen als gestrichelte Vorschau drunter
+- 0.19.9 hat den Stundenplan nach Schulschluss zu früh auf „Morgen"
+  umgeschaltet — Feedback (😀/😐/😟) für den heutigen Tag konnte man
+  damit nachmittags nicht mehr geben. Korrigiert: „Heute" bleibt immer
+  oben (mit allen Bewertungs-Buttons), darunter erscheint die
+  „Morgen"-Vorschau zum Tasche packen.
+- Vorschau-Stunden sind visuell dezent (gestrichelter Rahmen,
+  transparenter Hintergrund, kein Detail-Modal, keine Rating-Spalte) —
+  klar als Vorschau erkennbar, lenkt nicht vom Heute-Block ab.
+- HeaderChips bleiben wie in 0.19.9: rote Klausur-Leiste verschwindet
+  nach Schulschluss, Cram-Karte für die nächste nicht-sattelfeste
+  Klausur erscheint prominent.
+
 ## 0.19.9 — Heute schaltet nach Schulschluss auf Morgen, Klausur sichtbar rot
 - **Heute-Klausur-Leiste verschwindet jetzt zuverlässig**, sobald die
   zugeordnete Schulstunde Beginn passiert ist oder Schulschluss erreicht
