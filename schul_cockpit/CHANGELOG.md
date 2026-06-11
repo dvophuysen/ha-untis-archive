@@ -2,6 +2,21 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.8 — HA-Todo-Sync räumt Orphans und Duplikate auf
+- **Bugfix:** Wenn die HA-Automation für dieselbe Hausaufgabe pro Lauf
+  eine neue UID vergeben hat (oder wenn ein HA-Eintrag gelöscht wurde),
+  blieb der Eintrag in der App-DB stehen. Bei Josia hatten sich so 17
+  identische „Mathematik / Seite 201 7)" angesammelt.
+- Sync löscht jetzt **offene `ha_todo`-Zeilen**, deren UID nicht mehr in
+  der HA-Liste auftaucht. Erledigte Einträge bleiben (sind Historie).
+- Zusätzlich werden offene Einträge mit identischem `(Fach, Fälligkeit,
+  Aufgabentext)` auf einen kollabiert — fängt parallel angelegte
+  Duplikate ein, ohne zwei echte Mathe-HAs am gleichen Tag falsch
+  zusammenzulegen (Untis-Titel ist nur das Fach, der Aufgabentext steckt
+  in den Notes).
+- Der „↻ Sync"-Knopf gibt eine kurze Rückmeldung, wenn Einträge bereinigt
+  wurden („✓ N alte/doppelte HA aufgeräumt").
+
 ## 0.19.7 — Klausur-Endspurt: eigene MUSS-Sektion + klares Stufensystem
 - **Nicht-sattelfeste Klausuren in ≤ 3 Tagen** rutschen aus „Sollte
   heute" raus und werden im Plan als eigene **„Muss lernen"**-Sektion
