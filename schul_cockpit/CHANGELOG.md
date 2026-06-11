@@ -2,6 +2,18 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.11 — Erledigte HA poppt nicht mehr auf, wenn HA-Automation UID wechselt
+- **Bugfix:** Abgehakte Hausaufgaben tauchten wieder im aktiven Block
+  auf, sobald die HA-Automation für denselben Inhalt eine neue UID
+  ausgeliefert hat. Der Dedup-Pfad aus 0.19.8 hatte abgeschlossene
+  Einträge bewusst stehen lassen (Historie), aber den Insert-Pfad nicht
+  gegen Done-History abgeglichen — also wurden neue Aktiv-Reihen
+  angelegt, obwohl die Aufgabe als erledigt bekannt war.
+- Sync prüft jetzt vor jedem Insert: existiert eine ERLEDIGTE Aufgabe
+  mit identischem `(Fach, Fälligkeit, Aufgabentext)`? Wenn ja → die alte
+  Done-Reihe übernimmt die neue UID (rebind), kein neuer Aktiv-Eintrag.
+- Toast „N alte/doppelte HA aufgeräumt" zählt diese Rebinds mit.
+
 ## 0.19.10 — Heute-Stundenplan bleibt, Morgen als gestrichelte Vorschau drunter
 - 0.19.9 hat den Stundenplan nach Schulschluss zu früh auf „Morgen"
   umgeschaltet — Feedback (😀/😐/😟) für den heutigen Tag konnte man

@@ -47,7 +47,10 @@
     try {
       const r = await api.post(`/api/accounts/${accountId}/sync-ha-todos`);
       await load();
-      const cleaned = (r.orphans_deleted || 0) + (r.duplicates_collapsed || 0);
+      const cleaned =
+        (r.orphans_deleted || 0) +
+        (r.duplicates_collapsed || 0) +
+        (r.rebound_to_done || 0);
       if (cleaned > 0) {
         syncMsg = `${cleaned} alte/doppelte HA aufgeräumt`;
         setTimeout(() => (syncMsg = null), 4000);
