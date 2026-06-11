@@ -10,7 +10,7 @@
   // davon, und dieser Header darf den Fehler nicht wiederholen.
 
   import { api } from './api.js';
-  import { daysBetween } from './format.js';
+  import { daysBetween, learnStateEmoji } from './format.js';
 
   let {
     accountId,
@@ -124,10 +124,11 @@
     const d = daysBetween(todayIso, ex.date);
     const subj = ex.subject_name || ex.title || 'Klausur';
     const when = d === 1 ? 'morgen' : `in ${d} Tagen`;
+    const ls = learnStateEmoji(ex.learn_state);
     return {
       key: 'exam:' + (ex.exam_key ?? ex.date + '|' + subj),
       icon: '📝',
-      text: `${subj} ${when}`,
+      text: `${subj} ${when}${ls ? ' ' + ls : ''}`,
       action: () => onNavigate('klausuren'),
     };
   }
@@ -171,11 +172,12 @@
 
 {#each examsToday as ex (ex.exam_key ?? ex.date + '|' + (ex.subject_name ?? ex.title ?? ''))}
   {@const target = lessonForExam(ex)}
+  {@const ls = learnStateEmoji(ex.learn_state)}
   <button
     class="exam-bar"
     onclick={() => target && onJumpLesson(target.id)}
   >
-    🚨 Heute Klausur: {ex.subject_name || ex.title || 'Klausur'}
+    🚨 Heute Klausur: {ex.subject_name || ex.title || 'Klausur'}{#if ls} {ls}{/if}
   </button>
 {/each}
 

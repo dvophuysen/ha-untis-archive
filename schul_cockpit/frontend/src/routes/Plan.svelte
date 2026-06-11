@@ -1,6 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
-  import { isoToday, shiftDateIso, daysBetween } from '../lib/format.js';
+  import { isoToday, shiftDateIso, daysBetween, learnStateEmoji } from '../lib/format.js';
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskEditor from '../lib/TaskEditor.svelte';
 
@@ -86,6 +86,7 @@
     wenig: { label: 'wenig zu tun', cls: 'ok' },
     überschaubar: { label: 'überschaubar', cls: 'mid' },
     viel: { label: 'viel — fang mit den schnellen Sachen an', cls: 'high' },
+    lerntag: { label: 'harter Lerntag — Klausur steht an', cls: 'high' },
   };
 
   function followLink(link) {
@@ -127,6 +128,9 @@
         <div class="row between" style="align-items:flex-start;">
           <div style="flex:1; min-width:0; text-align:left;">
             <strong>{s.title}</strong>
+            {#if s.type === 'exam_prep' && learnStateEmoji(s.learn_state)}
+              <span class="ls-badge" title="Lernstand">{learnStateEmoji(s.learn_state)}</span>
+            {/if}
             <div class="muted" style="margin-top:1px;">
               {#if s.type === 'exam_prep'}📝{:else if s.type === 'catch_up'}🤒{:else}🧠{/if}
               {s.reason}
@@ -200,4 +204,5 @@
   .pensum.high { border-left: 4px solid var(--rating-1); }
   .should-item { width: 100%; cursor: pointer; }
   .chev { color: var(--fg-dim); font-size: 1.2rem; }
+  .ls-badge { margin-left: 0.4rem; font-size: 0.95rem; }
 </style>

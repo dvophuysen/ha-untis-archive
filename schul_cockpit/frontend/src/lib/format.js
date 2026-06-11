@@ -56,6 +56,19 @@ export function dueLabel(dueIso, todayIso) {
   return formatShortDate(dueIso);
 }
 
+/** Lernstand → Emoji (siehe Klausuren-Seite für die Definition).
+ *  null / undefined ergibt '' damit Aufrufer einfach hintendran hängen
+ *  können, ohne extra zu prüfen. */
+export function learnStateEmoji(state) {
+  switch (state) {
+    case 0: return '⚪';
+    case 1: return '😟';
+    case 2: return '😐';
+    case 3: return '😀';
+    default: return '';
+  }
+}
+
 /** Strip Untis-automation metadata from a todo description.
  *
  * The user's HA automation writes entries like:

@@ -77,6 +77,23 @@ async def plan(
         exams = exam_data.get("exams", [])
     except Exception:
         exams = []
+
+    # Lernstand-Map → jedes anstehende Klausur-Item bekommt sein learn_state
+    # (None = noch nicht eingeschätzt). Macht den Lernfortschritt überall
+    # sichtbar, nicht nur auf der Klausuren-Seite.
+    wconn = webapp_conn()
+    try:
+        progress = {
+            r["exam_key"]: r["learn_state"]
+            for r in wconn.execute(
+                "SELECT exam_key, learn_state FROM exam_progress "
+                "WHERE account_id = ?",
+                (account_id,),
+            ).fetchall()
+        }
+    finally:
+        wconn.close()
+
     upcoming_exams = []
     for e in exams:
         try:
@@ -85,18 +102,24 @@ async def plan(
             continue
         days = (d - today).days
         if 0 <= days <= 28:
-            upcoming_exams.append({**e, "days_until": days})
+            upcoming_exams.append({
+                **e,
+                "days_until": days,
+                "learn_state": progress.get(e.get("exam_key")),
+            })
     upcoming_exams.sort(key=lambda e: e["days_until"])
 
     # --- SHOULD items (max 3) ---
     should: list[dict] = []
 
-    # 1) Exams within 10 days → prepare.
+    # 1) Exams within 10 days → prepare. "Heute" fliegt raus: am Klausur-
+    # morgen ist Vorbereiten zu spät, das wäre nur Noise.
     for e in upcoming_exams:
+        if e["days_until"] == 0:
+            continue
         if e["days_until"] <= 10:
             when = (
-                "heute" if e["days_until"] == 0
-                else "morgen" if e["days_until"] == 1
+                "morgen" if e["days_until"] == 1
                 else f"in {e['days_until']} Tagen"
             )
             should.append({
@@ -105,6 +128,7 @@ async def plan(
                 "title": f"{e.get('subject_name') or 'Klausur'} vorbereiten",
                 "reason": f"Klausur {when}",
                 "days_until": e["days_until"],
+                "learn_state": e.get("learn_state"),
                 "link": "subjects",
             })
 
@@ -191,15 +215,30 @@ async def plan(
     should = deduped[:3]
 
     # --- workload indicator (qualitative) ---
-    n = len(must)
-    if n == 0:
-        workload = "frei"
-    elif n <= 2:
-        workload = "wenig"
-    elif n <= 4:
-        workload = "überschaubar"
+    # Wenn morgen oder übermorgen eine Klausur ansteht und der Lernstand
+    # noch nicht "sicher" (3) ist, ist das ein harter Lerntag — unabhängig
+    # davon, wie viele Hausaufgaben gerade fällig sind. Sonst Zählung über
+    # MUSS-Aufgaben.
+    looming_exam = next(
+        (
+            e for e in upcoming_exams
+            if e["days_until"] in (1, 2)
+            and (e.get("learn_state") is None or e["learn_state"] < 3)
+        ),
+        None,
+    )
+    if looming_exam is not None:
+        workload = "lerntag"
     else:
-        workload = "viel"
+        n = len(must)
+        if n == 0:
+            workload = "frei"
+        elif n <= 2:
+            workload = "wenig"
+        elif n <= 4:
+            workload = "überschaubar"
+        else:
+            workload = "viel"
 
     return {
         "date": today_iso,

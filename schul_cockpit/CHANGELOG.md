@@ -2,6 +2,22 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.6 — Lernstand der Klausur überall sichtbar + harter Lerntag im Plan
+- **Lernstand-Emoji überall**: 😟 (viel offen) / 😐 (mittel) / 😀 (sicher)
+  / ⚪ (nicht begonnen) erscheint jetzt direkt auf dem 📝-Klausur-Chip
+  auf „Heute", auf der roten „Heute Klausur"-Leiste und auf jeder
+  „… vorbereiten"-Karte im Plan. Vorher lag das nur auf der
+  Klausuren-Seite — der wichtigste Vorbereitungs-Signal-Wert war damit
+  praktisch unsichtbar.
+- **„Sollte heute"-Vorbereiten-Karte für heutige Klausur ausgeblendet.**
+  Vorbereiten kann man am Klausurmorgen nichts mehr; das Item war reines
+  Rauschen und stand zwischen den echten To-Dos.
+- **Neuer Pensum-Status „harter Lerntag — Klausur steht an"** (rot)
+  überschreibt „wenig/überschaubar/viel" sobald in den nächsten zwei
+  Tagen eine Klausur ansteht, deren Lernstand noch nicht „sicher" ist.
+  Damit zeigt der Plan-Banner endlich die Realität: zwei Hausaufgaben +
+  morgen Mathe-Klausur auf mittlerem Niveau ist kein „wenig zu tun".
+
 ## 0.19.5 — Untis-ID `[EN260612]` & Co. werden jetzt zuverlässig versteckt
 - `stripUntisMetadata` hat nur Tags mit dem festen Präfix `SN`
   ausgeblendet. Englisch (`[EN…]`), Deutsch (`[DE…]`), Mathe (`[MA…]`)
