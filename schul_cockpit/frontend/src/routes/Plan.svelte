@@ -82,15 +82,17 @@
   });
 
   const WORKLOAD = {
-    frei: { label: 'nichts Pflicht heute 🎉', cls: 'ok' },
-    wenig: { label: 'wenig zu tun', cls: 'ok' },
-    überschaubar: { label: 'überschaubar', cls: 'mid' },
-    viel: { label: 'viel — fang mit den schnellen Sachen an', cls: 'high' },
-    lerntag: { label: 'harter Lerntag — Klausur steht an', cls: 'high' },
+    frei:         { label: 'Frei — Pause heute 🎉',               cls: 'ok' },
+    wenig:        { label: 'Wenig zu tun',                        cls: 'ok' },
+    überschaubar: { label: 'Überschaubar',                        cls: 'mid' },
+    viel:         { label: 'Viel — fang mit den schnellen an',    cls: 'high' },
+    endspurt:     { label: '🔥 Klausur-Endspurt — heute lernen',  cls: 'cram' },
   };
 
   function followLink(link) {
-    window.location.hash = link === 'absences' ? '#/absences' : '#/subjects';
+    if (link === 'absences') window.location.hash = '#/absences';
+    else if (link === 'klausuren') window.location.hash = '#/klausuren';
+    else window.location.hash = '#/subjects';
   }
 </script>
 
@@ -109,6 +111,22 @@
   <div class="pensum {WORKLOAD[plan.workload]?.cls ?? ''}">
     Heute: <strong>{WORKLOAD[plan.workload]?.label ?? plan.workload}</strong>
   </div>
+
+  <!-- Muss lernen (Klausur ≤3 Tage, nicht sattelfest) -->
+  {#if plan.cram?.length > 0}
+    <div class="section-title cram-title">Muss lernen</div>
+    {#each plan.cram as c}
+      <button class="cram-card" onclick={() => followLink(c.link)}>
+        <div class="cram-head">
+          <span class="cram-subj">{c.subject_name || 'Klausur'}</span>
+          {#if learnStateEmoji(c.learn_state)}
+            <span class="cram-ls">{learnStateEmoji(c.learn_state)}</span>
+          {/if}
+        </div>
+        <div class="cram-reason">📝 {c.reason}</div>
+      </button>
+    {/each}
+  {/if}
 
   <!-- Heute zu erledigen -->
   {#if heute.length > 0}
@@ -202,7 +220,37 @@
   .pensum.ok { border-left: 4px solid var(--rating-3); }
   .pensum.mid { border-left: 4px solid var(--rating-2); }
   .pensum.high { border-left: 4px solid var(--rating-1); }
+  .pensum.cram {
+    border: 1px solid var(--rating-1);
+    border-left: 4px solid var(--rating-1);
+    background: color-mix(in srgb, var(--rating-1) 8%, var(--bg-card));
+    color: var(--fg);
+    font-size: 1rem;
+  }
   .should-item { width: 100%; cursor: pointer; }
   .chev { color: var(--fg-dim); font-size: 1.2rem; }
   .ls-badge { margin-left: 0.4rem; font-size: 0.95rem; }
+
+  .cram-title { color: var(--rating-1); }
+  .cram-card {
+    width: 100%;
+    text-align: left;
+    background: var(--bg-card);
+    border: 1px solid var(--rating-1);
+    border-left: 4px solid var(--rating-1);
+    border-radius: var(--radius);
+    padding: 0.7rem 0.85rem;
+    margin: 0.35rem 0;
+    cursor: pointer;
+    min-height: 0;
+  }
+  .cram-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .cram-subj { font-size: 1.1rem; font-weight: 700; }
+  .cram-ls { font-size: 1.6rem; line-height: 1; }
+  .cram-reason { color: var(--fg-muted); margin-top: 2px; font-size: 0.9rem; }
 </style>

@@ -2,6 +2,23 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.7 — Klausur-Endspurt: eigene MUSS-Sektion + klares Stufensystem
+- **Nicht-sattelfeste Klausuren in ≤ 3 Tagen** rutschen aus „Sollte
+  heute" raus und werden im Plan als eigene **„Muss lernen"**-Sektion
+  oben angezeigt. Eigene rot eingefasste Karte pro Klausur, grosses
+  Lernstand-Emoji rechts — geht so nicht mehr unter.
+- Pensum-Banner mit klarem 5-Stufen-System statt einem nichtssagenden
+  „lerntag":
+  - 🟢 *Frei — Pause heute* (nichts Pflicht)
+  - 🟢 *Wenig zu tun* (1–2 HAs)
+  - 🟡 *Überschaubar* (3–4 HAs)
+  - 🟠 *Viel — fang mit den schnellen an* (≥5 HAs)
+  - 🔴 *🔥 Klausur-Endspurt — heute lernen* (sobald eine cram-Klausur
+    aktiv ist; überschreibt die HA-basierte Stufe).
+- Endspurt-Banner ist rot hinterlegt und groesser als die anderen.
+- Service-Worker-Cache gebumpt, damit installierte PWAs sicher neu
+  laden statt das alte Banner-Layout zu cachen.
+
 ## 0.19.6 — Lernstand der Klausur überall sichtbar + harter Lerntag im Plan
 - **Lernstand-Emoji überall**: 😟 (viel offen) / 😐 (mittel) / 😀 (sicher)
   / ⚪ (nicht begonnen) erscheint jetzt direkt auf dem 📝-Klausur-Chip
