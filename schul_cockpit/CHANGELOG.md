@@ -2,6 +2,22 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.12 — Klausuren direkt auf der Klausuren-Seite bearbeiten
+- Eltern/Admin sehen jetzt oben rechts auf der Klausuren-Seite einen
+  „✏️ verwalten"-Link, der direkt in die volle Verwaltung (Kalender,
+  Fach-Zuordnung, Termine ergänzen) führt. War vorher nur tief im Setup
+  versteckt.
+- **Manuelle Termine inline bearbeiten:** Pro manuellem Eintrag im
+  „Ausstehend"-Block gibt es „✏️ bearbeiten" und „✕". Bearbeiten öffnet
+  ein kleines Datum/Titel-Formular direkt in der Karte — typischer
+  Fall: Nachschreibtermin wegen Krankheit verschoben.
+- **Kalender-Termine** zeigen einen Hinweis: dort muss die Quelle (z.B.
+  iServ) angefasst werden, alternativ über Verwalten dismissen und
+  manuell neu anlegen. Wir können iServ-Termine nicht von uns aus
+  zurückschreiben.
+- Backend: neuer Endpoint `PATCH /accounts/{id}/manual-exams/{id}` für
+  Datum/Fach/Titel/Notiz. Nur Eltern/Admin.
+
 ## 0.19.11 — Erledigte HA poppt nicht mehr auf, wenn HA-Automation UID wechselt
 - **Bugfix:** Abgehakte Hausaufgaben tauchten wieder im aktiven Block
   auf, sobald die HA-Automation für denselben Inhalt eine neue UID
