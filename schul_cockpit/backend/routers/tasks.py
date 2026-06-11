@@ -475,5 +475,5 @@ async def manual_sync(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     assert_account_access(user, account_id)
-    await sync_account(account_id)
-    return {"ok": True}
+    stats = await sync_account(account_id)
+    return {"ok": True, **stats}

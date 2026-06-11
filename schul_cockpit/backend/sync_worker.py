@@ -53,12 +53,17 @@ def _get_account_lists(conn: sqlite3.Connection) -> list[tuple[int, str]]:
     ]
 
 
-async def _sync_one(account_id: int, entity_id: str, sup: SupervisorClient) -> None:
+async def _sync_one(
+    account_id: int, entity_id: str, sup: SupervisorClient
+) -> dict[str, int]:
+    """Sync one account's HA todo list into the app. Returns a small stats
+    dict so the manual sync endpoint can give UI feedback (`inserted`,
+    `orphans_deleted`, `duplicates_collapsed`)."""
     try:
         ha_items = await sup.get_todo_items(entity_id)
     except SupervisorError as exc:
         _LOGGER.warning("todo.get_items %s failed: %s", entity_id, exc)
-        return
+        return {"inserted": 0, "orphans_deleted": 0, "duplicates_collapsed": 0}
 
     now = _now()
     conn = webapp_conn()
@@ -74,6 +79,7 @@ async def _sync_one(account_id: int, entity_id: str, sup: SupervisorClient) -> N
         }
 
         ha_seen_uids: set[str] = set()
+        stats = {"inserted": 0, "orphans_deleted": 0, "duplicates_collapsed": 0}
 
         for item in ha_items:
             uid = item.get("uid") or item.get("summary")
@@ -109,6 +115,7 @@ async def _sync_one(account_id: int, entity_id: str, sup: SupervisorClient) -> N
                         now,
                     ),
                 )
+                stats["inserted"] += 1
                 continue
 
             updates: list[tuple[str, str | None]] = []
@@ -188,14 +195,57 @@ async def _sync_one(account_id: int, entity_id: str, sup: SupervisorClient) -> N
                             "todo.update_item %s for %s failed: %s",
                             entity_id, row["title"], exc,
                         )
+            else:
+                # Offene ha_todo-Zeile, die nicht mehr in HA steht → die
+                # Quelle der Wahrheit hat sie entfernt (oder die Automation
+                # hat eine neue UID für denselben Eintrag erzeugt). Weg
+                # damit, sonst sammelt sich Müll an.
+                conn.execute("DELETE FROM tasks WHERE id = ?", (row["id"],))
+                stats["orphans_deleted"] += 1
+
+        # Dedup: offene ha_todo-Zeilen mit identischem Inhalt zusammen-
+        # klappen. Untis' Titel ist nur das Fach ("Mathematik"), darum
+        # muss der Notes-Text mit in den Schlüssel — sonst würden zwei
+        # echte Mathe-Aufgaben am gleichen Tag falsch zusammenfallen.
+        # Behalten wird der jüngste Eintrag (mutmaßlich der aktive in HA).
+        dup_rows = conn.execute(
+            "SELECT id, title, due_date, notes FROM tasks "
+            "WHERE account_id = ? AND ha_uid IS NOT NULL AND status = 'open' "
+            "ORDER BY updated_at DESC, id DESC",
+            (account_id,),
+        ).fetchall()
+        seen_keys: set[tuple[str, str, str]] = set()
+        for r in dup_rows:
+            title = (r["title"] or "").strip().lower()
+            if not title:
+                continue
+            key = (title, r["due_date"] or "", (r["notes"] or "").strip())
+            if key in seen_keys:
+                conn.execute("DELETE FROM tasks WHERE id = ?", (r["id"],))
+                stats["duplicates_collapsed"] += 1
+            else:
+                seen_keys.add(key)
+        if stats["duplicates_collapsed"] or stats["orphans_deleted"]:
+            _LOGGER.info(
+                "sync %s: +%d inserted, %d orphans deleted, %d duplicates collapsed",
+                entity_id,
+                stats["inserted"],
+                stats["orphans_deleted"],
+                stats["duplicates_collapsed"],
+            )
     finally:
         conn.close()
+    return stats
 
 
-async def sync_account(account_id: int) -> None:
+async def sync_account(account_id: int) -> dict[str, int]:
+    """Trigger one sync round for a single account; returns stats so the
+    manual-sync endpoint can give the UI feedback (`inserted`,
+    `orphans_deleted`, `duplicates_collapsed`)."""
+    empty = {"inserted": 0, "orphans_deleted": 0, "duplicates_collapsed": 0}
     sup = get_supervisor()
     if not sup.available:
-        return
+        return empty
     conn = webapp_conn()
     try:
         row = conn.execute(
@@ -205,8 +255,8 @@ async def sync_account(account_id: int) -> None:
     finally:
         conn.close()
     if row is None:
-        return
-    await _sync_one(account_id, row["ha_entity_id"], sup)
+        return empty
+    return await _sync_one(account_id, row["ha_entity_id"], sup)
 
 
 async def sync_all() -> None:

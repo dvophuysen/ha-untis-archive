@@ -16,6 +16,7 @@
   let editing = $state(null);
   let creating = $state(false);
   let syncing = $state(false);
+  let syncMsg = $state(null);
 
   async function load() {
     if (!accountId) return;
@@ -42,9 +43,15 @@
 
   async function syncNow() {
     syncing = true;
+    syncMsg = null;
     try {
-      await api.post(`/api/accounts/${accountId}/sync-ha-todos`);
+      const r = await api.post(`/api/accounts/${accountId}/sync-ha-todos`);
       await load();
+      const cleaned = (r.orphans_deleted || 0) + (r.duplicates_collapsed || 0);
+      if (cleaned > 0) {
+        syncMsg = `${cleaned} alte/doppelte HA aufgeräumt`;
+        setTimeout(() => (syncMsg = null), 4000);
+      }
     } catch (e) {
       error = e.message;
     } finally {
@@ -102,6 +109,9 @@
   </button>
   <button class="ghost" onclick={syncNow} disabled={syncing}>{syncing ? '↻ …' : '↻ Sync'}</button>
 </div>
+{#if syncMsg}
+  <div class="sync-toast">✓ {syncMsg}</div>
+{/if}
 
 {#if error}<div class="error-box">{error}</div>{/if}
 
@@ -253,4 +263,13 @@
   .cram-subj { font-size: 1.1rem; font-weight: 700; }
   .cram-ls { font-size: 1.6rem; line-height: 1; }
   .cram-reason { color: var(--fg-muted); margin-top: 2px; font-size: 0.9rem; }
+
+  .sync-toast {
+    background: color-mix(in srgb, var(--rating-3) 12%, var(--bg-card));
+    border: 1px solid var(--rating-3);
+    border-radius: var(--radius);
+    padding: 0.45rem 0.7rem;
+    margin: 0.2rem 0 0.5rem;
+    font-size: 0.85rem;
+  }
 </style>
