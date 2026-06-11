@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends
 
@@ -18,16 +18,32 @@ def today(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     assert_account_access(user, account_id)
-    today_iso = date.today().isoformat()
+    today_date = date.today()
+    today_iso = today_date.isoformat()
     conn = history_conn()
     try:
         lessons = lessons_for_date(conn, account_id, today_iso)
         exams = upcoming_exams(conn, account_id, days_ahead=7)
+        hidden = hidden_keys(account_id)
+        lessons = [l for l in lessons if not lesson_is_hidden(l, hidden)]
+
+        # Nächster Schultag — für den Stundenplan-Block nach Schulschluss.
+        # Wochenende/Ferien überspringen wir bis zu 7 Tagen voraus.
+        next_block: dict | None = None
+        for offset in range(1, 8):
+            cand_iso = (today_date + timedelta(days=offset)).isoformat()
+            cand = [
+                l for l in lessons_for_date(conn, account_id, cand_iso)
+                if not lesson_is_hidden(l, hidden)
+            ]
+            if cand:
+                for l in cand:
+                    l["checkin"] = None
+                    l["caught_up"] = False
+                next_block = {"date": cand_iso, "lessons": cand}
+                break
     finally:
         conn.close()
-
-    hidden = hidden_keys(account_id)
-    lessons = [l for l in lessons if not lesson_is_hidden(l, hidden)]
 
     lesson_ids = [lesson_row["id"] for lesson_row in lessons]
     checkins_by_lesson: dict[int, dict] = {}
@@ -73,4 +89,5 @@ def today(
             "upcoming_exams_7d": len(exams),
         },
         "upcoming_exams": exams,
+        "next": next_block,
     }

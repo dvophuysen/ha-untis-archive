@@ -1,5 +1,9 @@
 <script>
-  // Heute-Kopfleiste: rote "Klausur heute"-Leiste + bis zu 4 Aktions-Chips.
+  // Heute-Kopfleiste: drei Zonen, von oben nach unten in Dringlichkeit:
+  //   1. rote "Heute Klausur"-Leiste (nur solange Klausurstunde aussteht)
+  //   2. "Muss lernen"-Karten (Klausur ≤3 Tage, nicht sicher) — rot, prominent
+  //   3. Chip-Reihe für ⚡ / 🗣 / 📚 / restliche 📝
+  //
   // Zwei Phasen, Grenze = Ende der letzten heutigen Stunde:
   //   "before" → was kommt heute noch, worauf reagieren
   //   "after"  → was muss bis morgen vorbereitet sein
@@ -16,6 +20,7 @@
     accountId,
     todayIso,
     lessons = [],
+    phase = 'before',
     dueTodayCount = 0,
     onJumpDueToday = () => {},
     onJumpLesson = () => {},
@@ -44,20 +49,6 @@
     return n.getHours() * 100 + n.getMinutes();
   })();
 
-  const lastEndHhmm = $derived.by(() => {
-    let max = -1;
-    for (const l of lessons) {
-      if (l.is_cancelled) continue;
-      if (typeof l.end_time === 'number' && l.end_time > max) max = l.end_time;
-    }
-    return max < 0 ? null : max;
-  });
-
-  // Wochenende / schulfrei → faktisch "nach Schluss", planen den nächsten Tag.
-  const phase = $derived(
-    lastEndHhmm === null || now > lastEndHhmm ? 'after' : 'before',
-  );
-
   function isChanged(l) {
     return !!(
       l.is_cancelled ||
@@ -79,11 +70,31 @@
     return lessons[0] || null;
   }
 
-  // 🚨 Klausuren heute (egal welche Stunde — wir wissen aus dem Kalender
-  // nur das Datum, nicht die Periode).
+  // 🚨 Klausur heute: nur solange die zugeordnete Stunde noch bevorsteht.
+  // Phase "after" → komplett raus, dann ist auch ohne Lesson-Match klar:
+  // die Klausur ist vorbei.
   const examsToday = $derived(
-    curatedExams.filter((e) => e.date === todayIso),
+    curatedExams
+      .filter((e) => e.date === todayIso)
+      .filter((e) => {
+        if (phase === 'after') return false;
+        const l = lessonForExam(e);
+        if (!l || typeof l.start_time !== 'number') return true;
+        return l.start_time > now;
+      }),
   );
+
+  // Cram: Klausur in ≤3 Tagen UND Lernstand noch nicht "sicher" (3).
+  // Gleiche Regel wie im Plan-Endpoint — eigene rote Karte, kein Chip.
+  function isCram(e) {
+    if (!e.date || e.date <= todayIso) return false;
+    const d = daysBetween(todayIso, e.date);
+    if (d > 3) return false;
+    const ls = e.learn_state;
+    return ls === null || ls === undefined || ls < 3;
+  }
+
+  const cramExams = $derived(curatedExams.filter(isCram));
 
   // ⚡ nur noch nicht erlebte Plan-Änderungen.
   const futureChanges = $derived(
@@ -104,11 +115,10 @@
     return { icon: '⚡', text: `${items.length}× Planänderung` };
   }
 
-  // Alle Klausuren in den nächsten 7 Tagen außer heute (heute hat die rote
-  // Leiste). Jede bekommt einen eigenen Chip — zwei Klausuren in zwei Tagen
-  // sind genau der Moment, in dem beide sichtbar sein müssen.
-  const nextExams = $derived(
-    curatedExams.filter((e) => e.date && e.date > todayIso),
+  // Alle übrigen Klausuren in den nächsten 7 Tagen — die kommen als
+  // dezenter Chip. Cram-Klausuren sind oben schon prominent.
+  const nonCramNextExams = $derived(
+    curatedExams.filter((e) => e.date && e.date > todayIso && !isCram(e)),
   );
 
   // 🗣 nur wenn nächste Stunde des Faches noch heute kommt.
@@ -133,9 +143,6 @@
     };
   }
 
-  // Reihenfolge: zuerst zeitkritisches, danach jede anstehende Klausur.
-  // Kein hartes Limit mehr — die Chip-Reihe ist flex-wrap, mehrere
-  // Klausuren in einer Woche dürfen alle stehen.
   const chips = $derived.by(() => {
     const all = [];
     if (phase === 'before') {
@@ -165,7 +172,7 @@
         action: onJumpDueToday,
       });
     }
-    for (const ex of nextExams) all.push(examChip(ex));
+    for (const ex of nonCramNextExams) all.push(examChip(ex));
     return all;
   });
 </script>
@@ -181,7 +188,20 @@
   </button>
 {/each}
 
-{#if chips.length === 0 && examsToday.length === 0}
+{#each cramExams as ex (ex.exam_key ?? ex.date + '|' + (ex.subject_name ?? ex.title ?? ''))}
+  {@const d = daysBetween(todayIso, ex.date)}
+  {@const when = d === 1 ? 'morgen' : `in ${d} Tagen`}
+  {@const ls = learnStateEmoji(ex.learn_state)}
+  <button class="cram-card" onclick={() => onNavigate('klausuren')}>
+    <div class="cram-head">
+      <span class="cram-subj">{ex.subject_name || ex.title || 'Klausur'}</span>
+      {#if ls}<span class="cram-ls">{ls}</span>{/if}
+    </div>
+    <div class="cram-reason">📝 Klausur {when} — heute lernen</div>
+  </button>
+{/each}
+
+{#if chips.length === 0 && examsToday.length === 0 && cramExams.length === 0}
   <div class="all-clear">😌 Alles im Griff.</div>
 {:else if chips.length > 0}
   <div class="chip-row">
@@ -210,6 +230,27 @@
     cursor: pointer;
     min-height: 0;
   }
+  .cram-card {
+    width: 100%;
+    text-align: left;
+    background: var(--bg-card);
+    border: 1px solid var(--rating-1);
+    border-left: 4px solid var(--rating-1);
+    border-radius: 10px;
+    padding: 0.7rem 0.85rem;
+    margin: 0.4rem 0;
+    cursor: pointer;
+    min-height: 0;
+  }
+  .cram-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .cram-subj { font-size: 1.1rem; font-weight: 700; }
+  .cram-ls { font-size: 1.6rem; line-height: 1; }
+  .cram-reason { color: var(--fg-muted); margin-top: 2px; font-size: 0.9rem; }
   .chip-row {
     display: flex;
     flex-wrap: wrap;

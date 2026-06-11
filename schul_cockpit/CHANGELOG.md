@@ -2,6 +2,22 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.9 — Heute schaltet nach Schulschluss auf Morgen, Klausur sichtbar rot
+- **Heute-Klausur-Leiste verschwindet jetzt zuverlässig**, sobald die
+  zugeordnete Schulstunde Beginn passiert ist oder Schulschluss erreicht
+  ist. Vorher stand die rote „🚨 Heute Klausur: SPANISCH"-Leiste nach
+  Schulende noch stundenlang.
+- **Cram-Karte auch auf Heute**: Klausur in ≤3 Tagen mit Lernstand noch
+  nicht „sicher" landet als eigene rote Karte unter der Klausur-Leiste —
+  spiegelt das „Muss lernen"-Layout aus dem Plan. Der entsprechende
+  📝-Chip entfällt, damit nichts doppelt steht.
+- **Stundenplan-Block schaltet nach Schulschluss auf den nächsten
+  Schultag.** Überschrift ist jetzt groß und sprechend („Morgen ·
+  Do. 12.06." statt „Stundenplan 2026-06-11"). Backend `/today` liefert
+  dafür neu `next: {date, lessons}` für den nächsten Tag mit Stunden
+  (Wochenende/Ferien werden bis zu 7 Tagen übersprungen).
+- SW-Cache erneut gebumpt für die installierten PWAs.
+
 ## 0.19.8 — HA-Todo-Sync räumt Orphans und Duplikate auf
 - **Bugfix:** Wenn die HA-Automation für dieselbe Hausaufgabe pro Lauf
   eine neue UID vergeben hat (oder wenn ein HA-Eintrag gelöscht wurde),
