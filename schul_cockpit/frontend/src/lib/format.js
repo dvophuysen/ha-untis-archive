@@ -62,11 +62,12 @@ export function dueLabel(dueIso, todayIso) {
  *   #<actual homework text>
  *   Gegeben am: Mi 03.06.
  *   Fällig bis: Do 04.06.
- *   [SN260604]
+ *   [EN260612]
  *
- * For the list view we only want the homework itself — due date is shown
- * as a pill, the rest is noise. Leading '#' is treated as a marker, not
- * literal text. */
+ * The trailing tag is `[<fach-kürzel><datum>]` — kürzel ist 1–5 Buchstaben
+ * (SN, EN, DE, MA, GE, WuN …). Für die Listenansicht wollen wir nur die
+ * eigentliche Aufgabenstellung; der Rest ist Rauschen. Leading '#' is
+ * treated as a marker, not literal text. */
 export function stripUntisMetadata(notes) {
   if (!notes) return '';
   const lines = notes.split(/\r?\n/);
@@ -79,7 +80,7 @@ export function stripUntisMetadata(notes) {
     }
     if (/^gegeben\s+am\s*:/i.test(line)) continue;
     if (/^f(ä|ae)llig(\s+bis)?\s*:/i.test(line)) continue;
-    if (/^\[SN\d+\]\s*$/i.test(line)) continue;
+    if (/^\[[A-Za-zÄÖÜäöüß]{1,5}\d+\]\s*$/.test(line)) continue;
     // Strip a leading '#' marker the automation prefixes to the body.
     kept.push(raw.replace(/^\s*#\s?/, ''));
   }
