@@ -1,6 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
-  import { shiftDateIso } from '../lib/format.js';
+  import { shiftDateIso, formatShortDate } from '../lib/format.js';
   import LessonCard from '../lib/LessonCard.svelte';
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskEditor from '../lib/TaskEditor.svelte';
@@ -45,6 +45,34 @@
     return tasks.filter((t) => t.due_date && t.due_date <= tom);
   });
 
+  // Snapshot der Uhrzeit beim ersten Render — Phase bleibt für die ganze
+  // Sitzung gleich (Seite wird beim Wiederöffnen ohnehin neu geladen).
+  const nowHhmm = (() => {
+    const n = new Date();
+    return n.getHours() * 100 + n.getMinutes();
+  })();
+
+  // "before" solange noch eine nicht-ausgefallene Stunde aussteht.
+  // Sonst (Schulschluss erreicht / Wochenende / schulfrei) "after".
+  const phase = $derived.by(() => {
+    const ls = data?.lessons ?? [];
+    let max = -1;
+    for (const l of ls) {
+      if (l.is_cancelled) continue;
+      if (typeof l.end_time === 'number' && l.end_time > max) max = l.end_time;
+    }
+    if (max < 0) return 'after';
+    return nowHhmm > max ? 'after' : 'before';
+  });
+
+  // Stundenplan-Block: nach Schulschluss zeigt die Seite den NÄCHSTEN
+  // Schultag. Wenn nichts dafür da ist (Ferien o.ä.), bleiben wir bei
+  // heute mit Hinweis "kein Unterricht".
+  const showNext = $derived(phase === 'after' && !!data?.next);
+  const planDate = $derived(showNext ? data.next.date : data?.date);
+  const planLessons = $derived(showNext ? data.next.lessons : (data?.lessons ?? []));
+  const planLabel = $derived(showNext ? 'Morgen' : 'Heute');
+
   function scrollTo(id) {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -60,6 +88,7 @@
     {accountId}
     todayIso={data.date}
     lessons={data.lessons}
+    {phase}
     dueTodayCount={dueToday.length}
     onJumpDueToday={() => scrollTo('section-due-today')}
     onJumpLesson={(id) => scrollTo('lesson-' + id)}
@@ -74,11 +103,13 @@
     </div>
   {/if}
 
-  <div class="section-title">Stundenplan {data.date}</div>
-  {#if data.lessons.length === 0}
-    <div class="empty">Heute kein Unterricht.</div>
+  <h2 class="day-heading">
+    {planLabel} <span class="day-heading-date">· {formatShortDate(planDate)}</span>
+  </h2>
+  {#if planLessons.length === 0}
+    <div class="empty">Kein Unterricht.</div>
   {:else}
-    {#each data.lessons as lesson (lesson.id)}
+    {#each planLessons as lesson (lesson.id)}
       <LessonCard {accountId} {lesson} />
     {/each}
   {/if}
@@ -87,3 +118,16 @@
 {#if editing}
   <TaskEditor {accountId} task={editing} onclose={() => (editing = null)} onsaved={load} />
 {/if}
+
+<style>
+  .day-heading {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 1.2rem 0.2rem 0.5rem;
+  }
+  .day-heading-date {
+    font-weight: 500;
+    color: var(--fg-muted);
+    font-size: 0.95rem;
+  }
+</style>
