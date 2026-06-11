@@ -1,6 +1,7 @@
 <script>
   import { api } from '../lib/api.js';
   import { formatShortDate, daysBetween, isoToday } from '../lib/format.js';
+  import { appState } from '../lib/store.svelte.js';
 
   let { accountId } = $props();
   const today = isoToday();
@@ -9,6 +10,12 @@
   let loading = $state(true);
   let error = $state(null);
   let busyKey = $state(null);
+  // Manueller Termin in Bearbeitung — { manual_id, exam_date, title }
+  let editing = $state(null);
+
+  const canManage = $derived(
+    !!(appState.me && (appState.me.is_admin || appState.me.role === 'parent'))
+  );
 
   async function load() {
     if (!accountId) return;
@@ -43,6 +50,45 @@
     }
   }
 
+  function startEdit(e) {
+    editing = {
+      manual_id: e.manual_id,
+      exam_date: e.date,
+      title: e.title ?? '',
+    };
+  }
+
+  async function saveEdit() {
+    if (!editing?.manual_id) return;
+    if (!editing.exam_date) { error = 'Datum fehlt.'; return; }
+    busyKey = `manual:${editing.manual_id}`;
+    try {
+      await api.patch(
+        `/api/accounts/${accountId}/manual-exams/${editing.manual_id}`,
+        { exam_date: editing.exam_date, title: editing.title || null },
+      );
+      editing = null;
+      await load();
+    } catch (e) {
+      error = e.message;
+    } finally {
+      busyKey = null;
+    }
+  }
+
+  async function deleteManual(e) {
+    if (!confirm(`Termin "${e.subject_name ?? e.title}" am ${formatShortDate(e.date)} löschen?`)) return;
+    busyKey = e.exam_key;
+    try {
+      await api.delete(`/api/accounts/${accountId}/manual-exams/${e.manual_id}`);
+      await load();
+    } catch (err) {
+      error = err.message;
+    } finally {
+      busyKey = null;
+    }
+  }
+
   const LEARN = [
     { v: 0, label: 'nicht begonnen', emoji: '⚪' },
     { v: 1, label: 'viel offen', emoji: '😟' },
@@ -66,7 +112,17 @@
   }
 </script>
 
-<h2 style="margin:0 0 0.6rem; font-size:1.15rem;">Klausuren</h2>
+<div class="row between" style="margin: 0 0 0.6rem; align-items:center;">
+  <h2 style="margin:0; font-size:1.15rem;">Klausuren</h2>
+  {#if canManage}
+    <button
+      class="ghost"
+      style="font-size:0.85rem; min-height:32px;"
+      onclick={() => (window.location.hash = '#/exams')}
+      title="Kalender verknüpfen, Termine ergänzen"
+    >✏️ verwalten</button>
+  {/if}
+</div>
 
 {#if error}<div class="error-box">{error}</div>{/if}
 
@@ -98,18 +154,42 @@
           <span class="badge when {urgencyClass(e.date)}">{whenLabel(e.date)}</span>
         </div>
 
-        <div class="muted" style="margin-top:0.5rem;">Lernstand:</div>
-        <div class="learn-row">
-          {#each LEARN as l}
-            <button
-              class="learn"
-              class:active={e.learn_state === l.v}
-              disabled={busyKey === e.exam_key}
-              onclick={() => saveProgress(e, { learn_state: l.v })}
-              title={l.label}
-            >{l.emoji}<span class="ll">{l.label}</span></button>
-          {/each}
-        </div>
+        {#if editing?.manual_id === e.manual_id}
+          <div class="edit-form">
+            <label>Datum</label>
+            <input type="date" bind:value={editing.exam_date} />
+            <label style="margin-top:0.4rem;">Titel (optional)</label>
+            <input bind:value={editing.title} placeholder="z.B. Nachschreibtermin" />
+            <div class="row gap-sm" style="margin-top:0.5rem;">
+              <button class="primary" onclick={saveEdit} disabled={busyKey === `manual:${e.manual_id}`}>Speichern</button>
+              <button class="ghost" onclick={() => (editing = null)}>Abbrechen</button>
+            </div>
+          </div>
+        {:else}
+          <div class="muted" style="margin-top:0.5rem;">Lernstand:</div>
+          <div class="learn-row">
+            {#each LEARN as l}
+              <button
+                class="learn"
+                class:active={e.learn_state === l.v}
+                disabled={busyKey === e.exam_key}
+                onclick={() => saveProgress(e, { learn_state: l.v })}
+                title={l.label}
+              >{l.emoji}<span class="ll">{l.label}</span></button>
+            {/each}
+          </div>
+
+          {#if canManage && e.source === 'manual'}
+            <div class="row gap-sm" style="margin-top:0.5rem; justify-content:flex-end;">
+              <button class="ghost" onclick={() => startEdit(e)} title="Termin verschieben / bearbeiten">✏️ bearbeiten</button>
+              <button class="ghost danger" onclick={() => deleteManual(e)} title="Termin löschen">✕</button>
+            </div>
+          {:else if canManage && e.source === 'calendar'}
+            <div class="dim" style="margin-top:0.5rem; font-size:0.78rem;">
+              kommt aus dem Kalender — Datum in der Quelle anpassen oder unter <a href="#/exams">Verwalten</a> dismissen und Ersatztermin anlegen.
+            </div>
+          {/if}
+        {/if}
       </div>
     {/each}
   {/if}
@@ -165,4 +245,5 @@
   .when.mid { background: var(--rating-2); color: #fff; border-color: transparent; }
   .grade-box { flex-shrink: 0; }
   .grade-input { width: 110px; text-align: center; font-weight: 600; min-height: 40px; }
+  .edit-form { margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px dashed var(--border); }
 </style>
