@@ -109,7 +109,12 @@ async def plan(
             })
     upcoming_exams.sort(key=lambda e: e["days_until"])
 
-    # --- SHOULD items (max 3) ---
+    # --- SHOULD vs CRAM items ---
+    # Cram = Klausur in ≤3 Tagen UND Lernstand noch nicht "sicher" (3).
+    # Diese müssen heute gelernt werden, nicht "vielleicht vorbereiten".
+    # Werden im UI als eigene MUSS-Sektion oben angezeigt, nicht als
+    # weiche Empfehlung.
+    cram: list[dict] = []
     should: list[dict] = []
 
     # 1) Exams within 10 days → prepare. "Heute" fliegt raus: am Klausur-
@@ -117,20 +122,27 @@ async def plan(
     for e in upcoming_exams:
         if e["days_until"] == 0:
             continue
-        if e["days_until"] <= 10:
-            when = (
-                "morgen" if e["days_until"] == 1
-                else f"in {e['days_until']} Tagen"
-            )
-            should.append({
-                "type": "exam_prep",
-                "subject_name": e.get("subject_name"),
-                "title": f"{e.get('subject_name') or 'Klausur'} vorbereiten",
-                "reason": f"Klausur {when}",
-                "days_until": e["days_until"],
-                "learn_state": e.get("learn_state"),
-                "link": "subjects",
-            })
+        if e["days_until"] > 10:
+            continue
+        when = (
+            "morgen" if e["days_until"] == 1
+            else f"in {e['days_until']} Tagen"
+        )
+        ls = e.get("learn_state")
+        item = {
+            "type": "exam_prep",
+            "subject_name": e.get("subject_name"),
+            "title": f"{e.get('subject_name') or 'Klausur'} lernen",
+            "reason": f"Klausur {when}",
+            "days_until": e["days_until"],
+            "learn_state": ls,
+            "link": "klausuren",
+        }
+        is_cram = e["days_until"] <= 3 and (ls is None or ls < 3)
+        if is_cram:
+            cram.append(item)
+        else:
+            should.append(item)
 
     # 2) Un-caught-up missed material (older than 2 days, last 30 days).
     hconn = history_conn()
@@ -215,20 +227,11 @@ async def plan(
     should = deduped[:3]
 
     # --- workload indicator (qualitative) ---
-    # Wenn morgen oder übermorgen eine Klausur ansteht und der Lernstand
-    # noch nicht "sicher" (3) ist, ist das ein harter Lerntag — unabhängig
-    # davon, wie viele Hausaufgaben gerade fällig sind. Sonst Zählung über
-    # MUSS-Aufgaben.
-    looming_exam = next(
-        (
-            e for e in upcoming_exams
-            if e["days_until"] in (1, 2)
-            and (e.get("learn_state") is None or e["learn_state"] < 3)
-        ),
-        None,
-    )
-    if looming_exam is not None:
-        workload = "lerntag"
+    # Cram-Klausuren (s.o.) machen den Tag automatisch zum Endspurt,
+    # egal wie viele HAs anstehen — der Lernaufwand für eine nicht
+    # sattelfeste Klausur sprengt jedes HA-Pensum.
+    if cram:
+        workload = "endspurt"
     else:
         n = len(must)
         if n == 0:
@@ -243,6 +246,7 @@ async def plan(
     return {
         "date": today_iso,
         "workload": workload,
+        "cram": cram,
         "must": must,
         "should": should,
         "upcoming_exams": upcoming_exams,
