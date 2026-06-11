@@ -37,7 +37,16 @@ async def get_exams(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     assert_account_access(user, account_id)
-    return await resolve_exams(account_id, days_ahead=days_ahead)
+    data = await resolve_exams(account_id, days_ahead=days_ahead)
+    # Lernstand mitschicken — der Header und der Plan zeigen das Emoji,
+    # damit der Vorbereitungs-Stand überall präsent ist und nicht nur auf
+    # der Klausuren-Seite.
+    prog = _progress_map(account_id)
+    data["exams"] = [
+        {**e, "learn_state": prog.get(e.get("exam_key"), {}).get("learn_state")}
+        for e in data.get("exams", [])
+    ]
+    return data
 
 
 def _progress_map(account_id: int) -> dict:
