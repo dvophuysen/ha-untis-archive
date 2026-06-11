@@ -63,7 +63,12 @@ async def _sync_one(
         ha_items = await sup.get_todo_items(entity_id)
     except SupervisorError as exc:
         _LOGGER.warning("todo.get_items %s failed: %s", entity_id, exc)
-        return {"inserted": 0, "orphans_deleted": 0, "duplicates_collapsed": 0}
+        return {
+            "inserted": 0,
+            "orphans_deleted": 0,
+            "duplicates_collapsed": 0,
+            "rebound_to_done": 0,
+        }
 
     now = _now()
     conn = webapp_conn()
@@ -79,7 +84,19 @@ async def _sync_one(
         }
 
         ha_seen_uids: set[str] = set()
-        stats = {"inserted": 0, "orphans_deleted": 0, "duplicates_collapsed": 0}
+        stats = {
+            "inserted": 0,
+            "orphans_deleted": 0,
+            "duplicates_collapsed": 0,
+            "rebound_to_done": 0,
+        }
+
+        def _content_key(title: str, due_date: str | None, notes: str | None) -> tuple:
+            return (
+                (title or "").strip().lower(),
+                due_date or "",
+                (notes or "").strip(),
+            )
 
         for item in ha_items:
             uid = item.get("uid") or item.get("summary")
@@ -95,6 +112,36 @@ async def _sync_one(
 
             row = existing.get(uid)
             if row is None:
+                # Bevor wir ein neues HA-Item einsetzen: prüfen, ob in der DB
+                # schon eine ERLEDIGTE Aufgabe mit identischem Inhalt liegt.
+                # Wenn ja, hat die HA-Automation nur eine neue UID für die-
+                # selbe Aufgabe vergeben — den alten Eintrag re-binden statt
+                # eine als-erledigt-markierte Aufgabe wieder in Aktiv zu
+                # legen. Sonst ploppt jede abgehakte HA wieder auf, sobald
+                # die Automation einen neuen UID-Lauf macht.
+                if new_status == "open":
+                    incoming_key = _content_key(ha_summary, ha_due_date, ha_description)
+                    match = next(
+                        (
+                            r for r in existing.values()
+                            if r["status"] == "done"
+                            and _content_key(r["title"], r["due_date"], r["notes"])
+                            == incoming_key
+                        ),
+                        None,
+                    )
+                    if match is not None:
+                        old_uid = match["ha_uid"]
+                        conn.execute(
+                            "UPDATE tasks SET ha_uid = ?, ha_last_synced_at = ? "
+                            "WHERE id = ?",
+                            (uid, now, match["id"]),
+                        )
+                        existing.pop(old_uid, None)
+                        match["ha_uid"] = uid
+                        existing[uid] = match
+                        stats["rebound_to_done"] += 1
+                        continue
                 conn.execute(
                     "INSERT INTO tasks "
                     "(account_id, ha_uid, title, task_type, status, due_date, "
@@ -225,13 +272,18 @@ async def _sync_one(
                 stats["duplicates_collapsed"] += 1
             else:
                 seen_keys.add(key)
-        if stats["duplicates_collapsed"] or stats["orphans_deleted"]:
+        if (
+            stats["duplicates_collapsed"]
+            or stats["orphans_deleted"]
+            or stats["rebound_to_done"]
+        ):
             _LOGGER.info(
-                "sync %s: +%d inserted, %d orphans deleted, %d duplicates collapsed",
+                "sync %s: +%d inserted, %d orphans, %d dup, %d done-rebinds",
                 entity_id,
                 stats["inserted"],
                 stats["orphans_deleted"],
                 stats["duplicates_collapsed"],
+                stats["rebound_to_done"],
             )
     finally:
         conn.close()
@@ -242,7 +294,12 @@ async def sync_account(account_id: int) -> dict[str, int]:
     """Trigger one sync round for a single account; returns stats so the
     manual-sync endpoint can give the UI feedback (`inserted`,
     `orphans_deleted`, `duplicates_collapsed`)."""
-    empty = {"inserted": 0, "orphans_deleted": 0, "duplicates_collapsed": 0}
+    empty = {
+        "inserted": 0,
+        "orphans_deleted": 0,
+        "duplicates_collapsed": 0,
+        "rebound_to_done": 0,
+    }
     sup = get_supervisor()
     if not sup.available:
         return empty
