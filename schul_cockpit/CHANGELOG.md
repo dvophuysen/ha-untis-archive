@@ -2,6 +2,13 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.5 — Untis-ID `[EN260612]` & Co. werden jetzt zuverlässig versteckt
+- `stripUntisMetadata` hat nur Tags mit dem festen Präfix `SN`
+  ausgeblendet. Englisch (`[EN…]`), Deutsch (`[DE…]`), Mathe (`[MA…]`)
+  blieben sichtbar und blähten die Hausaufgaben-Zellen auf.
+- Filter ist jetzt generisch: `[<1–5 Buchstaben><Ziffern>]` — passt auf
+  alle Untis-Fach-Kürzel.
+
 ## 0.19.4 — Alle anstehenden Klausuren als eigene Chips
 - Bisher hat der Header nur die **nächste** Klausur als 📝-Chip gezeigt.
   Wer zwei Klausuren in zwei Tagen schreibt, sah nur die erste — genau
