@@ -32,9 +32,25 @@ from .dashboard import _dashboard_for_account
 
 router = APIRouter()
 
-_LEARN_EMOJI = ["⚪", "😟", "😐", "😀"]
-_PRIO_DOT = {"red": "🔴", "orange": "🟠", "green": "🟢"}
-_URG_DOT = {"missed": "❗", "red": "🔴", "orange": "🟠", "green": "🟢"}
+# iOS-12-Safari kennt die farbigen Unicode-12-Glyphen (🔴🟠🟢⚪) noch
+# nicht und zeigt sie als „…"-Platzhalter — und auch 😟😐😀 fielen auf
+# dem Küchen-iPad sichtbar aus dem Font-Stack. Also rendern wir Prio/
+# Dringlichkeit als CSS-Punkte (farbige Spans) und Learn-State als
+# kleines Text-Label mit Farbcode. ⚠ und ✓ kommen aus Unicode-Bereichen,
+# die iOS 12 stabil rendert.
+_PRIO_CLASS = {"red": "red", "orange": "orange", "green": "green"}
+_URG_CLASS = {
+    "missed": "missed",
+    "red": "red",
+    "orange": "orange",
+    "green": "green",
+}
+_LEARN_LABEL = [
+    ("none", "–"),
+    ("red", "1"),
+    ("orange", "2"),
+    ("green", "✓"),
+]
 _WEEKDAY_DE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 
 
@@ -194,6 +210,16 @@ def _render_now(kid: dict) -> str:
     return f"<div class='now'>{h(icon)} {h(label)}</div>"
 
 
+def _dot(kind: str | None, klass_map: dict) -> str:
+    cls = klass_map.get(kind or "", "")
+    return f"<span class='pill-dot {cls}'></span>" if cls else "<span class='pill-dot'></span>"
+
+
+def _short(label: str, limit: int = 4) -> str:
+    label = (label or "").strip()
+    return label[:limit] if len(label) > limit else label
+
+
 def _render_exams(kid: dict) -> str:
     exams = kid.get("exams") or []
     head = (
@@ -204,50 +230,59 @@ def _render_exams(kid: dict) -> str:
     if not exams:
         return f"<div class='block'>{head}<div class='empty-small'>keine geplant</div></div>"
     rows = []
-    for e in exams:
-        dot = _PRIO_DOT.get(e["priority"], "")
-        learn = _LEARN_EMOJI[e["learn_state"]] if e.get("learn_state") is not None else _LEARN_EMOJI[0]
-        comp = e.get("comprehension") or {}
+    for ex in exams:
+        dot = _dot(ex.get("priority"), _PRIO_CLASS)
+        ls = ex.get("learn_state") or 0
+        learn_cls, learn_txt = _LEARN_LABEL[ls if 0 <= ls < 4 else 0]
+        comp = ex.get("comprehension") or {}
         hard = comp.get("hard", 0)
-        hard_cell = f"⚠{hard}" if hard > 0 else ""
+        hard_tag = (
+            f"<span class='hard-tag'>⚠{hard}</span>" if hard > 0 else ""
+        )
+        when = _when_label(ex["date"], ex["days_until"])
+        days = ex["days_until"]
+        # „heute"/„morgen" tragen die Information schon im Label —
+        # erst ab 2 Tagen den Counter ergänzen.
+        days_part = (
+            f"<span class='sub'>· {days}T</span>" if days >= 2 else ""
+        )
         rows.append(
-            "<tr>"
-            f"<td class='dot'>{dot}</td>"
-            f"<td class='subj'>{h(e.get('subject_short') or '')}</td>"
-            f"<td class='when'>{h(_when_label(e['date'], e['days_until']))}</td>"
-            f"<td class='num'>{e['days_until']}</td>"
-            f"<td class='learn'>{learn}</td>"
-            f"<td class='hard'>{hard_cell}</td>"
-            "</tr>"
+            "<div class='row'>"
+            f"{dot}"
+            f"<span class='subj'>{h(_short(ex.get('subject_short') or ''))}</span>"
+            f"<span class='mid'>{h(when)} {days_part}</span>"
+            f"<span class='learn-pill {learn_cls}'>{learn_txt}</span>"
+            f"{hard_tag}"
+            "</div>"
         )
     return (
         f"<div class='block'>{head}"
-        "<table class='tbl exam-tbl'>"
+        "<div class='rows'>"
         + "".join(rows)
-        + "</table></div>"
+        + "</div></div>"
     )
 
 
 def _render_support(kid: dict) -> str:
     support = kid.get("support") or []
-    head = "<h3>Mitlernen 🤝</h3>"
+    head = "<h3>Mitlernen</h3>"
     if not support:
         return f"<div class='block'>{head}<div class='empty-small'>alles im grünen Bereich</div></div>"
     rows = []
     for s in support:
         label = s.get("subject_short") or s.get("subject_name") or ""
         rows.append(
-            "<tr>"
-            f"<td class='subj'>{h(label)}</td>"
-            f"<td class='hard'>⚠ {s['hard_count']}</td>"
-            f"<td class='num'>/{s['total_count']}</td>"
-            "</tr>"
+            "<div class='row'>"
+            f"<span class='subj'>{h(_short(label))}</span>"
+            f"<span class='hard-tag'>⚠{s['hard_count']}</span>"
+            f"<span class='sub'>von {s['total_count']}</span>"
+            "</div>"
         )
     return (
         f"<div class='block'>{head}"
-        "<table class='tbl sup-tbl'>"
+        "<div class='rows'>"
         + "".join(rows)
-        + "</table></div>"
+        + "</div></div>"
     )
 
 
@@ -263,20 +298,29 @@ def _render_tasks(kid: dict) -> str:
         return f"<div class='block'>{head}<div class='empty-small'>keine offenen Aufgaben</div></div>"
     rows = []
     for t in tasks:
-        dot = _URG_DOT.get(t.get("urgency") or "", "")
+        dot = _dot(t.get("urgency"), _URG_CLASS)
+        subj = _short(t.get("subject_short") or "")
+        title = (t.get("title") or "").strip()
+        title_part = (
+            f"<span class='mid'>{h(title)}</span>" if title else ""
+        )
+        due = _due_label(t.get("due_date"))
+        due_part = (
+            f"<span class='sub'>{h(due)}</span>" if due else ""
+        )
         rows.append(
-            "<tr>"
-            f"<td class='dot'>{dot}</td>"
-            f"<td class='subj'>{h(t.get('subject_short') or '')}</td>"
-            f"<td class='title'>{h(t.get('title') or '')}</td>"
-            f"<td class='when'>{h(_due_label(t.get('due_date')))}</td>"
-            "</tr>"
+            "<div class='row'>"
+            f"{dot}"
+            f"<span class='subj'>{h(subj)}</span>"
+            f"{title_part}"
+            f"{due_part}"
+            "</div>"
         )
     return (
         f"<div class='block'>{head}"
-        "<table class='tbl hw-tbl'>"
+        "<div class='rows'>"
         + "".join(rows)
-        + "</table></div>"
+        + "</div></div>"
     )
 
 
@@ -522,35 +566,80 @@ main { padding: 0.8rem; max-width: 1400px; margin: 0 auto; }
 .empty-small { padding: 0.15rem 0 0.3rem; }
 .small { font-size: 0.8rem; }
 
-.tbl {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.82rem;
-  table-layout: fixed;
-}
-.tbl td {
-  padding: 0.3rem 0.25rem;
-  vertical-align: middle;
+/* Flex-Rows statt Tabelle: Inhalt sitzt linksbündig zusammengepackt
+   statt über die volle Karten-Breite gespreizt zu werden. Jede Zeile
+   trägt nur so viel Platz wie der Inhalt braucht; das war die
+   Hauptkritik am ersten Render. */
+.rows { display: block; }
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0;
   border-top: 1px solid #f0f2f5;
+  font-size: 0.82rem;
+  min-width: 0;
+}
+.row:first-child { border-top: none; }
+.row .subj {
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.row .mid {
+  color: #5b6b7c;
+  font-size: 0.78rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  flex: 1 1 auto;
 }
-.tbl tr:first-child td { border-top: none; }
-.tbl .dot { width: 1.4em; text-align: center; }
-.tbl .subj { font-weight: 600; width: 3em; }
-.tbl .when { color: #5b6b7c; font-size: 0.78rem; }
-.tbl .num {
+.row .sub {
   color: #98a4b1;
-  font-size: 0.75rem;
-  text-align: right;
+  font-size: 0.72rem;
   font-variant-numeric: tabular-nums;
-  width: 1.8em;
+  flex: 0 0 auto;
 }
-.tbl .learn { text-align: center; width: 1.6em; }
-.tbl .hard { color: #f59e0b; font-size: 0.74rem; text-align: right; width: 2.2em; }
-.tbl .title { width: auto; }
-.exam-tbl td.subj, .hw-tbl td.subj { width: 2.8em; }
+
+/* Farb-Punkte als CSS-Kreis — iOS-12-fest, weil keine Farb-Emojis. */
+.pill-dot {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: #d1d5db;
+  flex: 0 0 auto;
+}
+.pill-dot.red { background: #ef4444; }
+.pill-dot.orange { background: #f59e0b; }
+.pill-dot.green { background: #22c55e; }
+.pill-dot.missed { background: #991b1b; box-shadow: 0 0 0 2px #fecaca; }
+
+/* Learn-State-Marker als kleine farbige Text-Pill statt Smiley-Emoji. */
+.learn-pill {
+  display: inline-block;
+  min-width: 1.2em;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.05rem 0.3rem;
+  border-radius: 6px;
+  color: #fff;
+  background: #d1d5db;
+  flex: 0 0 auto;
+}
+.learn-pill.none { background: #e2e6ea; color: #98a4b1; }
+.learn-pill.red { background: #ef4444; }
+.learn-pill.orange { background: #f59e0b; }
+.learn-pill.green { background: #22c55e; }
+
+/* ⚠ + Zahl — Unicode-Warndreieck rendert iOS-12 zuverlässig. */
+.hard-tag {
+  color: #b45309;
+  font-size: 0.78rem;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
 
 /* Plan-Tabelle. table-layout: fixed sorgt dafür, dass alle Spalten
    gleich breit sind, egal wieviel Text drin steht. */
@@ -682,7 +771,8 @@ main { padding: 0.8rem; max-width: 1400px; margin: 0 auto; }
   .now, .block h3, .muted, .empty-small, .plan th .pdate, .hyg,
   .tbl .when, .login-form label { color: #9ba8b5; }
   .count { background: #232a34; border-color: #2a323c; color: #e6e9ed; }
-  .tbl td { border-top-color: #232a34; }
+  .row { border-top-color: #232a34; }
+  .learn-pill.none { background: #2a323c; color: #6b7888; }
   .plan td { background: #1a2028; border-color: #2a323c; }
   .plan td.today-col { background: #1d2a44; }
   .plan td.empty { background: transparent; border-color: transparent; }
