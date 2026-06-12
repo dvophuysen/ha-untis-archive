@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import sqlite3
 from contextlib import suppress
 from datetime import datetime, timezone
@@ -23,6 +24,20 @@ from .supervisor_client import SupervisorClient, SupervisorError, get_supervisor
 _LOGGER = logging.getLogger(__name__)
 
 SYNC_INTERVAL_SECONDS = 120
+
+# Untis-Hausaufgaben-ID-Tag im Notes-Feld, z.B. [MA260611] = Mathe, gegeben
+# am 11.06.26. Untis schreibt diesen Tag in JEDE Variante derselben Aufgabe
+# (gleicher Code, egal wie oft die HA-Automation neue UIDs vergibt). Damit
+# ist er der kanonische Dedup-Schlüssel — robuster als (title, due_date,
+# notes), die sich mit Untis-Edits leise verschieben können.
+_UNTIS_ID_RE = re.compile(r"\[([A-Za-zÄÖÜäöüß]{1,5}\d+)\]")
+
+
+def _untis_id(notes: str | None) -> str | None:
+    if not notes:
+        return None
+    m = _UNTIS_ID_RE.search(notes)
+    return m.group(1).upper() if m else None
 
 
 def _now() -> str:
@@ -91,12 +106,16 @@ async def _sync_one(
             "rebound_to_done": 0,
         }
 
-        def _content_key(title: str, due_date: str | None, notes: str | None) -> tuple:
-            return (
-                (title or "").strip().lower(),
-                due_date or "",
-                (notes or "").strip(),
-            )
+        # Index existierender Reihen nach Untis-ID — wenn HA für dieselbe
+        # Aufgabe eine neue UID schickt, finden wir die alte Reihe darüber
+        # und re-binden sie, statt eine zweite Reihe anzulegen. Done-Status
+        # gewinnt: eine abgehakte Reihe darf nicht durch neue UID-Lieferung
+        # wieder auf "offen" springen.
+        by_untis: dict[str, list[dict]] = {}
+        for r in existing.values():
+            tag = _untis_id(r.get("notes"))
+            if tag:
+                by_untis.setdefault(tag, []).append(r)
 
         for item in ha_items:
             uid = item.get("uid") or item.get("summary")
@@ -112,36 +131,29 @@ async def _sync_one(
 
             row = existing.get(uid)
             if row is None:
-                # Bevor wir ein neues HA-Item einsetzen: prüfen, ob in der DB
-                # schon eine ERLEDIGTE Aufgabe mit identischem Inhalt liegt.
-                # Wenn ja, hat die HA-Automation nur eine neue UID für die-
-                # selbe Aufgabe vergeben — den alten Eintrag re-binden statt
-                # eine als-erledigt-markierte Aufgabe wieder in Aktiv zu
-                # legen. Sonst ploppt jede abgehakte HA wieder auf, sobald
-                # die Automation einen neuen UID-Lauf macht.
-                if new_status == "open":
-                    incoming_key = _content_key(ha_summary, ha_due_date, ha_description)
-                    match = next(
-                        (
-                            r for r in existing.values()
-                            if r["status"] == "done"
-                            and _content_key(r["title"], r["due_date"], r["notes"])
-                            == incoming_key
-                        ),
-                        None,
+                # Vor dem Insert: gibt's schon eine Reihe mit derselben
+                # Untis-Hausaufgaben-ID? Dann ist das dieselbe Aufgabe mit
+                # neuer HA-UID. Re-binden, Status beibehalten (done bleibt
+                # done), kein neues Aktiv-Duplikat erzeugen.
+                tag = _untis_id(ha_description)
+                target = None
+                if tag and by_untis.get(tag):
+                    candidates = by_untis[tag]
+                    done = [r for r in candidates if r["status"] == "done"]
+                    pool = done if done else candidates
+                    target = max(pool, key=lambda r: r["updated_at"] or "")
+                if target is not None:
+                    old_uid = target["ha_uid"]
+                    conn.execute(
+                        "UPDATE tasks SET ha_uid = ?, ha_last_synced_at = ? "
+                        "WHERE id = ?",
+                        (uid, now, target["id"]),
                     )
-                    if match is not None:
-                        old_uid = match["ha_uid"]
-                        conn.execute(
-                            "UPDATE tasks SET ha_uid = ?, ha_last_synced_at = ? "
-                            "WHERE id = ?",
-                            (uid, now, match["id"]),
-                        )
-                        existing.pop(old_uid, None)
-                        match["ha_uid"] = uid
-                        existing[uid] = match
-                        stats["rebound_to_done"] += 1
-                        continue
+                    existing.pop(old_uid, None)
+                    target["ha_uid"] = uid
+                    existing[uid] = target
+                    stats["rebound_to_done"] += 1
+                    continue
                 conn.execute(
                     "INSERT INTO tasks "
                     "(account_id, ha_uid, title, task_type, status, due_date, "
@@ -250,28 +262,49 @@ async def _sync_one(
                 conn.execute("DELETE FROM tasks WHERE id = ?", (row["id"],))
                 stats["orphans_deleted"] += 1
 
-        # Dedup: offene ha_todo-Zeilen mit identischem Inhalt zusammen-
-        # klappen. Untis' Titel ist nur das Fach ("Mathematik"), darum
-        # muss der Notes-Text mit in den Schlüssel — sonst würden zwei
-        # echte Mathe-Aufgaben am gleichen Tag falsch zusammenfallen.
-        # Behalten wird der jüngste Eintrag (mutmaßlich der aktive in HA).
-        dup_rows = conn.execute(
-            "SELECT id, title, due_date, notes FROM tasks "
-            "WHERE account_id = ? AND ha_uid IS NOT NULL AND status = 'open' "
-            "ORDER BY updated_at DESC, id DESC",
+        # Untis-ID Dedup (Cross-Status): alle ha_todo-Reihen mit derselben
+        # Hausaufgaben-ID (z.B. [MA260611]) gehören zusammen, egal wie oft
+        # die HA-Automation neue UIDs vergeben hat. Done schlägt offen —
+        # eine abgehakte Aufgabe darf nicht durch neue UID-Lieferungen
+        # wieder als aktiv auftauchen.
+        all_rows = conn.execute(
+            "SELECT id, ha_uid, status, notes, updated_at FROM tasks "
+            "WHERE account_id = ? AND ha_uid IS NOT NULL",
             (account_id,),
         ).fetchall()
-        seen_keys: set[tuple[str, str, str]] = set()
-        for r in dup_rows:
-            title = (r["title"] or "").strip().lower()
-            if not title:
+        groups: dict[str, list[sqlite3.Row]] = {}
+        for r in all_rows:
+            tag = _untis_id(r["notes"])
+            if tag:
+                groups.setdefault(tag, []).append(r)
+
+        for tag, group in groups.items():
+            if len(group) <= 1:
                 continue
-            key = (title, r["due_date"] or "", (r["notes"] or "").strip())
-            if key in seen_keys:
+            done_rows = [r for r in group if r["status"] == "done"]
+            pool = done_rows if done_rows else group
+            keeper = max(pool, key=lambda r: r["updated_at"] or "")
+            # ha_uid des Keepers auf eine UID setzen, die HA aktuell führt
+            # — sonst räumt der Orphan-Pfad nächste Runde den Keeper weg.
+            if keeper["ha_uid"] not in ha_seen_uids:
+                live = next(
+                    (
+                        r["ha_uid"] for r in group
+                        if r["id"] != keeper["id"] and r["ha_uid"] in ha_seen_uids
+                    ),
+                    None,
+                )
+                if live:
+                    conn.execute(
+                        "UPDATE tasks SET ha_uid = ?, ha_last_synced_at = ? "
+                        "WHERE id = ?",
+                        (live, now, keeper["id"]),
+                    )
+            for r in group:
+                if r["id"] == keeper["id"]:
+                    continue
                 conn.execute("DELETE FROM tasks WHERE id = ?", (r["id"],))
                 stats["duplicates_collapsed"] += 1
-            else:
-                seen_keys.add(key)
         if (
             stats["duplicates_collapsed"]
             or stats["orphans_deleted"]

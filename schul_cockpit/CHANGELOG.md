@@ -2,6 +2,20 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.13 — HA-Dedup nutzt die Untis-Hausaufgaben-ID, nicht den Inhalt
+- **Untis-ID als kanonischer Dedup-Schlüssel:** Der Tag `[MA260611]` &
+  Co. in den Notes ist über alle Varianten derselben Aufgabe konstant —
+  egal wie oft die HA-Automation neue UIDs vergibt. Sync gruppiert
+  ha_todo-Reihen jetzt darüber statt über `(title, due_date, notes)`,
+  was bei kleinsten Untis-Änderungen (z.B. Fälligkeit nachgeschoben)
+  durchgerutscht ist.
+- **Cross-Status:** der Dedup räumt jetzt auch offene Reihen weg, wenn
+  für dieselbe Untis-ID schon eine erledigte Reihe existiert. Done
+  schlägt offen — kein „erledigte HA poppt wieder auf" mehr.
+- Beim Sync wird die Keeper-Reihe an die aktuell von HA gelieferte UID
+  rebinded, damit sie beim nächsten Lauf wiedererkannt wird (statt vom
+  Orphan-Pfad weggeräumt zu werden).
+
 ## 0.19.12 — Klausuren direkt auf der Klausuren-Seite bearbeiten
 - Eltern/Admin sehen jetzt oben rechts auf der Klausuren-Seite einen
   „✏️ verwalten"-Link, der direkt in die volle Verwaltung (Kalender,
