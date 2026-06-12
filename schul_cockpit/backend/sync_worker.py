@@ -284,27 +284,30 @@ async def _sync_one(
             done_rows = [r for r in group if r["status"] == "done"]
             pool = done_rows if done_rows else group
             keeper = max(pool, key=lambda r: r["updated_at"] or "")
-            # ha_uid des Keepers auf eine UID setzen, die HA aktuell führt
-            # — sonst räumt der Orphan-Pfad nächste Runde den Keeper weg.
+            # Vor dem Rebind die anderen Reihen löschen — sonst kollidiert
+            # die UNIQUE(account_id, ha_uid)-Constraint, weil die UID, die
+            # wir dem Keeper geben wollen, noch in einer anderen Reihe der
+            # Gruppe steckt.
+            new_uid = None
             if keeper["ha_uid"] not in ha_seen_uids:
-                live = next(
+                new_uid = next(
                     (
                         r["ha_uid"] for r in group
                         if r["id"] != keeper["id"] and r["ha_uid"] in ha_seen_uids
                     ),
                     None,
                 )
-                if live:
-                    conn.execute(
-                        "UPDATE tasks SET ha_uid = ?, ha_last_synced_at = ? "
-                        "WHERE id = ?",
-                        (live, now, keeper["id"]),
-                    )
             for r in group:
                 if r["id"] == keeper["id"]:
                     continue
                 conn.execute("DELETE FROM tasks WHERE id = ?", (r["id"],))
                 stats["duplicates_collapsed"] += 1
+            if new_uid:
+                conn.execute(
+                    "UPDATE tasks SET ha_uid = ?, ha_last_synced_at = ? "
+                    "WHERE id = ?",
+                    (new_uid, now, keeper["id"]),
+                )
         if (
             stats["duplicates_collapsed"]
             or stats["orphans_deleted"]
