@@ -368,8 +368,9 @@ def _render_plan_cell(lesson: dict | None, is_today: bool) -> str:
             swap = "<span class='swap'>⇄</span>"
         content = f"<span>{h(label)}</span>{swap}"
 
-    if lesson.get("has_exam") and not lesson.get("is_cancelled"):
-        content += "<span class='exam-tag'>KA</span>"
+    # Klausur-Marker bewusst nur als pink Outline (has-exam Klasse) —
+    # die Zellen sind im 2-Spalten-Hochformat zu eng für ein Inline-Tag,
+    # und der Rahmen ist eindeutig genug.
 
     return f"<td{cls_attr}>{content}</td>"
 
@@ -469,28 +470,29 @@ header {
 header h1 { margin: 0; font-size: 1rem; font-weight: 600; color: #5b6b7c; }
 main { padding: 0.8rem; max-width: 1400px; margin: 0 auto; }
 
+/* Zwei Spalten fest — auch im iPad-Hochformat (768 px). Damit beide
+   Kinder ohne Scrollen nebeneinander auf den Bildschirm passen. CSS
+   Grid läuft in iOS 12 Safari (seit 10.3) zuverlässig. */
 .dash {
-  display: flex;
-  flex-wrap: wrap;
-  margin: -0.4rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
 }
 .kid {
   background: #fff;
   border-radius: 12px;
-  padding: 0.9rem 1rem;
-  margin: 0.4rem;
-  flex: 1 1 460px;
+  padding: 0.7rem 0.8rem;
   min-width: 0;
 }
 .kid-head h2 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 700;
 }
 .now {
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   color: #5b6b7c;
-  padding: 0.35rem 0 0.55rem;
+  padding: 0.3rem 0 0.5rem;
   border-bottom: 1px solid #e2e6ea;
 }
 
@@ -523,54 +525,55 @@ main { padding: 0.8rem; max-width: 1400px; margin: 0 auto; }
 .tbl {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
+  table-layout: fixed;
 }
 .tbl td {
-  padding: 0.35rem 0.4rem;
+  padding: 0.3rem 0.25rem;
   vertical-align: middle;
   border-top: 1px solid #f0f2f5;
-}
-.tbl tr:first-child td { border-top: none; }
-.tbl .dot { width: 1.6em; text-align: center; }
-.tbl .subj { font-weight: 600; width: 4em; }
-.tbl .when { color: #5b6b7c; font-size: 0.85rem; }
-.tbl .num {
-  color: #98a4b1;
-  font-size: 0.8rem;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.tbl .learn { text-align: center; width: 1.8em; }
-.tbl .hard { color: #f59e0b; font-size: 0.8rem; text-align: right; }
-.tbl .title {
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 220px;
+  white-space: nowrap;
 }
-.exam-tbl td.subj, .hw-tbl td.subj { width: 3.5em; }
+.tbl tr:first-child td { border-top: none; }
+.tbl .dot { width: 1.4em; text-align: center; }
+.tbl .subj { font-weight: 600; width: 3em; }
+.tbl .when { color: #5b6b7c; font-size: 0.78rem; }
+.tbl .num {
+  color: #98a4b1;
+  font-size: 0.75rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  width: 1.8em;
+}
+.tbl .learn { text-align: center; width: 1.6em; }
+.tbl .hard { color: #f59e0b; font-size: 0.74rem; text-align: right; width: 2.2em; }
+.tbl .title { width: auto; }
+.exam-tbl td.subj, .hw-tbl td.subj { width: 2.8em; }
 
 /* Plan-Tabelle. table-layout: fixed sorgt dafür, dass alle Spalten
    gleich breit sind, egal wieviel Text drin steht. */
 .plan {
   width: 100%;
   border-collapse: separate;
-  border-spacing: 3px;
+  border-spacing: 2px;
   table-layout: fixed;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
 }
 .plan th {
-  padding: 0.2rem 0 0.4rem;
+  padding: 0.15rem 0 0.3rem;
   font-weight: 700;
   text-align: center;
+  font-size: 0.8rem;
 }
 .plan th.is-today { color: #2563eb; }
 .plan th .pdate {
   display: block;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: #5b6b7c;
   font-weight: 400;
-  margin-top: 0.1rem;
+  margin-top: 0.05rem;
 }
 .plan th.filler .pdate { color: #98a4b1; }
 
@@ -578,10 +581,10 @@ main { padding: 0.8rem; max-width: 1400px; margin: 0 auto; }
   background: #fff;
   border: 1px solid #e2e6ea;
   border-radius: 4px;
-  padding: 0.3rem 0.15rem;
+  padding: 0.25rem 0.1rem;
   text-align: center;
-  height: 32px;
-  font-size: 0.8rem;
+  height: 26px;
+  font-size: 0.72rem;
   vertical-align: middle;
 }
 .plan td.empty { background: transparent; border-color: transparent; }
