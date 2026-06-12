@@ -2,6 +2,13 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.19.14 — Hotfix Sync-500: UNIQUE-Constraint beim Untis-ID-Dedup
+- **Bugfix:** 0.19.13 hat den Keeper-Eintrag auf eine UID rebinded, die
+  noch in einer anderen Reihe der gleichen Gruppe lag → kollidierte mit
+  `UNIQUE(account_id, ha_uid)`, der Sync brach mit 500 ab, Duplikate
+  blieben stehen. Reihenfolge gefixt: erst die anderen Reihen löschen,
+  dann den Keeper rebinden.
+
 ## 0.19.13 — HA-Dedup nutzt die Untis-Hausaufgaben-ID, nicht den Inhalt
 - **Untis-ID als kanonischer Dedup-Schlüssel:** Der Tag `[MA260611]` &
   Co. in den Notes ist über alle Varianten derselben Aufgabe konstant —
