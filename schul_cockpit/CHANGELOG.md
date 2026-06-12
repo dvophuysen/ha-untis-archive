@@ -2,6 +2,26 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.21.0 — Kiosk-Fallback für alte iPads (iOS 12 Safari)
+- **Neuer Kiosk-Modus** unter `/kiosk` als reine HTML-Variante des
+  Eltern-Dashboards — kein JavaScript, nur Tabellen + Server-Render.
+  Damit kann das alte Küchen-iPad mit iOS 12 das Eltern-Dashboard
+  anzeigen, obwohl der moderne Svelte-Bundle dort an Optional Chaining
+  & Co. scheitert. Auto-Refresh alle 5 Minuten via `<meta refresh>`.
+- **Automatische Erkennung**: Wenn ein iPad/iPhone mit iOS < 13 die App
+  öffnet, leitet der SPA-Catchall direkt auf `/kiosk` um — der Nutzer
+  landet nicht mehr auf einer leeren weißen Seite, sondern sieht sofort
+  das Dashboard.
+- **Login-Form ohne JS**: `/kiosk/login` ist eine klassische
+  HTML-Form-POST-Maske, die direkt an die bestehende PIN-Auth dockt.
+  Cookie hält 30 Tage, also einmal anmelden → läuft monatelang.
+- **Datenquelle identisch zur SPA**: das Kiosk-Render benutzt
+  dasselbe `_dashboard_for_account` wie `/api/dashboard`, damit
+  Klausur-Ampel, Mitlernen-Schwellen und Plan-Grid auf beiden Geräten
+  exakt gleich aussehen.
+- Read-only — für Eingaben (Lernstand setzen, HA abhaken) bleiben Handy
+  und Desktop zuständig. Der Kiosk ist Anzeige.
+
 ## 0.20.1 — Plan-Grid auf fixe Periodenzeilen, klarere Vertretung
 - **Fixe Stundenzeilen**: Das Plan-Grid auf der Übersicht alignt jetzt
   zeilenweise auf die Startzeit der Stunde. Periode 1 steht über alle
