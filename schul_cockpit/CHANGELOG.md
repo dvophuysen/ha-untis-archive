@@ -2,6 +2,24 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.21.2 — Kiosk: CSS-Punkte statt Emojis, linksbündig gepackt
+- **Farbige Punkte / Learn-Pills als CSS** statt Unicode-Emoji-Glyphen.
+  iOS 12 Safari rendert weder die Unicode-12-Farbkreise (🔴🟠🟢⚪)
+  noch zuverlässig die Gesichts-Emojis (😟😐😀) — die zeigte das
+  Küchen-iPad als „…"-Platzhalter und ganze Zellen wurden unlesbar.
+  Punkte sind jetzt einfache CSS-Spans mit `background`, Learn-State
+  ist eine kleine farbige Text-Pill („–"/„1"/„2"/„✓").
+- **Linksbündig zusammengepackte Zeilen** in Klausuren / Mitlernen /
+  Hausaufgaben — Flex-Rows statt Tabelle. Vorher hat `table-layout:
+  fixed` die Spalten über die ganze Karten-Breite gespreizt, mit dem
+  Datum ganz rechts und großen Lücken dazwischen. Jetzt sitzen Dot,
+  Fach, Datum und Marker direkt nebeneinander, der Blick liest die
+  Zeile als kurzen Satz von links nach rechts.
+- **Fach-Kürzel hart gekürzt** (max. 4 Zeichen) — wenn Untis keinen
+  Short hat und nur der volle Name vorliegt („Spanisch", „Mathematik"),
+  wird in der Kiosk-Ansicht auf „Span" / „Math" gekürzt, damit die
+  Spalte schmal bleibt.
+
 ## 0.21.1 — Kiosk: beide Kinder nebeneinander im iPad-Hochformat
 - **Zwei feste Spalten**: das Kiosk-Dashboard rendert beide Kinder
   zwangsweise nebeneinander, auch bei 768 px Breite (iPad mini /
