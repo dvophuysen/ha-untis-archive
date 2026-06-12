@@ -2,6 +2,19 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.21.1 — Kiosk: beide Kinder nebeneinander im iPad-Hochformat
+- **Zwei feste Spalten**: das Kiosk-Dashboard rendert beide Kinder
+  zwangsweise nebeneinander, auch bei 768 px Breite (iPad mini /
+  Air 1 im Hochformat). Vorher haben sich die Karten unter 920 px
+  übereinander gestapelt — Scrollen war Pflicht.
+- **Engerer Satz**: Schriften, Zellpadding und Plan-Cell-Höhe sind
+  reduziert, damit der ganze Dashboard-Inhalt eines Kindes ohne
+  Scrollen in eine halbe iPad-Breite passt. Kompromisslos für den
+  Küchen-Blick aus 1–2 m Entfernung optimiert.
+- **Klausur-Marker im Plan-Grid nur als pinker Rahmen** (kein „KA"-
+  Inline-Tag mehr) — der Rahmen ist eindeutig, das Tag hätte in den
+  jetzt schmaleren Zellen überlappt.
+
 ## 0.21.0 — Kiosk-Fallback für alte iPads (iOS 12 Safari)
 - **Neuer Kiosk-Modus** unter `/kiosk` als reine HTML-Variante des
   Eltern-Dashboards — kein JavaScript, nur Tabellen + Server-Render.
