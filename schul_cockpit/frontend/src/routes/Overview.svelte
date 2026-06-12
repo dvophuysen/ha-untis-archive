@@ -137,37 +137,63 @@
           {/if}
         </div>
 
-        <!-- Plan-Grid -->
+        <!-- Plan-Grid: fixe Periodenzeilen, damit gleiche Stunden über die
+             Tage hinweg untereinander stehen (wie das Woche-Layout). -->
         <div class="block">
           <h3>Plan {#if kid.plan.is_weekend}<span class="small dim">· nächste Woche</span>{/if}</h3>
-          <div class="plan-grid">
-            {#each kid.plan.columns as col}
-              <div class="plan-col" class:is-today={col.is_today} class:filler={col.is_filler}>
-                <div class="plan-head">
-                  <strong>{col.weekday}</strong>
-                  <span class="plan-date">{planDate(col.date)}</span>
-                </div>
-                <div class="plan-cells">
-                  {#each col.lessons as l}
+          <div
+            class="plan-grid"
+            style="grid-template-rows: auto repeat({kid.plan.period_times.length || 1}, minmax(26px, auto));"
+          >
+            {#each kid.plan.columns as col, ci}
+              {#if col.is_today}
+                <div
+                  class="plan-today-frame"
+                  style="grid-column: {ci + 1}; grid-row: 1 / span {kid.plan.period_times.length + 1};"
+                ></div>
+              {/if}
+              <div
+                class="plan-head"
+                class:is-today={col.is_today}
+                class:filler={col.is_filler}
+                style="grid-column: {ci + 1}; grid-row: 1;"
+              >
+                <strong>{col.weekday}</strong>
+                <span class="plan-date">{planDate(col.date)}</span>
+              </div>
+            {/each}
+
+            {#each kid.plan.period_times as t, pi}
+              {#each kid.plan.columns as col, ci}
+                {@const l = col.lessons.find((x) => x.start_hhmm === t)}
+                <div class="plan-slot" style="grid-column: {ci + 1}; grid-row: {pi + 2};">
+                  {#if l}
                     <button
                       class="plan-cell"
                       class:cancelled={l.is_cancelled}
-                      class:substitution={l.is_irregular && !l.is_cancelled}
+                      class:substitution={!l.is_cancelled && (l.is_irregular || l.is_subject_substituted)}
                       class:has-exam={l.has_exam}
                       onclick={() => open(kid, 'week')}
                       title={(l.start_hhmm ?? '') + ' ' + (l.subject_name ?? '')}
                     >
-                      <span class="plan-label">{l.subject_short}</span>
-                      {#if l.has_exam}<span class="plan-mark">📝</span>
-                      {:else if l.is_cancelled}<span class="plan-mark">🛑</span>
-                      {:else if l.is_irregular}<span class="plan-mark">🔁</span>{/if}
+                      {#if l.is_cancelled}
+                        <span class="cell-old">{l.subject_orig_short || l.subject_short}</span>
+                      {:else if l.is_subject_substituted && l.subject_orig_short}
+                        <span class="cell-old">{l.subject_orig_short}</span>
+                        <span class="cell-new">{l.subject_short}</span>
+                      {:else}
+                        <span class="cell-label">{l.subject_short}</span>
+                        {#if l.is_irregular || l.is_teacher_substituted || l.is_room_substituted}
+                          <span class="cell-swap">⇄</span>
+                        {/if}
+                      {/if}
+                      {#if l.has_exam && !l.is_cancelled}
+                        <span class="cell-exam">📝</span>
+                      {/if}
                     </button>
-                  {/each}
-                  {#if col.lessons.length === 0}
-                    <div class="plan-empty">–</div>
                   {/if}
                 </div>
-              </div>
+              {/each}
             {/each}
           </div>
         </div>
@@ -275,72 +301,74 @@
   }
   .hw-when { color: var(--fg-muted); font-size: 0.78rem; }
 
-  /* Plan-Grid — Mo–Fr Spalten, vergangene Wochentage rollen in die
-     Folgewoche. Heute wird durch einen dezenten Rahmen markiert. */
+  /* Plan-Grid — fünf feste Mo–Fr-Spalten, eine Zeile pro Periode (über
+     alle Tage hinweg gemeinsame Startzeit). Vergangene Wochentage rollen
+     in die Folgewoche; „heute" bekommt einen Rahmen, der per Overlay
+     hinter den Zellen läuft, damit die Zellen sauber alignt bleiben. */
   .plan-grid {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 3px;
+    column-gap: 3px;
+    row-gap: 2px;
+    position: relative;
   }
-  .plan-col {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    padding: 2px;
-    border-radius: 6px;
-  }
-  .plan-col.is-today {
+  .plan-today-frame {
     outline: 2px solid var(--accent);
     background: color-mix(in oklab, var(--accent) 8%, transparent);
+    border-radius: 6px;
+    pointer-events: none;
+    z-index: 0;
   }
-  .plan-col.filler .plan-date { color: var(--fg-dim); }
-  .plan-head { text-align: center; padding: 0.15rem 0; line-height: 1.1; }
+  .plan-head, .plan-slot { position: relative; z-index: 1; }
+  .plan-head { text-align: center; padding: 0.15rem 0 0.25rem; line-height: 1.1; }
   .plan-head strong { font-size: 0.75rem; }
+  .plan-head.is-today strong { color: var(--accent); }
+  .plan-head.filler .plan-date { color: var(--fg-dim); }
   .plan-date { display: block; font-size: 0.65rem; color: var(--fg-muted); }
-  .plan-col.is-today .plan-head strong { color: var(--accent); }
 
-  .plan-cells { display: flex; flex-direction: column; gap: 2px; }
+  .plan-slot { display: flex; min-width: 0; }
   .plan-cell {
     position: relative;
+    flex: 1;
     border: 1px solid var(--border);
     background: var(--bg-elevated);
-    padding: 0.18rem 0.1rem;
-    font-size: 0.66rem;
+    padding: 0.18rem 0.15rem;
+    font-size: 0.68rem;
     line-height: 1.1;
     border-radius: 4px;
     cursor: pointer;
-    min-height: 22px;
+    min-height: 24px;
     color: var(--fg);
     text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
   }
   .plan-cell.cancelled {
-    background: var(--cancelled);
-    color: #fff;
-    text-decoration: line-through;
-    opacity: 0.7;
+    background: var(--bg-elevated);
+    border-style: dashed;
+    color: var(--fg-dim);
   }
   .plan-cell.substitution { outline: 1px solid var(--substitution); }
   .plan-cell.has-exam { outline: 2px solid var(--exam); }
-  .plan-label {
-    display: block;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+
+  .cell-label { font-weight: 500; }
+  .cell-old {
+    text-decoration: line-through;
+    color: var(--fg-dim);
+    font-weight: 400;
   }
-  .plan-mark {
+  .cell-new { font-weight: 600; color: var(--substitution); }
+  .cell-swap { font-size: 0.65rem; color: var(--substitution); }
+  .cell-exam {
     position: absolute;
-    top: -4px; right: -3px;
+    top: -5px; right: -4px;
     font-size: 0.6rem;
     background: var(--bg-card);
     border-radius: 50%;
     padding: 0 1px;
     line-height: 1;
-  }
-  .plan-empty {
-    color: var(--fg-dim);
-    text-align: center;
-    font-size: 0.7rem;
-    padding: 0.3rem 0;
   }
 
   /* Hygiene */

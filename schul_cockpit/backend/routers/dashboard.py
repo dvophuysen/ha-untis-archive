@@ -220,17 +220,38 @@ def _plan_for_account(account_id: int, today: date) -> dict:
         by_date.setdefault(l["date"], []).append(l)
 
     def _cell(l: dict) -> dict:
+        orig_name = l.get("subject_orig_name")
         return {
             "lesson_id": l["id"],
             "start_hhmm": l.get("start_hhmm"),
             "end_hhmm": l.get("end_hhmm"),
             "subject_short": _short_label(l.get("subject_name"), l.get("subject_short")),
             "subject_name": l.get("subject_name"),
+            # Für ersetzte Fächer („Mu → MA"): den ursprünglichen Kürzel
+            # gleich mitliefern, damit die Zelle ihn durchgestrichen
+            # neben das neue Fach setzen kann.
+            "subject_orig_short": _short_label(orig_name, None) if orig_name else None,
+            "subject_orig_name": orig_name,
+            "is_subject_substituted": bool(l.get("is_subject_substituted")),
+            "is_teacher_substituted": bool(l.get("is_teacher_substituted")),
+            "is_room_substituted": bool(l.get("is_room_substituted")),
             "room": l.get("room"),
             "is_cancelled": bool(l.get("is_cancelled")),
             "is_irregular": bool(l.get("is_irregular")),
             "has_exam": bool(l.get("exam")),
         }
+
+    # Spalten- *und* Zeit-Achse: damit das Grid im Frontend wie das Woche-
+    # Layout fix auf eine Stunden-Achse alignt (Periode 1 bei allen Tagen
+    # in derselben Zeile), sammeln wir hier die Vereinigung aller
+    # vorkommenden Startzeiten über die 5 Tage. Leere Zellen entstehen
+    # automatisch, wo ein Tag in der Periode keine Stunde hat.
+    all_start_times: set[str] = set()
+    for l in lessons:
+        t = l.get("start_hhmm")
+        if t:
+            all_start_times.add(t)
+    period_times = sorted(all_start_times)
 
     columns = []
     for wd, d, is_today, is_filler in cols:
@@ -245,7 +266,11 @@ def _plan_for_account(account_id: int, today: date) -> dict:
             "is_filler": is_filler,
             "lessons": day_lessons,
         })
-    return {"columns": columns, "is_weekend": today.weekday() >= 5}
+    return {
+        "columns": columns,
+        "period_times": period_times,
+        "is_weekend": today.weekday() >= 5,
+    }
 
 
 def _feedback_gap(account_id: int, today: date) -> dict:

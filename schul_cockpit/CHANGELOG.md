@@ -2,6 +2,22 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.20.1 — Plan-Grid auf fixe Periodenzeilen, klarere Vertretung
+- **Fixe Stundenzeilen**: Das Plan-Grid auf der Übersicht alignt jetzt
+  zeilenweise auf die Startzeit der Stunde. Periode 1 steht über alle
+  Tage hinweg in derselben Zeile, leere Zellen entstehen wo ein Tag in
+  der Periode keinen Unterricht hat. Vorher haben die Spalten unabhängig
+  gepackt — wer sehen wollte, wann Mathe wiederkommt, musste mitzählen.
+- **Vertretungen kompakt in einer Zelle**: Bei Fachersatz wird das
+  ursprüngliche Fach durchgestrichen *und* das neue Fach in derselben
+  Zelle gezeigt (z. B. `M̶u̶ MA`). Bleibt das Fach gleich und es ist nur
+  Lehrer/Raum-Vertretung, erscheint ein ⇄-Symbol neben dem Fach.
+- **Roter Ampel-Punkt auf Entfällen entfernt**: durchgestrichener,
+  gestrichelter Rahmen ist Signal genug. Klausuren behalten ihr 📝-Eck.
+- **„Heute"-Rahmen als Overlay**: liegt jetzt hinter den Zellen, damit
+  die Mo–Fr-Reihen sauber alignt bleiben statt von der Padding-Box des
+  alten Spalten-Wrappers verschoben zu werden.
+
 ## 0.20.0 — Eltern-Dashboard „Übersicht" für mehrere Kinder
 - **Neue Startseite „Übersicht" 🏠** für Eltern-Accounts mit mindestens
   zwei verlinkten Kindern. Zeigt pro Kind nebeneinander: NOW-Streifen
