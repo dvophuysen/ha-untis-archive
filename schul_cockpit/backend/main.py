@@ -27,6 +27,7 @@ from .routers import (
     dashboard as dashboard_router,
     exams,
     health,
+    kiosk as kiosk_router,
     me,
     notify,
     oral,
@@ -137,6 +138,10 @@ app.include_router(plan_router.router, prefix=API)
 app.include_router(courses_router.router, prefix=API)
 app.include_router(backup_router.router, prefix=API)
 app.include_router(dashboard_router.router, prefix=API)
+# Kiosk-Routen leben außerhalb von /api, weil sie ganze HTML-Seiten
+# liefern (Login-Form, Dashboard) und vom SPA-Catchall unterschieden
+# werden müssen.
+app.include_router(kiosk_router.router)
 
 
 @app.get("/api/schema-status")
@@ -170,6 +175,18 @@ _NO_CACHE_HEADERS = {
 }
 _IMMUTABLE_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
 
+# iOS-Versions-Match im User-Agent — alles vor iOS 13 kann den modernen
+# Svelte-Bundle (Optional Chaining, Nullish Coalescing, color-mix) nicht
+# parsen. Diese Geräte schicken wir auf den server-gerenderten Kiosk.
+import re as _re
+_LEGACY_IOS_RE = _re.compile(r"CPU (?:iPhone )?OS (\d+)_")
+
+
+def _is_legacy_browser(request: Request) -> bool:
+    ua = request.headers.get("user-agent", "") or ""
+    m = _LEGACY_IOS_RE.search(ua)
+    return bool(m and int(m.group(1)) < 13)
+
 
 if _FRONTEND_DIR and (_FRONTEND_DIR / "index.html").exists():
     if (_FRONTEND_DIR / "assets").exists():
@@ -180,7 +197,7 @@ if _FRONTEND_DIR and (_FRONTEND_DIR / "index.html").exists():
         )
 
     @app.get("/{full_path:path}")
-    def spa(full_path: str):
+    def spa(full_path: str, request: Request):
         target = _FRONTEND_DIR / full_path
         if full_path and target.exists() and target.is_file():
             name = target.name
@@ -189,14 +206,22 @@ if _FRONTEND_DIR and (_FRONTEND_DIR / "index.html").exists():
             if "/assets/" in f"/{full_path}":
                 return FileResponse(target, headers=_IMMUTABLE_HEADERS)
             return FileResponse(target)
-        # SPA fallback → always the (uncached) index.html
+        # SPA fallback — moderne Browser kriegen index.html, altes
+        # iOS-Safari schicken wir auf den server-gerenderten Kiosk,
+        # damit das Küchen-iPad nicht auf einer leeren weißen Seite
+        # landet.
+        if _is_legacy_browser(request):
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse("/kiosk", status_code=302)
         return FileResponse(
             _FRONTEND_DIR / "index.html", headers=_NO_CACHE_HEADERS
         )
 
 else:
-    from fastapi.responses import HTMLResponse
+    from fastapi.responses import HTMLResponse, RedirectResponse as _RedirectResponse
 
     @app.get("/{full_path:path}")
-    def placeholder(full_path: str):  # noqa: ARG001
+    def placeholder(full_path: str, request: Request):  # noqa: ARG001
+        if _is_legacy_browser(request):
+            return _RedirectResponse("/kiosk", status_code=302)
         return HTMLResponse(_PLACEHOLDER_HTML)
