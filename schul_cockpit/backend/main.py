@@ -24,6 +24,7 @@ from .routers import (
     backup as backup_router,
     checkins,
     courses as courses_router,
+    dashboard as dashboard_router,
     exams,
     health,
     me,
@@ -135,6 +136,7 @@ app.include_router(exams.router, prefix=API)
 app.include_router(plan_router.router, prefix=API)
 app.include_router(courses_router.router, prefix=API)
 app.include_router(backup_router.router, prefix=API)
+app.include_router(dashboard_router.router, prefix=API)
 
 
 @app.get("/api/schema-status")

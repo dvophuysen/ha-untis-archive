@@ -2,6 +2,33 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.20.0 — Eltern-Dashboard „Übersicht" für mehrere Kinder
+- **Neue Startseite „Übersicht" 🏠** für Eltern-Accounts mit mindestens
+  zwei verlinkten Kindern. Zeigt pro Kind nebeneinander: NOW-Streifen
+  („jetzt 3. Std Mathe · bis 13:20"), anstehende Klausuren mit
+  Ampel-Punkt, offene Hausaufgaben, Fächer mit Unterstützungsbedarf
+  („Mitlernen 🤝") und einen 5-Tage-Plan-Grid Mo–Fr. Klick auf einen
+  Block schaltet das Kind aktiv und springt in den Detail-View — die
+  bisherige Switching-Mechanik bleibt unverändert.
+- **Klausur-Ampel zentral**: kombiniert Tage bis zur Klausur, Lernstand
+  (😟/😐/😀) und das Verständnis-Signal aus den Lesson-Checkins der
+  letzten 21 Tage im jeweiligen Fach. Eine Klausur in einem Sorgenfach
+  ohne Lernstart kippt früh auf 🟠/🔴, eine gut sitzende bleibt 🟢 auch
+  knapp vor dem Termin.
+- **Hausaufgaben-Ampel im Eltern-Stil**: heute fällig = ❗ (im Unterricht
+  schon abgefragt), morgen = 🔴 (jetzt handeln), diese Woche = 🟠,
+  später = 🟢.
+- **Plan-Grid „rollende Schulwoche"**: feste Mo–Fr-Spalten; bereits
+  vergangene Wochentage werden mit demselben Wochentag der Folgewoche
+  aufgefüllt, heute bekommt einen blauen Rahmen. Am Wochenende zeigt das
+  Grid komplett die kommende Woche. Klausur-Slots, Vertretungen,
+  Entfälle und Sondertermine erscheinen als kleine Eck-Emojis (📝 🔁 🛑).
+- **Backend-Aggregator** `GET /api/dashboard` liefert alle Blöcke für
+  alle verlinkten Kinder in einem Roundtrip — kein Fanout von sechs
+  Endpoints × zwei Kindern im Frontend.
+- Eltern mit nur einem verlinkten Kind sehen die App wie bisher: keine
+  Tab-Änderung, kein Default-Switch, das Dashboard ist nicht erreichbar.
+
 ## 0.19.14 — Hotfix Sync-500: UNIQUE-Constraint beim Untis-ID-Dedup
 - **Bugfix:** 0.19.13 hat den Keeper-Eintrag auf eine UID rebinded, die
   noch in einer anderen Reihe der gleichen Gruppe lag → kollidierte mit

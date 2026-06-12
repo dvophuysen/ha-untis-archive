@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { appState, loadMe, setActiveAccount, activeAccount } from './lib/store.svelte.js';
   import Today from './routes/Today.svelte';
+  import Overview from './routes/Overview.svelte';
   import Plan from './routes/Plan.svelte';
   import Week from './routes/Week.svelte';
   import Subjects from './routes/Subjects.svelte';
@@ -21,6 +22,12 @@
     await loadMe();
   }
 
+  // Wenn die App ohne Hash geöffnet wird, wollen wir Eltern mit ≥2 Kindern
+  // auf das Übersichts-Dashboard schicken — aber nur, sobald `me` geladen
+  // ist (vorher wissen wir die Kind-Anzahl nicht). Daher merken wir uns,
+  // dass die Initial-URL keinen Hash hatte, und ein $effect macht den
+  // Default-Switch sobald die Daten da sind.
+  const hadEmptyInitialHash = !window.location.hash.replace(/^#\/?/, '');
   let route = $state(parseHash());
 
   function parseHash() {
@@ -42,16 +49,43 @@
     return () => window.removeEventListener('hashchange', handler);
   });
 
+  // Default-Landing: sobald `me` geladen ist und es ≥2 verlinkte Kinder
+  // gibt, schicken wir den Eltern-User auf das Dashboard — vorausgesetzt,
+  // er hat die App ohne expliziten Hash geöffnet und ist noch auf der
+  // „today"-Voreinstellung. Läuft genau einmal.
+  let defaultLandingApplied = $state(false);
+  $effect(() => {
+    if (defaultLandingApplied) return;
+    if (!appState.me) return;
+    defaultLandingApplied = true;
+    if (
+      hadEmptyInitialHash &&
+      (appState.me.accounts?.length ?? 0) >= 2 &&
+      route.name === 'today'
+    ) {
+      navigate('overview');
+    }
+  });
+
   const acc = $derived(activeAccount());
 
-  const navItems = [
-    { name: 'today', icon: '📅', label: 'Heute' },
-    { name: 'plan', icon: '🎯', label: 'Plan' },
-    { name: 'week', icon: '📊', label: 'Woche' },
-    { name: 'subjects', icon: '📚', label: 'Fächer' },
-    { name: 'klausuren', icon: '📝', label: 'Klausur' },
-    { name: 'absences', icon: '🤒', label: 'Fehlt' },
-  ];
+  // Übersicht-Tab nur für Eltern mit mind. zwei verlinkten Kindern. Bei
+  // einem Kind ist „Heute" der natürliche Einstieg, das Dashboard wäre
+  // dann eine reine Solo-Spalte.
+  const navItems = $derived.by(() => {
+    const items = [
+      { name: 'today', icon: '📅', label: 'Heute' },
+      { name: 'plan', icon: '🎯', label: 'Plan' },
+      { name: 'week', icon: '📊', label: 'Woche' },
+      { name: 'subjects', icon: '📚', label: 'Fächer' },
+      { name: 'klausuren', icon: '📝', label: 'Klausur' },
+      { name: 'absences', icon: '🤒', label: 'Fehlt' },
+    ];
+    if ((appState.me?.accounts?.length ?? 0) >= 2) {
+      items.unshift({ name: 'overview', icon: '🏠', label: 'Übersicht' });
+    }
+    return items;
+  });
 </script>
 
 {#if appState.needsLogin}
@@ -114,7 +148,7 @@
         Es sind neue HA-Nutzer da, die noch nicht zugeordnet sind, oder noch keine Verlinkungen existieren.
         <button class="primary" style="margin-top:0.6rem" onclick={() => navigate('setup')}>Jetzt einrichten</button>
       </div>
-    {:else if !acc && !['setup'].includes(route.name)}
+    {:else if !acc && !['setup', 'overview'].includes(route.name)}
       <div class="empty">
         Dein Account ist noch mit keinem Kind verlinkt.
         {#if appState.me.is_admin}
@@ -133,6 +167,8 @@
       <Courses accountId={appState.activeAccountId} />
     {:else if route.name === 'changes'}
       <MyChanges />
+    {:else if route.name === 'overview'}
+      <Overview {navigate} />
     {:else if route.name === 'today'}
       <Today accountId={appState.activeAccountId} />
     {:else if route.name === 'plan' || route.name === 'tasks'}
