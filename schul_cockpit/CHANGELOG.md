@@ -2,6 +2,21 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.21.3 — Kiosk: Zeilen als kurze Sätze, kein zerrissenes Layout mehr
+- **Flex-`gap` raus** — iOS-12-Safari kennt das noch nicht und hat es
+  stillschweigend verworfen, dadurch klebten Punkt + Fach + Datum
+  aneinander („🔴MAMi · 5T") während die Mini-Pills rechts mit großem
+  Loch dazwischen saßen. Abstände jetzt per `margin-left` auf der
+  Textzeile, was Safari 12 sauber rendert.
+- **Mini-Pills („1", „⚠1") raus** — die isolierten Glyphen waren
+  zwischen Lernstand und Hard-Count als „1 ⚠1" für den Schnellblick
+  unklar. Jede Zeile ist jetzt EIN zusammenhängender Satz:
+  „🔴 MA · Mi · in 5 Tagen · 4 schwer". Lernstand-Pill ist im Kiosk
+  weg — diese feinkörnige Info bleibt der App vorbehalten.
+- **Mitlernen / Hausaufgaben analog**: „SN · 2 von 4 schwer" bzw.
+  „🟠 Span · S.42 Nr.4-7 · Di" — lesen sich von links nach rechts wie
+  Stichworte, keine Tabellen-Spalten mit Lücken.
+
 ## 0.21.2 — Kiosk: CSS-Punkte statt Emojis, linksbündig gepackt
 - **Farbige Punkte / Learn-Pills als CSS** statt Unicode-Emoji-Glyphen.
   iOS 12 Safari rendert weder die Unicode-12-Farbkreise (🔴🟠🟢⚪)
