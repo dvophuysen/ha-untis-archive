@@ -22,6 +22,33 @@
     await loadMe();
   }
 
+  // Ein-Klick-Reparatur verwaister Kind-Verlinkungen. Der Server biegt nur
+  // um, wenn die Zuordnung zwingend ist (genau ein verwaister Link, genau
+  // ein unverlinkter Account) — sonst landet man im Setup und wählt selbst.
+  let repairing = $state(false);
+  let repairMsg = $state(null);
+  async function repairLinks() {
+    repairing = true;
+    repairMsg = null;
+    try {
+      const res = await api.post('/api/link-repair', { apply: true });
+      const done = (res.steps ?? []).filter((s) => s.action === 'repoint');
+      const open = (res.steps ?? []).filter((s) => s.action === 'skipped_ambiguous');
+      await loadMe();
+      if (done.length > 0) {
+        repairMsg = `✓ ${done.map((s) => s.to_name).join(', ')} wieder verknüpft`;
+      }
+      if (open.length > 0) {
+        repairMsg = 'Zuordnung nicht eindeutig — bitte im Setup wählen.';
+        navigate('setup');
+      }
+    } catch (e) {
+      repairMsg = e.message;
+    } finally {
+      repairing = false;
+    }
+  }
+
   // Wenn die App ohne Hash geöffnet wird, wollen wir Eltern mit ≥2 Kindern
   // auf das Übersichts-Dashboard schicken — aber nur, sobald `me` geladen
   // ist (vorher wissen wir die Kind-Anzahl nicht). Daher merken wir uns,
@@ -122,6 +149,30 @@
       {/if}
     </div>
   </header>
+
+  <!-- Verwaiste Kind-Verlinkung: der Link zeigt auf eine account_id, die
+       es in der Untis-Archiv-DB nicht (mehr) gibt — typischerweise nach
+       Schuljahreswechsel, Restore oder Neu-Einrichtung der Integration,
+       weil sich dabei die AUTOINCREMENT-IDs verschieben. Vorher fiel das
+       Kind dadurch stumm aus der Liste und der Umschalter verschwand. -->
+  {#if (appState.me?.stale_account_ids?.length ?? 0) > 0}
+    <div
+      style="background: var(--exam); color: #fff; padding: 0.5rem 1rem; font-size: 0.85rem; display:flex; justify-content:space-between; align-items:center; gap:0.5rem;"
+    >
+      <span>
+        ⚠️ <strong>{appState.me.stale_account_ids.length} Kind-Verlinkung{appState.me.stale_account_ids.length === 1 ? '' : 'en'} ins Leere</strong>
+        · {repairMsg ?? 'dieses Kind fehlt gerade im Umschalter'}
+      </span>
+      {#if appState.me?.is_admin}
+        <button
+          class="ghost"
+          disabled={repairing}
+          style="color:#fff; border-color:rgba(255,255,255,0.4); padding:0.2rem 0.6rem; min-height:32px; font-size:0.8rem; white-space:nowrap;"
+          onclick={repairLinks}
+        >{repairing ? 'läuft…' : 'Reparieren'}</button>
+      {/if}
+    </div>
+  {/if}
 
   {#if appState.me?.demo_mode}
     <div

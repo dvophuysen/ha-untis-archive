@@ -2,6 +2,43 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.22.0 — Verwaiste Kind-Verlinkungen sichtbar machen (Umschalter fehlt)
+Wenn ein Kind aus dem Umschalter verschwindet, lag es bisher daran, dass
+`user_account_links.account_id` auf die AUTOINCREMENT-ID der
+Untis-Archiv-DB zeigt. Wird diese DB neu angelegt — Schuljahreswechsel,
+Restore aus Backup, Integration neu eingerichtet — verschieben sich die
+IDs und alte Links zeigen ins Leere. `/api/me` hat solche Kinder
+**stillschweigend weggelassen**: bei nur einem verbleibenden Kind
+rendert die App den `<select>`-Umschalter gar nicht mehr (er braucht
+≥2 Accounts) und auch der Übersicht-Tab fällt weg — es sah aus als sei
+der Umschalter kaputt, obwohl die Verlinkung das Problem war.
+
+- **`/api/me` meldet `stale_account_ids`** statt betroffene Kinder
+  unsichtbar zu verschlucken.
+- **Warnbanner in der App**, sobald eine Verlinkung ins Leere zeigt —
+  mit „Reparieren"-Knopf (nur für Admins).
+- **Ein-Klick-Reparatur** (`POST /api/link-repair`): biegt den verwaisten
+  Link automatisch auf den neuen Account um. Weil ein verwaister Link nur
+  noch eine tote Zahl ist — welches Kind das war, steht nirgends —
+  passiert das **nur bei zwingender Zuordnung**: genau ein verwaister
+  Link und genau ein unverlinkter Account. Sonst führt der Knopf ins
+  Setup zur manuellen Auswahl, ohne etwas zu verändern.
+- **Schutzschaltung**: findet die Reparatur *keinen einzigen* Account in
+  der Untis-Archiv-DB, bricht sie mit 409 ab statt aufzuräumen. Eine
+  leere Tabelle heißt fast immer „DB nicht lesbar/nicht gemountet" — dort
+  blind zu prunen würde alle gültigen Verlinkungen vernichten.
+- **Setup zeigt verwaiste Links explizit** als entfernbare Chips
+  („⚠️ Account 2 entfernen"). Vorher waren sie unsichtbar, weil die
+  Knopfleiste nur existierende Accounts kennt.
+- **Neuer Diagnose-Endpunkt `GET /api/link-health`** (Admin): listet
+  Accounts der History-DB, alle Verlinkungen mit aufgelöst/verwaist,
+  und die noch unverlinkten Accounts — nach einem ID-Shift genau die
+  „neuen" Kinder, auf die umgebogen werden muss.
+- **Keine Geisterkarten mehr**: `/api/dashboard` und der Kiosk
+  übersprangen verwaiste IDs vorher nicht und bauten daraus eine
+  namenlose leere Kind-Karte. Jetzt werden sie ausgelassen und als
+  Warnung gemeldet.
+
 ## 0.21.3 — Kiosk: Zeilen als kurze Sätze, kein zerrissenes Layout mehr
 - **Flex-`gap` raus** — iOS-12-Safari kennt das noch nicht und hat es
   stillschweigend verworfen, dadurch klebten Punkt + Fach + Datum
