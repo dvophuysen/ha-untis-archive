@@ -84,6 +84,14 @@
     return patchUser(u, { account_ids: [...ids] });
   }
 
+  // Verlinkte account_ids ohne passenden Account in der History-DB.
+  // Nach einem Schuljahreswechsel / Restore verschieben sich die
+  // AUTOINCREMENT-IDs, dann zeigen alte Links ins Leere.
+  function staleFor(u) {
+    const known = new Set(accounts.map((a) => a.id));
+    return u.account_ids.filter((id) => !known.has(id));
+  }
+
   async function setTodoList(accountId, entityId) {
     if (!entityId) return;
     await api.put('/api/todo-lists', { account_id: accountId, ha_entity_id: entityId });
@@ -191,6 +199,26 @@
           >{a.name}</button>
         {/each}
       </div>
+
+      <!-- Verlinkungen, zu denen es keinen Account in der Untis-Archiv-DB
+           (mehr) gibt. Ohne diese Anzeige wären sie unsichtbar: die
+           Buttons oben kennen nur existierende Accounts, das Kind fällt
+           in der App aber stumm aus dem Umschalter. -->
+      {#if staleFor(u).length > 0}
+        <div class="dim" style="margin-top:0.5rem; color: var(--exam);">
+          Zeigt ins Leere (Account gelöscht oder ID verschoben):
+        </div>
+        <div class="row gap-sm" style="flex-wrap:wrap; margin-top:0.25rem;">
+          {#each staleFor(u) as sid}
+            <button
+              onclick={() => toggleAccount(u, sid)}
+              disabled={savingFor === u.id}
+              title="Verlinkung auf gelöschten Account {sid} entfernen"
+              style="font-size:0.85rem; padding:0.3rem 0.6rem; min-height:36px; border-color: var(--exam); color: var(--exam);"
+            >⚠️ Account {sid} entfernen</button>
+          {/each}
+        </div>
+      {/if}
 
       <div class="row between" style="margin-top:0.6rem; padding-top:0.5rem; border-top:1px solid var(--border);">
         <div class="dim">

@@ -82,13 +82,29 @@ async def kiosk_dashboard(request: Request) -> HTMLResponse:
     finally:
         conn.close()
 
+    # Verwaiste Verlinkungen überspringen (siehe dashboard.py) — sonst
+    # hängt im Kiosk eine namenlose leere Karte neben den echten Kindern.
     kids = []
+    stale = [aid for aid in account_ids if aid not in names]
     for acc_id in account_ids:
-        kids.append(
-            await _dashboard_for_account(acc_id, names.get(acc_id, ""), today)
-        )
+        if acc_id not in names:
+            continue
+        kids.append(await _dashboard_for_account(acc_id, names[acc_id], today))
 
-    body = "<div class='dash'>" + "".join(_render_kid(k) for k in kids) + "</div>"
+    warn = ""
+    if stale:
+        warn = (
+            "<div class='kiosk-warn'>⚠️ "
+            f"{len(stale)} Kind-Verlinkung"
+            f"{'' if len(stale) == 1 else 'en'} zeigt ins Leere — "
+            "im Setup der App reparieren.</div>"
+        )
+    body = (
+        warn
+        + "<div class='dash'>"
+        + "".join(_render_kid(k) for k in kids)
+        + "</div>"
+    )
     return HTMLResponse(
         _layout(
             f"Schul-Cockpit · {h(user.display_name or 'Übersicht')}",
@@ -724,6 +740,15 @@ main { padding: 0.8rem; max-width: 1400px; margin: 0 auto; }
   padding: 2rem;
   text-align: center;
   color: #5b6b7c;
+}
+.kiosk-warn {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.85rem;
 }
 
 @media (prefers-color-scheme: dark) {

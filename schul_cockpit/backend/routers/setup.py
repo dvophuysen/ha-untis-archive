@@ -89,6 +89,204 @@ def list_accounts(user: CurrentUser = Depends(get_current_user)) -> dict:
     }
 
 
+@router.get("/link-health")
+def link_health(user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Zeigt, ob Nutzer-Kind-Verlinkungen noch auf existierende Accounts
+    zeigen.
+
+    Hintergrund: `user_account_links.account_id` verweist auf die
+    AUTOINCREMENT-ID in der History-DB. Wird diese DB neu angelegt
+    (Schuljahreswechsel, Restore aus Backup, Integration neu
+    eingerichtet), verschieben sich die IDs — die Links zeigen dann ins
+    Leere. `/api/me` hat solche Kinder früher stillschweigend
+    weggelassen, wodurch der Kind-Umschalter ohne Fehlermeldung
+    verschwand. Dieser Endpunkt macht den Zustand sichtbar und nennt die
+    verwaisten sowie die noch unverlinkten Accounts.
+    """
+    require_admin(user)
+
+    hconn = history_conn()
+    try:
+        acc_rows = hconn.execute(
+            "SELECT id, name, entry_id, username, school FROM accounts ORDER BY id"
+        ).fetchall()
+    finally:
+        hconn.close()
+    accounts = {
+        r["id"]: {
+            "id": r["id"],
+            "name": r["name"],
+            "entry_id": r["entry_id"],
+            "username": r["username"],
+            "school": r["school"],
+        }
+        for r in acc_rows
+    }
+
+    conn = webapp_conn()
+    try:
+        users = conn.execute(
+            "SELECT id, display_name, role FROM users ORDER BY id"
+        ).fetchall()
+        links = conn.execute(
+            "SELECT user_id, account_id FROM user_account_links"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    by_user: dict[int, list[int]] = {}
+    for link in links:
+        by_user.setdefault(link["user_id"], []).append(link["account_id"])
+
+    linked_ids = {link["account_id"] for link in links}
+    report = []
+    for u in users:
+        ids = sorted(by_user.get(u["id"], []))
+        if not ids:
+            continue
+        resolved = [accounts[i] for i in ids if i in accounts]
+        stale = [i for i in ids if i not in accounts]
+        report.append({
+            "user_id": u["id"],
+            "display_name": u["display_name"],
+            "role": u["role"],
+            "linked_account_ids": ids,
+            "resolved": [{"id": a["id"], "name": a["name"]} for a in resolved],
+            "stale_account_ids": stale,
+        })
+
+    return {
+        "accounts_in_history": list(accounts.values()),
+        "users": report,
+        # Accounts, die es gibt, auf die aber niemand verlinkt ist — nach
+        # einem ID-Shift sind das genau die „neuen" Kinder, auf die die
+        # Links umgebogen werden müssen.
+        "unlinked_accounts": [
+            a for aid, a in accounts.items() if aid not in linked_ids
+        ],
+        "has_stale_links": any(r["stale_account_ids"] for r in report),
+    }
+
+
+class LinkRepairIn(BaseModel):
+    # Ohne apply wird nur der Plan zurückgegeben (Vorschau für die
+    # Oberfläche), es wird nichts geschrieben.
+    apply: bool = False
+    # Verwaiste Links auch dann entfernen, wenn sie nicht eindeutig auf
+    # einen neuen Account umgebogen werden können.
+    prune_ambiguous: bool = False
+
+
+@router.post("/link-repair")
+def link_repair(
+    body: LinkRepairIn,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Biegt verwaiste Kind-Verlinkungen auf die neuen Accounts um.
+
+    Ein verwaister Link ist nur noch eine tote Zahl — welches Kind das
+    war, steht nirgends. Automatisch umbiegen ist deshalb *nur* dann
+    zulässig, wenn die Zuordnung zwingend ist: der Nutzer hat genau
+    einen verwaisten Link und es gibt genau einen unverlinkten Account.
+    Alles andere bleibt Handarbeit im Setup (oder `prune_ambiguous`).
+    """
+    require_admin(user)
+
+    hconn = history_conn()
+    try:
+        acc_rows = hconn.execute("SELECT id, name FROM accounts").fetchall()
+    finally:
+        hconn.close()
+    accounts = {r["id"]: r["name"] for r in acc_rows}
+
+    # Schutzschaltung: eine leere accounts-Tabelle heißt fast immer, dass
+    # die History-DB gerade nicht lesbar/noch nicht gemountet ist — dann
+    # sähen ALLE Links verwaist aus und ein Prune würde die komplette
+    # Zuordnung vernichten. Lieber abbrechen.
+    if not accounts:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Keine Accounts in der Untis-Archiv-DB gefunden — DB nicht "
+                "lesbar? Reparatur abgebrochen, damit keine gültigen "
+                "Verlinkungen gelöscht werden."
+            ),
+        )
+
+    conn = webapp_conn()
+    try:
+        link_rows = conn.execute(
+            "SELECT user_id, account_id FROM user_account_links"
+        ).fetchall()
+        by_user: dict[int, list[int]] = {}
+        for link in link_rows:
+            by_user.setdefault(link["user_id"], []).append(link["account_id"])
+
+        linked_ids = {link["account_id"] for link in link_rows}
+        unlinked = sorted(aid for aid in accounts if aid not in linked_ids)
+
+        planned: list[dict] = []
+        for user_id, ids in sorted(by_user.items()):
+            stale = sorted(i for i in ids if i not in accounts)
+            if not stale:
+                continue
+            if len(stale) == 1 and len(unlinked) == 1:
+                target = unlinked[0]
+                planned.append({
+                    "user_id": user_id,
+                    "action": "repoint",
+                    "from_account_id": stale[0],
+                    "to_account_id": target,
+                    "to_name": accounts[target],
+                })
+            elif body.prune_ambiguous:
+                planned.append({
+                    "user_id": user_id,
+                    "action": "prune",
+                    "from_account_id": stale,
+                })
+            else:
+                planned.append({
+                    "user_id": user_id,
+                    "action": "skipped_ambiguous",
+                    "from_account_id": stale,
+                    "candidates": [
+                        {"id": aid, "name": accounts[aid]} for aid in unlinked
+                    ],
+                })
+
+        if body.apply:
+            for step in planned:
+                if step["action"] == "repoint":
+                    conn.execute(
+                        "DELETE FROM user_account_links "
+                        "WHERE user_id = ? AND account_id = ?",
+                        (step["user_id"], step["from_account_id"]),
+                    )
+                    conn.execute(
+                        "INSERT OR IGNORE INTO user_account_links "
+                        "(user_id, account_id) VALUES (?, ?)",
+                        (step["user_id"], step["to_account_id"]),
+                    )
+                elif step["action"] == "prune":
+                    for aid in step["from_account_id"]:
+                        conn.execute(
+                            "DELETE FROM user_account_links "
+                            "WHERE user_id = ? AND account_id = ?",
+                            (step["user_id"], aid),
+                        )
+    finally:
+        conn.close()
+
+    return {
+        "applied": body.apply,
+        "steps": planned,
+        "unlinked_accounts": [
+            {"id": aid, "name": accounts[aid]} for aid in unlinked
+        ],
+    }
+
+
 @router.patch("/users/{user_id}")
 def patch_user(
     user_id: int,

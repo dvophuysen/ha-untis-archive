@@ -12,6 +12,14 @@ router = APIRouter()
 def get_me(user: CurrentUser = Depends(get_current_user)) -> dict:
     account_ids = sorted(linked_account_ids(user.id))
     accounts: list[dict] = []
+    # Verlinkte account_ids, zu denen es in der History-DB keine Zeile
+    # (mehr) gibt. Passiert z. B. wenn die Untis-Archiv-DB neu angelegt
+    # wurde (Schuljahreswechsel, Restore, Integration neu eingerichtet)
+    # und die AUTOINCREMENT-IDs sich verschoben haben. Vorher fielen
+    # solche Kinder hier stillschweigend aus der Liste — der Umschalter
+    # verschwand ohne Fehlermeldung. Jetzt melden wir sie mit, damit die
+    # Oberfläche warnen kann.
+    stale_account_ids: list[int] = []
     if account_ids:
         conn = history_conn()
         try:
@@ -24,6 +32,8 @@ def get_me(user: CurrentUser = Depends(get_current_user)) -> dict:
             accounts = [{"id": r["id"], "name": r["name"]} for r in rows]
         finally:
             conn.close()
+        found = {a["id"] for a in accounts}
+        stale_account_ids = [aid for aid in account_ids if aid not in found]
 
     setup_needed = False
     demo_mode = False
@@ -56,6 +66,7 @@ def get_me(user: CurrentUser = Depends(get_current_user)) -> dict:
         "role": user.role,
         "is_admin": user.is_admin,
         "accounts": accounts,
+        "stale_account_ids": stale_account_ids,
         "setup_needed": setup_needed,
         "demo_mode": demo_mode,
         "open_audit_count": open_audit_count,

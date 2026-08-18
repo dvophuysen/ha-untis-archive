@@ -325,10 +325,23 @@ async def dashboard(user: CurrentUser = Depends(get_current_user)) -> dict:
     finally:
         hconn.close()
 
+    # Verwaiste Verlinkungen überspringen: zeigt ein Link auf eine
+    # account_id, die es in der History-DB nicht (mehr) gibt (ID-Shift
+    # nach Schuljahreswechsel / Restore), gab es vorher eine namenlose
+    # Geisterkarte im Dashboard. Die IDs melden wir separat, damit die
+    # Oberfläche warnen kann statt still Unsinn anzuzeigen.
     kids = []
+    stale_account_ids = []
     for acc_id in account_ids:
-        kids.append(await _dashboard_for_account(acc_id, names.get(acc_id, ""), today))
-    return {"today": today_iso, "kids": kids}
+        if acc_id not in names:
+            stale_account_ids.append(acc_id)
+            continue
+        kids.append(await _dashboard_for_account(acc_id, names[acc_id], today))
+    return {
+        "today": today_iso,
+        "kids": kids,
+        "stale_account_ids": stale_account_ids,
+    }
 
 
 async def _dashboard_for_account(account_id: int, name: str, today: date) -> dict:
