@@ -143,6 +143,13 @@ class HausaufgabenOffenSensor(_Base):
         return {
             "items": [
                 {
+                    # Echte WebUntis-Hausaufgaben-ID — der einzige wirklich
+                    # eindeutige Schlüssel. Automationen sollten diese ID
+                    # in die ToDo-Description übernehmen (z.B. als Tag
+                    # "[MA12345]"), denn Fach + Datum allein kollidiert,
+                    # sobald am selben Tag zwei Aufgaben im selben Fach
+                    # aufgegeben werden.
+                    "id": h.get("untis_homework_id"),
                     "subject": h.get("subject_name"),
                     "text": h.get("text"),
                     "due_date": h.get("due_date"),

@@ -19,6 +19,15 @@ UPDATE_INTERVAL_HOURS = 1
 WINDOW_DAYS_BACK = 5
 WINDOW_DAYS_FORWARD = 9
 
+# Der Hausaufgaben-Endpoint (/api/homeworks/lessons) unterliegt NICHT der
+# Timetable-Fensterbeschränkung und akzeptiert weite Bereiche. Großzügig
+# zurückschauen, damit (a) eine mehrtägige HA-Downtime keine in der
+# Zwischenzeit vergebenen Aufgaben verliert und (b) der completed-Status
+# der letzten Wochen weiter aktualisiert wird; nach vorn, damit weit im
+# Voraus vergebene/fällige Aufgaben sicher mitkommen.
+HOMEWORK_WINDOW_DAYS_BACK = 21
+HOMEWORK_WINDOW_DAYS_FORWARD = 30
+
 # The absence endpoint accepts the whole school year. Grab a generous
 # window so we never miss past absences and can backfill on first pull.
 ABSENCE_WINDOW_DAYS_BACK = 400
