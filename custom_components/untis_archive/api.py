@@ -60,6 +60,23 @@ def _date_to_untis(d: date) -> int:
     return int(d.strftime("%Y%m%d"))
 
 
+def _parse_json(resp: httpx.Response, what: str) -> Any:
+    """Parse a response body as JSON or raise :class:`UntisApiError`.
+
+    WebUntis answers with an HTML login/maintenance page (HTTP 200!) when
+    the session expired or the instance is in maintenance. Without this
+    guard the resulting ``ValueError`` escapes as an unexpected exception
+    and takes the whole coordinator update down instead of degrading
+    gracefully per endpoint.
+    """
+    try:
+        return resp.json()
+    except ValueError as err:
+        raise UntisApiError(
+            f"{what} returned non-JSON (HTTP {resp.status_code}): {resp.text[:200]}"
+        ) from err
+
+
 def _schoolname_cookie(school: str) -> str:
     """Encode the school name the way WebUntis sets its ``schoolname`` cookie.
 
@@ -218,7 +235,7 @@ class UntisClient:
             raise UntisApiError(f"RPC {method} failed: {err}") from err
         if resp.status_code != 200:
             raise UntisApiError(f"RPC {method} HTTP {resp.status_code}: {resp.text[:200]}")
-        data = resp.json()
+        data = _parse_json(resp, f"RPC {method}")
         if "error" in data:
             raise UntisApiError(f"RPC {method} error: {data['error']}")
         return data.get("result")
@@ -292,7 +309,7 @@ class UntisClient:
             raise UntisApiError(
                 f"period/info HTTP {resp.status_code}: {resp.text[:200]}"
             )
-        return resp.json()
+        return _parse_json(resp, "period/info")
 
     async def get_teachers(self) -> list[dict[str, Any]]:
         """Master list of all teachers at the school (~99 at GaW).
@@ -345,7 +362,7 @@ class UntisClient:
             raise UntisApiError(
                 f"absences HTTP {resp.status_code}: {resp.text[:200]}"
             )
-        return resp.json()
+        return _parse_json(resp, "absences")
 
     async def get_homework(self, start: date, end: date) -> dict[str, Any]:
         """Fetch homework entries for the given window."""
@@ -364,4 +381,4 @@ class UntisClient:
             raise UntisApiError(
                 f"homeworks/lessons HTTP {resp.status_code}: {resp.text[:200]}"
             )
-        return resp.json()
+        return _parse_json(resp, "homeworks/lessons")

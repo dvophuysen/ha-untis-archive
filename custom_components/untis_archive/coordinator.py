@@ -24,6 +24,8 @@ from .const import (
     DB_FILENAME,
     DB_SUBDIR,
     DOMAIN,
+    HOMEWORK_WINDOW_DAYS_BACK,
+    HOMEWORK_WINDOW_DAYS_FORWARD,
     UPDATE_INTERVAL_HOURS,
     WINDOW_DAYS_BACK,
     WINDOW_DAYS_FORWARD,
@@ -94,6 +96,8 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         end = today + timedelta(days=WINDOW_DAYS_FORWARD)
         absence_start = today - timedelta(days=ABSENCE_WINDOW_DAYS_BACK)
         absence_end = today + timedelta(days=ABSENCE_WINDOW_DAYS_FORWARD)
+        homework_start = today - timedelta(days=HOMEWORK_WINDOW_DAYS_BACK)
+        homework_end = today + timedelta(days=HOMEWORK_WINDOW_DAYS_FORWARD)
 
         client = UntisClient(
             data[CONF_SERVER],
@@ -210,7 +214,7 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             hw_inserted = hw_updated = hw_unchanged = 0
             try:
-                raw_homework = await client.get_homework(start, end)
+                raw_homework = await client.get_homework(homework_start, homework_end)
             except UntisApiError as err:
                 _LOGGER.warning("Hausaufgaben-Abruf fehlgeschlagen: %s", err)
                 raw_homework = {}

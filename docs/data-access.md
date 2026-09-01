@@ -300,7 +300,7 @@ Tageswerte. Pro Kind (`<name>` = slugifizierter Anzeigename):
 | Entity | State | Wichtige Attribute |
 |---|---|---|
 | `sensor.untis_archive_<name>_lehrstoff_heute` | Anzahl heutiger Stunden mit Lehrstoff | `items[]` (subject, start, teacher, teacher_orig, room, code, was_absent, lstext) |
-| `sensor.untis_archive_<name>_hausaufgaben_offen` | Anzahl offener HA | `items[]` (subject, text, due_date, assigned_date) |
+| `sensor.untis_archive_<name>_hausaufgaben_offen` | Anzahl offener HA | `items[]` (id = WebUntis-Hausaufgaben-ID, subject, text, due_date, assigned_date) |
 | `sensor.untis_archive_<name>_versaeumter_stoff` | Anzahl verpasster Stunden (14 Tage) | `items[]` (date, subject, teacher, absence_reason, lstext) |
 | `sensor.untis_archive_<name>_fehlzeiten_schuljahr` | Anzahl Fehlzeiten im Schuljahr | `unexcused_count`, `items[]` |
 | `sensor.untis_archive_<name>_stundenplan_aenderungen` | Anzahl Änderungen (7 Tage) | `items[]` (date, subject, teacher/orig, room/orig, change_types) |
