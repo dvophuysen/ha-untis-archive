@@ -151,6 +151,9 @@ class HausaufgabenOffenSensor(_Base):
                     # aufgegeben werden.
                     "id": h.get("untis_homework_id"),
                     "subject": h.get("subject_name"),
+                    # Untis-Kürzel (z.B. "MA") aus dem Stundenplan — als
+                    # Tag-Präfix für Automationen ("[MA12345]").
+                    "subject_code": h.get("subject_code"),
                     "text": h.get("text"),
                     "due_date": h.get("due_date"),
                     "assigned_date": h.get("assigned_date"),

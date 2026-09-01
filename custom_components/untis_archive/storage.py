@@ -1161,7 +1161,50 @@ class UntisStorage:
                ORDER BY due_date""",
             (account_id,),
         )
-        return [dict(row) for row in cur.fetchall()]
+        rows = [dict(row) for row in cur.fetchall()]
+        self._resolve_homework_subjects(account_id, rows)
+        return rows
+
+    def _resolve_homework_subjects(
+        self, account_id: int, rows: list[dict[str, Any]]
+    ) -> None:
+        """Fach je Hausaufgabe aus der lessons-Tabelle auflösen.
+
+        homework.untis_lesson_id ist die Untis-Lesson-Nummer und entspricht
+        lessons.lsnumber. Darüber holen wir den Langnamen (subject_name)
+        für Zeilen, bei denen der Homework-Endpoint keinen geliefert hat,
+        und immer das Untis-Kürzel (subject_code, z.B. "MA") aus dem
+        Roh-Payload der Stunde — Automationen brauchen das Kürzel als
+        stabilen Tag-Präfix.
+        """
+        lsnumbers = {
+            r["untis_lesson_id"] for r in rows if r.get("untis_lesson_id")
+        }
+        by_lsnumber: dict[int, tuple[str | None, str | None]] = {}
+        if lsnumbers:
+            placeholder = ",".join("?" for _ in lsnumbers)
+            cur = self._conn.execute(
+                f"""SELECT lsnumber, subject_name, payload_json FROM lessons
+                    WHERE account_id=? AND lsnumber IN ({placeholder})
+                          AND subject_name IS NOT NULL
+                    ORDER BY date""",
+                (account_id, *lsnumbers),
+            )
+            for lrow in cur.fetchall():
+                code = None
+                try:
+                    raw = json.loads(lrow["payload_json"] or "{}")
+                    su = (raw.get("su") or [{}])[0]
+                    code = (su.get("name") or "").strip() or None
+                except (ValueError, AttributeError, IndexError, TypeError):
+                    code = None
+                # ORDER BY date: der letzte Treffer (neueste Stunde) gewinnt.
+                by_lsnumber[lrow["lsnumber"]] = (lrow["subject_name"], code)
+        for r in rows:
+            name, code = by_lsnumber.get(r.get("untis_lesson_id"), (None, None))
+            if not r.get("subject_name") and name:
+                r["subject_name"] = name
+            r["subject_code"] = code
 
     def missed_lessons(
         self, account_id: int, start_day: str, end_day: str
@@ -1364,12 +1407,23 @@ def normalize_homework(raw: dict[str, Any], lessons_lookup: dict[int, dict[str, 
     can resolve subject information.
     """
     lesson_info = lessons_lookup.get(int(raw.get("lessonId", 0))) or {}
-    subj = (lesson_info.get("subject") or {}) if isinstance(lesson_info, dict) else {}
+    subj = (lesson_info.get("subject") or None) if isinstance(lesson_info, dict) else None
+    # Reale Installationen liefern lessons[].subject mal als Dict
+    # ({"id":…,"name":…}), mal als nackten String — beides akzeptieren.
+    if isinstance(subj, dict):
+        subject_untis_id = subj.get("id")
+        subject_name = subj.get("name")
+    elif isinstance(subj, str):
+        subject_untis_id = None
+        subject_name = subj.strip() or None
+    else:
+        subject_untis_id = None
+        subject_name = None
     return {
         "untis_homework_id": int(raw["id"]),
         "untis_lesson_id": raw.get("lessonId"),
-        "subject_untis_id": subj.get("id") if isinstance(subj, dict) else None,
-        "subject_name": subj.get("name") if isinstance(subj, dict) else None,
+        "subject_untis_id": subject_untis_id,
+        "subject_name": subject_name,
         "text": (raw.get("text") or "").strip(),
         "assigned_date": to_iso_date(raw.get("date")),
         "due_date": to_iso_date(raw.get("dueDate")),
