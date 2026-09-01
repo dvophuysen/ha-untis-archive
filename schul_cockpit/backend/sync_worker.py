@@ -25,19 +25,30 @@ _LOGGER = logging.getLogger(__name__)
 
 SYNC_INTERVAL_SECONDS = 120
 
-# Untis-Hausaufgaben-ID-Tag im Notes-Feld, z.B. [MA260611] = Mathe, gegeben
-# am 11.06.26. Untis schreibt diesen Tag in JEDE Variante derselben Aufgabe
-# (gleicher Code, egal wie oft die HA-Automation neue UIDs vergibt). Damit
-# ist er der kanonische Dedup-Schlüssel — robuster als (title, due_date,
-# notes), die sich mit Untis-Edits leise verschieben können.
+# Untis-Tag im Notes-Feld, z.B. [MA260611] = Mathe, gegeben am 11.06.26.
+# Die HA-Automation schreibt diesen Tag in JEDE Variante derselben Aufgabe
+# (gleicher Code, egal wie oft sie neue UIDs vergibt). Der Tag allein ist
+# aber NICHT eindeutig: er codiert nur Fach + Vergabedatum. Gibt eine
+# Lehrkraft am selben Tag zwei Aufgaben im selben Fach auf, tragen beide
+# denselben Tag — deshalb geht der normalisierte Aufgabentext mit in den
+# Dedup-Schlüssel. Fälligkeits-Verschiebungen (der häufige Untis-Edit)
+# ändern den Schlüssel weiterhin nicht; nur ein editierter Aufgabentext
+# lässt den Eintrag als neue offene Aufgabe wieder auftauchen (fail-open —
+# lieber ein Duplikat als eine verschluckte echte Hausaufgabe).
 _UNTIS_ID_RE = re.compile(r"\[([A-Za-zÄÖÜäöüß]{1,5}\d+)\]")
 
 
-def _untis_id(notes: str | None) -> str | None:
+def _dedup_key(notes: str | None) -> str | None:
+    """Kanonischer Dedup-Schlüssel: Untis-Tag + normalisierter Resttext."""
     if not notes:
         return None
     m = _UNTIS_ID_RE.search(notes)
-    return m.group(1).upper() if m else None
+    if not m:
+        return None
+    tag = m.group(1).upper()
+    text = _UNTIS_ID_RE.sub(" ", notes)
+    text = re.sub(r"\s+", " ", text).strip().lower()
+    return f"{tag}|{text}"
 
 
 def _now() -> str:
@@ -106,16 +117,17 @@ async def _sync_one(
             "rebound_to_done": 0,
         }
 
-        # Index existierender Reihen nach Untis-ID — wenn HA für dieselbe
-        # Aufgabe eine neue UID schickt, finden wir die alte Reihe darüber
-        # und re-binden sie, statt eine zweite Reihe anzulegen. Done-Status
-        # gewinnt: eine abgehakte Reihe darf nicht durch neue UID-Lieferung
-        # wieder auf "offen" springen.
+        # Index existierender Reihen nach Dedup-Schlüssel (Untis-Tag +
+        # Aufgabentext) — wenn HA für dieselbe Aufgabe eine neue UID
+        # schickt, finden wir die alte Reihe darüber und re-binden sie,
+        # statt eine zweite Reihe anzulegen. Done-Status gewinnt: eine
+        # abgehakte Reihe darf nicht durch neue UID-Lieferung wieder auf
+        # "offen" springen.
         by_untis: dict[str, list[dict]] = {}
         for r in existing.values():
-            tag = _untis_id(r.get("notes"))
-            if tag:
-                by_untis.setdefault(tag, []).append(r)
+            key = _dedup_key(r.get("notes"))
+            if key:
+                by_untis.setdefault(key, []).append(r)
 
         for item in ha_items:
             uid = item.get("uid") or item.get("summary")
@@ -131,11 +143,12 @@ async def _sync_one(
 
             row = existing.get(uid)
             if row is None:
-                # Vor dem Insert: gibt's schon eine Reihe mit derselben
-                # Untis-Hausaufgaben-ID? Dann ist das dieselbe Aufgabe mit
-                # neuer HA-UID. Re-binden, Status beibehalten (done bleibt
-                # done), kein neues Aktiv-Duplikat erzeugen.
-                tag = _untis_id(ha_description)
+                # Vor dem Insert: gibt's schon eine Reihe mit demselben
+                # Dedup-Schlüssel (Untis-Tag + Aufgabentext)? Dann ist das
+                # dieselbe Aufgabe mit neuer HA-UID. Re-binden, Status
+                # beibehalten (done bleibt done), kein neues Aktiv-Duplikat
+                # erzeugen.
+                tag = _dedup_key(ha_description)
                 target = None
                 if tag and by_untis.get(tag):
                     candidates = by_untis[tag]
@@ -221,39 +234,37 @@ async def _sync_one(
                 )
 
             if push_done_to_ha:
+                # WICHTIG: per UID adressieren, nie per Titel. Der Titel
+                # ist bei Untis-Aufgaben nur der Fachname ("Mathematik")
+                # und damit mehrdeutig — HA nimmt beim Titel-Match das
+                # ERSTE Item mit diesem Summary und hakt sonst eine ganz
+                # andere (aktuelle!) Hausaufgabe ab.
                 try:
                     await sup.update_todo_item(
                         entity_id,
-                        row["title"],
+                        uid,
                         status="completed",
                     )
                 except SupervisorError as exc:
                     _LOGGER.warning(
                         "todo.update_item %s for %s failed: %s",
-                        entity_id, row["title"], exc,
+                        entity_id, uid, exc,
                     )
 
         for uid, row in existing.items():
             if uid in ha_seen_uids:
                 continue
             if row["status"] == "done":
-                last_sync = row.get("ha_last_synced_at") or row["updated_at"]
-                if row["updated_at"] and row["updated_at"] > last_sync:
-                    try:
-                        await sup.update_todo_item(
-                            entity_id,
-                            row["title"],
-                            status="completed",
-                        )
-                        conn.execute(
-                            "UPDATE tasks SET ha_last_synced_at = ? WHERE id = ?",
-                            (now, row["id"]),
-                        )
-                    except SupervisorError as exc:
-                        _LOGGER.warning(
-                            "todo.update_item %s for %s failed: %s",
-                            entity_id, row["title"], exc,
-                        )
+                # Erledigte Reihe, deren UID nicht mehr in HA existiert:
+                # nichts pushen. Früher wurde hier per TITEL "completed"
+                # nachgeschoben — der Titel ist aber nur der Fachname und
+                # traf damit regelmäßig eine ANDERE, aktuelle Hausaufgabe
+                # desselben Fachs in der HA-Liste. Hat die Automation die
+                # Aufgabe mit neuer UID neu angelegt, greift der
+                # Rebind-Pfad oben und der Done-Status wird beim nächsten
+                # Lauf regulär per UID gepusht. Ist das Item in HA wirklich
+                # gelöscht, gibt es nichts mehr abzuhaken.
+                pass
             else:
                 # Offene ha_todo-Zeile, die nicht mehr in HA steht → die
                 # Quelle der Wahrheit hat sie entfernt (oder die Automation
@@ -262,11 +273,14 @@ async def _sync_one(
                 conn.execute("DELETE FROM tasks WHERE id = ?", (row["id"],))
                 stats["orphans_deleted"] += 1
 
-        # Untis-ID Dedup (Cross-Status): alle ha_todo-Reihen mit derselben
-        # Hausaufgaben-ID (z.B. [MA260611]) gehören zusammen, egal wie oft
-        # die HA-Automation neue UIDs vergeben hat. Done schlägt offen —
-        # eine abgehakte Aufgabe darf nicht durch neue UID-Lieferungen
-        # wieder als aktiv auftauchen.
+        # Dedup (Cross-Status): alle ha_todo-Reihen mit demselben
+        # Dedup-Schlüssel (Untis-Tag + Aufgabentext) gehören zusammen,
+        # egal wie oft die HA-Automation neue UIDs vergeben hat. Done
+        # schlägt offen — eine abgehakte Aufgabe darf nicht durch neue
+        # UID-Lieferungen wieder als aktiv auftauchen. Der Tag allein
+        # reicht als Schlüssel NICHT: zwei echte Hausaufgaben desselben
+        # Fachs am selben Tag tragen denselben Tag und wurden früher
+        # fälschlich auf eine Reihe kollabiert.
         all_rows = conn.execute(
             "SELECT id, ha_uid, status, notes, updated_at FROM tasks "
             "WHERE account_id = ? AND ha_uid IS NOT NULL",
@@ -274,9 +288,9 @@ async def _sync_one(
         ).fetchall()
         groups: dict[str, list[sqlite3.Row]] = {}
         for r in all_rows:
-            tag = _untis_id(r["notes"])
-            if tag:
-                groups.setdefault(tag, []).append(r)
+            key = _dedup_key(r["notes"])
+            if key:
+                groups.setdefault(key, []).append(r)
 
         for tag, group in groups.items():
             if len(group) <= 1:

@@ -2,6 +2,37 @@
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.
 
+## 0.22.1 — Sync verschluckt keine aktuellen Hausaufgaben mehr
+
+Zwei Fehler im HA-ToDo-Sync haben dafür gesorgt, dass aktuelle
+Hausaufgaben sowohl aus der HA-ToDo-Liste als auch aus der App
+verschwinden konnten:
+
+- **Abhaken traf das falsche Item.** `todo.update_item` wurde per
+  **Titel** aufgerufen — bei Untis-Aufgaben ist der Titel aber nur der
+  Fachname („Mathematik"). HA nimmt beim Titel-Match das erste Item mit
+  diesem Namen, also wurde beim Abhaken in der App regelmäßig eine
+  ganz andere, aktuelle Aufgabe desselben Fachs in HA erledigt. Der
+  nächste Sync hat das dann in die App übernommen — die Aufgabe war
+  überall weg. Der Push adressiert jetzt immer die UID; der
+  Titel-basierte Nachschub für verschwundene UIDs ist ersatzlos raus
+  (den Fall deckt der Rebind-Pfad ab).
+- **Dedup-Schlüssel war mehrdeutig.** Der Tag `[MA260901]` codiert nur
+  Fach + Vergabedatum. Gibt eine Lehrkraft am selben Tag zwei Aufgaben
+  im selben Fach auf, hat der Dedup aus 0.19.13 die zweite als
+  Duplikat der ersten behandelt: kollabiert oder — wenn die erste schon
+  abgehakt war — direkt als „erledigt" verschluckt. Der Schlüssel ist
+  jetzt Tag **plus normalisierter Aufgabentext**. Fälligkeits-Edits aus
+  Untis ändern ihn weiterhin nicht; nur ein geänderter Aufgabentext
+  lässt die Aufgabe wieder als offen auftauchen (lieber einmal doppelt
+  als eine echte Hausaufgabe verloren).
+- Regressionstests für beide Fälle in `tests/test_sync_worker.py`.
+
+Parallel dazu liefert die UNTIS-Archive-Integration ab 0.5.0 im Sensor
+`hausaufgaben_offen` pro Eintrag die echte WebUntis-Hausaufgaben-ID
+(`items[].id`). Wer seine ToDo-Automation darauf umstellt (ID mit in
+den Notes-Tag), macht den Dedup vollständig kollisionsfrei.
+
 ## 0.22.0 — Verwaiste Kind-Verlinkungen sichtbar machen (Umschalter fehlt)
 Wenn ein Kind aus dem Umschalter verschwindet, lag es bisher daran, dass
 `user_account_links.account_id` auf die AUTOINCREMENT-ID der
