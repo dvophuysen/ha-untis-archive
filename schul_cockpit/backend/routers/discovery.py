@@ -55,7 +55,7 @@ def snapshot(account_id):
     for r in rows:
         r['lstext']=r['text']
         r['fingerprint']=hashlib.sha256(json.dumps([r['date'],r['subject_name'],r['text']],ensure_ascii=False).encode()).hexdigest()
-    pending=[r for r in rows if not r['future'] and r['text'].strip() and (r['id'] not in known or known[r['id']]['fingerprint']!=r['fingerprint'])]
+    pending=[r for r in rows if not r['future'] and r['text'].strip() and (r.get('subject_name') or '').strip() and (r['id'] not in known or known[r['id']]['fingerprint']!=r['fingerprint'])]
     pending.sort(key=lambda r:(r['rating'] not in (1,2),-date.fromisoformat(r['date']).toordinal()))
     return dict(profile=p,enabled=bool(setting and setting[0]),rows=rows,pending=pending,known=known,since=n['since'],truncated=n['truncated'])
 

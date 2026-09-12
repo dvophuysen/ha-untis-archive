@@ -60,6 +60,7 @@ def snapshot(account_id, include_previous=False):
         reviews=[dict(r) for r in c.execute('SELECT s.*,r.due_date FROM mentor_skills s JOIN mentor_reviews r ON r.skill_id=s.id WHERE s.account_id=? ORDER BY r.due_date LIMIT 60',(account_id,))]
         recent=[dict(r) for r in c.execute('SELECT id,subject,goal,status,summary,updated_at FROM mentor_sessions WHERE account_id=? AND is_test=0 ORDER BY id DESC LIMIT 20',(account_id,))]
         settings=c.execute('SELECT * FROM mentor_settings WHERE account_id=?',(account_id,)).fetchone()
+        discovered={r['lesson_id']:dict(r) for r in c.execute('SELECT i.lesson_id,i.fingerprint,t.id,t.subject,t.title,t.objective,d.explanation,d.bridge,d.prerequisites,d.outlook FROM learning_discovery_items i JOIN learning_topics t ON t.id=i.topic_id JOIN learning_discovery_topics d ON d.topic_id=t.id WHERE i.account_id=? AND i.profile_id=?',(account_id,p['id'] if p else -1))}
     try:
         with closing(history_conn()) as c:
             start=school_start(c,account_id,day)
@@ -80,6 +81,10 @@ def snapshot(account_id, include_previous=False):
             r.update(text=text[:1800],rating=ratings.get(r['id'],{}).get('rating'),note=(ratings.get(r['id'],{}).get('note') or '')[:500],
                      missed_minutes=n,catch_up_open=bool(r.get('was_absent') and r['id'] not in caught and (n is None or n>=15)),future=r['date']>day.isoformat())
             r.pop('teacher_name',None);r.pop('lstext_manual_override',None);r.pop('lstext',None)
+            topic=discovered.get(r['id'])
+            # Reuse only a cluster whose underlying lesson still matches.
+            if topic and topic['subject']==r.get('subject_name') and topic['fingerprint']==fingerprint([r['date'],r.get('subject_name'),r['text']]):
+                r['topic']={k:topic[k] for k in ('id','title','objective','explanation','bridge','prerequisites','outlook')}
             clean.append(r)
         lessons=clean
     except (sqlite3.Error,OSError):
@@ -110,7 +115,7 @@ def candidates(s):
         options=[x for x in pool if x.get('subject_name')==subject]
         x=max(options,key=lambda x:(x['rating'] in (1,2),x['catch_up_open'],x['date']))
         reason='Verständnis kurz prüfen' if x['rating'] in (1,2) else 'Versäumtes gemeinsam einordnen' if x['catch_up_open'] else 'Kurz schauen, was noch sitzt'
-        out.append(dict(kind='lesson',lesson_id=x['id'],subject=subject,title=x['text'][:150],reason=reason,
+        out.append(dict(kind='lesson',lesson_id=x['id'],subject=subject,title=x.get('topic',{}).get('title') or x['text'][:150],reason=reason,
                         source={'lesson_id':x['id'],'date':x['date'],'text':x['text']},rank=1 if x['rating'] in (1,2) else 2))
     # Rotate the first subject using number of starts today, then offer max 4.
     out.sort(key=lambda r:(last.get(r['subject'],''),r['rank']))
@@ -136,6 +141,13 @@ def context(account_id,session):
                homework=[r for r in s['homework'] if r.get('subject_name')==subject][:6],
                previous=[r for r in s['recent'] if r['subject']==subject and r['id']!=session['id']][:3],
                evidence=evidence,materials=materials,errors=s['errors'])
+    topics={}
+    for lesson in lessons:
+        t=lesson.get('topic')
+        if t and t['id'] not in topics and len(topics)<3:
+            topics[t['id']]={k:(v[:700] if isinstance(v,str) else v) for k,v in t.items()}
+            topics[t['id']].update(source_lesson_id=lesson['id'],source_date=lesson['date'],status='KI-Themenvorschlag aus dokumentiertem Unterricht; keine gemessene Kompetenz')
+    state['topic_connections']=list(topics.values())
     version=fingerprint(state)
     state.update(messages=msgs,summary=session['summary'],phase=session['phase'],current_task=json.loads(session['current_task']) if session['current_task'] else None,
                  help_count=session['help_count'],task_help=bool(session['task_help']),read_at=s['read_at'])
