@@ -1,3 +1,19 @@
+## Übungsklausuren ab 0.27.0
+
+Unter **Lernen → Übungsklausur → Übungsklausur vorbereiten** sind beide Wege direkt sichtbar: eigene Themen zeilenweise eintragen oder ein Fach wählen und **Themen aus Unterricht vorschlagen** aufrufen. Standard ist seit Schuljahresbeginn; alternativ seit der letzten erfassten Klausur desselben Fachs oder ab einem eigenen Datum. Fehlt eine vergangene Klausur, wird der Schuljahresbeginn ausdrücklich angezeigt. Bei einem Kalenderfehler bitte Datum selbst wählen.
+
+Die KI gruppiert alle verwertbaren Fachstunden und Hausaufgaben des Zeitraums in bis zu acht Bereiche. Alle sind zunächst ausgewählt; Titel lassen sich ändern, Bereiche abwählen und eigene Themen hinzufügen. Aufklappbare Quellen zeigen Unterrichtsdatum, Notiz und Hausaufgaben. Fehlzeiten schließen Themen nicht aus. Organisatorische/unklare Einträge bleiben sichtbar; sie sollten bei Bedarf abgewählt werden. Leere Einträge können unbekannten Stoff enthalten. Sehr lange Einzelnotizen und außergewöhnlich große Archive werden nicht stillschweigend als vollständig ausgewertet bezeichnet.
+
+Der gewählte Stoffplan wird als Vorlage samt Quellen an die Arbeit gebunden. Pro ausgewähltem Bereich ist mindestens eine Aufgabe erforderlich; mindestens drei Minuten je Bereich, höchstens acht Bereiche pro Arbeit. Die Aufgaben sind eine Stichprobe innerhalb der Bereiche, kein Nachweis, dass jedes Unterrichtsdetail geprüft wird. Es wird kein tatsächlicher Prüfungsumfang der Lehrkraft behauptet. Für große Stoffmengen mehrere Arbeiten planen. Gespeicherte Themenübersichten und Gruppierungsschritte vermeiden wiederholte KI-Kosten.
+
+Drei Bearbeitungswege:
+
+1. **Aufgaben drucken:** A4-Druckansicht ohne Lösungen; Browser-Drucken oder auf dem iPhone Teilen → Drucken / als PDF sichern. Aufgabennummern auf Zusatzblätter schreiben. In **Online / Foto bearbeiten** die passenden Fotos jeder Aufgabe zuordnen (höchstens zwei Fotos pro Aufgabe), abgeben und anschließend Aufgaben mit KI-Punkten auswerten.
+2. **Online / Foto bearbeiten:** Antworten direkt tippen/diktieren oder mit Fotos kombinieren. Punkte und Teilpunkte werden nach Abgabe pro Aufgabe durch den Assistenten vergeben; unleserliche/unklare Antworten bleiben als unklar erkennbar. Die Auswertung wird bewusst in einzelnen begrenzten Schritten angefordert.
+3. **Selbstkontrolle ohne Punkte:** Aufgaben gedanklich oder auf Papier durchgehen und Musterlösungen aufklappen. Keine KI-Auswertung und kein Kompetenznachweis. Das Öffnen der Lösungen wird pro Benutzer und Arbeit dokumentiert; eine danach abgegebene Bearbeitung erhält weiterhin Punkte, zählt aber als Übung mit bekannter Lösung. Eltern-Selbstkontrolle beeinflusst die Kennzeichnung des Kindes nicht.
+
+Demo-Arbeiten bleiben auch beim Drucken und bei der Selbstkontrolle vom Kinderstand getrennt.
+
 ## Elternansicht ab 0.26.0: Kinderstand und Demo
 
 Im Bereich **Lernen** steht für Eltern oben der Umschalter **Kinderstand / Demo ausprobieren**. Beim erneuten Öffnen beginnt der Mentor im Kinderstand. Das oben ausgewählte Kind bestimmt, wessen echte Daten angezeigt werden; die Demo ist ebenfalls pro ausgewähltem Konto getrennt gespeichert.

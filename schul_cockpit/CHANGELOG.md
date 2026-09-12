@@ -1,3 +1,11 @@
+## 0.27.0
+
+- Übungsklausuren aus dem Unterrichtsverlauf vorbereiten: Fach und Zeitraum (Schuljahr, seit letzter Klausur, eigenes Datum), KI-Themengruppen zunächst vollständig ausgewählt, abwählbar und um eigene Themen ergänzbar.
+- Alle lesbaren Fachstunden im Zeitraum und zugehörige Hausaufgaben werden mit Quellenzuordnung berücksichtigt, auch Fehlzeiten. Leere/gekürzte Notizen und Kalenderfehler sind ausdrücklich sichtbar. Keine stillschweigende Beschränkung auf die jüngsten zwölf Stunden bei Verwendung einer Themenübersicht.
+- Themenübersichten und Teilschritte werden dauerhaft wiederverwendet; jeder Quelleneintrag muss genau einer Gruppe zugeordnet sein. Demo verwendet ausschließlich Beispieldaten.
+- Druckbare Aufgabenfassung ohne Lösungen, mit Antwortplatz und Aufgabennummern. Danach pro Aufgabe Fotos einreichen oder direkt online antworten und mit KI-Punkten auswerten.
+- Separater Weg zur Selbstkontrolle ohne Punkte. Geöffnete Lösungen werden vermerkt; nachfolgende Bewertungen zählen als Übung mit bekannter Lösung, nicht als selbstständiger Leistungsnachweis.
+
 ## 0.26.0
 
 - Eltern-Umschalter im Lernmentor: echter Kinderstand und separate Demo mit erfundenen Beispielen für Klasse 6.

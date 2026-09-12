@@ -54,7 +54,7 @@ def missed_minutes(lesson, absences):
     except (KeyError,ValueError,TypeError): return None
 
 
-def snapshot(account_id, include_previous=False):
+def snapshot(account_id, include_previous=False, include_all_homework=False):
     day=today_local(); errors=[]
     with closing(webapp_conn()) as c:
         p=c.execute('SELECT * FROM learning_profiles WHERE account_id=? AND active=1',(account_id,)).fetchone()
@@ -72,7 +72,8 @@ def snapshot(account_id, include_previous=False):
             lessons=rows(c,'lessons','id untis_period_id date start_time end_time subject_name subject_untis_id teacher_untis_id teacher_name lstext lstext_manual_override was_absent is_supervision_guess supervision_manual_override code last_updated_at',account_id,
                          'AND date>=? AND date<=? ORDER BY date DESC,id DESC LIMIT 6001',(start,(day+timedelta(days=7)).isoformat()))
             absence=rows(c,'absences','start_date end_date start_time end_time',account_id)
-            homework=rows(c,'homework','id untis_lesson_id subject_name text assigned_date due_date completed',account_id,'AND assigned_date>=? ORDER BY assigned_date DESC LIMIT 200',(start,))
+            homework=rows(c,'homework','id untis_lesson_id subject_name text assigned_date due_date completed',account_id,'AND assigned_date>=? ORDER BY assigned_date DESC LIMIT '+('8001' if include_all_homework else '200'),(start,))
+            if include_all_homework and len(homework)>8000:errors.append('Die Hausaufgabenhistorie überschreitet die vollständige Lesemenge.')
         hidden=hidden_keys(account_id)
         clipped=len(lessons)>6000
         clean=[]
@@ -82,7 +83,7 @@ def snapshot(account_id, include_previous=False):
             if override if override is not None else r.get('is_supervision_guess'): continue
             text=r.get('lstext_manual_override') or r.get('lstext') or ''
             n=missed_minutes(r,absence) if r.get('was_absent') else 0
-            r.update(text=text[:1800],rating=ratings.get(r['id'],{}).get('rating'),note=(ratings.get(r['id'],{}).get('note') or '')[:500],
+            r.update(text=text[:1800],text_truncated=len(text)>1800,rating=ratings.get(r['id'],{}).get('rating'),note=(ratings.get(r['id'],{}).get('note') or '')[:500],
                      missed_minutes=n,catch_up_open=bool(r.get('was_absent') and r['id'] not in caught and (n is None or n>=15)),future=r['date']>day.isoformat())
             r.pop('teacher_name',None);r.pop('lstext_manual_override',None);r.pop('lstext',None)
             topic=discovered.get(r['id'])

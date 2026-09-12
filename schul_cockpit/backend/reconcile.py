@@ -32,7 +32,7 @@ _LOGGER = logging.getLogger("schul_cockpit.reconcile")
 _ACCOUNT_TABLES = (
     "mentor_quality_runs", "mentor_settings", "mentor_ai_calls", "mentor_skills", "mentor_sessions",
     "mentor_messages", "mentor_evidence", "mentor_reviews", "mentor_attachments",
-    "mentor_jobs", "mentor_exams", "mentor_exam_attempts", "mentor_exam_photos",
+    "mentor_exam_exposures", "mentor_scope_plans", "mentor_jobs", "mentor_exams", "mentor_exam_attempts", "mentor_exam_photos",
     "learning_profiles",
     "learning_ai_usage",
     "learning_discovery_settings",
