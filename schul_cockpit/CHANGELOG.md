@@ -1,3 +1,10 @@
+# 0.25.2 – Themenverbindungen und Aufgaben im Dialog
+
+- Erkannte Themenfelder mit Erklärbildern und Grundlagen fließen jetzt in den Mentor ein; geänderte Originaleinträge entwerten alte Zuordnungen.
+- Neue Aufgaben stehen direkt bei der zugehörigen Mentornachricht, damit sie beim Scrollen auf dem iPhone sichtbar bleiben.
+- Budgetanzeige nach Modellprüfungen aktualisiert; bestehende Farbvariablen der App verwendet.
+- Hintergrundauswertung überspringt Einträge ohne Fachzuordnung.
+
 # 0.25.1 – Unvollständige Unterrichtszuordnung
 
 - Unterrichtseinträge ohne Fachzuordnung werden nicht als Fachvorschlag verwendet und blockieren die Startseite nicht mehr.

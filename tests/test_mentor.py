@@ -49,6 +49,23 @@ def test_dashboard_tolerates_lessons_without_subject(setup):
     assert [x['subject'] for x in result.json()['candidates']]==['Deutsch']
 
 
+def test_discovered_connections_require_unchanged_lesson(setup):
+    client,_,_=setup
+    with closing(db.webapp_conn()) as c:
+        t=c.execute('SELECT id,profile_id FROM learning_topics LIMIT 1').fetchone()
+        c.execute('INSERT INTO learning_discovery_topics VALUES(?,?,?,?,?,?)',(t['id'],'Kurze Erklärung','Bildliche Brücke','Grundlage','Möglicher Ausblick','now'))
+        c.execute('INSERT INTO learning_discovery_items VALUES(?,?,?,?,?,?)',(1,t['profile_id'],1,mc.fingerprint(['2026-09-11','Deutsch','Adjektive großschreiben']),t['id'],''))
+    s=mc.snapshot(1)
+    assert mc.candidates(s)[0]['title']=='Argumentieren'
+    session=start(client)
+    with closing(db.webapp_conn()) as c: raw=dict(c.execute('SELECT * FROM mentor_sessions WHERE id=?',(session['id'],)).fetchone())
+    ctx,_,_=mc.context(1,raw)
+    assert ctx['topic_connections'][0]['bridge']=='Bildliche Brücke'
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:c.execute("UPDATE lessons SET lstext='Veränderter Stoff' WHERE id=1")
+    ctx,_,_=mc.context(1,raw)
+    assert ctx['topic_connections']==[]
+
+
 def send(client,s,**args):
     key='request_'+str(s['version'])
     return client.post(B+f"/sessions/{s['id']}/turn",json={'request_key':key,'version':s['version'],'text':'Kurz ausprobieren',**args})
