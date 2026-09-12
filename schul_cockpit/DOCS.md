@@ -125,8 +125,7 @@ nie über unverschlüsseltes HTTP übertragen wird.
 
 ## Datensicherheit & Persistenz
 
-- **Alle Daten bleiben auf deiner HA-Instanz** — keine externen
-  Verbindungen.
+- **Die Lern- und App-Daten bleiben auf deiner HA-Instanz.** Optional aktivierte KI-Entwürfe senden ausdrücklich ausgewählte Materialien an den konfigurierten Modell-Endpunkt; Details im Lernkonzept.
 - `webapp.db` (Check-ins, Aufgaben, PINs, Einstellungen) liegt in
   `/data/` und ist Teil **jedes HA-Backups**.
 - **Add-on-Updates** (auch automatische) lassen `/data/` unangetastet.
@@ -139,3 +138,14 @@ nie über unverschlüsseltes HTTP übertragen wird.
 - **Einziger echter Löschfall**: Beim Deinstallieren des Add-ons fragt
   HA „Daten löschen?" — mit „Nein" überlebt `webapp.db` eine spätere
   Neuinstallation.
+
+
+## Lernraum ab 0.23.0
+
+Der neue Tab **Lernen** verbindet Unterrichtsthemen, Materialien und Übungen über alle Fächer und Schuljahre. Unter **Steuern** richten Eltern das aktive Schuljahr und den Lernrahmen ein. Die vorhandene Kind-Zuordnung gilt unverändert.
+
+Unter **Themen** lassen sich eigene Übungen anlegen; KI-Entwürfe werden erst nach Prüfung freigegeben. Der Lernverlauf enthält ausdrücklich Selbsteinschätzungen, keine automatisch vergebenen Noten. Für Screenshots und PDFs stehen 100 MB je Kind zur Verfügung (8 MB je Datei). PDF-Inhalt für KI als Text ergänzen oder einzelne Seiten als Bilder einstellen.
+
+Die optionalen Add-on-Einstellungen `learning_ai_url`, `learning_ai_key` und `learning_ai_model` konfigurieren einen kompatiblen HTTPS-Endpunkt für Responses oder Chat Completions. Zusätzlich muss KI pro Schuljahr freigegeben werden. Ohne Konfiguration ist der Lernraum mit eigenen Aufgaben voll nutzbar.
+
+[Gesamtkonzept, Architektur, Betriebsgrenzen und Inbetriebnahme](LERNKONZEPT.md)

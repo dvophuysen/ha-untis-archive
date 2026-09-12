@@ -106,6 +106,9 @@
   }
 </script>
 
+<p><a href="#/learning">🌱 Lernraum: kurze Übungen und spätere Wiederholungen →</a></p>
+
+
 <div class="row between" style="margin: 0.3rem 0.2rem 0.5rem;">
   <button onclick={() => (showDone = !showDone)} style="font-size:0.85rem; min-height:36px;">
     {showDone ? 'Erledigte ausblenden' : 'Erledigte anzeigen'}

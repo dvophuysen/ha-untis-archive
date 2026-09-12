@@ -45,7 +45,7 @@ def _budget_for_today(account_id: int, today: date) -> tuple[int, dict]:
         if section is None:
             # Fall back to the manual value so we don't return 0 minutes
             # while the admin assigns the right section.
-            default = (row and row["default_daily_budget_minutes"]) or 60
+            default = row["default_daily_budget_minutes"] if row else 60
             return default, {
                 "source": "fallback_manual",
                 "reason": "Klasse konnte nicht erkannt werden",
@@ -63,7 +63,7 @@ def _budget_for_today(account_id: int, today: date) -> tuple[int, dict]:
         }
 
     # Manual override branch — unchanged behaviour from before.
-    default = (row and row["default_daily_budget_minutes"]) or 60
+    default = row["default_daily_budget_minutes"] if row else 60
     overrides_raw = row["budget_overrides_json"] if row else None
     info = {"source": "manual"}
     if not overrides_raw:
