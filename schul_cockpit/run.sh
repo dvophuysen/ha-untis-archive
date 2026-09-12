@@ -10,6 +10,9 @@ export LEARNING_AI_URL="$(bashio::config 'learning_ai_url')"
 export LEARNING_AI_KEY="$(bashio::config 'learning_ai_key')"
 export LEARNING_AI_MODEL="$(bashio::config 'learning_ai_model')"
 
+export LEARNING_READ_TOKEN="$(bashio::config 'learning_read_token')"
+export LEARNING_READ_ACCOUNTS="$(bashio::config 'learning_read_accounts')"
+
 bashio::log.info "Starting Schul-Cockpit on ${WEBAPP_HOST}:${WEBAPP_PORT}"
 bashio::log.info "history.db: ${WEBAPP_HISTORY_DB}"
 bashio::log.info "data dir:   ${WEBAPP_DATA_DIR}"

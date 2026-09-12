@@ -149,3 +149,8 @@ Unter **Themen** lassen sich eigene Übungen anlegen; KI-Entwürfe werden erst n
 Die optionalen Add-on-Einstellungen `learning_ai_url`, `learning_ai_key` und `learning_ai_model` konfigurieren einen kompatiblen HTTPS-Endpunkt für Responses oder Chat Completions. Zusätzlich muss KI pro Schuljahr freigegeben werden. Ohne Konfiguration ist der Lernraum mit eigenen Aufgaben voll nutzbar.
 
 [Gesamtkonzept, Architektur, Betriebsgrenzen und Inbetriebnahme](LERNKONZEPT.md)
+
+
+## Dauerhafter Analysezugang ab 0.23.3
+
+Eine separate Lese-API liefert Unterricht, Rückmeldungen, Nachholen, Aufgaben und Lernverläufe. Authentifizierung, Filter, Pagination und Wiederverwendung in späteren Sessions: [READ_ACCESS.md](READ_ACCESS.md). Der Zugang ist standardmäßig deaktiviert und wird über `learning_read_token` sowie `learning_read_accounts` ausdrücklich eingerichtet.

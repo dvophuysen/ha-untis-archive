@@ -1,3 +1,10 @@
+# 0.23.3 – Dauerhafter Lesezugang für Analysen
+
+- Separate schlüsselgeschützte Lese-API mit ausdrücklicher Kind-Freigabeliste.
+- Unterricht, Hausaufgaben, Rückmeldungen, Nachholen, Kursfilter, Aufgaben und Lernverläufe mit Pagination und Datumsfiltern.
+- SQLite ausschließlich read-only; keine freie SQL-Ausführung und keine Ausgabe von Anmeldedaten.
+- Neustartfeste Konfiguration, widerrufbar durch Leeren oder Wechseln des Schlüssels.
+
 # 0.23.2 – Lernrahmen mit Auswahlfeldern
 
 - Schuljahr, Jahrgang, Bundesland und Schulform als native Dropdowns.

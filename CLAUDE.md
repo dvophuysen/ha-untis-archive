@@ -34,3 +34,7 @@
 - **HA-Komponente `untis_archive`:** sichtbare Änderungen brauchen einen
   Bump in `custom_components/untis_archive/manifest.json` (triggert den
   Release-Workflow in `.github/workflows/release.yml`).
+
+# Dauerhafter lesender Schul-Datenzugriff
+
+Für Datenanalysen des Schul-Cockpits zuerst [READ_ACCESS.md](schul_cockpit/READ_ACCESS.md) lesen. Die App bietet ab 0.23.3 eine eigene schlüsselgeschützte, nach Kind begrenzte Lese-API. Keine PIN oder SSH-Anmeldung nötig. Zugangsdaten ausschließlich in der HA-App-Konfiguration; nie in Git oder Chat ausgeben.

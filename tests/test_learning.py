@@ -457,3 +457,44 @@ def test_responses_protocol(url):
     ]:
         with pytest.raises(ValueError):
             learning.model_output(url, invalid)
+
+
+def test_persistent_read_access_scope_pagination_and_secret_exclusion(env):
+    from backend.routers import read_access as r
+    client,state,monkeypatch=env
+    client.app.include_router(r.router,prefix='/api')
+    monkeypatch.setattr(r,'SETTINGS',db.SETTINGS)
+    base='/api/integration/learning'
+    monkeypatch.delenv('LEARNING_READ_TOKEN',raising=False)
+    assert client.get(base).status_code==503
+    monkeypatch.setenv('LEARNING_READ_TOKEN','a'*48)
+    monkeypatch.setenv('LEARNING_READ_ACCOUNTS','1')
+    headers={'X-Learning-Read-Key':'a'*48}
+    assert client.get(base).status_code==401
+    assert client.get(base,headers={'X-Learning-Read-Key':'wrong'}).status_code==401
+    manifest=client.get(base,headers=headers)
+    assert manifest.status_code==200 and manifest.json()['account_ids']==[1]
+    assert client.get(base+'/accounts?account_id=2',headers=headers).status_code==403
+    assert client.get(base+'/users?account_id=1',headers=headers).status_code==404
+    assert client.post(base+'/tasks?account_id=1',headers=headers,json={'title':'no'}).status_code==405
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO account_settings(account_id,created_at,updated_at,notify_token) VALUES(1,'now','now','SECRET-NEVER-EXPORT')")
+        for day in ['2026-08-13','2026-09-11','2026-09-12']:
+            c.execute("INSERT INTO tasks(account_id,title,source,due_date,created_at,updated_at) VALUES(1,'Check','manual',?,?,?)",(day,day+'T10:00:00+02:00',day+'T10:00:00+02:00'))
+        c.execute("INSERT INTO tasks(account_id,title,source,created_at,updated_at) VALUES(2,'OTHER-CHILD','manual','now','now')")
+    result=client.get(base+'/account_settings?account_id=1',headers=headers)
+    assert result.status_code==200 and 'SECRET' not in result.text and 'notify_token' not in result.text
+    first=client.get(base+'/tasks?account_id=1&limit=1',headers=headers).json()
+    assert len(first['rows'])==1 and first['has_more']
+    second=client.get(base+f"/tasks?account_id=1&limit=2&after={first['next_after']}",headers=headers).json()
+    assert len(second['rows'])==2 and not second['has_more']
+    assert 'OTHER-CHILD' not in str(first)+str(second)
+    assert len(client.get(base+'/tasks?account_id=1&start=2026-09-01&end=2026-09-11',headers=headers).json()['rows'])==1
+    assert len(client.get(base+'/tasks?account_id=1&updated_since=2026-09-12T00:00:00Z',headers=headers).json()['rows'])==1
+    assert client.get(base+'/tasks?account_id=1&limit=251',headers=headers).status_code==422
+    with closing(r.open_readonly('app')) as c:
+        with pytest.raises(sqlite3.OperationalError): c.execute("UPDATE tasks SET title='No'")
+    monkeypatch.setenv('LEARNING_READ_TOKEN','b'*48)
+    assert client.get(base,headers=headers).status_code==401
+    monkeypatch.setenv('LEARNING_READ_ACCOUNTS','')
+    assert client.get(base,headers={'X-Learning-Read-Key':'b'*48}).status_code==503

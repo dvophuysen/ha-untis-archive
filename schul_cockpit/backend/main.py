@@ -28,6 +28,7 @@ from .routers import (
     exams,
     health,
     learning,
+    read_access,
     kiosk as kiosk_router,
     me,
     notify,
@@ -95,7 +96,7 @@ async def slide_pin_cookie(request: Request, call_next):
     must not be overwritten by stale incoming-cookie values."""
     response = await call_next(request)
     path = request.url.path
-    if "/learning" in path and path.startswith("/api/accounts/"):
+    if ("/learning" in path and path.startswith("/api/accounts/")) or path.startswith("/api/integration/learning"):
         response.headers["Cache-Control"] = "private, no-store"
     if path.startswith("/api/auth/"):
         return response
@@ -121,6 +122,7 @@ async def slide_pin_cookie(request: Request, call_next):
 API = "/api"
 app.include_router(health.router, prefix=API)
 app.include_router(learning.router, prefix=API)
+app.include_router(read_access.router, prefix=API)
 app.include_router(auth_router.router, prefix=API)
 app.include_router(me.router, prefix=API)
 app.include_router(setup.router, prefix=API)
