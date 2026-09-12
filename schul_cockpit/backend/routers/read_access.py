@@ -51,15 +51,15 @@ dataset('learning_reviews','app','activity_id next_due streak last_outcome last_
 
 # Mentor history and evidence remain account-scoped. Binary files are excluded.
 for name,cols,dt in [
- ('mentor_sessions','id account_id subject goal is_test phase status version max_minutes elapsed_seconds turns help_count summary context_hash created_at updated_at','updated_at'),
+ ('mentor_sessions','id account_id subject goal is_test is_demo phase status version max_minutes elapsed_seconds turns help_count summary context_hash created_at updated_at','updated_at'),
  ('mentor_messages','id account_id session_id role text payload created_at','created_at'),
  ('mentor_skills','id account_id subject title objective source_json created_at updated_at','updated_at'),
  ('mentor_evidence','id account_id skill_id session_id exam_attempt_id task_json answer result rationale help_used source variant_hash invalidated created_at','created_at'),
  ('mentor_reviews','skill_id account_id due_date last_evidence_id updated_at','updated_at'),
  ('mentor_ai_calls','id account_id session_id purpose month day model status reserved_micro charged_micro input_tokens output_tokens input_rate output_rate created_at finished_at error','created_at'),
  ('mentor_jobs','account_id status next_run updated_at error','updated_at'),
- ('mentor_exams','id account_id title subject scope_json tasks_json minutes status created_at published_at','created_at'),
- ('mentor_exam_attempts','id account_id exam_id status answers_json snapshot feedback_json elapsed_seconds started_at submitted_at','started_at')]:
+ ('mentor_exams','id account_id title subject scope_json tasks_json minutes status is_demo created_at published_at','created_at'),
+ ('mentor_exam_attempts','id account_id exam_id is_test status answers_json snapshot feedback_json elapsed_seconds started_at submitted_at','started_at')]:
     dataset(name,'app',cols,dt)
 
 

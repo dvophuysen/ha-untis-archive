@@ -312,6 +312,8 @@ _MIGRATIONS.append(("learning_002", (Path(__file__).parent / "discovery_schema.s
 
 _MIGRATIONS.append(("mentor_001", (Path(__file__).parent / "mentor_schema.sql").read_text()))
 
+_MIGRATIONS.append(("mentor_002", (Path(__file__).parent / "mentor_demo_schema.sql").read_text()))
+
 def history_conn() -> sqlite3.Connection:
     """Read-only connection to the UNTIS Archive's history.db."""
     uri = f"file:{SETTINGS.history_db_path}?mode=ro"

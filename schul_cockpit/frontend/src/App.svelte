@@ -180,7 +180,7 @@
     <div
       style="background: var(--substitution); color: #fff; padding: 0.5rem 1rem; font-size: 0.85rem; display:flex; justify-content:space-between; align-items:center; gap:0.5rem;"
     >
-      <span>🧪 <strong>Demo-Modus</strong> · {appState.me.open_audit_count ?? 0} Änderungen geloggt</span>
+      <span>🧪 <strong>Teständerungen · Echtdaten</strong> · {appState.me.open_audit_count ?? 0} Änderungen geloggt</span>
       <button
         class="ghost"
         style="color:#fff; border-color:rgba(255,255,255,0.4); padding:0.2rem 0.6rem; min-height:32px; font-size:0.8rem;"
