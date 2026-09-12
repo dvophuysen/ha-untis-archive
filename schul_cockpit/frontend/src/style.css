@@ -127,7 +127,8 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
   right: 0;
   bottom: 0;
   display: flex;
-  justify-content: space-around;
+  justify-content: flex-start;
+  overflow-x: auto;
   padding: 0.4rem 0 calc(0.4rem + env(safe-area-inset-bottom));
   background: var(--bg-card);
   border-top: 1px solid var(--border);
@@ -135,7 +136,7 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
 }
 .bottom-nav button {
   flex: 1;
-  min-width: 0;
+  min-width: 64px;
   border: none;
   background: transparent;
   color: var(--fg-muted);

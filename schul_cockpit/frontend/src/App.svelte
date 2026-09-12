@@ -4,6 +4,7 @@
   import Today from './routes/Today.svelte';
   import Overview from './routes/Overview.svelte';
   import Plan from './routes/Plan.svelte';
+  import Learning from './routes/Learning.svelte';
   import Week from './routes/Week.svelte';
   import Subjects from './routes/Subjects.svelte';
   import SubjectDetail from './routes/SubjectDetail.svelte';
@@ -103,6 +104,7 @@
     const items = [
       { name: 'today', icon: '📅', label: 'Heute' },
       { name: 'plan', icon: '🎯', label: 'Plan' },
+      { name: 'learning', icon: '🌱', label: 'Lernen' },
       { name: 'week', icon: '📊', label: 'Woche' },
       { name: 'subjects', icon: '📚', label: 'Fächer' },
       { name: 'klausuren', icon: '📝', label: 'Klausur' },
@@ -226,6 +228,10 @@
       <Plan accountId={appState.activeAccountId} />
     {:else if route.name === 'week'}
       <Week accountId={appState.activeAccountId} />
+    {:else if route.name === 'learning'}
+      {#key appState.activeAccountId}
+        <Learning accountId={appState.activeAccountId} />
+      {/key}
     {:else if route.name === 'klausuren'}
       <Klausuren accountId={appState.activeAccountId} />
     {:else if route.name === 'absences'}

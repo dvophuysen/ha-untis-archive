@@ -1,3 +1,23 @@
+# 0.23.1 – Azure Responses API
+
+- Erkennt Responses-Endpunkte einschließlich Azure-Preview- und v1-Pfad automatisch.
+- Unterstützt Responses-Text- und Bildeingaben; speichert keine Responses-Konversation (`store=false`).
+- Liest nur abgeschlossene Textantworten; abgelehnte oder unvollständige Antworten werden nicht als Übungen übernommen.
+- Chat-Completions-Unterstützung bleibt erhalten. Echte Azure-Verbindung noch nicht getestet.
+
+# 0.23.0 – Fachübergreifender Lernraum
+
+- Dauerhafte Schuljahresprofile, beliebige Fächer/Themen, Lernziele und Elternsteuerung.
+- Unterrichtseingang, Materialien (Text, Foto, Screenshot, PDF), Prüfung und Freigabe.
+- Eigene Übungen und optional geprüfte KI-Entwürfe aus ausgewählten Quellen.
+- Geführte Einheiten mit eigener Antwort, Hilfe, Kriterienvergleich und Selbsteinschätzung.
+- Zeitbudgetabhängige Vorschläge, verteilte Wiederholung und langfristiger Verlauf.
+- Schuljahreswechsel ohne Datenverlust; Themen mit erneuter Prüfung fortführen.
+- Materialien sind Bestandteil vorhandener Datenbanksicherungen; JSON-Verlaufsexport.
+- Kontogebundene API, keine Offline-Zwischenspeicherung der Lernantworten.
+- Optionaler KI-Endpunkt in der Add-on-Konfiguration; ohne Verbindung weiter nutzbar.
+- Gesamtkonzept und Betriebsgrenzen: `LERNKONZEPT.md`.
+
 # Changelog
 
 Alle relevanten Änderungen am Schul-Cockpit-Add-on. Neueste oben.

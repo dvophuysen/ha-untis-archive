@@ -15,15 +15,21 @@ async function request(method, path, body) {
   // login screen just reappears ("button does nothing").
   const opts = { method, headers: {}, credentials: 'include' };
   if (body !== undefined) {
-    opts.headers['content-type'] = 'application/json';
-    opts.body = JSON.stringify(body);
+    if (body instanceof FormData) {
+      opts.body = body;
+    } else {
+      opts.headers['content-type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
   }
   const resp = await fetch(joinUrl(path), opts);
   if (!resp.ok) {
     let detail = `${resp.status} ${resp.statusText}`;
     try {
       const data = await resp.json();
-      if (data?.detail) detail = data.detail;
+      if (data?.detail) detail = Array.isArray(data.detail)
+        ? data.detail.map((d) => d.msg || 'Eingaben prüfen').join('; ')
+        : String(data.detail);
     } catch (_) { /* ignore */ }
     throw new ApiError(detail, resp.status);
   }

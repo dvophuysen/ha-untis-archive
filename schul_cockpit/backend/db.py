@@ -302,6 +302,11 @@ _MIGRATIONS: list[tuple[str, str]] = [
     ),
 ]
 
+_MIGRATIONS.append((
+    "learning_001",
+    (Path(__file__).parent / "learning_schema.sql").read_text(),
+))
+
 
 def history_conn() -> sqlite3.Connection:
     """Read-only connection to the UNTIS Archive's history.db."""

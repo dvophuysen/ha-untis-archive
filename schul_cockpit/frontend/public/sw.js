@@ -7,7 +7,7 @@
 // The cache name carries a build marker so a new add-on version invalidates
 // the old cache automatically on activate.
 
-const CACHE = 'schul-cockpit-2026-06-11-b';
+const CACHE = 'schul-cockpit-0.23.0';
 const SHELL = [
   './',
   './manifest.webmanifest',
@@ -35,6 +35,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
+  // Learning answers/materials must not survive account switches in a shared PWA.
+  if (/\/api\/accounts\/[^/]+\/learning(?:\/|$)/.test(new URL(req.url).pathname)) return;
 
   event.respondWith(
     fetch(req)
