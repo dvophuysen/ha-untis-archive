@@ -312,3 +312,100 @@ def test_demo_exam_never_publishes_to_child_and_parent_reads_real_attempt(setup)
     assert client.post(B+f"/exams/attempts/{a['id']}/grade-next").status_code==404
     assert client.get(B+f"/exams/attempts/{a['id']}/photos").status_code==200
     assert client.get(B+f"/exams/attempts/{a['id']}").json()==before
+
+
+def test_scope_covers_all_lessons_and_homework_cached_and_used_for_exam(setup):
+    from backend import exam_scope as es
+    client,state,patch=setup;patch.setattr(es,'today_local',lambda:date(2026,9,11))
+    original=es.snapshot
+    def school(account,demo):
+        s=original(account,demo)
+        s['lessons']=[dict(id=i,date='2026-09-10',subject_name='Deutsch',text=f'Teilthema {i}',future=False,missed_minutes=45 if i==14 else 0) for i in range(15)]
+        s['lessons'].append(dict(id=50,date='2026-09-10',subject_name='Deutsch',text='',future=False))
+        s['homework']=[{'id':1,'subject_name':'DEUTSCH','assigned_date':'2026-09-10','due_date':'2026-09-12','text':'Festigung des ersten Themas'}]
+        return s
+    patch.setattr(es,'snapshot',school)
+    contexts=[]
+    async def model(account,purpose,instruction,ctx,*args,**kw):
+        contexts.append((purpose,ctx))
+        if purpose=='exam_scope':return json.dumps({'groups':[{'title':'Sprachwissen','detail':'Alle Teilthemen einschließlich Festigung','ids':[x['id'] for x in ctx['items']]}]}),{},'fake'
+        return json.dumps({'title':'Stoffübersicht üben','tasks':[{**TASK,'skill_title':'Sprachwissen','prompt':f'Erkläre Teilthema {i}','minutes':5,'points':4} for i in range(3)]}),{},'fake'
+    patch.setattr(ai,'complete',model)
+    result=client.post(B+'/exams/scope',json={'subject':'Deutsch'})
+    assert result.status_code==200,result.text
+    plan=result.json();assert plan['lesson_count']==15 and plan['missing']==1
+    assert len(plan['groups'][0]['sources'])==16 and plan['warnings']
+    n=len(contexts);assert client.post(B+'/exams/scope',json={'subject':'Deutsch'}).json()['cached'];assert len(contexts)==n
+    made=client.post(B+'/exams',json={'subject':'Deutsch','scope':['Sprachwissen'],'minutes':15,'scope_plan_id':plan['plan_id'],'selected_groups':[{'group_id':0,'title':'Sprachwissen'}]})
+    assert made.status_code==200,made.text
+    assert contexts[-1][1]['curriculum']['groups'][0]['detail']=='Alle Teilthemen einschließlich Festigung'
+    assert contexts[-1][1]['lessons']==[]
+    saved=client.get(B+f"/exams/{made.json()['id']}/review").json()
+    assert len(saved['scope']['curriculum']['groups'][0]['sources'])==16
+    assert client.post(B+'/exams',json={'subject':'Mathematik','scope':['Sprachwissen'],'minutes':15,'scope_plan_id':plan['plan_id'],'selected_groups':[{'group_id':0,'title':'Sprachwissen'}]}).status_code==422
+
+
+def test_scope_rejects_incomplete_grouping_and_demo_never_reads_real(setup):
+    from backend import exam_scope as es
+    client,state,patch=setup;patch.setattr(es,'today_local',lambda:date(2026,9,11))
+    def forbidden(*a,**k):raise AssertionError('Demo read real archive')
+    patch.setattr(mc,'snapshot',forbidden)
+    mock(patch,[{'groups':[{'title':'Ein Thema','detail':'Beschreibung','ids':[999]}]}])
+    r=client.post(B+'/exams/scope',json={'subject':'Deutsch','demo':True})
+    assert r.status_code==502,r.text
+    mock(patch,[{'groups':[{'title':'Adjektive','detail':'Nominalisierung','ids':[0]}]}])
+    r=client.post(B+'/exams/scope',json={'subject':'Deutsch','demo':True})
+    assert r.status_code==200,r.text
+    assert r.json()['groups'][0]['sources'][0]['id']<0
+    child(state);assert client.post(B+'/exams/scope',json={'subject':'Deutsch','demo':True}).status_code==403
+
+
+def test_scope_last_exam_and_calendar_failure_are_explicit(setup):
+    from backend import exam_scope as es
+    client,state,patch=setup;patch.setattr(es,'today_local',lambda:date(2026,9,11))
+    async def calendar(*a,**k):return {'exams':[{'date':'2026-09-09','subject_name':'DEUTSCH'}],'calendar_error':None}
+    patch.setattr(es,'resolve_exams',calendar)
+    mock(patch,[{'groups':[{'title':'Adjektive','detail':'Nominalisierung','ids':[0]}]}])
+    r=client.post(B+'/exams/scope',json={'subject':'Deutsch','period':'last_exam'})
+    assert r.status_code==200,r.text
+    assert r.json()['start_date']=='2026-09-10'
+    async def broken(*a,**k):return {'exams':[],'calendar_error':'offline'}
+    patch.setattr(es,'resolve_exams',broken)
+    assert client.post(B+'/exams/scope',json={'subject':'Deutsch','period':'last_exam'}).status_code==409
+
+
+def test_print_is_solution_free_escaped_and_self_check_creates_no_score(setup):
+    client,state,patch=setup
+    tasks=[{**TASK,'prompt':'Nenne <script>alert(1)</script>','solution':'GEHEIME MUSTERLOESUNG','points':6,'minutes':5}]*3
+    with closing(db.webapp_conn()) as c:
+        eid=c.execute("INSERT INTO mentor_exams(account_id,title,subject,scope_json,tasks_json,minutes,status,created_at) VALUES(1,'Drucktest','Deutsch',?,?,15,'published','now')",(json.dumps({'topics':['Nominalisierung']}),json.dumps(tasks))).lastrowid
+    child(state)
+    r=client.get(B+f'/exams/{eid}/print')
+    assert r.status_code==200 and 'text/html' in r.headers['content-type']
+    assert 'GEHEIME MUSTERLOESUNG' not in r.text and '<script>alert' not in r.text and '&lt;script&gt;' in r.text
+    assert 'window.print()' in r.text
+    check=client.post(B+f'/exams/{eid}/self-check').json()
+    assert check['self_check'] and check['tasks'][0]['solution']=='GEHEIME MUSTERLOESUNG'
+    with closing(db.webapp_conn()) as c:
+        assert c.execute('SELECT COUNT(*) FROM mentor_exam_attempts').fetchone()[0]==0
+        assert c.execute('SELECT COUNT(*) FROM mentor_evidence').fetchone()[0]==0
+        c.execute('UPDATE mentor_exams SET is_demo=1 WHERE id=?',(eid,))
+    assert client.get(B+f'/exams/{eid}/print').status_code==404
+    assert client.post(B+f'/exams/{eid}/self-check').status_code==404
+
+
+def test_known_solutions_are_not_independent_evidence(setup):
+    client,state,patch=setup
+    tasks=[{**TASK,'prompt':f'Aufgabe {i}','points':6,'minutes':5} for i in range(3)]
+    with closing(db.webapp_conn()) as c:
+        eid=c.execute("INSERT INTO mentor_exams(account_id,title,subject,scope_json,tasks_json,minutes,status,created_at) VALUES(1,'Kontrolle','Deutsch',?,?,15,'published','now')",(json.dumps({'topics':['Nominalisierung']}),json.dumps(tasks))).lastrowid
+    child(state)
+    assert client.post(B+f'/exams/{eid}/self-check').status_code==200
+    attempt=client.post(B+f'/exams/{eid}/start').json()
+    client.put(B+f"/exams/attempts/{attempt['id']}",json={'version':0,'answers':{'0':'Richtige Antwort'}})
+    client.post(B+f"/exams/attempts/{attempt['id']}/submit")
+    mock(patch,[{'points':6,'rationale':'Richtig erklärt.','next_step':'Später erneut prüfen.','uncertain':False}])
+    graded=client.post(B+f"/exams/attempts/{attempt['id']}/grade-next")
+    assert graded.status_code==200,graded.text
+    assert graded.json()['feedback']['0']['solution_seen']
+    with closing(db.webapp_conn()) as c:assert c.execute('SELECT help_used FROM mentor_evidence').fetchone()[0]==1

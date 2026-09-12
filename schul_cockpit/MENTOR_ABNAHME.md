@@ -1,3 +1,7 @@
+## Ergänzung 0.27.0
+
+43 Integrationstests bestanden, Frontend-Produktionsbuild erfolgreich. Neue Prüfungen: vollständige Quellenzuordnung über mehr als zwölf Stunden einschließlich Hausaufgaben/Fehlzeiten; Wiederverwendung ohne Modellaufruf; Weitergabe des gegliederten Stoffplans an die Klausurgenerierung; Ablehnung ausgelassener/erfundener Quellen-IDs; Demo ohne Echtarchiv; Zeitraum seit letzter Klausur und expliziter Kalenderfehler; druckbare HTML-Fassung ohne Musterlösung und mit HTML-Escaping; Selbstkontrolle ohne Klausurversuch/Lernpunkte; bekannte Lösungen führen zu help_used statt unabhängigem Lernnachweis.
+
 ## Ergänzung 0.26.0: getrennte Demo und echter Kinderstand
 
 38 automatisierte Tests für Lernraum und Mentor bestanden. Zusätzliche Integrationstests prüfen: Demo-Chats funktionieren bei absichtlich gesperrtem Echtkontext-Zugriff; keine echten Materialien/Verläufe im Prompt; keine Demo-Lernnachweise; reale, frühere Eltern-Test- und neue Demo-Verläufe getrennt; Kinder können weder Demo öffnen noch starten; freigegebene Demo-Klausuren bleiben unsichtbar; Eltern lesen tatsächliche Kinderantworten ohne Schreibzugriff auf Antworten, Abgabe, Auswertung, Fotos oder Zeitstand. Frontend-Produktionsbuild erfolgreich.

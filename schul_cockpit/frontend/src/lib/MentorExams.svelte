@@ -5,6 +5,10 @@
   const base=$derived(`/api/accounts/${accountId}/learning/mentor/exams`);
   let data=$state(null),error=$state(''),busy=$state(false),draft=$state(null),attempt=$state(null);
   let subject=$state(''),scope=$state(''),confirmed=$state(false),minutes=$state(45),index=$state(0),answers=$state({}),reviewed=$state(false);
+  let period=$state('school_year'),fromDate=$state(''),topicPlan=$state(null),topicChoices=$state([]),selfCheck=$state(null);
+  const chosenScope=$derived([...topicChoices.filter(g=>g.selected).map(g=>g.title.trim()),...scope.split('\n').map(x=>x.trim()).filter(Boolean)]);
+  function clearTopics(){topicPlan=null;topicChoices=[];}
+  async function suggest(){clearTopics();topicPlan=await api.post(`${base}/scope`,{subject,demo,period,start_date:period==='custom'?fromDate:null});topicChoices=topicPlan.groups.map(g=>({...g,selected:true}));}
   let dirty=$state(false),photos=$state([]),photoInput=$state(null);
   async function load(){data=await api.get(`${base}?demo=${demo}`);}
   async function saveDraft(){await api.put(`${base}/${draft.id}`,{title:draft.title,tasks:draft.tasks});reviewed=false;}
@@ -20,8 +24,9 @@
 </script>
 {#if error}<p role="alert" class="notice">{error}</p>{/if}
 {#if busy}<p role="status">Wird gespeichert oder vorbereitet …</p>{/if}
-{#if attempt}
-  <header>{#if attempt.read_only}<p class="notice">Echter Kinderverlauf · nur ansehen. Antworten und Zeitstand werden nicht verändert.</p>{/if}<h2>{attempt.exam.title}</h2><p>{attempt.exam.minutes} Minuten vorgesehen · {attempt.status==='active'?'Prüfungssimulation':'Abgegeben'}</p></header>
+{#if selfCheck}<section class="card"><h2>Selbstkontrolle: {selfCheck.title}</h2><p>Gehe die Aufgaben im Kopf oder auf Papier durch. Öffne die Lösung erst danach. Hier entstehen keine KI-Punkte und keine Lernnachweise. Das Öffnen der Lösungen wird vermerkt; eine anschließende Bearbeitung zählt als Übung mit bekannter Lösung.</p>{#each selfCheck.tasks as t,i}<h3>Aufgabe {i+1}</h3><p class="preserve">{t.prompt}</p><details><summary>Lösung und Kriterien zur Selbstkontrolle</summary><p class="preserve">{t.solution}</p><p>{t.criteria}</p></details>{/each}<button onclick={()=>selfCheck=null}>Selbstkontrolle schließen</button></section>
+{:else if attempt}
+  <header>{#if !attempt.read_only}<p>Direkt tippen oder auf Papier lösen und Fotos bei der jeweiligen Aufgabe anhängen. Nach der Abgabe bewertet der Assistent mit Punkten; unklare Antworten werden gekennzeichnet.</p>{/if}{#if attempt.read_only}<p class="notice">Echter Kinderverlauf · nur ansehen. Antworten und Zeitstand werden nicht verändert.</p>{/if}<h2>{attempt.exam.title}</h2><p>{attempt.exam.minutes} Minuten vorgesehen · {attempt.status==='active'?'Prüfungssimulation':'Abgegeben'}</p></header>
   <nav aria-label="Aufgaben">{#each attempt.exam.tasks as t,i}<button class:chosen={i===index} disabled={busy} onclick={()=>act(()=>move(i))}>{i+1}{answers[String(i)]?' ✓':''}</button>{/each}</nav>
   <section class="card"><p class="muted">Aufgabe {index+1} von {attempt.exam.tasks.length} · {task.points} Punkte · etwa {task.minutes} Minuten</p><h3>{task.skill_title}</h3><p class="preserve">{task.prompt}</p>
     {#each photos.filter(p=>p.question_index===index) as p}<p><a href={`./${base.slice(1)}/attempts/${attempt.id}/photos/${p.id}`} target="_blank" rel="noreferrer">Angehängtes Foto öffnen</a></p>{/each}
@@ -33,7 +38,7 @@
     {:else}
       <h4>Deine Antwort</h4><p class="preserve">{answers[String(index)]||'Keine Antwort eingereicht.'}</p>
       {#if attempt.status!=='active'}<details><summary>Lösung und Kriterien</summary><p class="preserve">{task.solution}</p><p>{task.criteria}</p></details>{/if}
-      {#if feedback}<h4>{feedback.uncertain?'Bewertung noch unklar':`${feedback.points} von ${task.points} Punkten · KI-Einschätzung`}</h4><p>{feedback.rationale}</p><p><strong>Nächster Schritt:</strong> {feedback.next_step}</p>{/if}
+      {#if feedback}{#if feedback.solution_seen}<p class="notice">Lösungen waren vor der Abgabe geöffnet · Übung mit bekannter Lösung, kein Nachweis ohne Hilfe.</p>{/if}<h4>{feedback.uncertain?'Bewertung noch unklar':`${feedback.points} von ${task.points} Punkten · KI-Einschätzung`}</h4><p>{feedback.rationale}</p><p><strong>Nächster Schritt:</strong> {feedback.next_step}</p>{/if}
       {#if attempt.status!=='graded'&&!attempt.read_only}<button disabled={busy} onclick={()=>act(async()=>{attempt=await api.post(`${base}/attempts/${attempt.id}/grade-next`);})}>Nächste Aufgabe auswerten ({Object.keys(attempt.feedback).length}/{attempt.exam.tasks.length})</button>{:else if attempt.status==='graded'}<p>Alle Aufgaben ausgewertet. Vergleiche die Themen, bevor du dir eine Übung aussuchst.</p>{/if}
     {/if}
   </section>
@@ -47,18 +52,31 @@
 {:else}
   <h2>{demo?'Demo-Übungsklausuren':'Für eine Arbeit üben'}</h2>{#if canManage&&!demo}<p class="notice">Hier stehen echte Arbeiten und Kinderantworten. Neue Entwürfe und Freigaben werden im echten Lernbereich gespeichert.</p>{/if}<p>Eine vorbereitete Arbeit behält ihre Aufgaben und ihren Stand, auch wenn du später weitermachst.</p>
   {#each data?.exams||[] as exam}<section class="card"><h3>{exam.title}</h3><p>{exam.subject} · {exam.minutes} Minuten · {exam.status==='published'?'Geprüft und freigegeben':'Entwurf'}</p><p>{exam.scope.topics.join(' · ')}</p>
-    {#if exam.status==='published'&&(!canManage||demo)}<button disabled={busy} onclick={()=>act(async()=>open(await api.post(`${base}/${exam.id}/start`)))}>Öffnen / fortsetzen</button>{/if}
+    {#if exam.status==='published'&&(!canManage||demo)}<button disabled={busy} onclick={()=>act(async()=>open(await api.post(`${base}/${exam.id}/start`)))}>Online / Foto bearbeiten</button>{/if}
+    <a class="print-link" href={`./${base.slice(1)}/${exam.id}/print`} target="_blank" rel="noreferrer">Aufgaben drucken</a>
+    {#if !canManage||demo}<button disabled={busy} onclick={()=>act(async()=>{selfCheck=await api.post(`${base}/${exam.id}/self-check`);})}>Selbstkontrolle ohne Punkte</button>{/if}
     {#if canManage}<button disabled={busy} onclick={()=>act(async()=>{draft=await api.get(`${base}/${exam.id}/review`);reviewed=false;})}>Aufgaben prüfen</button>{/if}
   </section>{:else}<p>Noch keine Übungsklausur vorbereitet.</p>{/each}
   {#if canManage&&!demo}<h3>Bearbeitungen des Kindes</h3>{#each data?.attempts||[] as a}<button class="history" disabled={busy} onclick={()=>act(async()=>open(await api.get(`${base}/attempts/${a.id}`)))}>{data.exams.find(e=>e.id===a.exam_id)?.title||'Übungsklausur'} · {a.status==='active'?'angefangen':a.status==='graded'?'ausgewertet':'abgegeben'} · {a.started_at.slice(0,10)}</button>{:else}<p>Noch keine Bearbeitungen des Kindes gespeichert.</p>{/each}{/if}
-  {#if canManage}<details><summary>Übungsklausur vorbereiten</summary><form onsubmit={e=>{e.preventDefault();act(async()=>{const r=await api.post(base,{subject,scope:scope.split('\n').map(x=>x.trim()).filter(Boolean),confirmed_scope:confirmed,minutes,demo});draft=await api.get(`${base}/${r.id}/review`);reviewed=false;});}}>
-    <label>Fach<select bind:value={subject} required><option value="">Bitte auswählen</option>{#each subjects as s}<option>{s}</option>{/each}</select></label>
-    <label>Themen (eines pro Zeile, höchstens acht)<textarea bind:value={scope} rows="5" required placeholder="Die konkreten Themen aus der Vorbereitung oder der Vorgabe der Lehrkraft"></textarea></label>
+  {#if canManage}<section class="card"><h3>Übungsklausur vorbereiten</h3><form onsubmit={e=>{e.preventDefault();act(async()=>{const r=await api.post(base,{subject,scope:chosenScope,confirmed_scope:confirmed,minutes,demo,scope_plan_id:topicPlan?.plan_id||null,selected_groups:topicChoices.filter(g=>g.selected).map(g=>({group_id:g.id,title:g.title.trim()}))});draft=await api.get(`${base}/${r.id}/review`);reviewed=false;});}}>
+    <label>Fach<select bind:value={subject} required onchange={clearTopics}><option value="">Bitte auswählen</option>{#each subjects as s}<option>{s}</option>{/each}</select></label>
+    <label>Unterrichtszeitraum<select bind:value={period} onchange={clearTopics}><option value="school_year">Seit Schuljahresbeginn</option><option value="last_exam">Seit der letzten Klausur in diesem Fach</option><option value="custom">Ab einem eigenen Datum</option></select></label>
+    {#if period==='custom'}<label>Beginn<input type="date" bind:value={fromDate} onchange={clearTopics}/></label>{/if}
+    <button type="button" disabled={busy||!subject||(period==='custom'&&!fromDate)} onclick={()=>act(suggest)}>Themen aus Unterricht vorschlagen</button>
+    <p class="muted">Alle dokumentierten Stunden und zugehörigen Hausaufgaben im Zeitraum werden gruppiert, auch bei Fehlzeiten. Unveränderte Übersichten werden ohne erneuten KI-Aufruf wiederverwendet.</p>
+    {#if topicPlan}<p><strong>{topicPlan.lesson_count} beschriebene Stunden</strong> · {topicPlan.start_date} bis {topicPlan.end_date}{topicPlan.cached?' · gespeicherte Übersicht':''}</p>
+    {#each topicPlan.warnings as warning}<p class="notice">{warning}</p>{/each}
+    <button type="button" disabled={busy} onclick={()=>topicChoices=topicChoices.map(g=>({...g,selected:true}))}>Alle Themen auswählen</button>
+    {#each topicChoices as g}<section class="topic"><label class="check"><input type="checkbox" bind:checked={g.selected} disabled={busy}/><strong>{g.title}</strong></label><label>Themenbezeichnung ändern<input bind:value={g.title} maxlength="160" disabled={busy}/></label><p>{g.detail}</p><details><summary>Unterricht und Hausaufgaben ({g.sources.length})</summary>{#each g.sources as ref}<p class="preserve"><small>{ref.date} · {ref.kind==='homework'?'Hausaufgabe':'Unterricht'}{ref.missed_minutes?' · versäumte Zeit':''}</small><br/>{ref.text}</p>{/each}</details></section>{/each}
+    <p class="muted">Alle erkannten Bereiche sind zunächst ausgewählt. Organisatorisches und unklare Einträge bleiben sichtbar; wähle sie bei Bedarf ab. Unterrichtshäufigkeit ist keine zugesicherte Klausurgewichtung.</p>{/if}
+    <label>{topicPlan?'Weitere eigene Themen':'Eigene Themen (auch ohne automatische Vorschläge)'}<textarea bind:value={scope} rows="4" placeholder="Ein Thema pro Zeile. Insgesamt höchstens acht Themenbereiche je Arbeit."></textarea></label>
+    <p>{chosenScope.length} Themenbereiche ausgewählt. {#if chosenScope.length>8}Bitte die Auswahl auf höchstens acht Bereiche begrenzen oder mehrere Arbeiten erstellen.{/if}</p>
     <label>Dauer<select bind:value={minutes}>{#each [15,30,45,60,90] as n}<option value={n}>{n} Minuten</option>{/each}</select></label>
     <label class="check"><input type="checkbox" bind:checked={confirmed}/> Dieser Stoffumfang entspricht der Vorgabe der Lehrkraft.</label>
-    <button disabled={busy}>Entwurf erstellen</button><p>Vor der Freigabe werden Lösungen und Kriterien angezeigt. Die Erstellung kann etwa eine Minute dauern.</p>
-  </form></details>{/if}
+    <button disabled={busy||!chosenScope.length||chosenScope.length>8||minutes<chosenScope.length*3}>Entwurf erstellen</button>{#if minutes<chosenScope.length*3}<p class="notice">Bitte mehr Zeit wählen: mindestens drei Minuten je Themenbereich.</p>{/if}<p>Vor der Freigabe werden Lösungen und Kriterien angezeigt. Die Erstellung kann etwa eine Minute dauern.</p>
+  </form></section>{/if}
 {/if}
 <style>
+  .print-link{display:inline-block;padding:.7rem;min-height:44px;box-sizing:border-box;color:var(--accent,#247552)}.topic{border-top:1px solid var(--border,#ccc);padding-top:.5rem}input:not([type="checkbox"]){width:100%;box-sizing:border-box;font:inherit;font-size:16px;padding:.65rem;border-radius:8px;border:1px solid var(--border,#ccc);background:var(--bg-card,#fff);color:inherit}
   .card{padding:1rem;background:var(--bg-card,#fff);border:1px solid var(--border,#d8e2dc);border-radius:16px;margin:1rem 0}.preserve{white-space:pre-wrap;overflow-wrap:anywhere}nav,.actions{display:flex;gap:.5rem;flex-wrap:wrap}button,select{min-height:44px;padding:.6rem .9rem;cursor:pointer}button{border-radius:12px;border:1px solid var(--border,#ccc);background:var(--bg-card,#fff);color:inherit}.chosen{background:var(--accent,#247552);color:var(--accent-fg,#fff)}label{display:block;margin:.8rem 0}textarea,select{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:16px;margin-top:.4rem;padding:.7rem;border-radius:10px;border:1px solid var(--border,#ccc);background:var(--bg-card,#fff);color:inherit}.check{display:flex;gap:.5rem;align-items:center}.muted{font-size:.85rem;opacity:.8}.notice{padding:1rem;background:#fff1d0;color:#4c3610}details{margin:1rem 0}summary{cursor:pointer;min-height:44px}button:disabled{opacity:.5}
 </style>
