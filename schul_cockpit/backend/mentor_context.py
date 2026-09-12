@@ -14,6 +14,10 @@ def fingerprint(value):
     return hashlib.sha256(json.dumps(value,ensure_ascii=False,sort_keys=True,default=str).encode()).hexdigest()
 
 
+def same_subject(left,right):
+    return bool(left and right and str(left).strip().casefold()==str(right).strip().casefold())
+
+
 def rows(c, table, columns, account_id, suffix='', args=()):
     have={r[1] for r in c.execute(f'PRAGMA table_info("{table}")')}
     if 'account_id' not in have: return []
@@ -124,7 +128,7 @@ def candidates(s):
 
 def context(account_id,session):
     s=snapshot(account_id);subject=session['subject']
-    lessons=[r for r in s['lessons'] if r.get('subject_name')==subject][:18]
+    lessons=[r for r in s['lessons'] if same_subject(r.get('subject_name'),subject)][:18]
     source=json.loads(session.get('source_json') or '{}')
     if source.get('lesson_id'):
         focus=next((r for r in s['lessons'] if (r.get('untis_period_id')==source['untis_period_id'] if source.get('untis_period_id') else r['id']==source['lesson_id'])),None)
@@ -133,13 +137,14 @@ def context(account_id,session):
         msgs=[dict(r) for r in c.execute('SELECT role,text,payload FROM mentor_messages WHERE session_id=? ORDER BY id DESC LIMIT 8',(session['id'],))][::-1]
         for m in msgs: m.pop('payload',None)
         evidence=[dict(r) for r in c.execute('SELECT task_json,answer,result,rationale,help_used,created_at FROM mentor_evidence WHERE account_id=? AND skill_id=? AND invalidated=0 ORDER BY id DESC LIMIT 5',(account_id,session.get('skill_id')))]
-        materials=[dict(r) for r in c.execute('SELECT m.id,m.title,m.content_text,m.source_ref FROM learning_materials m JOIN learning_topics t ON t.id=m.topic_id JOIN learning_profiles p ON p.id=t.profile_id WHERE p.account_id=? AND t.subject=? AND m.verified=1 ORDER BY m.id DESC LIMIT 4',(account_id,subject))]
+        materials=[dict(r) for r in c.execute('SELECT m.id,m.title,m.content_text,m.source_ref FROM learning_materials m JOIN learning_topics t ON t.id=m.topic_id JOIN learning_profiles p ON p.id=t.profile_id WHERE p.account_id=? AND t.subject=? COLLATE NOCASE AND m.verified=1 ORDER BY m.id DESC LIMIT 4',(account_id,subject))]
         for m in materials: m['content_text']=m['content_text'][:1500]
     state=dict(grade=(s['profile'] or {}).get('grade'),school_year=(s['profile'] or {}).get('school_year'),subject=subject,goal=session['goal'],
                source=source,lessons=[{k:r.get(k) for k in ['id','date','text','rating','note','missed_minutes','catch_up_open']} for r in lessons],
-               tasks=[r for r in s['tasks'] if r.get('subject_name')==subject][:10],
-               homework=[r for r in s['homework'] if r.get('subject_name')==subject][:6],
-               previous=[r for r in s['recent'] if r['subject']==subject and r['id']!=session['id']][:3],
+               rating_meaning={'1':'nicht verstanden','2':'teilweise verstanden','3':'verstanden','4':'nur Aufsicht / kein neuer Stoff'},
+               tasks=[r for r in s['tasks'] if same_subject(r.get('subject_name'),subject)][:10],
+               homework=[r for r in s['homework'] if same_subject(r.get('subject_name'),subject)][:6],
+               previous=[r for r in s['recent'] if same_subject(r['subject'],subject) and r['id']!=session['id']][:3],
                evidence=evidence,materials=materials,errors=s['errors'])
     topics={}
     for lesson in lessons:
