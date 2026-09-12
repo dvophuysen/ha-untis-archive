@@ -8,7 +8,7 @@
   let period=$state('school_year'),fromDate=$state(''),topicPlan=$state(null),topicChoices=$state([]),selfCheck=$state(null);
   const chosenScope=$derived([...topicChoices.filter(g=>g.selected).map(g=>g.title.trim()),...scope.split('\n').map(x=>x.trim()).filter(Boolean)]);
   function clearTopics(){topicPlan=null;topicChoices=[];}
-  async function suggest(){clearTopics();topicPlan=await api.post(`${base}/scope`,{subject,demo,period,start_date:period==='custom'?fromDate:null});topicChoices=topicPlan.groups.map(g=>({...g,selected:true}));}
+  async function suggest(){clearTopics();topicPlan=await api.post(`${base}/scope`,{subject,demo,period,start_date:period==='custom'?fromDate:null});topicChoices=topicPlan.groups.map(g=>({...g,selected:g.category==='learning'}));}
   let dirty=$state(false),photos=$state([]),photoInput=$state(null);
   async function load(){data=await api.get(`${base}?demo=${demo}`);}
   async function saveDraft(){await api.put(`${base}/${draft.id}`,{title:draft.title,tasks:draft.tasks});reviewed=false;}
@@ -66,9 +66,9 @@
     <p class="muted">Alle dokumentierten Stunden und zugehörigen Hausaufgaben im Zeitraum werden gruppiert, auch bei Fehlzeiten. Unveränderte Übersichten werden ohne erneuten KI-Aufruf wiederverwendet.</p>
     {#if topicPlan}<p><strong>{topicPlan.lesson_count} beschriebene Stunden</strong> · {topicPlan.start_date} bis {topicPlan.end_date}{topicPlan.cached?' · gespeicherte Übersicht':''}</p>
     {#each topicPlan.warnings as warning}<p class="notice">{warning}</p>{/each}
-    <button type="button" disabled={busy} onclick={()=>topicChoices=topicChoices.map(g=>({...g,selected:true}))}>Alle Themen auswählen</button>
-    {#each topicChoices as g}<section class="topic"><label class="check"><input type="checkbox" bind:checked={g.selected} disabled={busy}/><strong>{g.title}</strong></label><label>Themenbezeichnung ändern<input bind:value={g.title} maxlength="160" disabled={busy}/></label><p>{g.detail}</p><details><summary>Unterricht und Hausaufgaben ({g.sources.length})</summary>{#each g.sources as ref}<p class="preserve"><small>{ref.date} · {ref.kind==='homework'?'Hausaufgabe':'Unterricht'}{ref.missed_minutes?' · versäumte Zeit':''}</small><br/>{ref.text}</p>{/each}</details></section>{/each}
-    <p class="muted">Alle erkannten Bereiche sind zunächst ausgewählt. Organisatorisches und unklare Einträge bleiben sichtbar; wähle sie bei Bedarf ab. Unterrichtshäufigkeit ist keine zugesicherte Klausurgewichtung.</p>{/if}
+    <button type="button" disabled={busy} onclick={()=>topicChoices=topicChoices.map(g=>({...g,selected:g.category==='learning'}))}>Alle Themen auswählen</button>
+    {#each topicChoices as g}<section class="topic"><label class="check"><input type="checkbox" bind:checked={g.selected} disabled={busy||g.category!=='learning'}/><strong>{g.title}</strong></label>{#if g.category!=='learning'}<p class="notice">{g.category==='organisation'?'Organisatorischer Eintrag – kein Klausurthema.':'Stoff noch unklar – bitte Originalmaterial oder ein eigenes konkretes Thema ergänzen.'}</p>{/if}<label>Themenbezeichnung ändern<input bind:value={g.title} maxlength="160" disabled={busy}/></label><p>{g.detail}</p><details><summary>Unterricht und Hausaufgaben ({g.sources.length})</summary>{#each g.sources as ref}<p class="preserve"><small>{ref.date} · {ref.kind==='homework'?'Hausaufgabe':'Unterricht'}{ref.missed_minutes?' · versäumte Zeit':''}</small><br/>{ref.text}</p>{/each}</details></section>{/each}
+    <p class="muted">Alle erkannten Lernbereiche sind zunächst ausgewählt. Organisatorisches und unklare Einträge bleiben sichtbar, werden aber nicht als Prüfungsstoff verwendet. Unterrichtshäufigkeit ist keine zugesicherte Klausurgewichtung.</p>{/if}
     <label>{topicPlan?'Weitere eigene Themen':'Eigene Themen (auch ohne automatische Vorschläge)'}<textarea bind:value={scope} rows="4" placeholder="Ein Thema pro Zeile. Insgesamt höchstens acht Themenbereiche je Arbeit."></textarea></label>
     <p>{chosenScope.length} Themenbereiche ausgewählt. {#if chosenScope.length>8}Bitte die Auswahl auf höchstens acht Bereiche begrenzen oder mehrere Arbeiten erstellen.{/if}</p>
     <label>Dauer<select bind:value={minutes}>{#each [15,30,45,60,90] as n}<option value={n}>{n} Minuten</option>{/each}</select></label>

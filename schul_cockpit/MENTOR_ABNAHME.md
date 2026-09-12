@@ -1,6 +1,12 @@
+## Live-Prüfung am 12.09.2026 und Ergänzung 0.27.1
+
+Die Gruppierung von Josias Deutschunterricht seit 13.08.2026 hat 14 beschriebene Stunden berücksichtigt und zwei Stunden ohne Beschreibung ausdrücklich angezeigt. Die Druckansicht der vorhandenen Deutsch-Übungsklausur wurde angemeldet geöffnet und visuell geprüft: Aufgaben, Punkte und Antwortplatz vorhanden; keine Musterlösungen. Ab 0.27.1 bleiben unklare/organisatorische Gruppen sichtbar, sind aber von der automatischen Klausurthemenauswahl ausgeschlossen; eigener Integrationstest prüft auch die serverseitige Ablehnung.
+
+Die Prüfung von Josias Plan und Fächeransicht sowie die konzeptionellen Konsequenzen sind in [LERNPLAN_VERZAHNUNG.md](LERNPLAN_VERZAHNUNG.md) dokumentiert. Diese Integration ist ausdrücklich noch geplant.
+
 ## Ergänzung 0.27.0
 
-43 Integrationstests bestanden, Frontend-Produktionsbuild erfolgreich. Neue Prüfungen: vollständige Quellenzuordnung über mehr als zwölf Stunden einschließlich Hausaufgaben/Fehlzeiten; Wiederverwendung ohne Modellaufruf; Weitergabe des gegliederten Stoffplans an die Klausurgenerierung; Ablehnung ausgelassener/erfundener Quellen-IDs; Demo ohne Echtarchiv; Zeitraum seit letzter Klausur und expliziter Kalenderfehler; druckbare HTML-Fassung ohne Musterlösung und mit HTML-Escaping; Selbstkontrolle ohne Klausurversuch/Lernpunkte; bekannte Lösungen führen zu help_used statt unabhängigem Lernnachweis.
+45 Integrationstests bestanden, Frontend-Produktionsbuild erfolgreich. Neue Prüfungen: vollständige Quellenzuordnung über mehr als zwölf Stunden einschließlich Hausaufgaben/Fehlzeiten; Wiederverwendung ohne Modellaufruf; Weitergabe des gegliederten Stoffplans an die Klausurgenerierung; Ablehnung ausgelassener/erfundener Quellen-IDs; Demo ohne Echtarchiv; Zeitraum seit letzter Klausur und expliziter Kalenderfehler; druckbare HTML-Fassung ohne Musterlösung und mit HTML-Escaping; Selbstkontrolle ohne Klausurversuch/Lernpunkte; bekannte Lösungen führen zu help_used statt unabhängigem Lernnachweis.
 
 ## Ergänzung 0.26.0: getrennte Demo und echter Kinderstand
 

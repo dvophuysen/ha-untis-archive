@@ -1,3 +1,8 @@
+## 0.27.1
+
+- Unklare Buchreferenzen und organisatorische Einträge bleiben in der Stoffübersicht sichtbar, werden aber nicht automatisch als Klausurstoff ausgewählt. Nur konkret erkannte Lernbereiche sind vorausgewählt; fehlendes Material kann durch eigene Themen ergänzt werden.
+- Gruppierung bewahrt diese Unterscheidung auch über mehrere Verarbeitungsschritte; vorhandene Übersichten werden dafür einmalig neu erschlossen.
+
 ## 0.27.0
 
 - Übungsklausuren aus dem Unterrichtsverlauf vorbereiten: Fach und Zeitraum (Schuljahr, seit letzter Klausur, eigenes Datum), KI-Themengruppen zunächst vollständig ausgewählt, abwählbar und um eigene Themen ergänzbar.
