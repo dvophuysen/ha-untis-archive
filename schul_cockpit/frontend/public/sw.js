@@ -36,7 +36,7 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   // Learning answers/materials must not survive account switches in a shared PWA.
-  if (/\/api\/accounts\/[^/]+\/learning(?:\/|$)/.test(new URL(req.url).pathname)) return;
+  if (new URL(req.url).pathname.startsWith("/api/integration/learning") || /\/api\/accounts\/[^/]+\/learning(?:\/|$)/.test(new URL(req.url).pathname)) return;
 
   event.respondWith(
     fetch(req)

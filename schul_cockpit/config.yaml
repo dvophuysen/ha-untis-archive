@@ -1,5 +1,5 @@
 name: Schul-Cockpit
-version: "0.23.2"
+version: "0.23.3"
 slug: schul_cockpit
 description: Mobile Schul-App für Kinder und Eltern, basierend auf dem UNTIS-Archive-Datenbestand.
 url: https://github.com/dvophuysen/ha-untis-archive/tree/main/schul_cockpit
@@ -38,6 +38,8 @@ options:
   learning_ai_url: ""
   learning_ai_key: ""
   learning_ai_model: ""
+  learning_read_token: ""
+  learning_read_accounts: ""
 schema:
   log_level: list(trace|debug|info|notice|warning|error|fatal)?
   # Public URL the app is reachable at from outside HA (e.g. your Cloudflare
@@ -49,3 +51,5 @@ schema:
   learning_ai_url: str?
   learning_ai_key: password?
   learning_ai_model: str?
+  learning_read_token: password?
+  learning_read_accounts: str?
