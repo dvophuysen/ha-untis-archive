@@ -16,11 +16,13 @@ from ..db import webapp_conn
 from ..learning import InputModel,now_iso,today_local
 from .. import ai_gateway as ai
 from .. import mentor_context as mc
+from .. import mentor_demo as demo_data
 from .learning import access,overview as learning_overview
 
 router=APIRouter(prefix='/accounts/{account_id}/learning/mentor',tags=['mentor'])
 
 class StartIn(InputModel):
+    demo:bool=False
     subject:str=Field(min_length=1,max_length=120)
     lesson_id:int|None=None
     skill_id:int|None=None
@@ -103,18 +105,28 @@ def add_message(c,sid,account,key,role,text,payload=None):
 
 
 @router.get('')
-async def dashboard(account_id:int,user:CurrentUser=Depends(get_current_user)):
+async def dashboard(account_id:int,demo:bool=False,user:CurrentUser=Depends(get_current_user)):
     access(user,account_id)
+    if demo:
+        access(user,account_id,parent=True)
+        try:
+            access(user,account_id,write=True);demo_can_write=True
+        except HTTPException:
+            demo_can_write=False
+        with closing(webapp_conn()) as c:
+            sessions=[dict(r) for r in c.execute('SELECT id,subject,goal,status,phase,summary,updated_at,is_test,is_demo FROM mentor_sessions WHERE account_id=? AND is_demo=1 ORDER BY updated_at DESC LIMIT 30',(account_id,))]
+        return dict(**demo_data.snapshot(),demo=True,candidates=[dict(subject=k,title=v,reason='Erfundenes Beispiel für Klasse 6') for k,v in demo_data.TOPICS.items()],sessions=sessions,legacy_sessions=[],progress=[],subjects=list(demo_data.TOPICS),can_manage=True,can_write=demo_can_write,budget=ai.status(),today={},exams=[],warnings=[])
     s=mc.snapshot(account_id)
     with closing(webapp_conn()) as c:
-        sessions=[dict(r) for r in c.execute('SELECT id,subject,goal,status,phase,summary,updated_at,is_test FROM mentor_sessions WHERE account_id=? '+('' if user.is_admin or user.role=='parent' else 'AND is_test=0 ')+'ORDER BY updated_at DESC LIMIT 30',(account_id,))]
+        sessions=[dict(r) for r in c.execute('SELECT id,subject,goal,status,phase,summary,updated_at,is_test,is_demo FROM mentor_sessions WHERE account_id=? AND is_test=0 ORDER BY updated_at DESC LIMIT 30',(account_id,))]
+        legacy=[dict(r) for r in c.execute('SELECT id,subject,goal,status,updated_at,is_test,is_demo FROM mentor_sessions WHERE account_id=? AND is_test=1 AND is_demo=0 ORDER BY updated_at DESC LIMIT 30',(account_id,))] if user.is_admin or user.role=='parent' else []
         progress=[dict(r) for r in c.execute("SELECT s.id,s.subject,s.title,s.objective,r.due_date,COUNT(e.id) attempts, SUM(CASE WHEN e.result='correct' AND e.help_used=0 THEN 1 ELSE 0 END) independent,COUNT(DISTINCT CASE WHEN e.result='correct' AND e.help_used=0 THEN e.variant_hash END) variants,MIN(CASE WHEN e.result='correct' AND e.help_used=0 THEN e.created_at END) first_success, MAX(CASE WHEN e.result='correct' AND e.help_used=0 THEN e.created_at END) last_success FROM mentor_skills s LEFT JOIN mentor_evidence e ON e.skill_id=s.id AND e.invalidated=0 LEFT JOIN mentor_reviews r ON r.skill_id=s.id WHERE s.account_id=? GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 100",(account_id,))]
     for r in progress:
         delayed=bool(r['variants']>=2 and r['first_success'] and r['last_success'] and (datetime.fromisoformat(r['last_success'])-datetime.fromisoformat(r['first_success'])).days>=7)
         r['label']='Mit Abstand selbstständig gezeigt' if delayed else 'Selbstständig gezeigt · später prüfen' if r['independent'] else 'Noch in Arbeit'
     parent=bool(user.is_admin or user.role=='parent')
     planning=await learning_overview(account_id,user)
-    return dict(enabled=s['enabled'],background=s['background'],profile=s['profile'],candidates=mc.candidates(s),sessions=sessions,progress=progress,
+    return dict(demo=False,legacy_sessions=legacy,enabled=s['enabled'],background=s['background'],profile=s['profile'],candidates=mc.candidates(s),sessions=sessions,progress=progress,
                 subjects=sorted({r['subject_name'] for r in s['lessons'] if r.get('subject_name')}),errors=s['errors'],read_at=s['read_at'],
                 can_manage=parent,can_write=planning['can_write'],today=planning['today'],budget=ai.status() if parent else None,
                 exams=planning.get('exams',[]),warnings=planning.get('warnings',[]))
@@ -142,7 +154,18 @@ def opening(account_id:int,body:OpeningIn,user:CurrentUser=Depends(get_current_u
 
 @router.post('/sessions')
 async def start(account_id:int,body:StartIn,user:CurrentUser=Depends(get_current_user)):
-    access(user,account_id,write=True);s=mc.snapshot(account_id);p=s['profile']
+    access(user,account_id,write=True)
+    if body.demo:
+        access(user,account_id,parent=True)
+        if body.lesson_id or body.skill_id:raise HTTPException(422,'Im Demo-Modus sind keine echten Unterrichts- oder Lernzielverknüpfungen erlaubt.')
+        with closing(webapp_conn()) as c,c:
+            c.execute('BEGIN IMMEDIATE')
+            existing=c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND user_id=? AND subject=? AND is_demo=1 AND status='active' ORDER BY id DESC LIMIT 1",(account_id,user.id,body.subject)).fetchone()
+            if existing:return view(c,dict(existing))
+            sid=c.execute('INSERT INTO mentor_sessions(account_id,user_id,subject,goal,max_minutes,active_since,created_at,updated_at,is_test,is_demo) VALUES(?,?,?,?,?,?,?,?,1,1)',(account_id,user.id,body.subject,body.goal or demo_data.TOPICS.get(body.subject,'Ein Beispiel gemeinsam ausprobieren'),body.minutes,now_iso(),now_iso(),now_iso())).lastrowid
+            add_message(c,sid,account_id,'welcome','assistant','Dies ist ein erfundenes Lernbeispiel für Klasse 6. Was möchtest du zuerst?',{'choices':['Zeig mir ein Beispiel','Kurz ausprobieren','Ich möchte erst erzählen']})
+            return view(c,get_session(c,account_id,sid))
+    s=mc.snapshot(account_id);p=s['profile']
     if not p or not p['ai_enabled'] or not s['enabled']:raise HTTPException(403,'Bitte den Lernrahmen und die KI für dieses Schuljahr aktivieren.')
     test_mode=bool(user.is_admin or user.role=='parent')
     source={};goal=body.goal or 'Gemeinsam herausfinden, was schon klappt';skill=body.skill_id
@@ -165,7 +188,7 @@ async def start(account_id:int,body:StartIn,user:CurrentUser=Depends(get_current
     remaining=min(p['daily_minutes']-plan['today']['completed_minutes'], total-plan['today']['reserved_homework_minutes']-plan['today']['completed_minutes'])
     with closing(webapp_conn()) as c,c:
         c.execute('BEGIN IMMEDIATE')
-        existing=c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND subject=? AND status='active' AND is_test=? ORDER BY id DESC LIMIT 1",(account_id,body.subject,int(test_mode))).fetchone()
+        existing=c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND subject=? AND status='active' AND is_test=? AND is_demo=0 ORDER BY id DESC LIMIT 1",(account_id,body.subject,int(test_mode))).fetchone()
         if existing:return view(c,dict(existing))
         used=c.execute('SELECT COALESCE(SUM(elapsed_seconds),0),COUNT(*) FROM mentor_sessions WHERE account_id=? AND is_test=0 AND substr(created_at,1,10)=?',(account_id,today_local().isoformat())).fetchone()
         remaining=min(p['daily_minutes']-used[0]/60,remaining-used[0]/60)
@@ -194,6 +217,7 @@ def pause(account_id:int,sid:int,body:PauseIn,user:CurrentUser=Depends(get_curre
     with closing(webapp_conn()) as c,c:
         c.execute('BEGIN IMMEDIATE');s=get_session(c,account_id,sid)
         if s['is_test'] and not (user.is_admin or user.role=='parent'):raise HTTPException(404,'Lerneinheit nicht gefunden.')
+        if not s['is_test'] and (user.is_admin or user.role=='parent'):raise HTTPException(403,'Kinderverläufe sind für Eltern nur lesbar.')
         c.execute('UPDATE mentor_sessions SET elapsed_seconds=?,active_since=? WHERE id=?',(elapsed(s),None if body.paused or s['status']!='active' else now_iso(),sid))
         return view(c,get_session(c,account_id,sid))
 
@@ -203,6 +227,7 @@ async def photo(account_id:int,sid:int,file:UploadFile=File(...),user:CurrentUse
     access(user,account_id,write=True)
     with closing(webapp_conn()) as c:s=get_session(c,account_id,sid)
     if s['is_test'] and not (user.is_admin or user.role=='parent'):raise HTTPException(404,'Lerneinheit nicht gefunden.')
+    if not s['is_test'] and (user.is_admin or user.role=='parent'):raise HTTPException(403,'Kinderverläufe sind für Eltern nur lesbar.')
     if s['status']!='active':raise HTTPException(409,'Diese Einheit ist abgeschlossen.')
     blob=await file.read(5*1024*1024+1)
     if len(blob)>5*1024*1024:raise HTTPException(413,'Bitte ein kleineres Bild verwenden.')
@@ -265,7 +290,7 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
             return view(c,get_session(c,account_id,sid))
         c.execute('UPDATE mentor_sessions SET pending_key=?,pending_since=?,elapsed_seconds=?,active_since=? WHERE id=?',(body.request_key,now_iso(),seconds,now_iso(),sid))
     try:
-        ctx,context_hash,fresh=mc.context(account_id,s)
+        ctx,context_hash,fresh=(demo_data.context if s['is_demo'] else mc.context)(account_id,s)
         if not fresh['enabled'] or not fresh['profile'] or not fresh['profile']['ai_enabled']:raise HTTPException(403,'Die KI-Begleitung wurde pausiert.')
         images=[];transcript=''
         if body.attachment_id:
@@ -286,7 +311,7 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
             if reply.action=='task' and not reply.task:raise ValueError('Missing task')
             if any(len(x)>80 for x in reply.choices):raise ValueError('Choice too long')
         except (ValidationError,ValueError):raise HTTPException(502,'Die Antwort war nicht eindeutig genug. Dein Stand bleibt erhalten.') from None
-        latest,latest_hash,latest_snapshot=mc.context(account_id,s)
+        latest,latest_hash,latest_snapshot=(demo_data.context if s['is_demo'] else mc.context)(account_id,s)
         if not latest_snapshot['enabled'] or not latest_snapshot['profile'] or not latest_snapshot['profile']['ai_enabled']:raise HTTPException(409,'Die KI-Begleitung wurde inzwischen pausiert.')
         # Do not persist a stale task/evaluation after source or task changes.
         if latest_hash!=context_hash:raise HTTPException(409,'Unterricht oder Aufgaben wurden inzwischen aktualisiert. Bitte mit dem neuen Stand fortfahren.')

@@ -1,3 +1,12 @@
+## 0.26.0
+
+- Eltern-Umschalter im Lernmentor: echter Kinderstand und separate Demo mit erfundenen Beispielen für Klasse 6.
+- Demo-Gespräche und Demo-Übungsklausuren verwenden keine echten Profile, Unterrichtsdaten, Materialien oder Kinderverläufe. Eigene Eingaben/Fotos bleiben im gespeicherten Demoverlauf; KI-Kosten zählen zum Familienbudget.
+- Demo-Arbeiten sind auch nach Freigabe für Kinder unsichtbar. Tests erzeugen keine Kinder-Lernnachweise oder Wiederholungen.
+- Echte Kindergespräche und bearbeitete Übungsklausuren sind für Eltern lesbar; Antworten, Fotos und Zeitstände lassen sich dabei nicht als Kind verändern.
+- Frühere Eltern-Testgespräche mit Echtkontext bleiben separat zugänglich. Echte Einstellungen und Freigaben sind ausdrücklich beschriftet.
+- Den bisherigen globalen Demo-Schalter als Teständerungen an Echtdaten gekennzeichnet: Er ist keine isolierte Simulation.
+
 # 0.25.3 – Prüfbare Entwürfe und verlässliche Fachzuordnung
 
 - Klausurentwürfe lassen sich vor Freigabe in Aufgaben, Lösungen und Punktkriterien bearbeiten. Freigegebene Fassungen bleiben unverändert.

@@ -284,16 +284,16 @@
   </div>
 
   {#if appState.me?.is_admin}
-  <div class="section-title">Demo-Modus</div>
+  <div class="section-title">Teständerungen an Echtdaten</div>
   <div class="banner">
-    Im Demo-Modus werden alle deine Änderungen geloggt und können einzeln oder gesammelt zurückgenommen werden.
+    Dieser Modus arbeitet mit echten Daten, protokolliert unterstützte Änderungen und pausiert deren HA-Synchronisierung. Er ist keine getrennte Simulation. Für Dummy-Gespräche nutze „Demo ausprobieren“ im Lernmentor.
     Außerdem wird der HA-ToDo-Sync für deine Änderungen pausiert — du kannst also gefahrlos ausprobieren, ohne
     in der HA-ToDo-Liste der Kinder etwas zu verändern.
   </div>
   <div class="card">
     <div class="row between">
       <div>
-        <strong>Demo-Modus</strong>
+        <strong>Teständerungen protokollieren</strong>
         <div class="dim">{appState.me?.demo_mode ? 'Aktiv — Änderungen werden geloggt, HA-Sync pausiert.' : 'Aus'}</div>
       </div>
       <button

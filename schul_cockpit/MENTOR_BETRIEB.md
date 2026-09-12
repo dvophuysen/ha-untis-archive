@@ -1,3 +1,17 @@
+## Elternansicht ab 0.26.0: Kinderstand und Demo
+
+Im Bereich **Lernen** steht für Eltern oben der Umschalter **Kinderstand / Demo ausprobieren**. Beim erneuten Öffnen beginnt der Mentor im Kinderstand. Das oben ausgewählte Kind bestimmt, wessen echte Daten angezeigt werden; die Demo ist ebenfalls pro ausgewähltem Konto getrennt gespeichert.
+
+- **Kinderstand → Gespräche:** ausschließlich echte Kindergespräche; aktive Gespräche können Eltern lesen, aber nicht beantworten, mit Fotos ergänzen oder im Zeitstand verändern. Unter einem gesonderten aufklappbaren Abschnitt bleiben frühere Eltern-Testläufe mit Echtkontext erhalten.
+- **Kinderstand → Was schon klappt:** echte Lernbeobachtungen. Das ausdrückliche Zurücknehmen einer falschen KI-Bewertung ist weiterhin eine echte Elternaktion.
+- **Kinderstand → Übungsklausur → Bearbeitungen des Kindes:** Antworten, angefangene/abgegebene Arbeiten und vorhandene Auswertungen lesen. Kein Abgeben, Überschreiben oder Bewerten unter der Identität des Kindes. Aufgabenentwürfe und Freigaben in dieser Ansicht sind ausdrücklich Echtdaten.
+- **Demo ausprobieren:** erfundene Beispiele für Klasse 6 in Deutsch, Mathematik und Geschichte; eigene Themen sind möglich. Keine automatischen Zugriffe auf Profile, UNTIS, Feedbacks, Hausaufgaben, echte Materialien oder Kinderverläufe. Ein eigenes Foto oder eine eigene Nachricht ist natürlich eine echte Eingabe und wird im getrennten Testverlauf gespeichert.
+- **Demo → Übungsklausur:** Entwürfe, Bearbeitung und Auswertung testen. Auch freigegebene Demo-Arbeiten bleiben für Kinder unsichtbar. Demo-Leistungen erzeugen keine Kinder-Kompetenzen, Wiederholungen oder Lernzeitbelastung.
+
+Die Demo ist ein Modus des **Lernmentors**, kein globaler Sandbox-Modus der ganzen Schul-App. Andere Bereiche wie Hausaufgaben, Check-ins, Materialien und Einstellungen arbeiten weiterhin mit Echtdaten. Der ältere Schalter in den Einstellungen heißt jetzt „Teständerungen an Echtdaten“: Er protokolliert unterstützte Änderungen und pausiert HA-Sync, trennt aber keine Datenbestände. Solange dieser ältere Modus aktiv ist, bleibt der Lernraum aus Gründen seiner bisherigen Berechtigungslogik nur lesbar.
+
+KI-Aufrufe der Demo kosten echtes Geld und unterliegen denselben globalen Budgetgrenzen. Gespeicherte Testdaten werden nicht automatisch gelöscht. Das Lesefeed kennzeichnet Sessions/Arbeiten mit `is_demo` und Versuche mit `is_test`, damit spätere Auswertungen sie zuverlässig unterscheiden können.
+
 # Lernmentor 0.25.3
 
 Stand: 12. September 2026. Diese Version setzt den ersten vollständigen Mentorablauf und die gemeinsame Grundlage für Übungsklausuren um. Der [Masterplan](MASTERPLAN.md) bleibt der Entwicklungsauftrag; dort beschriebene zukünftige Fähigkeiten sind nicht automatisch schon vorhanden.

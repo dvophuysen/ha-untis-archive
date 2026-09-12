@@ -234,3 +234,81 @@ def test_time_and_turn_limits_close_without_model(setup):
     async def forbidden(*a,**kw):raise AssertionError('Limit must not call model')
     patch.setattr(ai,'complete',forbidden)
     assert send(client,s).json()['status']=='completed'
+
+
+def test_demo_is_synthetic_persistent_and_excluded_from_live_learning(setup):
+    client,state,patch=setup
+    def no_real_data(*a,**kw):raise AssertionError('Demo accessed real lesson/profile context')
+    patch.setattr(mc,'snapshot',no_real_data)
+    contexts=[];mock(patch,[reply(),reply(assessment={'result':'correct','rationale':'Passend erklärt.'})],contexts)
+    dashboard=client.get(B+'?demo=true')
+    assert dashboard.status_code==200,dashboard.text
+    assert dashboard.json()['profile']['school_year']=='Demo'
+    assert client.post(B+'/sessions',json={'subject':'Deutsch','demo':True,'lesson_id':1}).status_code==422
+    r=client.post(B+'/sessions',json={'subject':'Deutsch','demo':True})
+    assert r.status_code==200,r.text
+    s=r.json();assert s['is_demo']==s['is_test']==1
+    s=send(client,s).json()
+    result=send(client,s,kind='answer',text='Dies ist meine Dummy-Antwort.')
+    assert result.status_code==200,result.text
+    assert contexts[-1]['source']=={'synthetic':True}
+    assert contexts[-1]['materials']==contexts[-1]['evidence']==contexts[-1]['previous']==[]
+    assert 'Adjektive großschreiben' not in json.dumps(contexts)
+    assert client.get(B+'?demo=true').json()['sessions'][0]['id']==s['id']
+    with closing(db.webapp_conn()) as c:
+        for table in ('mentor_skills','mentor_reviews','mentor_evidence'):
+            assert c.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]==0
+
+
+def test_real_history_and_parent_read_are_not_test_history(setup):
+    client,state,patch=setup;parent=state.user
+    legacy=start(client)
+    demo=client.post(B+'/sessions',json={'subject':'Deutsch','demo':True}).json()
+    child(state);real=start(client)
+    assert client.get(B+f"/sessions/{demo['id']}").status_code==404
+    assert client.get(B+'?demo=true').status_code==403
+    assert client.post(B+'/sessions',json={'subject':'Deutsch','demo':True}).status_code==403
+    assert [s['id'] for s in client.get(B).json()['sessions']]==[real['id']]
+    state.user=parent
+    live=client.get(B).json()
+    assert [s['id'] for s in live['sessions']]==[real['id']]
+    assert [s['id'] for s in live['legacy_sessions']]==[legacy['id']]
+    with closing(db.webapp_conn()) as c:before=dict(c.execute('SELECT * FROM mentor_sessions WHERE id=?',(real['id'],)).fetchone())
+    assert client.get(B+f"/sessions/{real['id']}").status_code==200
+    assert client.post(B+f"/sessions/{real['id']}/pause",json={'paused':False}).status_code==403
+    assert client.post(B+f"/sessions/{real['id']}/photos",files={'file':('test.png',b'not-image','image/png')}).status_code==403
+    assert send(client,real).status_code==403
+    with closing(db.webapp_conn()) as c:assert dict(c.execute('SELECT * FROM mentor_sessions WHERE id=?',(real['id'],)).fetchone())==before
+
+
+def test_demo_exam_never_publishes_to_child_and_parent_reads_real_attempt(setup):
+    client,state,patch=setup;parent=state.user
+    tasks=[{**TASK,'prompt':f'Erkläre Beispiel {i}','points':6,'minutes':5} for i in range(3)]
+    contexts=[];mock(patch,[{'title':'Demo-Arbeit','tasks':tasks}],contexts)
+    def no_real(*a,**kw):raise AssertionError('Demo exam accessed actual profile/lessons')
+    original=mc.snapshot;patch.setattr(mc,'snapshot',no_real)
+    r=client.post(B+'/exams',json={'subject':'Deutsch','scope':['Nominalisierung'],'minutes':15,'demo':True})
+    assert r.status_code==200,r.text
+    demo_id=r.json()['id'];assert contexts[-1]['materials']==contexts[-1]['lessons']==[]
+    assert client.post(B+f'/exams/{demo_id}/publish',json={'reviewed':True}).status_code==200
+    assert client.post(B+f'/exams/{demo_id}/start').status_code==200
+    assert client.get(B+'/exams').json()['exams']==[]
+    patch.setattr(mc,'snapshot',original)
+    child(state)
+    assert client.get(B+'/exams').json()=={'exams':[],'attempts':[]}
+    assert client.post(B+f'/exams/{demo_id}/start').status_code==404
+    assert client.get(B+'/exams?demo=true').status_code==403
+    state.user=parent
+    r=client.post(B+'/exams',json={'subject':'Deutsch','scope':['Nominalisierung'],'minutes':15})
+    real_id=r.json()['id'];client.post(B+f'/exams/{real_id}/publish',json={'reviewed':True})
+    child(state);a=client.post(B+f'/exams/{real_id}/start').json()
+    a=client.put(B+f"/exams/attempts/{a['id']}",json={'version':a['version'],'answers':{'0':'Meine echte Antwort'},'paused':True}).json()
+    state.user=parent
+    assert [r['id'] for r in client.get(B+'/exams').json()['attempts']]==[a['id']]
+    before=client.get(B+f"/exams/attempts/{a['id']}").json()
+    assert before['read_only'] and before['answers']['0']=='Meine echte Antwort'
+    assert client.put(B+f"/exams/attempts/{a['id']}",json={'version':a['version'],'answers':{'0':'Fälschung'}}).status_code==404
+    assert client.post(B+f"/exams/attempts/{a['id']}/submit").status_code==404
+    assert client.post(B+f"/exams/attempts/{a['id']}/grade-next").status_code==404
+    assert client.get(B+f"/exams/attempts/{a['id']}/photos").status_code==200
+    assert client.get(B+f"/exams/attempts/{a['id']}").json()==before

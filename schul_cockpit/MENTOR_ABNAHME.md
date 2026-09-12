@@ -1,3 +1,9 @@
+## Ergänzung 0.26.0: getrennte Demo und echter Kinderstand
+
+38 automatisierte Tests für Lernraum und Mentor bestanden. Zusätzliche Integrationstests prüfen: Demo-Chats funktionieren bei absichtlich gesperrtem Echtkontext-Zugriff; keine echten Materialien/Verläufe im Prompt; keine Demo-Lernnachweise; reale, frühere Eltern-Test- und neue Demo-Verläufe getrennt; Kinder können weder Demo öffnen noch starten; freigegebene Demo-Klausuren bleiben unsichtbar; Eltern lesen tatsächliche Kinderantworten ohne Schreibzugriff auf Antworten, Abgabe, Auswertung, Fotos oder Zeitstand. Frontend-Produktionsbuild erfolgreich.
+
+Die Migration ergänzt Kennzeichnungen, erhält vorhandene Daten und ordnet bestehende Klausurversuche anhand der Benutzerrolle konservativ als Eltern-Test bzw. Kinderversuch ein. Unbekannte Benutzer bleiben als Test markiert.
+
 # Abnahme des Lernmentors
 
 Stand: 12. September 2026. Release 0.25.3. Entwicklungsauftrag: [MASTERPLAN.md](MASTERPLAN.md). Bedienung und Grenzen: [MENTOR_BETRIEB.md](MENTOR_BETRIEB.md).
