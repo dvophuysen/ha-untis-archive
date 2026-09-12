@@ -54,6 +54,7 @@ def test_shared_plan_budget_weekend_positive_rotation_and_duplicate_sources(setu
     plan=client.get('/api/accounts/1/plan').json()
     assert plan['today']['actions']==[] and plan['today']['used_minutes']==60
     assert plan['deferred']
+    assert plan['today']['overload_minutes']==0 # Completed work is not pending homework.
 
 
 def test_source_link_roundtrip_help_invalidation_and_parent_isolation(setup):
@@ -120,3 +121,24 @@ def test_day_load_changes_proposal_and_voluntary_start_is_explicit(setup):
     r=client.post(B+'/sessions',json={'subject':'Deutsch','lesson_id':1,'voluntary':True,'minutes':5})
     assert r.status_code==200,r.text
     assert r.json()['max_minutes']==5
+
+
+def test_week_rotates_verified_topics_and_refreshes_lesson_dates(setup):
+    client,state,patch=setup;install(client)
+    snapshot=mc.snapshot(1)
+    base=snapshot['lessons'][0]
+    lessons=[]
+    for i in range(6):
+        lessons.append({**base,'id':100+i,'date':f'2026-09-{i+1:02d}','future':False,'text':f'German lesson {i}','subject_name':'Deutsch','rating':2,'topic':{'id':10,'title':'Grammatik'}})
+    lessons += [{**base,'id':200,'date':'2026-09-01','future':False,'text':'Stadtleben','subject_name':'Geschichte','rating':2,'topic':{'id':11,'title':'Stadtleben'}},
+                {**base,'id':201,'date':'2026-09-14','future':True,'subject_name':'Deutsch'},
+                {**base,'id':202,'date':'2026-09-17','future':True,'subject_name':'Deutsch'}]
+    snapshot['lessons']=lessons
+    snapshot['profile']['study_days']='[0,1,2,3,4,5,6]'
+    patch.setattr(lp,'envelope',lambda *a,**kw:(15,{'source':'test'},True))
+    result=lp.build(1,snapshot=snapshot)
+    actions=[g for d in result['week'] for g in d['actions']]
+    assert len([g for g in actions if g.get('topic_id')==10])==1
+    assert any(g['subject']=='Geschichte' for g in actions)
+    assert len([g for g in result['goals'] if g.get('topic_id')==10])==6 # No mastery merge.
+    assert all(not g['next_lesson'] or g['next_lesson']>=g['planned_date'] for g in actions)

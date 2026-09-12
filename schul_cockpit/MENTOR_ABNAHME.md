@@ -1,3 +1,9 @@
+## Nachprüfung 0.28.0 / Korrektur 0.28.1
+
+Live: Version 0.28.0 gestartet, Plan und Wochenvorschau erreichbar. Geschichts-Demo gruppiert neun erfundene Unterrichtsstunden und drei Hausaufgaben in drei wählbare Themenbereiche. Daraus wurde ein gespeicherter Klausurentwurf mit sechs Aufgaben über alle drei Bereiche erzeugt. Nicht freigegeben: Der Umfang erscheint für 15 Minuten zu groß; Zeitkalibrierung und vollständiger Druck-/Foto-/Bewertungsdurchlauf bleiben offen.
+
+0.28.1 behebt im Live-Test bemerkte Wiederholungen derselben Themen und die falsche Überlastungsmeldung bei bereits erledigten Aufgaben. 51 Tests und Produktionsbuild bestanden; Live-Installation dieser Korrektur separat prüfen.
+
 ## Integration 0.28.0
 
 50 automatisierte Lern-/Mentor-/Planprüfungen bestanden. Neue Fälle prüfen identische Planaktionen über verschiedene Ansichten, doppelte Tagesnotizen, positive Stichproben, Lerntage, Einrechnung erledigter Hausaufgaben, Quelle→Mentor→Plan-Verknüpfung, Eltern-Testtrennung, Kontogrenzen, Bewertungsrücknahme und neunstündige Geschichts-Demo ohne Zugriff aufs Echtarchiv.

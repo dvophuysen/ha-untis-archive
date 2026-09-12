@@ -1,3 +1,10 @@
+## 0.28.1
+
+- Wochenvorschau verteilt Fächer und plant je erkanntem Themengebiet zunächst einen Unterrichtsanlass; einzelne Lernbelege bleiben getrennt.
+- Nächste Unterrichtsstunde wird für jeden Vorschautag neu bestimmt.
+- Erledigte Aufgaben lösen keine Meldung über offene Hausaufgaben aus; angerechnete Zeit wird als Schätzung gekennzeichnet.
+- 51 automatisierte Prüfungen und Produktionsbuild erfolgreich.
+
 ## 0.28.0
 
 - Bedarfsabhängige Tagesplanung mit „Voller Tag“, „Normal“ und „Mehr Luft“. Minuten sind Orientierung; bewusst freiwilliges zusätzliches Üben ist möglich.
