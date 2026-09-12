@@ -1,3 +1,5 @@
+> Ergänzung vom 12.09.2026: [Gemeinsamer Lernplan und Wiederholungen](LERNPLAN_VERZAHNUNG.md). Beschreibt belegte Integrationslücken und die nächste konzeptionelle Umsetzung; noch nicht als laufende Funktion zu verstehen.
+
 # Schulmentor für Kind A und Kind B
 
 ## Zielbild, Bedienkonzept und verbindlicher Entwicklungsplan

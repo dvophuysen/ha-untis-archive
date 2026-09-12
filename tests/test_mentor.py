@@ -328,7 +328,7 @@ def test_scope_covers_all_lessons_and_homework_cached_and_used_for_exam(setup):
     contexts=[]
     async def model(account,purpose,instruction,ctx,*args,**kw):
         contexts.append((purpose,ctx))
-        if purpose=='exam_scope':return json.dumps({'groups':[{'title':'Sprachwissen','detail':'Alle Teilthemen einschließlich Festigung','ids':[x['id'] for x in ctx['items']]}]}),{},'fake'
+        if purpose=='exam_scope':return json.dumps({'groups':[{'title':'Sprachwissen','category':'learning','detail':'Alle Teilthemen einschließlich Festigung','ids':[x['id'] for x in ctx['items']]}]}),{},'fake'
         return json.dumps({'title':'Stoffübersicht üben','tasks':[{**TASK,'skill_title':'Sprachwissen','prompt':f'Erkläre Teilthema {i}','minutes':5,'points':4} for i in range(3)]}),{},'fake'
     patch.setattr(ai,'complete',model)
     result=client.post(B+'/exams/scope',json={'subject':'Deutsch'})
@@ -350,10 +350,10 @@ def test_scope_rejects_incomplete_grouping_and_demo_never_reads_real(setup):
     client,state,patch=setup;patch.setattr(es,'today_local',lambda:date(2026,9,11))
     def forbidden(*a,**k):raise AssertionError('Demo read real archive')
     patch.setattr(mc,'snapshot',forbidden)
-    mock(patch,[{'groups':[{'title':'Ein Thema','detail':'Beschreibung','ids':[999]}]}])
+    mock(patch,[{'groups':[{'title':'Ein Thema','category':'learning','detail':'Beschreibung','ids':[999]}]}])
     r=client.post(B+'/exams/scope',json={'subject':'Deutsch','demo':True})
     assert r.status_code==502,r.text
-    mock(patch,[{'groups':[{'title':'Adjektive','detail':'Nominalisierung','ids':[0]}]}])
+    mock(patch,[{'groups':[{'title':'Adjektive','category':'learning','detail':'Nominalisierung','ids':[0]}]}])
     r=client.post(B+'/exams/scope',json={'subject':'Deutsch','demo':True})
     assert r.status_code==200,r.text
     assert r.json()['groups'][0]['sources'][0]['id']<0
@@ -365,7 +365,7 @@ def test_scope_last_exam_and_calendar_failure_are_explicit(setup):
     client,state,patch=setup;patch.setattr(es,'today_local',lambda:date(2026,9,11))
     async def calendar(*a,**k):return {'exams':[{'date':'2026-09-09','subject_name':'DEUTSCH'}],'calendar_error':None}
     patch.setattr(es,'resolve_exams',calendar)
-    mock(patch,[{'groups':[{'title':'Adjektive','detail':'Nominalisierung','ids':[0]}]}])
+    mock(patch,[{'groups':[{'title':'Adjektive','category':'learning','detail':'Nominalisierung','ids':[0]}]}])
     r=client.post(B+'/exams/scope',json={'subject':'Deutsch','period':'last_exam'})
     assert r.status_code==200,r.text
     assert r.json()['start_date']=='2026-09-10'
@@ -409,3 +409,35 @@ def test_known_solutions_are_not_independent_evidence(setup):
     assert graded.status_code==200,graded.text
     assert graded.json()['feedback']['0']['solution_seen']
     with closing(db.webapp_conn()) as c:assert c.execute('SELECT help_used FROM mentor_evidence').fetchone()[0]==1
+
+
+def test_scope_merges_batches_without_losing_sources(setup):
+    from backend import exam_scope as es
+    client,_,patch=setup;patch.setattr(es,'today_local',lambda:date(2026,9,11))
+    original=es.snapshot
+    def school(account,demo):
+        s=original(account,demo)
+        s['lessons']=[dict(id=i,date='2026-09-10',subject_name='Deutsch',text=f'Thema {i}',future=False) for i in range(45)]
+        return s
+    patch.setattr(es,'snapshot',school)
+    calls=[]
+    async def model(account,purpose,instruction,ctx,*args,**kw):
+        calls.append(ctx)
+        return json.dumps({'groups':[{'title':'Zusammengehörige Themen','category':'learning','detail':'Alle Teilthemen im Zeitraum','ids':[x['id'] for x in ctx['items']]}]}),{},'fake'
+    patch.setattr(ai,'complete',model)
+    r=client.post(B+'/exams/scope',json={'subject':'Deutsch'})
+    assert r.status_code==200,r.text
+    assert len(calls)==3
+    assert len(r.json()['groups'])==1
+    assert {x['id'] for x in r.json()['groups'][0]['sources']}==set(range(45))
+
+
+def test_unclear_scope_cannot_become_automatic_exam_content(setup):
+    from backend import exam_scope as es
+    client,_,patch=setup;patch.setattr(es,'today_local',lambda:date(2026,9,11))
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:c.execute("UPDATE lessons SET lstext='Vertretung: Aufgaben nach Vorgabe bearbeiten' WHERE id=1")
+    mock(patch,[{'groups':[{'category':'unclear','title':'Unbekannte Aufgaben','detail':'Originalmaterial fehlt','ids':[0]}]}])
+    plan=client.post(B+'/exams/scope',json={'subject':'Deutsch'}).json()
+    assert plan['groups'][0]['category']=='unclear'
+    result=client.post(B+'/exams',json={'subject':'Deutsch','scope':['Unbekannte Aufgaben'],'minutes':15,'scope_plan_id':plan['plan_id'],'selected_groups':[{'group_id':0,'title':'Unbekannte Aufgaben'}]})
+    assert result.status_code==422,result.text
