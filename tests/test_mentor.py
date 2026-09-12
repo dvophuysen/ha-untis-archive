@@ -39,6 +39,16 @@ def start(client):
     return r.json()
 
 
+def test_dashboard_tolerates_lessons_without_subject(setup):
+    client,_,_=setup
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:
+        for subject in (None,'','   '):
+            c.execute("INSERT INTO lessons(account_id,date,subject_name,lstext) VALUES(1,'2026-09-11',?,'Allgemeine Veranstaltung')",(subject,))
+    result=client.get(B)
+    assert result.status_code==200,result.text
+    assert [x['subject'] for x in result.json()['candidates']]==['Deutsch']
+
+
 def send(client,s,**args):
     key='request_'+str(s['version'])
     return client.post(B+f"/sessions/{s['id']}/turn",json={'request_key':key,'version':s['version'],'text':'Kurz ausprobieren',**args})

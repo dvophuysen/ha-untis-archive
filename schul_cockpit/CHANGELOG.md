@@ -1,3 +1,8 @@
+# 0.25.1 – Unvollständige Unterrichtszuordnung
+
+- Unterrichtseinträge ohne Fachzuordnung werden nicht als Fachvorschlag verwendet und blockieren die Startseite nicht mehr.
+- Regressionstest mit leeren und fehlenden Fachnamen aus dem Muster der Live-Daten.
+
 # 0.25.0 – Dauerhafter Lernmentor
 
 - Neuer mobiler Einstieg: Unterrichtsvorschläge, kurze Dialoge, Schnellauswahlen, Fotos, Fortsetzen und Lernbelege.
