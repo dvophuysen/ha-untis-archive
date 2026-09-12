@@ -1,4 +1,4 @@
-# Lernmentor 0.25.0
+# Lernmentor 0.25.3
 
 Stand: 12. September 2026. Diese Version setzt den ersten vollständigen Mentorablauf und die gemeinsame Grundlage für Übungsklausuren um. Der [Masterplan](MASTERPLAN.md) bleibt der Entwicklungsauftrag; dort beschriebene zukünftige Fähigkeiten sind nicht automatisch schon vorhanden.
 
@@ -24,7 +24,7 @@ Kurze Sitzungen haben ein Zeit- und Nachrichtenlimit. Browser-Pausen und periodi
 
 ## Übungsklausuren
 
-Eltern geben Fach, Themen und Dauer an. Der erzeugte Entwurf muss jeden angegebenen Themenpunkt abdecken. Aufgaben, Lösungen und Punktkriterien sind vor Veröffentlichung zu prüfen. Die Angabe „Stoffumfang bestätigt“ bezieht sich auf die elterlich geprüfte Lehrkraftvorgabe; aus Unterrichtsdauer wird kein verbindlicher Klausurstoff abgeleitet.
+Eltern geben Fach, Themen und Dauer an. Der erzeugte Entwurf muss jeden angegebenen Themenpunkt abdecken. Aufgaben, Lösungen und Punktkriterien sind vor Veröffentlichung zu prüfen und direkt im Entwurf bearbeitbar. Halbe Punkte sind bei der Auswertung möglich. Die Angabe „Stoffumfang bestätigt“ bezieht sich auf die elterlich geprüfte Lehrkraftvorgabe; aus Unterrichtsdauer wird kein verbindlicher Klausurstoff abgeleitet.
 
 Veröffentlichte Arbeiten können Kinder als Simulation starten. Aufgaben werden im Versuch eingefroren. Antworten werden beim Aufgabenwechsel und alle 30 Sekunden gespeichert; **Speichern und Pause** sichert bewusst. Pro Aufgabe können zwei Fotos angehängt werden. Lösungen verlassen den Server erst nach Abgabe. Die Auswertung erfolgt mit begrenzten Aufrufen je Aufgabe; bereits bewertete Aufgaben werden nicht erneut berechnet. Am Ende zeigt die Übersicht alle Themen und höchstens drei nächste Übungsschritte. Unklare Bewertungen werden als solche angezeigt. Es wird keine Schulnote behauptet.
 
@@ -49,3 +49,5 @@ Die bestehenden SQLite-Datenbanken und ihr Backupverfahren bleiben erhalten. Neu
 Backendtests prüfen Kindtrennung, Wiederanlauf, doppelte Anfragen, Hilfehistorie, Datenänderungen während eines Aufrufs, Fehlzeitüberschneidungen, atomare Budgetreservierung, unklare Altkosten und Klausur-Lösungsschutz. Die Oberfläche wird als Produktionsbuild geprüft. Ein separates festes Set von 30 fachlichen Fällen kann im Elternbereich mit dem echten Deployment ausgewertet werden; zehn Fälle pro begrenztem Durchlauf. Das Ergebnis betrifft diese Beispiele und ist kein allgemeiner Nachweis der pädagogischen Wirksamkeit.
 
 Noch auszubauen: automatischer Abgleich mit Landes-/Schulcurricula, eigenständiger Aufnahme-/Transkriptionsdienst, längere Hör- und Sprechübungen, umfangreiche Materialverwaltung mit PDF-Seitenerschließung, differenzierte Aufgabenfamilien und wissenschaftlich aussagekräftigere Verlaufsbeobachtung. Die erste Themenauswahl und Wiederholungsrotation sind transparent, aber noch kein vollständig optimierter Wochenplan. Nutzen, Frust und Selbstständigkeit müssen sich in der realen Nutzung zeigen.
+
+Der konkrete geprüfte Stand und die Aussagegrenzen stehen in [MENTOR_ABNAHME.md](MENTOR_ABNAHME.md).
