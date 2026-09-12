@@ -1,4 +1,8 @@
+> Fortschreibung: [Masterplan](MASTERPLAN.md) und [aktueller Mentor-Betrieb](MENTOR_BETRIEB.md).
+
 # Lernraum – Gesamtkonzept und technische Umsetzung
+
+> Fortschreibung vom 12. September 2026: [Lernmentor, adaptive Lernstandsprüfung und nachhaltiges Wissen](MENTOR_KONZEPT.md). Dort sind implementierter Stand und geplante Architektur getrennt.
 
 Stand: 11. September 2026 · Schul-Cockpit 0.23.0
 

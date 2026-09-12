@@ -28,6 +28,10 @@ from .routers import (
     exams,
     health,
     learning,
+    mentor,
+    mentor_exams,
+    discovery,
+
     read_access,
     kiosk as kiosk_router,
     me,
@@ -44,6 +48,7 @@ from .routers import (
     week,
 )
 from .sync_worker import background_sync_loop
+from .mentor_worker import background_loop as mentor_loop
 
 logging.basicConfig(level=getattr(logging, SETTINGS.log_level.upper(), logging.INFO))
 _LOGGER = logging.getLogger("schul_cockpit")
@@ -71,10 +76,20 @@ async def lifespan(app: FastAPI):
         reconcile_all()
 
     _BG_TASK = asyncio.create_task(background_sync_loop())
+    mentor_task = asyncio.create_task(mentor_loop())
+    # A process restart cannot leave a grading lease permanently stuck.
+    from .db import webapp_conn
+    with __import__("contextlib").closing(webapp_conn()) as c:
+        c.execute("UPDATE mentor_exam_attempts SET status='submitted' WHERE status='grading'")
     _LOGGER.info("Background HA-todo sync loop started")
     try:
         yield
     finally:
+        mentor_task.cancel()
+        try:
+            await mentor_task
+        except asyncio.CancelledError:
+            pass
         if _BG_TASK:
             _BG_TASK.cancel()
             try:
@@ -122,6 +137,10 @@ async def slide_pin_cookie(request: Request, call_next):
 API = "/api"
 app.include_router(health.router, prefix=API)
 app.include_router(learning.router, prefix=API)
+app.include_router(mentor.router, prefix=API)
+app.include_router(mentor_exams.router, prefix=API)
+app.include_router(discovery.router, prefix=API)
+
 app.include_router(read_access.router, prefix=API)
 app.include_router(auth_router.router, prefix=API)
 app.include_router(me.router, prefix=API)

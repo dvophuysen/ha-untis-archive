@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
 from pydantic import ValidationError
 
+from .. import ai_gateway
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..db import history_conn, webapp_conn
 from ..courses import hidden_keys, lesson_is_hidden
@@ -287,7 +288,17 @@ async def overview(account_id: int, user: CurrentUser = Depends(get_current_user
             )
             selected.append(a)
             remaining -= a["minutes"]
+    suggested_grade = None
+    try:
+        from ..erlass import resolve_section
+        import re
+        _, _, klass = resolve_section(account_id)
+        match = re.match(r'^(\d{1,2})', klass or '')
+        if match and 1 <= int(match[1]) <= 13: suggested_grade = int(match[1])
+    except (sqlite3.Error, OSError, ValueError, TypeError):
+        pass
     return {
+        "suggested_grade": suggested_grade,
         "profiles": profiles,
         "topics": topics,
         "recent_attempts": attempts,
@@ -868,21 +879,6 @@ async def generate(
     if _AI_LOCK.locked():
         raise HTTPException(429, "Es wird bereits ein Entwurf erstellt. Bitte kurz warten.")
     async with _AI_LOCK:
-        # Persistent per-child daily cap; failed calls also count to prevent retry storms.
-        with closing(webapp_conn()) as conn, conn:
-            conn.execute("BEGIN IMMEDIATE")
-            day = today_local().isoformat()
-            r = conn.execute(
-                "SELECT calls FROM learning_ai_usage WHERE account_id=? AND day=?",
-                (account_id, day),
-            ).fetchone()
-            count = int(r[0]) if r else 0
-            if count >= 12:
-                raise HTTPException(429, "Heute wurden bereits zwölf KI-Entwürfe angefordert")
-            conn.execute(
-                "INSERT INTO learning_ai_usage(account_id,day,calls) VALUES(?,?,?) ON CONFLICT(account_id,day) DO UPDATE SET calls=excluded.calls",
-                (account_id, day, count + 1),
-            )
         context = {
             "grade": profile["grade"],
             "subject": topic["subject"],
@@ -902,16 +898,8 @@ async def generate(
             "Antworte ausschließlich als JSON entsprechend diesem Schema: "
             + json.dumps(GeneratedPack.model_json_schema())
         )
-        payload = model_payload(config["url"], config["model"], instruction, context, image_parts)
         try:
-            async with httpx.AsyncClient(timeout=60, follow_redirects=False) as client:
-                response = await client.post(
-                    config["url"],
-                    json=payload,
-                    headers={"Authorization": f"Bearer {config['key']}", "api-key": config["key"]},
-                )
-                response.raise_for_status()
-            raw = model_output(config["url"], response.json())
+            raw, _, _ = await ai_gateway.complete(account_id, 'material', instruction, context, image_parts, max_output=6500)
             if raw.startswith("```json"):
                 raw = raw[7:].rsplit("```", 1)[0].strip()
             pack = GeneratedPack.model_validate_json(raw)

@@ -1,3 +1,25 @@
+# 0.25.0 – Dauerhafter Lernmentor
+
+- Neuer mobiler Einstieg: Unterrichtsvorschläge, kurze Dialoge, Schnellauswahlen, Fotos, Fortsetzen und Lernbelege.
+- Frischer Kontext aus Unterricht, Rückmeldungen, Aufgaben, Nachholen und früheren Lernversuchen; Änderungen während einer Antwort werden erkannt.
+- Hinweise, KI-Einschätzungen und spätere Aufgabenvarianten werden getrennt dokumentiert. Eltern-Testläufe zählen nicht als Kinderleistungen.
+- Ein gemeinsamer KI-Zugang reserviert konservative Budgetkosten vor jedem Aufruf: 50 Euro/Monat für die Familie, Warnung ab 40 Euro, Hintergrundanteil höchstens 5 Euro.
+- Alle bestehenden KI-Entwürfe verwenden dieselbe Budgetsteuerung. Unbekannte Kostensätze und unklarer Altverbrauch sperren neue Aufrufe bis zur Klärung.
+- Optionale persistente Hintergrundauswertung statt KI-Aufrufen durch Seitenaufrufe.
+- Übungsklausuren mit Themenabdeckung, Elternprüfung, festem Aufgabenstand, gespeicherten Antworten/Fotos, Pause und Kriterienauswertung.
+- 30 feste fachliche Prüffälle zur Überprüfung des tatsächlich konfigurierten Modells.
+- Spracheingabe zunächst über das Diktat der Gerätetastatur. Eigene Aufnahme/Transkription, automatische Lehrplanbeschaffung und Aussprachebewertung sind noch keine Funktionen dieser Version.
+
+# Vorarbeit 0.24.0 – nicht separat veröffentlicht
+
+- Optionale automatische Themenauswertung beim Öffnen des Eltern-Lernraums, seit Beginn des vergangenen Schuljahres.
+- Neue/geänderte Unterrichtsinhalte inkrementell; Verständnisfeedback wird ohne zusätzliche KI-Aufrufe lokal berücksichtigt.
+- Erklärungen, Eselsbrücken, Grundlagen, fachliche Ausblicke und prüfbare Kurzcheck-Entwürfe aus Allgemeinwissen.
+- Belegte Unterrichtseinträge bleiben von vermuteten Verbindungen und Selbsteinschätzungen getrennt.
+- Unklare Stoffangaben erzeugen konkrete Materialfragen. Leere Einträge sind keine Wissenslücken.
+- Persistenter Cache, Aufrufgrenze und Anzeige der gemeldeten Tokens erfolgreicher Auswertungen.
+- Die erstmalige Auswertung erfolgt schrittweise; kein Hintergrunddienst, keine automatische Lehrplan- oder Klausurstoffermittlung.
+
 # 0.23.3 – Dauerhafter Lesezugang für Analysen
 
 - Separate schlüsselgeschützte Lese-API mit ausdrücklicher Kind-Freigabeliste.
