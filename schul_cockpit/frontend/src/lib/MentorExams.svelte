@@ -1,0 +1,61 @@
+<script>
+  import {onMount} from 'svelte';
+  import {api} from './api.js';
+  let {accountId,subjects=[],canManage=false}= $props();
+  const base=$derived(`/api/accounts/${accountId}/learning/mentor/exams`);
+  let data=$state(null),error=$state(''),busy=$state(false),draft=$state(null),attempt=$state(null);
+  let subject=$state(''),scope=$state(''),confirmed=$state(false),minutes=$state(45),index=$state(0),answers=$state({}),reviewed=$state(false);
+  let dirty=$state(false),photos=$state([]),photoInput=$state(null);
+  async function load(){data=await api.get(base);}
+  async function act(fn){if(busy)return;busy=true;error='';try{await fn();}catch(e){error=e.message;}finally{busy=false;}}
+  async function save(paused=false){if(!attempt || attempt.status!=='active')return;const r=await api.put(`${base}/attempts/${attempt.id}`,{version:attempt.version,answers,paused});attempt=r;dirty=false;}
+  async function open(r){attempt=r;answers={...r.answers};index=0;photos=await api.get(`${base}/attempts/${r.id}/photos`);}
+  async function upload(e){const file=e.target.files?.[0];if(!file)return;await act(async()=>{await save();const form=new FormData();form.append('file',file);await api.post(`${base}/attempts/${attempt.id}/photos/${index}`,form);photos=await api.get(`${base}/attempts/${attempt.id}/photos`);});e.target.value='';}
+  async function move(i){await save();index=i;}
+  onMount(()=>{act(load);const timer=setInterval(()=>{if(attempt?.status==='active'&&!busy)act(()=>save(document.hidden));},30000);return()=>clearInterval(timer);});
+  const task=$derived(attempt?.exam.tasks[index]);
+  const feedback=$derived(attempt?.feedback?.[String(index)]);
+</script>
+{#if error}<p role="alert" class="notice">{error}</p>{/if}
+{#if busy}<p role="status">Wird gespeichert oder vorbereitet …</p>{/if}
+{#if attempt}
+  <header><h2>{attempt.exam.title}</h2><p>{attempt.exam.minutes} Minuten vorgesehen · {attempt.status==='active'?'Prüfungssimulation':'Abgegeben'}</p></header>
+  <nav aria-label="Aufgaben">{#each attempt.exam.tasks as t,i}<button class:chosen={i===index} disabled={busy} onclick={()=>act(()=>move(i))}>{i+1}{answers[String(i)]?' ✓':''}</button>{/each}</nav>
+  <section class="card"><p class="muted">Aufgabe {index+1} von {attempt.exam.tasks.length} · {task.points} Punkte · etwa {task.minutes} Minuten</p><h3>{task.skill_title}</h3><p class="preserve">{task.prompt}</p>
+    {#each photos.filter(p=>p.question_index===index) as p}<p><a href={`./${base.slice(1)}/attempts/${attempt.id}/photos/${p.id}`} target="_blank" rel="noreferrer">Angehängtes Foto öffnen</a></p>{/each}
+    {#if attempt.status==='active'}
+      <label>Deine Antwort<textarea rows="8" bind:value={answers[String(index)]} oninput={()=>dirty=true} disabled={busy} placeholder="Schreibe hier. Du kannst auch über das Mikrofon deiner Tastatur diktieren. Du kannst auch auf Papier arbeiten und ein Foto anhängen."></textarea></label>
+      <input style="display:none" type="file" accept="image/*" bind:this={photoInput} onchange={upload}/><button disabled={busy||photos.filter(p=>p.question_index===index).length>=2} onclick={()=>photoInput?.click()}>Foto deiner Lösung anhängen</button>
+      <p class="muted">Automatisches Speichern alle 30 Sekunden und beim Aufgabenwechsel. {dirty?'Noch nicht gespeichert.':'Stand gespeichert.'}</p>
+      <div class="actions"><button disabled={busy} onclick={()=>act(()=>save(true))}>Speichern und Pause</button><button disabled={busy} onclick={()=>act(async()=>{await save(true);attempt=await api.post(`${base}/attempts/${attempt.id}/submit`);})}>Arbeit abgeben</button></div>
+    {:else}
+      <h4>Deine Antwort</h4><p class="preserve">{answers[String(index)]||'Keine Antwort eingereicht.'}</p>
+      <details><summary>Lösung und Kriterien</summary><p class="preserve">{task.solution}</p><p>{task.criteria}</p></details>
+      {#if feedback}<h4>{feedback.uncertain?'Bewertung noch unklar':`${feedback.points} von ${task.points} Punkten · KI-Einschätzung`}</h4><p>{feedback.rationale}</p><p><strong>Nächster Schritt:</strong> {feedback.next_step}</p>{/if}
+      {#if attempt.status!=='graded'}<button disabled={busy} onclick={()=>act(async()=>{attempt=await api.post(`${base}/attempts/${attempt.id}/grade-next`);})}>Nächste Aufgabe auswerten ({Object.keys(attempt.feedback).length}/{attempt.exam.tasks.length})</button>{:else}<p>Alle Aufgaben ausgewertet. Vergleiche die Themen, bevor du dir eine Übung aussuchst.</p>{/if}
+    {/if}
+  </section>
+  {#if attempt.status==='graded'}<section class="card"><h3>Das große Ganze</h3>{#each attempt.exam.tasks as t,i}<button style="display:block;text-align:left;width:100%;margin:.5rem 0" onclick={()=>index=i}>{t.skill_title}: {attempt.feedback[String(i)]?.uncertain?'noch unklar':`${attempt.feedback[String(i)]?.points} / ${t.points} Punkte`}</button>{/each}<h4>Deine nächsten sinnvollen Schritte</h4><ul>{#each Object.entries(attempt.feedback).sort((a,b)=>(a[1].points/attempt.exam.tasks[Number(a[0])].points)-(b[1].points/attempt.exam.tasks[Number(b[0])].points)).slice(0,3) as [i,f]}<li>{f.next_step}</li>{/each}</ul><p>KI-Einschätzungen zu den Aufgaben, keine Schulnote. Unklare Bewertungen bitte gemeinsam prüfen.</p></section>{/if}
+  <button disabled={busy} onclick={()=>act(async()=>{await save(true);attempt=null;await load();})}>Zur Übersicht</button>
+{:else if draft}
+  <h2>Entwurf prüfen: {draft.title}</h2><p>{draft.minutes} Minuten · {draft.scope.confirmed?'Stoffumfang von Eltern bestätigt':'Stoffumfang noch eine Annahme'}</p>
+  {#each draft.tasks as t,i}<section class="card"><h3>{i+1}. {t.skill_title} · {t.points} Punkte</h3><p class="preserve">{t.prompt}</p><details><summary>Lösung und Kriterien prüfen</summary><p class="preserve">{t.solution}</p><p>{t.criteria}</p></details></section>{/each}
+  <label class="check"><input type="checkbox" bind:checked={reviewed}/> Ich habe Aufgaben, Lösungen, Umfang und Punkte geprüft.</label>
+  <button disabled={busy||!reviewed} onclick={()=>act(async()=>{await api.post(`${base}/${draft.id}/publish`,{reviewed});draft=null;await load();})}>Für das Kind freigeben</button><button onclick={()=>draft=null}>Zurück</button>
+{:else}
+  <h2>Für eine Arbeit üben</h2><p>Eine vorbereitete Arbeit behält ihre Aufgaben und ihren Stand, auch wenn du später weitermachst.</p>
+  {#each data?.exams||[] as exam}<section class="card"><h3>{exam.title}</h3><p>{exam.subject} · {exam.minutes} Minuten · {exam.status==='published'?'Geprüft und freigegeben':'Entwurf'}</p><p>{exam.scope.topics.join(' · ')}</p>
+    {#if exam.status==='published'}<button disabled={busy} onclick={()=>act(async()=>open(await api.post(`${base}/${exam.id}/start`)))}>Öffnen / fortsetzen</button>{/if}
+    {#if canManage}<button disabled={busy} onclick={()=>act(async()=>{draft=await api.get(`${base}/${exam.id}/review`);reviewed=false;})}>Aufgaben prüfen</button>{/if}
+  </section>{:else}<p>Noch keine Übungsklausur vorbereitet.</p>{/each}
+  {#if canManage}<details><summary>Übungsklausur vorbereiten</summary><form onsubmit={e=>{e.preventDefault();act(async()=>{const r=await api.post(base,{subject,scope:scope.split('\n').map(x=>x.trim()).filter(Boolean),confirmed_scope:confirmed,minutes});draft=await api.get(`${base}/${r.id}/review`);reviewed=false;});}}>
+    <label>Fach<select bind:value={subject} required><option value="">Bitte auswählen</option>{#each subjects as s}<option>{s}</option>{/each}</select></label>
+    <label>Themen (eines pro Zeile, höchstens acht)<textarea bind:value={scope} rows="5" required placeholder="Die konkreten Themen aus der Vorbereitung oder der Vorgabe der Lehrkraft"></textarea></label>
+    <label>Dauer<select bind:value={minutes}>{#each [15,30,45,60,90] as n}<option value={n}>{n} Minuten</option>{/each}</select></label>
+    <label class="check"><input type="checkbox" bind:checked={confirmed}/> Dieser Stoffumfang entspricht der Vorgabe der Lehrkraft.</label>
+    <button disabled={busy}>Entwurf erstellen</button><p>Vor der Freigabe werden Lösungen und Kriterien angezeigt. Die Erstellung kann etwa eine Minute dauern.</p>
+  </form></details>{/if}
+{/if}
+<style>
+  .card{padding:1rem;background:var(--card,#fff);border:1px solid var(--border,#d8e2dc);border-radius:16px;margin:1rem 0}.preserve{white-space:pre-wrap;overflow-wrap:anywhere}nav,.actions{display:flex;gap:.5rem;flex-wrap:wrap}button,select{min-height:44px;padding:.6rem .9rem;cursor:pointer}button{border-radius:12px;border:1px solid var(--border,#ccc);background:var(--card,#fff);color:inherit}.chosen{background:var(--accent,#247552);color:var(--accent-fg,#fff)}label{display:block;margin:.8rem 0}textarea,select{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:16px;margin-top:.4rem;padding:.7rem;border-radius:10px;border:1px solid var(--border,#ccc);background:var(--card,#fff);color:inherit}.check{display:flex;gap:.5rem;align-items:center}.muted{font-size:.85rem;opacity:.8}.notice{padding:1rem;background:#fff1d0;color:#4c3610}details{margin:1rem 0}summary{cursor:pointer;min-height:44px}button:disabled{opacity:.5}
+</style>

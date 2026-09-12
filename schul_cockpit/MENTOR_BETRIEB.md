@@ -1,0 +1,51 @@
+# Lernmentor 0.25.0
+
+Stand: 12. September 2026. Diese Version setzt den ersten vollständigen Mentorablauf und die gemeinsame Grundlage für Übungsklausuren um. Der [Masterplan](MASTERPLAN.md) bleibt der Entwicklungsauftrag; dort beschriebene zukünftige Fähigkeiten sind nicht automatisch schon vorhanden.
+
+## Einstieg und Bedienung
+
+Unter **Lernen** erscheinen Vorschläge aus den sichtbaren persönlichen Unterrichtskursen und fälligen Wiederholungen. **Gemeinsam anschauen** beginnt eine begrenzte Einheit. Rückmeldungen, heutige Aufgaben und frühere Gespräche werden gezielt berücksichtigt. Ein unklarer Eintrag bleibt unklar; Originalbuchseiten werden nicht erfunden.
+
+Kinder können tippen, über das Mikrofon ihrer Gerätetastatur diktieren oder ein Foto anhängen. Der Mentor antwortet als Text mit wenigen Schnellauswahlen. **Anders erklären** dokumentiert Hilfe; **Für heute fertig** schließt auch ohne weiteren Modellaufruf ab. **Weitermachen** öffnet gespeicherte Gespräche. **Was schon klappt** zeigt einzelne Lernbelege, nicht aus Rückmeldungen erfundene Kompetenzwerte.
+
+In Elternkonten begonnene Mentorgespräche sind ausdrücklich Testläufe. Sie erzeugen keine Lernbelege oder Wiederholungsaufgaben für das Kind. Die Kinder starten ihre eigenen Einheiten mit ihrer vorhandenen Anmeldung. Eltern können die gespeicherten Kinderverläufe lesen und fehlerhafte KI-Bewertungen begründet zurücknehmen.
+
+Der Elternbereich öffnet die bisherige Verwaltung für Lernrahmen, Materialien und eigene Aufgaben. Ein neues Profil benötigt den passenden Jahrgang. Ein erkannter Klassenjahrgang wird vorgeschlagen. Der vorhandene Tagesrahmen gilt weiter; ausdrücklich eingeschaltete Wochenendtage ermöglichen freiwilliges Üben auch dann, wenn das automatische schulische Hausaufgabenbudget am Wochenende null beträgt.
+
+## Aktuelle Daten, Gedächtnis und Lernen
+
+Quellen werden pro Anfrage neu gelesen und account-scoped zusammengestellt. Relevante Datenänderungen während einer Modellantwort führen zum Verwerfen des überholten Ergebnisses, nicht zum stillen Überschreiben neuer Aufgabenstände. Modellantworten hängen an Sitzungs-Version und Anfragekennung. Doppelte erfolgreich bearbeitete Anfragen werden aus dem gespeicherten Zustand beantwortet.
+
+Unterrichtsüberblicke berücksichtigen Kursfilter, ausgefallene Stunden, Stoffkorrekturen und Fehlzeitüberschneidungen. Hausaufgaben-UNTIS-IDs werden nicht ungeprüft auf lokale Unterrichts-IDs abgebildet. Das Kontextfenster umfasst aktuelle Unterrichtsinhalte und passende gespeicherte Fähigkeiten; Hintergrunderschließung kann auch das vorige Schuljahr einbeziehen.
+
+Fähigkeiten, Nachrichten, Aufgabenfassungen, Hinweise und Kriterienbewertungen liegen in eigenen mentor_-Tabellen. Eine eigene Antwort nach Hinweis wird als unterstützt erfasst. Wiederholungen nutzen neue Aufgabenvarianten. Die Anzeige „mit Abstand selbstständig gezeigt“ verlangt mindestens zwei unterschiedliche Varianten und mindestens sieben Tage zwischen selbstständigen erfolgreichen Beobachtungen. Das ist eine transparente Produktregel, kein wissenschaftlich normierter Kompetenztest. KI-Bewertungen können falsch sein und bleiben korrigierbar.
+
+Kurze Sitzungen haben ein Zeit- und Nachrichtenlimit. Browser-Pausen und periodische Aktivität werden erfasst; die Zeitmessung ist eine Näherung, keine Überwachung. Nach zwei Hilfen werden alternative Erklärung und Abschluss angeboten. Nach zwölf Modellschritten oder dem Zeitrahmen endet die Einheit ohne weiteren KI-Aufruf.
+
+## Übungsklausuren
+
+Eltern geben Fach, Themen und Dauer an. Der erzeugte Entwurf muss jeden angegebenen Themenpunkt abdecken. Aufgaben, Lösungen und Punktkriterien sind vor Veröffentlichung zu prüfen. Die Angabe „Stoffumfang bestätigt“ bezieht sich auf die elterlich geprüfte Lehrkraftvorgabe; aus Unterrichtsdauer wird kein verbindlicher Klausurstoff abgeleitet.
+
+Veröffentlichte Arbeiten können Kinder als Simulation starten. Aufgaben werden im Versuch eingefroren. Antworten werden beim Aufgabenwechsel und alle 30 Sekunden gespeichert; **Speichern und Pause** sichert bewusst. Pro Aufgabe können zwei Fotos angehängt werden. Lösungen verlassen den Server erst nach Abgabe. Die Auswertung erfolgt mit begrenzten Aufrufen je Aufgabe; bereits bewertete Aufgaben werden nicht erneut berechnet. Am Ende zeigt die Übersicht alle Themen und höchstens drei nächste Übungsschritte. Unklare Bewertungen werden als solche angezeigt. Es wird keine Schulnote behauptet.
+
+## Budget und Modelle
+
+Alle Lern-KI-Aufrufe verwenden ai_gateway.py: Mentor, Bilder, Entwürfe, Themenerschließung, Klausuren und Modellprüfungen. 50 Euro pro Kalendermonat gelten gemeinsam für die Familie, Warnschwelle 40 Euro. Hintergrundarbeit ist auf 5 Euro innerhalb dieses Rahmens begrenzt. Zusätzlich gelten konservative Tages- und Sitzungsgrenzen (5 Euro pro Kind/Tag, 2 Euro pro Mentorsitzung). Diese sind Budgetanrechnungen, keine behaupteten Rechnungsbeträge.
+
+Vor dem Aufruf erfolgt eine transaktionale Reservierung anhand einer konservativen Eingabeobergrenze und eines verbindlichen Ausgabelimits. Nach dem Aufruf wird die gemeldete Nutzung mit konservativen Sätzen verrechnet. Nicht gemeldete Nutzung und unklare Timeouts behalten ihre Reservierung. Keine automatischen Provider-Retries. Überschreitet gemeldete Nutzung ihre Reservierung, wird eine erneute Kostenklärung erforderlich. Parallelität kann das gemeinsame Budget nicht durch getrennte lokale Zähler umgehen.
+
+Die eingebauten Sätze für die vom Eigentümer benannten Standard-Global-Deployments enthalten eine Reserve gegenüber den am 12.09.2026 geprüften veröffentlichten USD-Listenpreisen; Rabatte und Cache-Ersparnis werden nicht vorausgesetzt. Für Sol werden 10/45 Euro, Terra 5/18 Euro, Luna 1,90/9 Euro je Million Eingabe-/Ausgabetokens angerechnet. [Microsoft-Preisbasis](https://azure.microsoft.com/en-us/blog/gpt-5-6-now-available-in-microsoft-foundry/). Diese Kostensätze laufen am 01.12.2026 ab und müssen dann erneut geprüft werden; unbekannte Modellnamen sind gesperrt. Das ist keine Garantie über die gesamte Azure-Rechnung, andere Dienste, geänderte Preise oder Abgaben. Die App zeigt diese Unterscheidung im Elternbereich.
+
+Gab es vor der neuen Buchführung bereits KI-Aufrufe im laufenden Monat, müssen Eltern deren Anfangsverbrauch bestätigen. Bestehende Anfragen werden nicht als kostenlos oder als nachweislich null ausgegeben. Bei fehlendem Rahmen bleiben bereits gespeicherte Aufgaben, Antworten und Abschlüsse nutzbar.
+
+## Hintergrund und Betrieb
+
+Ein persistenter Auftrag je Kind wird nur bei ausdrücklich aktivierter Hintergrunderschließung ausgeführt. Neue/geänderte Stoffeinträge werden in kleinen Gruppen erschlossen. Der Dienst prüft alle 60 Sekunden, ein Kind erhält höchstens einen Batch je zehn Minuten. Bei Fehlern wird vier Stunden vertagt. Elternfreigabe und KI-Schuljahresfreigabe werden erneut geprüft. Ein Neustart setzt nicht die Kostenbuchführung zurück.
+
+Die bestehenden SQLite-Datenbanken und ihr Backupverfahren bleiben erhalten. Neue Tabellen werden bei ID-Neuzuordnung des Archivkontos mitgeführt. Die vorhandene Nur-Lese-API liefert jetzt auch Mentorverläufe, Lernbelege, Kostenbuchungen und Klausurversuche; keine Binärdateien oder Zugangsdaten. Anleitung: [READ_ACCESS.md](READ_ACCESS.md).
+
+## Qualitätsprüfung und weitere Ausbauschritte
+
+Backendtests prüfen Kindtrennung, Wiederanlauf, doppelte Anfragen, Hilfehistorie, Datenänderungen während eines Aufrufs, Fehlzeitüberschneidungen, atomare Budgetreservierung, unklare Altkosten und Klausur-Lösungsschutz. Die Oberfläche wird als Produktionsbuild geprüft. Ein separates festes Set von 30 fachlichen Fällen kann im Elternbereich mit dem echten Deployment ausgewertet werden; zehn Fälle pro begrenztem Durchlauf. Das Ergebnis betrifft diese Beispiele und ist kein allgemeiner Nachweis der pädagogischen Wirksamkeit.
+
+Noch auszubauen: automatischer Abgleich mit Landes-/Schulcurricula, eigenständiger Aufnahme-/Transkriptionsdienst, längere Hör- und Sprechübungen, umfangreiche Materialverwaltung mit PDF-Seitenerschließung, differenzierte Aufgabenfamilien und wissenschaftlich aussagekräftigere Verlaufsbeobachtung. Die erste Themenauswahl und Wiederholungsrotation sind transparent, aber noch kein vollständig optimierter Wochenplan. Nutzen, Frust und Selbstständigkeit müssen sich in der realen Nutzung zeigen.

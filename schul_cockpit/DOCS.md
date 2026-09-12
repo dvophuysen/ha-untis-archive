@@ -151,6 +151,21 @@ Die optionalen Add-on-Einstellungen `learning_ai_url`, `learning_ai_key` und `le
 [Gesamtkonzept, Architektur, Betriebsgrenzen und Inbetriebnahme](LERNKONZEPT.md)
 
 
+## Automatische Themenübersicht ab 0.24.0
+
+Im Eltern-Lernraum unter **Heute → Unterricht automatisch auswerten** einschalten. KI muss zusätzlich im aktiven Schuljahr aktiviert sein. Pro Öffnen wird höchstens eine Gruppe von 24 neuen/geänderten Einträgen eines Fachs verarbeitet; **Weitere Unterrichtseinträge auswerten** setzt die Erstaufnahme fort. Das Archivfenster beginnt am 1. August des vergangenen Schuljahres. Höchstens 6.000 aktuelle Datensätze werden betrachtet; eine Kürzung wird angezeigt.
+
+An die KI gehen Jahrgang, Fach, Unterrichtsdatum und Stofftext sowie bereits erkannte Thementitel; Feedback, Fehlzeiten und Antworten bleiben für die Priorisierung lokal. Inhalte werden pro Eintrag auf 2.000 Zeichen und pro Gruppe auf 14.000 Zeichen begrenzt. Maximal 6.500 Ausgabetokens und gemeinsam zwölf Modellaufrufe pro Kind/Tag begrenzen den Aufwand. Tatsächliche gemeldete Tokens erfolgreicher Auswertungen werden angezeigt; dies ist keine vollständige Kostenabrechnung.
+
+Themen erhalten Erklärungen, Verbindungen und einen **nicht freigegebenen** Kurzcheck. Eltern prüfen diesen unter **Kurzcheck prüfen und freigeben**. Freigegebene Aufgaben nutzen die vorhandenen Wiederholungsintervalle und Zeitbudgets. Unterrichtstexte beweisen weder Können noch Klausurrelevanz. Älterer Unterricht bleibt mit seinem Datum erkennbar, auch wenn er dem aktuellen Lernrahmen als Grundlage zugeordnet wird. Die Auswertung startet beim Öffnen des Eltern-Lernraums, nicht im Hintergrund. Eine pausierte Auswertung löscht vorhandene Ergebnisse nicht.
+
+API (jeweils unter `/api/accounts/{account_id}/learning/discovery`): GET Übersicht, PUT `/settings` mit `{ "enabled": true }`, POST `/scan` für eine begrenzte Gruppe. Elternrolle und bestehende Kontoberechtigungen sind erforderlich.
+
 ## Dauerhafter Analysezugang ab 0.23.3
 
 Eine separate Lese-API liefert Unterricht, Rückmeldungen, Nachholen, Aufgaben und Lernverläufe. Authentifizierung, Filter, Pagination und Wiederverwendung in späteren Sessions: [READ_ACCESS.md](READ_ACCESS.md). Der Zugang ist standardmäßig deaktiviert und wird über `learning_read_token` sowie `learning_read_accounts` ausdrücklich eingerichtet.
+
+
+## Lernmentor ab 0.25.0
+
+Der Lernbereich startet jetzt mit dem Mentor. [Bedienung, Kostensteuerung, Datenmodell und Grenzen](MENTOR_BETRIEB.md). Der [Masterplan](MASTERPLAN.md) ist die verbindliche Entwicklungsgrundlage. Die Abschnitte zur früheren 0.24.0-Vorarbeit beschreiben keinen eigenständigen Release; Seitenaufrufe lösen keine automatischen KI-Analysen mehr aus.

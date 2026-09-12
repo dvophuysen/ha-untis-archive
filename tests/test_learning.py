@@ -45,6 +45,10 @@ def env(tmp_path, monkeypatch):
         SimpleNamespace(webapp_db_path=tmp_path / "webapp.db", history_db_path=history),
     )
     db.init_webapp_db()
+    from backend import ai_gateway as ai
+    monkeypatch.setitem(ai.RATES, 'test', (10.,45.))
+    monkeypatch.setitem(ai.RATES, 'test-model', (10.,45.))
+    monkeypatch.setattr(ai, 'today_local', lambda: date(2026,9,11))
     with closing(db.webapp_conn()) as conn:
         for uid, role in [(1, "parent"), (2, "child"), (3, "child"), (4, "parent")]:
             conn.execute(
@@ -458,6 +462,69 @@ def test_responses_protocol(url):
         with pytest.raises(ValueError):
             learning.model_output(url, invalid)
 
+
+def test_discovery_cached_mapping_feedback_and_isolation(env):
+    from backend.routers import discovery as d
+    client, state, monkeypatch = env
+    client.app.include_router(d.router, prefix='/api')
+    monkeypatch.setattr(d, 'today_local', lambda: date(2026, 9, 12))
+    monkeypatch.setattr(d, 'hidden_keys', lambda _: set())
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:
+        c.executescript("CREATE TABLE lessons(id INTEGER PRIMARY KEY,account_id INTEGER,date TEXT,subject_name TEXT,subject_untis_id INTEGER,teacher_untis_id INTEGER,lstext TEXT,was_absent INTEGER,code TEXT);")
+        c.execute("INSERT INTO lessons VALUES(1,1,'2026-09-10','Deutsch',1,1,'Nominalisierung',0,NULL)")
+        c.execute("INSERT INTO lessons VALUES(2,1,'2026-09-09','Deutsch',1,1,'Buch Seite 42',0,NULL)")
+        c.execute("INSERT INTO lessons VALUES(3,1,'2026-09-08','Deutsch',1,1,'',0,NULL)")
+    client.put(path()+'/profiles',json={**P,'ai_enabled':True})
+    for k,v in {'LEARNING_AI_URL':'https://example.com/responses','LEARNING_AI_KEY':'fake','LEARNING_AI_MODEL':'test'}.items(): monkeypatch.setenv(k,v)
+    calls=[]
+    class FakeClient:
+        def __init__(self,**kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self,*args): pass
+        async def post(self,url,**kwargs):
+            calls.append(kwargs)
+            pack={'topics':[{'title':'Nominalisierung','lesson_ids':[1],'objective':'Ich erkenne Nomen.','explanation':'Wörter können als Nomen gebraucht werden.','check':A}], 'unclear':[{'lesson_id':2,'question':'Was steht auf Seite 42?'}]}
+            return httpx.Response(200,json={'status':'completed','output':[{'type':'message','role':'assistant','content':[{'type':'output_text','text':json.dumps(pack)}]}],'usage':{'input_tokens':100,'output_tokens':200}},request=httpx.Request('POST',url))
+    monkeypatch.setattr(d.httpx,'AsyncClient',FakeClient)
+    url=path()+'/discovery'
+    assert client.post(url+'/scan').status_code==403
+    client.put(url+'/settings',json={'enabled':True})
+    assert client.get(url).json()['pending']==2
+    result=client.post(url+'/scan')
+    assert result.status_code==200,result.text
+    assert result.json()['processed']==2
+    assert client.post(url+'/scan').json()['cached']
+    assert len(calls)==1
+    overview=client.get(url).json()
+    assert overview['blank']==1 and overview['pending']==0
+    assert overview['questions'][0]['question']=='Was steht auf Seite 42?'
+    assert overview['usage']['input_tokens']==100
+    tid=overview['topics'][0]['id']
+    with closing(db.webapp_conn()) as c:
+        assert c.execute('SELECT published FROM learning_activities WHERE topic_id=?',(tid,)).fetchone()[0]==0
+        # Feedback must change prioritisation without calling the model again.
+        c.execute("INSERT INTO lesson_checkins(account_id,lesson_id,user_id,rating,created_at,updated_at) VALUES(1,1,2,1,'now','now')")
+    assert client.get(url).json()['topics'][0]['reason']=='Verständnis kurz prüfen'
+    assert client.post(url+'/scan').json()['cached'] and len(calls)==1
+    with closing(db.webapp_conn()) as c:
+        c.execute('UPDATE lesson_checkins SET rating=3 WHERE account_id=1')
+    assert client.get(url).json()['topics'][0]['reason'].startswith('Als verstanden')
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:
+        c.execute("UPDATE lessons SET lstext='Nominalisierung von Adjektiven' WHERE id=1")
+    assert client.get(url).json()['pending']==1
+    # Invalid/outdated model references cause no partial persistence.
+    assert client.post(url+'/scan').status_code==502
+    assert client.get(url).json()['pending']==1
+    child(state,3)
+    assert client.get(url).status_code==403
+    assert client.post(url+'/scan').status_code==403
+
+
+def test_discovery_rejects_duplicate_and_invented_evidence():
+    from backend.routers.discovery import Pack, validate_pack
+    for ids in [[1,1],[1,99]]:
+        p=Pack.model_validate({'topics':[{'title':'Thema','lesson_ids':ids,'objective':'Ziel','explanation':'Erklärung','check':A}]})
+        with pytest.raises(ValueError): validate_pack(p,[{'id':1},{'id':2}])
 
 def test_persistent_read_access_scope_pagination_and_secret_exclusion(env):
     from backend.routers import read_access as r
