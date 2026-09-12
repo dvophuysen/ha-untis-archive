@@ -98,7 +98,9 @@ def candidates(s):
             out.append(dict(kind='review',skill_id=r['id'],subject=r['subject'],title=r['title'],reason='Mit Abstand an einer neuen Aufgabe ausprobieren',source={'skill_id':r['id']},rank=0))
     last={}
     for r in s['recent']: last.setdefault(r['subject'],r['updated_at'][:10])
-    pool=[r for r in s['lessons'] if not r['future'] and r['text'].strip()]
+    # Archive-wide events may have lesson text but no subject. They cannot
+    # anchor a subject-specific learning session; retain them in the archive.
+    pool=[r for r in s['lessons'] if not r['future'] and r['text'].strip() and (r.get('subject_name') or '').strip()]
     pool.sort(key=lambda r:(r['rating'] not in (1,2),not r['catch_up_open'],last.get(r['subject_name'],''),r['date']),reverse=False)
     for r in pool:
         subject=r.get('subject_name') or 'Unterricht'
