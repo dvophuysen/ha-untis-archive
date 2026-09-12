@@ -1,3 +1,10 @@
+# 0.23.2 – Lernrahmen mit Auswahlfeldern
+
+- Schuljahr, Jahrgang, Bundesland und Schulform als native Dropdowns.
+- Entfernt die fehlerhafte Browser-Formatprüfung beim Schuljahr.
+- Dynamische Schuljahresauswahl; gespeicherte Werte bleiben auswählbar.
+- Kennzeichnet die bisher rein beschreibenden Angaben zu Bundesland und Schulform.
+
 # 0.23.1 – Azure Responses API
 
 - Erkennt Responses-Endpunkte einschließlich Azure-Preview- und v1-Pfad automatisch.

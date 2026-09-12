@@ -16,6 +16,14 @@
   const kindNames = {preview:'Vorbereitung',practice:'Üben',transfer:'Übertragen',oral:'Mündlich'};
   const outcomes = {again:'Noch offen',partly:'Teilweise / mit Hilfe',independent:'Selbstständig eingeschätzt'};
   const weekdays = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+  const regions = ['Baden-Württemberg','Bayern','Berlin','Brandenburg','Bremen','Hamburg','Hessen','Mecklenburg-Vorpommern','Niedersachsen','Nordrhein-Westfalen','Rheinland-Pfalz','Saarland','Sachsen','Sachsen-Anhalt','Schleswig-Holstein','Thüringen'];
+  const schoolTypes = ['Grundschule','Gymnasium','Gesamtschule','Oberschule','Realschule','Hauptschule','Förderschule','Berufliche Schule'];
+  const schoolYears = $derived.by(() => {
+    const now = new Date();
+    const start = now.getFullYear() - (now.getMonth() < 7 ? 1 : 0);
+    return [...new Set([...Array.from({length:17}, (_, i) => `${start-13+i}/${start-12+i}`),
+      ...(data?.profiles || []).map(p => p.school_year), profileForm?.school_year].filter(Boolean))].sort();
+  });
   const current = $derived(data?.profiles.find(p => p.active));
   const filteredTopics = $derived(data?.topics.filter(t => (!year || t.school_year === year) && (!subject || t.subject === subject)) || []);
   const subjects = $derived([...new Set(data?.topics.map(t => t.subject) || [])].sort());
@@ -219,8 +227,15 @@
         <h2>Gemeinsam den Rahmen festlegen</h2><p>Ein aktives Schuljahr steuert die täglichen Vorschläge. Alte Themen und Lernverläufe bleiben erhalten; Fächer und Materialien werden nach Bedarf ergänzt.</p>
         {#if profileForm}
           <form class="card" onsubmit={(e)=>{e.preventDefault();act(saveProfile);}}>
-            <div class="columns"><label>Schuljahr<input bind:value={profileForm.school_year} pattern="20[0-9]{2}/20[0-9]{2}" placeholder="2026/2027" required /></label><label>Jahrgang<input type="number" bind:value={profileForm.grade} min="1" max="13" required /></label></div>
-            <div class="columns"><label>Bundesland<input bind:value={profileForm.region} maxlength="80" /></label><label>Schulform<input bind:value={profileForm.school_type} maxlength="120" /></label></div>
+            <div class="columns">
+              <label>Schuljahr<select bind:value={profileForm.school_year} required>{#each schoolYears as value}<option value={value}>{value}</option>{/each}</select></label>
+              <label>Jahrgang<select bind:value={profileForm.grade} required>{#each Array.from({length:13}, (_, i) => i+1) as value}<option value={value}>{value}</option>{/each}</select></label>
+            </div>
+            <div class="columns">
+              <label>Bundesland<select bind:value={profileForm.region}><option value="">Bitte auswählen</option>{#if profileForm.region && !regions.includes(profileForm.region)}<option value={profileForm.region}>{profileForm.region}</option>{/if}{#each regions as value}<option value={value}>{value}</option>{/each}</select></label>
+              <label>Schulform<select bind:value={profileForm.school_type}><option value="">Bitte auswählen</option>{#if profileForm.school_type && !schoolTypes.includes(profileForm.school_type)}<option value={profileForm.school_type}>{profileForm.school_type}</option>{/if}{#each schoolTypes as value}<option value={value}>{value}</option>{/each}</select></label>
+            </div>
+            <p class="muted">Bundesland und Schulform werden bisher zur Einordnung gespeichert. Lehrpläne werden noch nicht automatisch zugeordnet.</p>
             <label>Eigenes Ziel des Kindes<textarea bind:value={profileForm.personal_goal} maxlength="500" placeholder="Was möchte ich im Unterricht leichter schaffen?"></textarea></label>
             <div class="columns"><label>Maximal für den Lernraum pro Tag (Minuten)<input type="number" bind:value={profileForm.daily_minutes} min="0" max="120" required /></label><label>Höchstens so viele Einheiten<input type="number" bind:value={profileForm.max_sessions} min="1" max="5" required /></label></div>
             <p class="muted">Dies ist eine Obergrenze innerhalb des bestehenden Tagesbudgets. Hausaufgaben und bereits investierte Zeit werden abgezogen. 0 Minuten pausiert tägliche Vorschläge.</p>
