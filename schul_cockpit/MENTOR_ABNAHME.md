@@ -1,3 +1,9 @@
+## Integration 0.28.0
+
+50 automatisierte Lern-/Mentor-/Planprüfungen bestanden. Neue Fälle prüfen identische Planaktionen über verschiedene Ansichten, doppelte Tagesnotizen, positive Stichproben, Lerntage, Einrechnung erledigter Hausaufgaben, Quelle→Mentor→Plan-Verknüpfung, Eltern-Testtrennung, Kontogrenzen, Bewertungsrücknahme und neunstündige Geschichts-Demo ohne Zugriff aufs Echtarchiv.
+
+Wiederholungsregeln sind für gleiche Tage, bekannte Aufgaben, größere Abstände, Fehler, Hilfen und unklare/ungültige Bewertungen geprüft. Produktionsbuild separat geprüft. Live-Abnahme folgt nach Veröffentlichung. Automatisierte Modellantworten sind Testdoubles, kein pädagogischer Wirksamkeitsnachweis.
+
 ## Live-Prüfung am 12.09.2026 und Ergänzung 0.27.1
 
 Die Gruppierung von Kind B Deutschunterricht seit 13.08.2026 hat 14 beschriebene Stunden berücksichtigt und zwei Stunden ohne Beschreibung ausdrücklich angezeigt. Die Druckansicht der vorhandenen Deutsch-Übungsklausur wurde angemeldet geöffnet und visuell geprüft: Aufgaben, Punkte und Antwortplatz vorhanden; keine Musterlösungen. Ab 0.27.1 bleiben unklare/organisatorische Gruppen sichtbar, sind aber von der automatischen Klausurthemenauswahl ausgeschlossen; eigener Integrationstest prüft auch die serverseitige Ablehnung.

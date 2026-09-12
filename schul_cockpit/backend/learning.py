@@ -124,7 +124,7 @@ class FinishIn(InputModel):
 def next_review(streak: int, outcome: str, help_used: bool, day: date) -> tuple[int, str]:
     if outcome == "independent" and not help_used:
         streak += 1
-        interval = (2, 7, 14, 30)[min(streak - 1, 3)]
+        interval = (2, 7, 14, 30, 60)[min(streak - 1, 4)]
     else:
         streak, interval = 0, 1
     return streak, (day + timedelta(days=interval)).isoformat()

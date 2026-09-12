@@ -1,3 +1,11 @@
+## Gemeinsame Planung ab 0.28.0
+
+**Plan** und **Lernen → Heute** zeigen dieselben Lernaktionen. Die Auswahl richtet sich nach Lernbedarf und nahen Klausuren. „Voller Tag“, „Normal“ und „Mehr Luft“ ändern den heutigen Vorschlag. Minuten dienen als Orientierung, weitere Einheiten können bewusst freiwillig gestartet werden; freie Zeit ist kein Lernauftrag. „Nächste sieben Tage“ öffnet die begrenzte Vorschau. „Bearbeitet, noch offen und spätere Kurzchecks“ zeigt ursprüngliche Rückmeldungen, Gespräche, Aufgabenbelege und nächste Termine. Kinder öffnen den passenden Mentor direkt; Eltern lesen die Kinderverläufe, Tests bleiben getrennt.
+
+Neue selbstständige Aufgaben an getrennten Tagen verlängern die Wiederholungsabstände bis 60 Tage. Unklare Bewertungen stufen nicht herab. Einzelne Erfolge bestätigen nur die geübte Fähigkeit. Historische Selbstkontrollübungen bleiben als Selbsteinschätzung kenntlich. Anrechenbare Zeit ist ein Richtwert aus Aufgabenannahmen und reservierten Lernblöcken, keine Behauptung über tatsächliche Konzentrationszeit.
+
+Für Tests: **Demo ausprobieren → Übungsklausur → Geschichte → Themen aus Beispielunterricht vorschlagen**. Neun erfundene Stunden aus mehreren Wochen und drei Hausaufgaben ersetzen die bisherige Einzelstunde. Der Kinderstand liefert weiterhin den echten Unterricht. Gruppierung und Klausurerstellung verwenden dieselben Funktionen und das bestehende Familienbudget.
+
 ## Übungsklausuren ab 0.27.0
 
 Unter **Lernen → Übungsklausur → Übungsklausur vorbereiten** sind beide Wege direkt sichtbar: eigene Themen zeilenweise eintragen oder ein Fach wählen und **Themen aus Unterricht vorschlagen** aufrufen. Standard ist seit Schuljahresbeginn; alternativ seit der letzten erfassten Klausur desselben Fachs oder ab einem eigenen Datum. Fehlt eine vergangene Klausur, wird der Schuljahresbeginn ausdrücklich angezeigt. Bei einem Kalenderfehler bitte Datum selbst wählen.

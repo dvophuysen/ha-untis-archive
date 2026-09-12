@@ -61,7 +61,7 @@
   function parseHash() {
     const h = window.location.hash.replace(/^#\/?/, '');
     if (!h) return { name: 'today' };
-    const [name, ...rest] = h.split('/');
+    const [name, ...rest] = h.split('?')[0].split('/');
     return { name, args: rest };
   }
 

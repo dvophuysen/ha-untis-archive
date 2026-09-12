@@ -288,6 +288,14 @@ async def overview(account_id: int, user: CurrentUser = Depends(get_current_user
             )
             selected.append(a)
             remaining -= a["minutes"]
+    from .. import learning_plan as lp
+    shared=lp.build(account_id,exams)
+    td=shared['today']
+    selected=[a for a in candidates if any(g.get('activity_id')==a['id'] for g in td['actions'])]
+    for a in selected:a['reason']='Im gemeinsamen Lernplan eingeplant'
+    total_budget=td['budget_minutes'];budget_source=td['budget_source']
+    must_minutes=td['homework_minutes'];remaining=td['remaining_minutes']
+    used=(td['used_slots'],td['learning_used_minutes'])
     suggested_grade = None
     try:
         from ..erlass import resolve_section
@@ -298,6 +306,7 @@ async def overview(account_id: int, user: CurrentUser = Depends(get_current_user
     except (sqlite3.Error, OSError, ValueError, TypeError):
         pass
     return {
+        "shared_plan": shared,
         "suggested_grade": suggested_grade,
         "profiles": profiles,
         "topics": topics,
@@ -745,7 +754,7 @@ def finish_session(
         current = activity_row(conn, account_id, s["activity_id"])
         snapshot = json.loads(s["snapshot"])
         # Don't attach progress from an old task version to a newer task.
-        if all(current[k] == snapshot[k] for k in ("prompt", "solution", "criteria")):
+        if user.role=="child" and not user.is_admin and all(current[k] == snapshot[k] for k in ("prompt", "solution", "criteria")):
             old = conn.execute(
                 "SELECT r.streak,s.completed_at FROM learning_reviews r JOIN learning_sessions s ON s.id=r.last_session_id WHERE r.activity_id=?",
                 (s["activity_id"],),
@@ -760,7 +769,7 @@ def finish_session(
             ):
                 streak = old["streak"]
                 due = (
-                    today_local() + timedelta(days=(2, 7, 14, 30)[min(max(streak - 1, 0), 3)])
+                    today_local() + timedelta(days=(2, 7, 14, 30, 60)[min(max(streak - 1, 0), 4)])
                 ).isoformat()
             conn.execute(
                 "INSERT INTO learning_reviews(activity_id,next_due,streak,last_outcome,last_session_id) VALUES(?,?,?,?,?) "

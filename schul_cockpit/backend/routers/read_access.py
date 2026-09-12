@@ -49,6 +49,11 @@ dataset('learning_sessions','app','id activity_id snapshot answer help_used outc
 dataset('learning_reviews','app','activity_id next_due streak last_outcome last_session_id','next_due',joins=ACTIVITY_JOIN,account='p.account_id')
 
 
+dataset('learning_day_preferences','app','account_id day load updated_at','day','updated_at')
+dataset('learning_plan_links','app','account_id goal_key skill_id')
+dataset('learning_plan_blocks','app','account_id day session_id goal_key minutes','day')
+dataset('learning_skill_state','app','skill_id account_id level label due_date last_day rationale rule_version','last_day')
+
 # Mentor history and evidence remain account-scoped. Binary files are excluded.
 for name,cols,dt in [
  ('mentor_sessions','id account_id subject goal is_test is_demo phase status version max_minutes elapsed_seconds turns help_count summary context_hash created_at updated_at','updated_at'),

@@ -15,6 +15,7 @@ from .. import ai_gateway as ai
 from .. import mentor_context as mc
 from .. import mentor_demo as demo_data
 from .. import exam_scope
+from .. import learning_plan as lp
 from .learning import access
 from .mentor import Task
 
@@ -271,9 +272,7 @@ async def grade_next(account_id:int,aid:int,user:CurrentUser=Depends(get_current
                 outcome='uncertain' if g.uncertain else 'correct' if g.points==task['points'] else 'partial' if g.points else 'incorrect'
                 evid=c.execute('INSERT OR IGNORE INTO mentor_evidence(account_id,skill_id,exam_attempt_id,task_json,answer,result,rationale,help_used,source,variant_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                                (account_id,skill,aid,json.dumps(task,ensure_ascii=False),answer or g.transcription or 'Keine lesbare Antwort',outcome,g.rationale,int(helped),'ai_exam_assessment',mc.fingerprint(task['prompt']),now_iso())).lastrowid
-                if evid:
-                    c.execute('INSERT INTO mentor_reviews VALUES(?,?,?,?,?) ON CONFLICT(skill_id) DO UPDATE SET due_date=excluded.due_date,last_evidence_id=excluded.last_evidence_id,updated_at=excluded.updated_at',
-                              (skill,account_id,(today_local()+timedelta(days=7 if outcome=='correct' and not helped else 2)).isoformat(),evid,now_iso()))
+                if evid:lp.refresh_skill(c,account_id,skill)
             c.execute('UPDATE mentor_exam_attempts SET feedback_json=?,status=?,version=version+1 WHERE id=?',(json.dumps(feedback,ensure_ascii=False),'graded' if len(feedback)==len(pack['tasks']) else 'submitted',aid))
             return attempt_view(attempt_row(c,account_id,aid,user))
     finally:
