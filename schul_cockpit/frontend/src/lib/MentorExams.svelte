@@ -7,6 +7,7 @@
   let subject=$state(''),scope=$state(''),confirmed=$state(false),minutes=$state(45),index=$state(0),answers=$state({}),reviewed=$state(false);
   let dirty=$state(false),photos=$state([]),photoInput=$state(null);
   async function load(){data=await api.get(base);}
+  async function saveDraft(){await api.put(`${base}/${draft.id}`,{title:draft.title,tasks:draft.tasks});reviewed=false;}
   async function act(fn){if(busy)return;busy=true;error='';try{await fn();}catch(e){error=e.message;}finally{busy=false;}}
   async function save(paused=false){if(!attempt || attempt.status!=='active')return;const r=await api.put(`${base}/attempts/${attempt.id}`,{version:attempt.version,answers,paused});attempt=r;dirty=false;}
   async function open(r){attempt=r;answers={...r.answers};index=0;photos=await api.get(`${base}/attempts/${r.id}/photos`);}
@@ -38,10 +39,10 @@
   {#if attempt.status==='graded'}<section class="card"><h3>Das große Ganze</h3>{#each attempt.exam.tasks as t,i}<button style="display:block;text-align:left;width:100%;margin:.5rem 0" onclick={()=>index=i}>{t.skill_title}: {attempt.feedback[String(i)]?.uncertain?'noch unklar':`${attempt.feedback[String(i)]?.points} / ${t.points} Punkte`}</button>{/each}<h4>Deine nächsten sinnvollen Schritte</h4><ul>{#each Object.entries(attempt.feedback).sort((a,b)=>(a[1].points/attempt.exam.tasks[Number(a[0])].points)-(b[1].points/attempt.exam.tasks[Number(b[0])].points)).slice(0,3) as [i,f]}<li>{f.next_step}</li>{/each}</ul><p>KI-Einschätzungen zu den Aufgaben, keine Schulnote. Unklare Bewertungen bitte gemeinsam prüfen.</p></section>{/if}
   <button disabled={busy} onclick={()=>act(async()=>{await save(true);attempt=null;await load();})}>Zur Übersicht</button>
 {:else if draft}
-  <h2>Entwurf prüfen: {draft.title}</h2><p>{draft.minutes} Minuten · {draft.scope.confirmed?'Stoffumfang von Eltern bestätigt':'Stoffumfang noch eine Annahme'}</p>
-  {#each draft.tasks as t,i}<section class="card"><h3>{i+1}. {t.skill_title} · {t.points} Punkte</h3><p class="preserve">{t.prompt}</p><details><summary>Lösung und Kriterien prüfen</summary><p class="preserve">{t.solution}</p><p>{t.criteria}</p></details></section>{/each}
-  <label class="check"><input type="checkbox" bind:checked={reviewed}/> Ich habe Aufgaben, Lösungen, Umfang und Punkte geprüft.</label>
-  <button disabled={busy||!reviewed} onclick={()=>act(async()=>{await api.post(`${base}/${draft.id}/publish`,{reviewed});draft=null;await load();})}>Für das Kind freigeben</button><button onclick={()=>draft=null}>Zurück</button>
+  <h2>Aufgaben prüfen: {draft.title}</h2><p>{draft.minutes} Minuten · {draft.scope.confirmed?'Stoffumfang von Eltern bestätigt':'Stoffumfang noch eine Annahme'}</p>
+  {#each draft.tasks as t,i}<section class="card"><h3>{i+1}. {t.skill_title} · {t.points} Punkte</h3>{#if draft.status==='draft'}<label>Aufgabe {i+1}<textarea rows="5" bind:value={t.prompt} oninput={()=>reviewed=false}></textarea></label><details><summary>Lösung und Kriterien prüfen</summary><label>Lösung {i+1}<textarea rows="4" bind:value={t.solution} oninput={()=>reviewed=false}></textarea></label><label>Punktkriterien {i+1}<textarea rows="4" bind:value={t.criteria} oninput={()=>reviewed=false}></textarea></label></details>{:else}<p class="preserve">{t.prompt}</p><details><summary>Lösung und Kriterien prüfen</summary><p class="preserve">{t.solution}</p><p>{t.criteria}</p></details>{/if}</section>{/each}
+  {#if draft.status==='draft'}<button disabled={busy} onclick={()=>act(saveDraft)}>Entwurf speichern</button><label class="check"><input type="checkbox" bind:checked={reviewed}/> Ich habe Aufgaben, Lösungen, Umfang und Punkte geprüft.</label>
+  <button disabled={busy||!reviewed} onclick={()=>act(async()=>{await api.put(`${base}/${draft.id}`,{title:draft.title,tasks:draft.tasks});await api.post(`${base}/${draft.id}/publish`,{reviewed});draft=null;await load();})}>Für das Kind freigeben</button>{/if}<button disabled={busy} onclick={()=>draft=null}>Zurück</button>
 {:else}
   <h2>Für eine Arbeit üben</h2><p>Eine vorbereitete Arbeit behält ihre Aufgaben und ihren Stand, auch wenn du später weitermachst.</p>
   {#each data?.exams||[] as exam}<section class="card"><h3>{exam.title}</h3><p>{exam.subject} · {exam.minutes} Minuten · {exam.status==='published'?'Geprüft und freigegeben':'Entwurf'}</p><p>{exam.scope.topics.join(' · ')}</p>

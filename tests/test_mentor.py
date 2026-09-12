@@ -91,9 +91,10 @@ def test_persistent_context_help_and_delayed_evidence(setup):
     assert client.get(B+f"/sessions/{s['id']}").json()['task']['prompt']==TASK['prompt']
     s=send(client,s,kind='hint',text='kp').json()
     with closing(db.webapp_conn()) as c:
-        c.execute("INSERT INTO tasks(account_id,title,subject_name,status,source,created_at,updated_at,completed_at) VALUES(1,'Deutsch Hausaufgabe','Deutsch','done','manual','now','now','now')")
+        c.execute("INSERT INTO tasks(account_id,title,subject_name,status,source,created_at,updated_at,completed_at) VALUES(1,'Deutsch Hausaufgabe','DEUTSCH','done','manual','now','now','now')")
     r=send(client,s,kind='answer',text='Nach etwas ist es nominalisiert.');assert r.status_code==200,r.text;s=r.json()
     assert contexts[-1]['tasks'][0]['status']=='done'
+    assert contexts[-1]['rating_meaning']['1']=='nicht verstanden'
     with closing(db.webapp_conn()) as c:
         evidence=c.execute('SELECT * FROM mentor_evidence').fetchone()
         assert evidence['help_used']==1 and evidence['result']=='correct'
@@ -169,8 +170,15 @@ def test_exam_fixed_version_secret_answers_and_resume(setup):
     client,state,patch=setup
     tasks=[{**TASK,'prompt':TASK['prompt']+str(i),'points':3,'minutes':5} for i in range(3)]
     with closing(db.webapp_conn()) as c:
-        eid=c.execute("INSERT INTO mentor_exams(account_id,title,subject,scope_json,tasks_json,minutes,status,created_at) VALUES(1,'Probeklausur','Deutsch',?,?,15,'published','now')",(json.dumps({'topics':['Nominalisierung'],'confirmed':False}),json.dumps(tasks))).lastrowid
-    child(state);base=B+'/exams';r=client.post(base+f'/{eid}/start');assert r.status_code==200,r.text;a=r.json()
+        eid=c.execute("INSERT INTO mentor_exams(account_id,title,subject,scope_json,tasks_json,minutes,status,created_at) VALUES(1,'Probeklausur','Deutsch',?,?,15,'draft','now')",(json.dumps({'topics':['Nominalisierung'],'confirmed':False}),json.dumps(tasks))).lastrowid
+    base=B+'/exams'
+    edit={'title':'Geprüfte Probeklausur','tasks':tasks}
+    assert client.put(base+f'/{eid}',json=edit).status_code==200
+    assert client.post(base+f'/{eid}/publish',json={'reviewed':True}).status_code==200
+    assert client.put(base+f'/{eid}',json=edit).status_code==409
+    child(state)
+    assert client.put(base+f'/{eid}',json=edit).status_code==403
+    r=client.post(base+f'/{eid}/start');assert r.status_code==200,r.text;a=r.json()
     assert TASK['solution'] not in json.dumps(a)
     assert client.get(base+f'/{eid}/review').status_code==403
     assert client.post(base+f'/{eid}/start').json()['id']==a['id']
@@ -179,10 +187,11 @@ def test_exam_fixed_version_secret_answers_and_resume(setup):
     r=client.put(base+f"/attempts/{a['id']}",json={'version':0,'answers':{'0':'Mein Versuch'},'paused':True});assert r.status_code==200
     assert client.post(base+f"/attempts/{a['id']}/grade-next").status_code==409
     a=client.post(base+f"/attempts/{a['id']}/submit").json();assert a['status']=='submitted'
-    mock(patch,[{'points':2,'rationale':'Teilweise erklärt.','next_step':'Begründung ergänzen.','uncertain':False}])
+    mock(patch,[{'points':2.5,'rationale':'Teilweise erklärt.','next_step':'Begründung ergänzen.','uncertain':False}])
     for _ in range(3):
         r=client.post(base+f"/attempts/{a['id']}/grade-next");assert r.status_code==200,r.text
     assert r.json()['status']=='graded' and len(r.json()['feedback'])==3
+    assert r.json()['feedback']['0']['points']==2.5
     assert client.post(base+f"/attempts/{a['id']}/grade-next").status_code==200
 
 

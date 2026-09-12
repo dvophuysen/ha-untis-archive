@@ -1,3 +1,10 @@
+# 0.25.3 – Prüfbare Entwürfe und verlässliche Fachzuordnung
+
+- Klausurentwürfe lassen sich vor Freigabe in Aufgaben, Lösungen und Punktkriterien bearbeiten. Freigegebene Fassungen bleiben unverändert.
+- Halbe Punkte in Kriterienauswertungen werden unterstützt; neue Aufgaben sind auf Antworten per Text, Diktat oder Foto ausgerichtet.
+- Fachnamen aus UNTIS und Aufgabenlisten werden unabhängig von Groß-/Kleinschreibung zusammengeführt.
+- Verständnisrückmeldungen werden dem Modell mit ihrer ausdrücklichen Bedeutung übergeben.
+
 # 0.25.2 – Themenverbindungen und Aufgaben im Dialog
 
 - Erkannte Themenfelder mit Erklärbildern und Grundlagen fließen jetzt in den Mentor ein; geänderte Originaleinträge entwerten alte Zuordnungen.
