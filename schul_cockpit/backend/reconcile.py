@@ -30,6 +30,7 @@ _LOGGER = logging.getLogger("schul_cockpit.reconcile")
 
 # Tables in webapp.db that carry an account_id and must be remapped together.
 _ACCOUNT_TABLES = (
+    "learning_day_preferences", "learning_plan_links", "learning_plan_blocks", "learning_skill_state",
     "mentor_quality_runs", "mentor_settings", "mentor_ai_calls", "mentor_skills", "mentor_sessions",
     "mentor_messages", "mentor_evidence", "mentor_reviews", "mentor_attachments",
     "mentor_exam_exposures", "mentor_scope_plans", "mentor_jobs", "mentor_exams", "mentor_exam_attempts", "mentor_exam_photos",

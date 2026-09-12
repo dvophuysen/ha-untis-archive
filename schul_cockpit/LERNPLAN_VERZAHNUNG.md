@@ -1,6 +1,22 @@
+# Umsetzungsstand 0.28.0
+
+Plan, Nachmittagsplan, Fächer-Vorbereitung und Mentor verwenden jetzt `learning_plan.py`. Die ursprünglichen Anforderungen bleiben unten als Designreferenz erhalten; die historische Ist-Beschreibung bezieht sich auf 0.27.1.
+
+Umgesetzt: gemeinsame Tages- und Sieben-Tage-Planung mit Zeitrahmen, Herkunft, Bearbeitung und gültigen Fähigkeitenbelegen; direkter Einstieg; konservative Quellenverknüpfung; Zusammenfassung identischer Tagesnotizen; spätere Checks auch für positiv bewerteten Stoff; reproduzierbare Wiederholungszustände einschließlich Rücknahme von Bewertungen; gespeicherte Selbstkontrollübungen mit entsprechendem Label; Trennung der Eltern- und Demo-Daten; Klausurbelege im Wiederholungsbestand.
+
+Ein Themenanlass ist noch keine vollständige Diagnose aller Teilfähigkeiten. Ein erfolgreicher Teilversuch bestätigt deshalb nicht den gesamten Unterrichtsstoff. Verknüpft wird über Quellen und explizite IDs. Eine erledigte Hausaufgabe mit explizitem Stundenbezug verschiebt den ungemessenen Erstcheck, erzeugt aber keinen Könnensnachweis. Unverknüpfte Klausurziele bleiben eigenständige Ziele; sie haken keine nur ähnlich betitelten Unterrichtsstunden ab.
+
+Die Wochenansicht ist eine Neuberechnung anhand aktueller Daten, kein starrer Kalender mit Drag-and-drop. Sie nimmt nicht an, dass künftige Übungen schon gelöst sind. Mentorblöcke werden mit ihrem vereinbarten Umfang angerechnet, auch bei frühem Ende; längere Übungsklausuren mit ihrem vorgesehenen Umfang. Tatsächliche Konzentrationszeit wird damit nicht behauptet. Bei übervollen Hausaufgabentagen bleibt gemeinsame Priorisierung eine Elternentscheidung.
+
+Die Tagesplanung ist bedarfsabhängig: geringe Belastung führt zu einem kurzen Erhaltungscheck, offene Anliegen zu zusätzlichen begrenzten Schritten, nahe Klausuren erhalten Gewicht. „Voller Tag“, „Normal“ und „Mehr Luft“ passen nur den heutigen Vorschlag an. Freie Zeit wird nicht automatisch ausgeschöpft. Eine ausdrücklich freiwillig begonnene weitere Einheit ist möglich; Minuten sind Orientierung und keine Leistungsvorgabe. Die finanzielle KI-Grenze bleibt verbindlich.
+
+Gamification bleibt offen und ist nicht implementiert.
+
+---
+
 # Gemeinsamer Lernplan statt paralleler Vorschlagslisten
 
-Stand: 12.09.2026. Konzeptionelle Ergänzung zum Masterplan nach Prüfung von Josias Live-Ansicht und des Codes. **Die nachfolgende gemeinsame Planung ist noch nicht implementiert.** Version 0.27.0 ergänzt Themenauswahl aus dem Unterricht sowie Druck- und Selbstkontrollfunktionen für Übungsklausuren; sie löst die hier beschriebenen Integrationslücken noch nicht.
+Stand: 12.09.2026. Konzeptionelle Ergänzung zum Masterplan nach Prüfung von Josias Live-Ansicht und des Codes. **Historischer Konzeptstand vor Umsetzung 0.28.0; aktuelle Abdeckung siehe oben.** Version 0.27.0 ergänzt Themenauswahl aus dem Unterricht sowie Druck- und Selbstkontrollfunktionen für Übungsklausuren; sie löst die hier beschriebenen Integrationslücken noch nicht.
 
 ## Ziel
 

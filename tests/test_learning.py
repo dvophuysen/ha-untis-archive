@@ -45,6 +45,9 @@ def env(tmp_path, monkeypatch):
         SimpleNamespace(webapp_db_path=tmp_path / "webapp.db", history_db_path=history),
     )
     db.init_webapp_db()
+    from backend import learning_plan as lp
+    from backend.routers import plan as plan_routes
+    monkeypatch.setattr(lp,"today_local",lambda:date(2026,9,11))
     from backend import ai_gateway as ai
     monkeypatch.setitem(ai.RATES, 'test', (10.,45.))
     monkeypatch.setitem(ai.RATES, 'test-model', (10.,45.))
@@ -72,6 +75,7 @@ def env(tmp_path, monkeypatch):
         return {"exams": [], "calendar_error": None}
 
     monkeypatch.setattr(routes, "resolve_exams", exams)
+    monkeypatch.setattr(plan_routes,"resolve_exams",exams)
     with TestClient(app) as client:
         yield client, state, monkeypatch
 

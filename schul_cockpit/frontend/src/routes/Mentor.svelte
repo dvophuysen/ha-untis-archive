@@ -1,17 +1,19 @@
 <script>
   import {onMount,tick} from 'svelte';
   import {api} from '../lib/api.js';
+  import SharedLearningPlan from '../lib/SharedLearningPlan.svelte';
   import MentorExams from '../lib/MentorExams.svelte';
   let {accountId,onManage}= $props();
   const base=$derived(`/api/accounts/${accountId}/learning/mentor`);
   let data=$state(null),running=$state(null),tab=$state('today'),error=$state(''),busy=$state(false);
   let text=$state(''),attachment=$state(null),fileInput=$state(null),subject=$state(''),goal=$state(''),spent=$state(0),evidence=$state(null),correction=$state(''),quality=$state(null);
+  let focusKey=$state('');
   let end=$state(null),demo=$state(false),examBusy=$state(false);
   async function switchMode(value){if(value===demo)return;await leave();demo=value;data=null;tab='today';text='';attachment=null;evidence=null;quality=null;subject='';goal='';await load();}
   async function load(){data=await api.get(`${base}?demo=${demo}`);}
   async function act(fn){if(busy)return;busy=true;error='';try{await fn();await tick();}catch(e){error=e.message;}finally{busy=false;}}
   async function open(s){running=await api.get(`${base}/sessions/${s.id}`);text='';attachment=null;}
-  async function start(c){running=await api.post(`${base}/sessions`,{subject:c.subject,lesson_id:c.lesson_id||null,skill_id:c.skill_id||null,goal:c.title||goal,minutes:10,demo});text='';}
+  async function start(c){running=await api.post(`${base}/sessions`,{subject:c.subject,lesson_id:c.lesson_id||null,skill_id:c.skill_id||null,goal:c.title||goal,goal_key:c.key||null,minutes:c.minutes||10,voluntary:c.voluntary||false,demo});text='';}
   async function send(kind='message',value=text){
     const r=await api.post(`${base}/sessions/${running.id}/turn`,{request_key:crypto.randomUUID(),version:running.version,text:value,kind,attachment_id:attachment?.id||null});
     running=r;text='';attachment=null;await tick();end?.scrollIntoView({behavior:'smooth',block:'end'});
@@ -20,7 +22,7 @@
   async function leave(){if(running?.status==='active'&&(!data.can_manage||running.is_test))await api.post(`${base}/sessions/${running.id}/pause`,{paused:true});running=null;await load();}
   async function pause(hidden){if(running?.status==='active'&&(!data?.can_manage||running.is_test)&&!busy){try{const r=await api.post(`${base}/sessions/${running.id}/pause`,{paused:hidden});if(running?.id===r.id)running=r;}catch{/* next explicit action shows an error */}}}
   const choices=$derived(running?.messages.filter(m=>m.role==='assistant').at(-1)?.payload?.choices||[]);
-  onMount(()=>{act(load);const t=setInterval(()=>pause(document.hidden),30000);const v=()=>pause(document.hidden);document.addEventListener('visibilitychange',v);return()=>{clearInterval(t);document.removeEventListener('visibilitychange',v);};});
+  onMount(()=>{act(async()=>{await load();const q=new URLSearchParams(window.location.hash.split('?')[1]||'');if(q.get('session'))await open({id:Number(q.get('session'))});else if(q.get('goal')){const g=data.shared_plan?.goals.find(g=>g.key===q.get('goal'));if(g){focusKey=g.key;goal=g.title;subject=g.subject;if(g.session_id)await open({id:g.session_id});else if(!data.can_manage)await start(g);else tab='today';}}});const t=setInterval(()=>pause(document.hidden),30000);const v=()=>pause(document.hidden);document.addEventListener('visibilitychange',v);return()=>{clearInterval(t);document.removeEventListener('visibilitychange',v);};});
 </script>
 <div class="mentor">
   {#if data?.can_manage}<nav class="mode-switch" aria-label="Mentor-Modus"><button aria-pressed={!demo} class:chosen={!demo} disabled={busy||examBusy} onclick={()=>act(()=>switchMode(false))}>Kinderstand</button><button aria-pressed={demo} class:chosen={demo} disabled={busy||examBusy} onclick={()=>act(()=>switchMode(true))}>Demo ausprobieren</button></nav>
@@ -48,7 +50,7 @@
         <div class="actions"><button class="primary" disabled={busy||(!text.trim()&&!attachment)||!data?.can_write}>Senden</button><button type="button" disabled={busy||!data?.can_write} onclick={()=>fileInput?.click()}>Foto zeigen</button><input class="file" type="file" accept="image/*" bind:this={fileInput} onchange={upload}/></div>
         <div class="actions"><button type="button" disabled={busy||!data?.can_write} onclick={()=>act(()=>send('hint','Bitte anders erklären.'))}>Anders erklären</button><button type="button" disabled={busy||!data?.can_write} onclick={()=>act(()=>send('finish','Für heute fertig.'))}>Für heute fertig</button></div>
       </form>
-    {:else}<section class="card"><h2>{running.status==='active'?'Gespeicherter Kinderverlauf':'Für heute geschafft'}</h2><p>{running.summary||'Dein Gespräch und deine Antworten bleiben gespeichert.'}</p><button onclick={()=>act(leave)}>Zur Übersicht</button></section>{/if}
+    {:else}<section class="card"><h2>{running.status==='active'?'Gespeicherter Kinderverlauf':'Für heute geschafft'}</h2><p>{running.summary||'Dein Gespräch und deine Antworten bleiben gespeichert.'}</p><button onclick={()=>act(leave)}>Zur Übersicht</button><a href="#/plan">Aktualisierten Lernplan ansehen</a></section>{/if}
     {#if busy}<p role="status" class="working">Einen Moment – deine Antwort wird vorbereitet …</p>{/if}
   {:else if data}
     <header><span class="eyebrow">Dein Lernbegleiter</span><h1>{data.can_manage&&!demo?'Der echte Lernverlauf.':'Ein Schritt nach dem anderen.'}</h1><p>{data.can_manage&&!demo?'Wähle oben das Kind. Hier findest du seine gespeicherten Gespräche, Antworten und Lernbeobachtungen.':'Du kannst etwas zeigen, ausprobieren oder einfach erzählen.'}</p></header>
@@ -57,8 +59,10 @@
     {#each data.errors as warning}<p class="notice">{warning}</p>{/each}
     {#if tab==='today'}
       {#each data.sessions.filter(s=>s.status==='active').slice(0,2) as s}<section class="card"><span class="eyebrow">Angefangen · {s.subject}</span><h2>{s.goal}</h2><button class="primary" disabled={busy} onclick={()=>act(()=>open(s))}>{data.can_manage&&!demo?'Verlauf ansehen':'Hier weitermachen'}</button></section>{/each}
-      {#each data.candidates.slice(0,3) as c}<section class="card"><span class="eyebrow">{c.subject}</span><h2>{c.title}</h2><p>{c.reason}</p>{#if !data.can_manage||demo}<button class="primary" disabled={busy||!data.can_write} onclick={()=>act(()=>start(c))}>Gemeinsam anschauen</button>{:else}<small>Vorschlag für das Kind · noch kein gemessener Lernstand</small>{/if}</section>{:else}<p>Noch kein passender Vorschlag. Du kannst unten selbst ein Thema mitbringen.</p>{/each}
-      {#if !data.can_manage||demo}<details><summary>Ich möchte etwas anderes anschauen</summary><form onsubmit={e=>{e.preventDefault();act(()=>start({subject,title:goal}));}}><label>Fach<select required bind:value={subject}><option value="">Auswählen</option>{#each data.subjects as s}<option>{s}</option>{/each}</select></label><label>Worum geht es ungefähr?<input bind:value={goal} maxlength="250" placeholder="Du kannst es auch gleich im Gespräch zeigen."/></label><button disabled={busy||!data.can_write}>Gespräch beginnen</button></form></details>{/if}
+      {#if !demo&&focusKey&&data.can_manage}<section class="card"><h2>{goal}</h2><p>{data.shared_plan?.goals.find(g=>g.key===focusKey)?.state}</p><p>Für dieses Thema gibt es noch keinen Kinderverlauf. Mit seiner Anmeldung kann das Kind direkt beim gewählten Lernschritt beginnen.</p><a href="#/plan">Zum Plan</a></section>{/if}
+      {#if !demo}<SharedLearningPlan plan={data.shared_plan} compact={false} onstart={data.can_manage?null:c=>act(()=>start(c))}/>{:else}
+      {#each data.candidates.slice(0,3) as c}<section class="card"><span>{c.subject}</span><h2>{c.title}</h2><p>{c.reason}</p><button disabled={busy} onclick={()=>act(()=>start(c))}>Gemeinsam anschauen</button></section>{/each}{/if}
+      {#if !data.can_manage||demo}<details><summary>Freiwillig ein anderes Thema anschauen</summary><form onsubmit={e=>{e.preventDefault();act(()=>start({subject,title:goal,voluntary:true}));}}><label>Fach<select required bind:value={subject}><option value="">Auswählen</option>{#each data.subjects as s}<option>{s}</option>{/each}</select></label><label>Worum geht es ungefähr?<input bind:value={goal} maxlength="250" placeholder="Du kannst es auch gleich im Gespräch zeigen."/></label><button disabled={busy||!data.can_write}>Gespräch beginnen</button></form></details>{/if}
     {:else if tab==='history'}
       {#each data.sessions as s}<button class="history" disabled={busy} onclick={()=>act(()=>open(s))}><strong>{s.subject} · {s.goal}</strong><span>{s.status==='active'&&(!data.can_manage||demo)?'Fortsetzen':'Verlauf ansehen'} · {s.updated_at.slice(0,10)}</span></button>{:else}<p>{data.can_manage&&!demo?'Noch keine Gespräche des Kindes gespeichert. Eltern-Testläufe werden hier nicht eingemischt.':'Deine ersten Gespräche erscheinen hier.'}</p>{/each}
       {#if data.legacy_sessions?.length}<details><summary>Frühere Eltern-Testläufe mit Echtkontext ({data.legacy_sessions.length})</summary><p>Diese älteren Tests sind keine Beispieldaten-Demo und keine Leistungen des Kindes.</p>{#each data.legacy_sessions as s}<button class="history" onclick={()=>act(()=>open(s))}>{s.subject} · {s.goal}</button>{/each}</details>{/if}

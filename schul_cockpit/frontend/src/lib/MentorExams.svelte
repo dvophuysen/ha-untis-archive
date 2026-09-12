@@ -62,8 +62,8 @@
     <label>Fach<select bind:value={subject} required onchange={clearTopics}><option value="">Bitte auswählen</option>{#each subjects as s}<option>{s}</option>{/each}</select></label>
     <label>Unterrichtszeitraum<select bind:value={period} onchange={clearTopics}><option value="school_year">Seit Schuljahresbeginn</option><option value="last_exam">Seit der letzten Klausur in diesem Fach</option><option value="custom">Ab einem eigenen Datum</option></select></label>
     {#if period==='custom'}<label>Beginn<input type="date" bind:value={fromDate} onchange={clearTopics}/></label>{/if}
-    <button type="button" disabled={busy||!subject||(period==='custom'&&!fromDate)} onclick={()=>act(suggest)}>Themen aus Unterricht vorschlagen</button>
-    <p class="muted">Alle dokumentierten Stunden und zugehörigen Hausaufgaben im Zeitraum werden gruppiert, auch bei Fehlzeiten. Unveränderte Übersichten werden ohne erneuten KI-Aufruf wiederverwendet.</p>
+    <button type="button" disabled={busy||!subject||(period==='custom'&&!fromDate)} onclick={()=>act(suggest)}>{demo?'Themen aus Beispielunterricht vorschlagen':'Themen aus Unterricht vorschlagen'}</button>
+    <p class="muted">{demo?'Erfundener mehrwöchiger Unterricht für den Funktionstest. Für den echten Stoff oben zu Kinderstand wechseln.':'Alle dokumentierten Stunden und zugehörigen Hausaufgaben im Zeitraum werden gruppiert, auch bei Fehlzeiten.'} Unveränderte Übersichten werden ohne erneuten KI-Aufruf wiederverwendet.</p>
     {#if topicPlan}<p><strong>{topicPlan.lesson_count} beschriebene Stunden</strong> · {topicPlan.start_date} bis {topicPlan.end_date}{topicPlan.cached?' · gespeicherte Übersicht':''}</p>
     {#each topicPlan.warnings as warning}<p class="notice">{warning}</p>{/each}
     <button type="button" disabled={busy} onclick={()=>topicChoices=topicChoices.map(g=>({...g,selected:g.category==='learning'}))}>Alle Themen auswählen</button>

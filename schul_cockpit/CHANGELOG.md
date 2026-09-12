@@ -1,3 +1,13 @@
+## 0.28.0
+
+- Bedarfsabhängige Tagesplanung mit „Voller Tag“, „Normal“ und „Mehr Luft“. Minuten sind Orientierung; bewusst freiwilliges zusätzliches Üben ist möglich.
+
+- Plan, Mentor, Nachmittagsplan und Fächer-Vorbereitung verwenden einen gemeinsamen Planungsdienst mit Minutenrahmen, Sieben-Tage-Vorschau, Auswahlgründen und bewusst verschobenen Anliegen.
+- Quellenverknüpfung zwischen Unterrichtsanlass und echten Mentorversuchen; identische Tagesnotizen zusammengefasst, historische Rückmeldungen erhalten.
+- Bearbeitung, Hilfe und unabhängige Aufgabenbelege getrennt; Wiederholung nach 2, 7, 14, 30 und 60 Tagen bei passenden Erfolgen. Zurückgenommene Bewertungen berechnen den gültigen Stand neu.
+- Gemeinsames Zeitkonto für Hausaufgaben, Mentorblöcke, gespeicherte Übungen und Übungsklausuren; Eltern- und Demo-Versuche zählen nicht für Kinder.
+- Klausur-Demo mit mehrwöchigem Beispielunterricht statt einer Stunde pro Fach: Geschichte mit neun Stunden, drei Hausaufgaben und beispielhafter Fehlzeit. Herkunft ausdrücklich als erfunden gekennzeichnet.
+
 ## 0.27.1
 
 - Unklare Buchreferenzen und organisatorische Einträge bleiben in der Stoffübersicht sichtbar, werden aber nicht automatisch als Klausurstoff ausgewählt. Nur konkret erkannte Lernbereiche sind vorausgewählt; fehlendes Material kann durch eigene Themen ergänzt werden.

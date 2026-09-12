@@ -28,16 +28,17 @@ class Groups(InputModel):
 
 def snapshot(account, demo):
     if not demo:return mc.snapshot(account,include_all_homework=True)
-    s=mentor_demo.snapshot();day=today_local();s['since']=date(day.year-(day.month<8),8,1).isoformat()
-    s['lessons']=[dict(id=-(i+1),date=(day-timedelta(days=i+1)).isoformat(),subject_name=subject,text=text,future=False,missed_minutes=0) for i,(subject,text) in enumerate(mentor_demo.TOPICS.items())]
-    s['homework']=[]
+    s=mentor_demo.snapshot();day=today_local()
+    s['lessons'],s['homework']=mentor_demo.curriculum(day)
+    s['since']=min(r['date'] for r in s['lessons'])
+
     return s
 
 async def collect(account,body):
     s=snapshot(account,body.demo)
     if not s['profile'] or not s['profile']['ai_enabled']:raise HTTPException(403,'KI im Lernrahmen aktivieren.')
     if s['errors'] or s.get('truncated'):raise HTTPException(409,'Das Unterrichtsarchiv ist nicht vollständig lesbar. Bitte später erneut versuchen.')
-    day=today_local();start=s['since'];warnings=[]
+    day=today_local();start=s['since'];warnings=['Erfundener mehrwöchiger Beispielunterricht – keine Daten von Noah oder Josia.'] if body.demo else []
     if body.period=='custom':
         if not body.start_date or not start<=body.start_date.isoformat()<=day.isoformat():raise HTTPException(422,'Der Beginn muss im laufenden Schuljahr liegen und darf nicht in der Zukunft liegen.')
         start=body.start_date.isoformat()

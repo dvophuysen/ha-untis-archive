@@ -18,6 +18,7 @@ def setup(env):
     client,state,patch=env
     client.app.include_router(m.router,prefix='/api');client.app.include_router(ex.router,prefix='/api')
     seed(client,ai_enabled=True,daily_minutes=30,max_sessions=3)
+    patch.setattr(m,'now_iso',lambda:'2026-09-11T15:00:00+02:00')
     for mod in [m,mc,ai]:
         patch.setattr(mod,'today_local',lambda:date(2026,9,11)) if hasattr(mod,'today_local') else None
     patch.setitem(ai.RATES,'test',(10.,45.))
@@ -46,7 +47,7 @@ def test_dashboard_tolerates_lessons_without_subject(setup):
             c.execute("INSERT INTO lessons(account_id,date,subject_name,lstext) VALUES(1,'2026-09-11',?,'Allgemeine Veranstaltung')",(subject,))
     result=client.get(B)
     assert result.status_code==200,result.text
-    assert [x['subject'] for x in result.json()['candidates']]==['Deutsch']
+    assert {x['subject'] for x in result.json()['shared_plan']['goals']}=={'Deutsch'}
 
 
 def test_discovered_connections_require_unchanged_lesson(setup):
@@ -353,7 +354,7 @@ def test_scope_rejects_incomplete_grouping_and_demo_never_reads_real(setup):
     mock(patch,[{'groups':[{'title':'Ein Thema','category':'learning','detail':'Beschreibung','ids':[999]}]}])
     r=client.post(B+'/exams/scope',json={'subject':'Deutsch','demo':True})
     assert r.status_code==502,r.text
-    mock(patch,[{'groups':[{'title':'Adjektive','category':'learning','detail':'Nominalisierung','ids':[0]}]}])
+    mock(patch,[{'groups':[{'title':'Adjektive','category':'learning','detail':'Nominalisierung','ids':list(range(8))}]}])
     r=client.post(B+'/exams/scope',json={'subject':'Deutsch','demo':True})
     assert r.status_code==200,r.text
     assert r.json()['groups'][0]['sources'][0]['id']<0

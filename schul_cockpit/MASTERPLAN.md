@@ -1,4 +1,4 @@
-> Ergänzung vom 12.09.2026: [Gemeinsamer Lernplan und Wiederholungen](LERNPLAN_VERZAHNUNG.md). Beschreibt belegte Integrationslücken und die nächste konzeptionelle Umsetzung; noch nicht als laufende Funktion zu verstehen.
+> Ergänzung vom 12.09.2026: [Gemeinsamer Lernplan und Wiederholungen](LERNPLAN_VERZAHNUNG.md). Gemeinsame Planung ab 0.28.0 umgesetzt; Abdeckung und Grenzen stehen im verlinkten Dokument.
 
 # Schulmentor für Noah und Josia
 

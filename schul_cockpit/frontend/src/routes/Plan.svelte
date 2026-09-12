@@ -1,4 +1,5 @@
 <script>
+  import SharedLearningPlan from '../lib/SharedLearningPlan.svelte';
   import { api } from '../lib/api.js';
   import { isoToday, shiftDateIso, daysBetween, learnStateEmoji } from '../lib/format.js';
   import TaskRow from '../lib/TaskRow.svelte';
@@ -91,19 +92,6 @@
     return { week, later, noDate, done };
   });
 
-  const WORKLOAD = {
-    frei:         { label: 'Frei — Pause heute 🎉',               cls: 'ok' },
-    wenig:        { label: 'Wenig zu tun',                        cls: 'ok' },
-    überschaubar: { label: 'Überschaubar',                        cls: 'mid' },
-    viel:         { label: 'Viel — fang mit den schnellen an',    cls: 'high' },
-    endspurt:     { label: '🔥 Klausur-Endspurt — heute lernen',  cls: 'cram' },
-  };
-
-  function followLink(link) {
-    if (link === 'absences') window.location.hash = '#/absences';
-    else if (link === 'klausuren') window.location.hash = '#/klausuren';
-    else window.location.hash = '#/subjects';
-  }
 </script>
 
 <p><a href="#/learning">🌱 Lernraum: kurze Übungen und spätere Wiederholungen →</a></p>
@@ -124,26 +112,7 @@
 {#if loading}
   <div class="empty"><span class="spinner"></span></div>
 {:else if plan}
-  <div class="pensum {WORKLOAD[plan.workload]?.cls ?? ''}">
-    Heute: <strong>{WORKLOAD[plan.workload]?.label ?? plan.workload}</strong>
-  </div>
-
-  <!-- Muss lernen (Klausur ≤3 Tage, nicht sattelfest) -->
-  {#if plan.cram?.length > 0}
-    <div class="section-title cram-title">Muss lernen</div>
-    {#each plan.cram as c}
-      <button class="cram-card" onclick={() => followLink(c.link)}>
-        <div class="cram-head">
-          <span class="cram-subj">{c.subject_name || 'Klausur'}</span>
-          {#if learnStateEmoji(c.learn_state)}
-            <span class="cram-ls">{learnStateEmoji(c.learn_state)}</span>
-          {/if}
-        </div>
-        <div class="cram-reason">📝 {c.reason}</div>
-      </button>
-    {/each}
-  {/if}
-
+  <SharedLearningPlan {plan}/>
   <!-- Heute zu erledigen -->
   {#if heute.length > 0}
     <div class="section-title">Heute zu erledigen</div>
@@ -152,28 +121,6 @@
         <TaskRow {accountId} {task} onchange={load} onopen={(t) => (editing = t)} />
       {/each}
     </div>
-  {/if}
-
-  <!-- Sollte heute -->
-  {#if plan.should.length > 0}
-    <div class="section-title">Sollte heute</div>
-    {#each plan.should as s}
-      <button class="card compact should-item" onclick={() => followLink(s.link)}>
-        <div class="row between" style="align-items:flex-start;">
-          <div style="flex:1; min-width:0; text-align:left;">
-            <strong>{s.title}</strong>
-            {#if s.type === 'exam_prep' && learnStateEmoji(s.learn_state)}
-              <span class="ls-badge" title="Lernstand">{learnStateEmoji(s.learn_state)}</span>
-            {/if}
-            <div class="muted" style="margin-top:1px;">
-              {#if s.type === 'exam_prep'}📝{:else if s.type === 'catch_up'}🤒{:else}🧠{/if}
-              {s.reason}
-            </div>
-          </div>
-          <span class="chev">›</span>
-        </div>
-      </button>
-    {/each}
   {/if}
 
   <!-- Demnächst -->
@@ -225,51 +172,6 @@
 {/if}
 
 <style>
-  .pensum {
-    border-radius: var(--radius);
-    padding: 0.6rem 0.85rem;
-    margin: 0.2rem 0 0.6rem;
-    border: 1px solid var(--border);
-    background: var(--bg-card);
-    font-size: 0.9rem;
-  }
-  .pensum.ok { border-left: 4px solid var(--rating-3); }
-  .pensum.mid { border-left: 4px solid var(--rating-2); }
-  .pensum.high { border-left: 4px solid var(--rating-1); }
-  .pensum.cram {
-    border: 1px solid var(--rating-1);
-    border-left: 4px solid var(--rating-1);
-    background: color-mix(in srgb, var(--rating-1) 8%, var(--bg-card));
-    color: var(--fg);
-    font-size: 1rem;
-  }
-  .should-item { width: 100%; cursor: pointer; }
-  .chev { color: var(--fg-dim); font-size: 1.2rem; }
-  .ls-badge { margin-left: 0.4rem; font-size: 0.95rem; }
-
-  .cram-title { color: var(--rating-1); }
-  .cram-card {
-    width: 100%;
-    text-align: left;
-    background: var(--bg-card);
-    border: 1px solid var(--rating-1);
-    border-left: 4px solid var(--rating-1);
-    border-radius: var(--radius);
-    padding: 0.7rem 0.85rem;
-    margin: 0.35rem 0;
-    cursor: pointer;
-    min-height: 0;
-  }
-  .cram-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-  }
-  .cram-subj { font-size: 1.1rem; font-weight: 700; }
-  .cram-ls { font-size: 1.6rem; line-height: 1; }
-  .cram-reason { color: var(--fg-muted); margin-top: 2px; font-size: 0.9rem; }
-
   .sync-toast {
     background: color-mix(in srgb, var(--rating-3) 12%, var(--bg-card));
     border: 1px solid var(--rating-3);
