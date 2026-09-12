@@ -11,10 +11,10 @@
   <h2>Dein Lernplan</h2>
   <p>Wie passt Lernen heute in deinen Tag?</p><div class="day-choice">{#each [['busy','Voller Tag'],['normal','Normal'],['room','Mehr Luft']] as [value,label]}<button aria-pressed={plan.today.day_load===value} disabled={adjusting} onclick={()=>adjust(value)}>{label}</button>{/each}</div>
   {#if error}<p role="alert">{error}</p>{/if}<p>{plan.today.load_reason}</p>
-  <p><strong>Vorschlag: heute etwa {plan.today.planned_minutes} Minuten</strong>{#if plan.today.used_minutes} · {plan.today.used_minutes} Minuten bereits berücksichtigt{/if}</p>
+  <p><strong>Vorschlag: heute etwa {plan.today.planned_minutes} Minuten</strong>{#if plan.today.used_minutes} · {plan.today.used_minutes} Minuten für erledigte Aufgaben und begonnene Übungen angerechnet (Schätzung){/if}</p>
   <p class="muted">Hausaufgaben und Üben sind gemeinsam berücksichtigt. Die Zeiten helfen beim Einteilen; sie sind kein Pflichtpensum.</p>
   {#each plan.errors||[] as e}<p class="notice">{e}</p>{/each}
-  {#if plan.today.overload_minutes}<p class="notice">Die fälligen Hausaufgaben überschreiten die heutige Orientierung um etwa {plan.today.overload_minutes} Minuten. Bitte gemeinsam priorisieren; es kommen keine zusätzlichen Übungen dazu.</p>{/if}
+  {#if plan.today.overload_minutes}<p class="notice">Die noch offenen, zeitnah fälligen Hausaufgaben überschreiten die verbleibende Orientierung um etwa {plan.today.overload_minutes} Minuten. Bitte gemeinsam priorisieren; es kommen keine zusätzlichen Übungen dazu.</p>{/if}
   {#each plan.today.actions as g (g.key)}
    <article><span>{g.subject} · etwa {g.minutes} Minuten</span><h3>{g.title}</h3><p>{g.reason}</p><p class="muted">{g.state}</p>
     {#if g.kind==='activity'}<a href="#/learning/legacy">Gespeicherte Übung öffnen</a>{:else}<button onclick={()=>go(g)}>{onstart?'Gemeinsam anschauen':'Zum passenden Lernschritt'}</button>{/if}
@@ -40,7 +40,7 @@
       <details><summary>Ursprüngliche Rückmeldungen ({g.sources.length})</summary>{#each g.sources as s}<p>{dayLabel(s.date)}: {s.text}</p><small>{s.rating===1?'Nicht verstanden':s.rating===2?'Teilweise verstanden':s.rating===3?'Als verstanden gemeldet':'Keine Verständnisbewertung'} {s.note||''}</small>{/each}</details>
     </article>{/each}
    </details>
-   {#if plan.deferred.length}<details><summary>Heute bewusst nicht zusätzlich eingeplant ({plan.deferred.length})</summary>{#each plan.deferred as g}<p><strong>{g.subject}: {g.title}</strong><br/>{g.defer_reason}</p>{/each}</details>{/if}
+   {#if plan.deferred.length}<details><summary>Weitere Lernanlässe ({plan.deferred.length})</summary><p class="muted">Das sind Unterrichtseinträge und Lernanlässe, keine Liste nachgewiesener Wissenslücken.</p>{#each plan.deferred as g}<p><strong>{g.subject}: {g.title}</strong><br/>{g.defer_reason}</p>{/each}</details>{/if}
   {/if}
  </section>
 {/if}

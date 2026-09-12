@@ -74,7 +74,7 @@ def catalogue(account, snapshot=None):
         if not r['text'].strip() or r.get('rating')==4:continue
         if any(x in subject.casefold() for x in ('sport','schwimm','pause','klassenrat')):continue
         key=goal_key(r);lesson_keys[r['id']]=key
-        g=groups.setdefault(key,dict(key=key,kind='lesson',subject=subject,subject_id=r.get('subject_untis_id'),title=r.get('topic',{}).get('title') or r['text'][:150],lesson_id=r['id'],sources=[],rating=r.get('rating'),catch_up_open=False,date=r['date'],skill_ids=[],sessions=[],state='Noch nicht geprüft',due_date=None,last_day=None,reason='',minutes=8))
+        g=groups.setdefault(key,dict(key=key,kind='lesson',subject=subject,subject_id=r.get('subject_untis_id'),topic_id=r.get('topic',{}).get('id'),title=r.get('topic',{}).get('title') or r['text'][:150],lesson_id=r['id'],sources=[],rating=r.get('rating'),catch_up_open=False,date=r['date'],skill_ids=[],sessions=[],state='Noch nicht geprüft',due_date=None,last_day=None,reason='',minutes=8))
         g['sources'].append({k:r.get(k) for k in ('id','untis_period_id','date','text','rating','note','catch_up_open')})
         if r.get('rating') in (1,2):g['rating']=r['rating']
         g['catch_up_open'] |= r.get('catch_up_open',False)
@@ -158,7 +158,7 @@ def envelope(account,day,profile,budget_override=None):
 
 
 def build(account,exams=(),snapshot=None,budget_override=None):
-    goals,s=catalogue(account,snapshot);day=today_local();profile=s['profile'];week=[];scheduled=set();deferred=[]
+    goals,s=catalogue(account,snapshot);day=today_local();profile=s['profile'];week=[];scheduled=set();scheduled_topics=set();subject_counts={};deferred=[]
     with closing(webapp_conn()) as c:
         tasks=[dict(r) for r in c.execute("SELECT * FROM tasks WHERE account_id=? AND status IN ('open','in_progress') ORDER BY COALESCE(due_date,'9999'),id",(account,))]
         used=usage(c,account,day)
@@ -175,11 +175,21 @@ def build(account,exams=(),snapshot=None,budget_override=None):
         remaining=max(0,total-homework-already['homework']-already['learning']) if allowed or load=='room' else 0
         slots=max(0,(profile or {}).get('max_sessions',0)+(1 if load=='room' else 0)-already['slots'])
         imminent={e.get('subject_name') for e in exams if ds<e.get('date','')<=(d+timedelta(days=3)).isoformat()}
-        available=[g for g in goals if g['key'] not in scheduled and (g['due_date']<=ds or g['subject'] in imminent) and not (offset==0 and (g.get('last_day')==ds or g.get('worked_day')==ds))]
+        def topic_key(g):
+            return (g['subject'],g['topic_id']) if g.get('topic_id') is not None and not g.get('skill_states') else None
+        # Group only planning occasions, never independent evidence or mastery.
+        candidates=[]
+        for original in goals:
+            g=dict(original)
+            g['next_lesson']=min((r['date'] for r in s['lessons'] if r.get('future') and r.get('subject_name')==g['subject'] and r['date']>=ds),default=None)
+            g['reason']=g['reason'].split(' · nächste Stunde ')[0]
+            if g['next_lesson']:g['reason']+=' · nächste Stunde '+g['next_lesson']
+            candidates.append(g)
+        available=[g for g in candidates if g['key'] not in scheduled and topic_key(g) not in scheduled_topics and (g['due_date']<=ds or g['subject'] in imminent) and not (offset==0 and (g.get('last_day')==ds or g.get('worked_day')==ds))]
         exam_dates={e.get('subject_name'):e.get('date') for e in sorted(exams,key=lambda e:e.get('date',''),reverse=True) if e.get('date','')>ds}
         def rank(g):
             exam=exam_dates.get(g['subject']);urgent=bool(exam and exam<=(d+timedelta(days=10)).isoformat())
-            return (not urgent,g['rating'] not in (1,2),not bool(g.get('skill_states')),not g['catch_up_open'],g.get('next_lesson') or '9999',g['due_date'],g['key'])
+            return (not urgent,subject_counts.get(g['subject'],0),g['rating'] not in (1,2),not bool(g.get('skill_states')),not g['catch_up_open'],g.get('next_lesson') or '9999',g['due_date'],g['key'])
         # Workload determines the proposal; free capacity is never a target.
         need=sum(g['rating'] in (1,2) or g['catch_up_open'] or bool(g.get('skill_states')) for g in available)
         urgent=any(g['subject'] in imminent for g in available)
@@ -204,9 +214,11 @@ def build(account,exams=(),snapshot=None,budget_override=None):
             if minutes<3 or minutes>remaining:continue
             actions.append({**g,'minutes':minutes,'planned_date':ds,'reason':g['reason']+(' · Klausur '+exam_dates[g['subject']] if g['subject'] in exam_dates else '')})
             subjects.add(g['subject']);scheduled.add(g['key']);remaining-=minutes
+            subject_counts[g['subject']]=subject_counts.get(g['subject'],0)+1
+            if topic_key(g) is not None:scheduled_topics.add(topic_key(g))
         for t in must:pending_tasks.remove(t)
         planned=sum(g['minutes'] for g in actions)
-        week.append(dict(date=ds,budget_minutes=total,budget_source=source,study_day=allowed or load=='room',day_load=load,target_minutes=target,load_reason='Wenig Bedarf: kurzer Erhaltungscheck genügt' if not need else 'Klausur steht kurz bevor: gezielte Vorbereitung' if urgent else 'Offene Anliegen und fällige Wiederholungen gezielt aufgreifen',homework=must,homework_minutes=homework,used_minutes=already['learning']+already['homework'],learning_used_minutes=already['learning'],used_slots=already['slots'],actions=actions,planned_minutes=planned+homework,remaining_minutes=remaining,overload_minutes=max(0,homework+already['learning']+already['homework']-total),message='Das ist der Vorschlag für heute. Du kannst den Tag leichter planen oder bei Bedarf mehr aufgreifen.'))
+        week.append(dict(date=ds,budget_minutes=total,budget_source=source,study_day=allowed or load=='room',day_load=load,target_minutes=target,load_reason='Wenig Bedarf: kurzer Erhaltungscheck genügt' if not need else 'Klausur steht kurz bevor: gezielte Vorbereitung' if urgent else 'Offene Anliegen und fällige Wiederholungen gezielt aufgreifen',homework=must,homework_minutes=homework,used_minutes=already['learning']+already['homework'],learning_used_minutes=already['learning'],used_slots=already['slots'],actions=actions,planned_minutes=planned+homework,remaining_minutes=remaining,overload_minutes=max(0,homework-max(0,total-already['learning']-already['homework'])),message='Das ist der Vorschlag für heute. Du kannst den Tag leichter planen oder bei Bedarf mehr aufgreifen.'))
     today=week[0]
     for g in goals:
         if g['key'] not in {x['key'] for x in today['actions']} and g['due_date']<=day.isoformat():deferred.append({**g,'defer_reason':'Heute bereits bearbeitet; später erneut prüfen' if g.get('worked_day')==day.isoformat() or g.get('last_day')==day.isoformat() else 'Nicht zusätzlich eingeplant: Zeitrahmen, Lerntage und Fachwechsel beachten'})
