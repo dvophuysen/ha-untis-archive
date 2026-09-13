@@ -1,13 +1,18 @@
 <script>
   import { api } from './api.js';
+  import { onMount } from 'svelte';
+  import { lessonEnded } from './dayDashboard.js';
   import LessonDetail from './LessonDetail.svelte';
 
   // preview=true wird für die "Morgen"-Vorschau verwendet: nur Anzeige,
   // keine Bewertung, kein Detail-Modal — der Stoff hat noch nicht
   // stattgefunden, da gibt's nichts zu bewerten.
-  let { accountId, lesson, preview = false } = $props();
+  let { accountId, lesson, preview = false, onsaved = () => {} } = $props();
 
   let busy = $state(false);
+  let saveError = $state('');
+  let clock = $state(new Date());
+  onMount(() => { const timer = setInterval(() => clock = new Date(), 30000); return () => clearInterval(timer); });
   let showDetail = $state(false);
 
   const isCancelled = $derived(lesson.is_cancelled);
@@ -15,7 +20,7 @@
   const hasExam = $derived(!!lesson.exam);
   const rating = $derived(lesson.checkin?.rating ?? null);
   const subjectLabel = $derived(lesson.subject_short || lesson.subject_name || '—');
-  const canRate = $derived(!isCancelled && !wasAbsent);
+  const canRate = $derived(!isCancelled && !wasAbsent && lessonEnded(lesson, lesson.date, clock));
   // 👀 "nur Aufsicht" makes sense only for actual substitution lessons,
   // not for the regular teacher delivering the regular subject.
   const isSubst = $derived(
@@ -23,14 +28,19 @@
   );
 
   async function checkin(r) {
+    if (busy || !canRate) return;
+    saveError = '';
     const note = lesson.checkin?.note ?? null;
     busy = true;
     try {
-      await api.post(
+      const saved = await api.post(
         `/api/accounts/${accountId}/lessons/${lesson.id}/checkin`,
         { rating: r, note: note || null },
       );
-      lesson.checkin = { rating: r, note: note || null };
+      lesson.checkin = { rating: saved.rating, note: saved.note };
+      onsaved();
+    } catch (e) {
+      saveError = 'Nicht gespeichert. Bitte noch einmal versuchen.';
     } finally {
       busy = false;
     }
@@ -107,13 +117,13 @@
       <div class="lesson-right">
         <div class="checkins">
           {#if isSubst}
-            <button class="ci r4" class:active={rating === 4} disabled={busy} onclick={() => checkin(4)} title="nur Aufsicht / kein neuer Stoff">👀</button>
+            <button class="ci r4" class:active={rating === 4} disabled={busy} onclick={() => checkin(4)} title="nur Aufsicht / kein neuer Stoff" aria-label="Nur Aufsicht, kein neuer Stoff">👀</button>
           {:else}
             <span class="ci-empty"></span>
           {/if}
-          <button class="ci r3" class:active={rating === 3} disabled={busy} onclick={() => checkin(3)} title="verstanden">😀</button>
-          <button class="ci r2" class:active={rating === 2} disabled={busy} onclick={() => checkin(2)} title="teils verstanden">😐</button>
-          <button class="ci r1" class:active={rating === 1} disabled={busy} onclick={() => checkin(1)} title="nicht verstanden">😟</button>
+          <button class="ci r3" class:active={rating === 3} disabled={busy} onclick={() => checkin(3)} title="verstanden" aria-label="Verstanden">😀</button>
+          <button class="ci r2" class:active={rating === 2} disabled={busy} onclick={() => checkin(2)} title="teils verstanden" aria-label="Teilweise verstanden">😐</button>
+          <button class="ci r1" class:active={rating === 1} disabled={busy} onclick={() => checkin(1)} title="nicht verstanden" aria-label="Nicht verstanden">😟</button>
         </div>
       </div>
     {:else}
@@ -124,11 +134,14 @@
   {/if}
 </div>
 
+{#if saveError}<p class="error-box" role="alert">{saveError}</p>{/if}
+
 {#if showDetail && !preview}
   <LessonDetail
     {accountId}
     {lesson}
     onclose={() => (showDetail = false)}
+    {onsaved}
   />
 {/if}
 

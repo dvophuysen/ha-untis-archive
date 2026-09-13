@@ -1,3 +1,13 @@
+# Tagesdashboard 0.29.0
+
+Erster Umsetzungsschritt des UI-Redesigns: direkt sichtbare Tagesaufgaben und Lernvorschläge, offene Rückmeldungen mit erreichbarem Verlauf, allgemeine nächste Schulvorschau und reduzierte Hauptnavigation. Vorhandene Direktlinks bleiben erhalten. Elternstart anhand der Rolle statt nur der Kontenzahl.
+
+Prüfung: 55 bestehende Python-Tests; vier neue JavaScript-Tests für Tagesaufteilung und Datumsgrenzen; Browserprüfung am Produktionsbuild mit synthetischen Daten für erfolgreiche/fehlgeschlagene Speicherung, sichtbare Aufgabenbereiche und 320/390/768 Pixel. Helle und dunkle Screenshots geprüft. Bestehende Svelte-Barrierefreiheitshinweise bleiben. Echter iPhone-/PWA-Betrieb und Zustellung von Push wurden damit nicht geprüft.
+
+Packbestätigungen, Reminder-Zeitsteuerung, Belohnungen, vollständige Zusammenführung der Fachbewertung und weitere Mentorinteraktion sind Folgepakete. Kein vollständiger Abschluss der Gesamtvision. Veröffentlichung und Live-Version werden separat dokumentiert.
+
+---
+
 # Korrekturpaket 0.28.2
 
 Stand: 13.09.2026. Ausgangspunkt: Remote 58cf623, laufende App 0.28.1 über Supervisor und Health-API bestätigt. Zunächst geprüfter Code; Veröffentlichung und Live-Abnahme separat nachtragen.

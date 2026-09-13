@@ -1,0 +1,30 @@
+// Build the frontend first. Requires playwright-core; optionally set SCHOOL_TEST_CHROMIUM. Uses synthetic API fixtures only.
+const {chromium:pw}=require('playwright-core');
+const fs=require('fs');const http=require('http');const path=require('path');const assert=require('assert/strict');
+(async()=>{
+ const root=path.resolve(__dirname,'../schul_cockpit/frontend/dist');
+ const server=http.createServer((req,res)=>{const file=path.join(root,req.url.split('?')[0]==='/'?'index.html':req.url.split('?')[0]);try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(file));}catch{res.statusCode=404;res.end();}});await new Promise(r=>server.listen(4178,'127.0.0.1',r));
+ const browser=await pw.launch({executablePath:process.env.SCHOOL_TEST_CHROMIUM,args:['--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-zygote'],headless:true});
+ const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Europe/Berlin',serviceWorkers:'block'});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.clock.install({time:new Date('2026-09-14T14:00:00+02:00')});
+ let rating=null,done=false,failRating=true,failTask=true;
+ await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url()).pathname;let body={};let status=200;
+ if(u==='/api/me')body={accounts:[{id:1,name:'Beispielkind'}],role:'child',is_admin:false};
+ else if(u.endsWith('/today'))body={date:'2026-09-14',lessons:[{id:1,date:'2026-09-14',subject_name:'Deutsch',subject_short:'DE',start_hhmm:'08:00',start_time:800,end_time:845,room:'204',lstext:'Groß- und Kleinschreibung',checkin:{rating,note:null}}],next:{date:'2026-09-15',lessons:[{id:2,subject_name:'Sport',start_hhmm:'08:00',end_time:845,room:'Halle'}]}};
+ else if(u.endsWith('/tasks')&&req.method()==='GET')body={tasks:[{id:1,title:'Mathematik',notes:'Brüche: Aufgabe 3',due_date:'2026-09-15',status:done?'done':'open',estimated_minutes:10},{id:2,title:'Englisch',notes:'Seite 24 lesen',due_date:'2026-09-18',status:'open'},{id:3,title:'Notiz ohne Termin',status:'open'}]};
+ else if(u.endsWith('/plan'))body={today:{actions:[{key:'math',subject:'Mathematik',title:'Brüche vergleichen',minutes:8,url:'#/learning?focus=math'}]},upcoming_exams:[],errors:[]};
+ else if(u.endsWith('/checkin')){if(failRating){status=500;body={detail:'Test failure'};}else{rating=req.postDataJSON().rating;body={rating,note:null};}}
+ else if(u==='/api/tasks/1'){if(failTask){status=500;body={detail:'Test failure'};}else{done=req.postDataJSON().status==='done';body={ok:true};}}
+ await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+ });
+ await page.goto('http://127.0.0.1:4178/#/today');await page.getByRole('heading',{name:'Heute erledigen',exact:true}).waitFor({timeout:8000}).catch(async e=>{console.log('ERRORS',errors,'BODY',await page.locator('body').innerText());throw e;});
+ for(const title of ['Schon vorziehen','Noch ohne Termin','Üben & vorbereiten'])assert.equal(await page.getByRole('heading',{name:title,exact:true}).count(),1);
+ await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.getByRole('alert').filter({hasText:'Nicht gespeichert'}).waitFor();assert.equal(await page.getByRole('button',{name:'Verstanden',exact:true}).count(),1);
+ failRating=false;await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.getByRole('button',{name:/Vergangene Stunden ansehen/}).waitFor();assert.equal(await page.getByRole('button',{name:'Verstanden',exact:true}).count(),0);
+ await page.getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Test failure',{exact:true}).waitFor();assert.equal(done,false);
+ failTask=false;await page.getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Keine offenen Aufgaben bis morgen eingetragen.').waitFor();
+ for(const width of [320,390,768]){await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'overflow '+width);}
+ await page.setViewportSize({width:390,height:844});if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-390.png'),fullPage:true});
+ await page.emulateMedia({colorScheme:'dark'});if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-dark.png'),fullPage:true});
+ assert.deepEqual(errors,[]);console.log('PASS: dashboard sections, failed/successful checkin and task save, 320/390/768 px, no JS exceptions');await browser.close();await new Promise(r=>server.close(r));
+})().catch(e=>{console.error(e);process.exit(1)});

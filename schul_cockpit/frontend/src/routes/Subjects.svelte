@@ -62,7 +62,7 @@
           <div class="muted" style="border-top:1px solid var(--border); padding-top:0.4rem; margin-top:0.4rem;">
             <span class="dim">{formatShortDate(it.date)} · {it.rating === 1 ? '😟' : '😐'}</span><br>
             {it.lstext || it.note || '—'}
-            <p>{it.state} · Kurzcheck frühestens {it.due_date}</p><a href={it.url}>Im Lernplan aufgreifen</a>
+            <p>{it.state} · Wieder ansehen ab {formatShortDate(it.due_date)}</p><a href={it.url}>Zum Lernplan</a>
           </div>
         {/each}
       </div>

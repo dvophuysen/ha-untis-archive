@@ -1,4 +1,5 @@
 <script>
+  import { formatShortDate } from '../lib/format.js';
   import { api } from '../lib/api.js';
 
   let { accountId, subjectId } = $props();
@@ -45,7 +46,7 @@
     <div class="card compact">
       <div class="row between">
         <div>
-          <span class="dim">{l.date} · {l.start_hhmm}</span>
+          <span class="dim">{formatShortDate(l.date)} · {l.start_hhmm}</span>
           {#if l.code === 'cancelled'}<span class="badge cancelled">×</span>{/if}
           {#if l.was_absent}<span class="badge absent">🤒</span>{/if}
         </div>
