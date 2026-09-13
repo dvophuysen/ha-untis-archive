@@ -1,3 +1,11 @@
+# Anwesenheitskorrektur 0.30.1
+
+Die expliziten Untis-Gründe „Verspätet“/„Verspätung“ werden für Fehlstunden, Feedbacksperren und Nachholbedarf ignoriert. Keine Minutenschwelle. Eine verbindungslokale SQLite-Sicht korrigiert vorhandene Fehlmarkierungen zentral für alle App-Abfragen, ohne das schreibgeschützte Quellarchiv zu verändern. Überlappende tatsächliche Abwesenheiten haben Vorrang; Meldungen anderer Konten oder außerhalb der Stunde verändern nichts. Fehlzeitenmetadaten und Mentor-Zeitberechnung schließen Verspätungen ebenfalls aus. Originalmeldungen bleiben im Integrationsdatensatz absences nachvollziehbar.
+
+Prüfung: 81 Python-Tests erfolgreich, einschließlich expliziter Verspätung unterschiedlicher Dauer, überlappender echter Abwesenheit, Kontogrenzen, gespeicherter Rückmeldung und Archiv-Neuberechnung. Frontend-Produktionsbuild erfolgreich. Keine UI-Umgestaltung in diesem Fehlerpaket.
+
+Zusätzlich korrigiert die Archiv-Integration recompute_attendance nach ihrem eigenen Update die gespeicherten Flags beim Abgleich. Der App-Fix benötigt dieses separate Update nicht.
+
 # Optionale Erinnerungssicherung 0.30.0
 
 Ein täglicher gebündelter Tagescheck für offene Aufgaben mit Fälligkeit bis morgen, noch nicht bestätigtes Fachmaterial für morgen und fehlende Rückmeldung zu beendeten heutigen Stunden. Kein KI-Aufruf, keine Ableitung eines tatsächlichen Versäumnisses aus fehlendem Häkchen. Standard aus; Eltern wählen ausdrücklich eine Zeit zwischen 14 und 21 Uhr (Europe/Berlin). Versand nur im folgenden 30-Minuten-Fenster. Kinder melden Geräte selbst an; Eltern erhalten keine automatischen Eskalationen.

@@ -6,6 +6,8 @@ import json
 import sqlite3
 from typing import Any
 
+from .attendance import LATE_REASON_SQL
+
 
 def lessons_for_date(
     conn: sqlite3.Connection, account_id: int, date_iso: str
@@ -119,7 +121,7 @@ def absences_for_account(
 ) -> list[dict[str, Any]]:
     rows = conn.execute(
         "SELECT id, start_date, end_date, reason, is_excused "
-        "FROM absences WHERE account_id = ? "
+        f"FROM absences WHERE account_id = ? AND NOT ({LATE_REASON_SQL}) "
         "ORDER BY start_date DESC LIMIT 200",
         (account_id,),
     ).fetchall()

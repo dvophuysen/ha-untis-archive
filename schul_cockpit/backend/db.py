@@ -374,6 +374,8 @@ def history_conn() -> sqlite3.Connection:
     uri = f"file:{SETTINGS.history_db_path}?mode=ro"
     conn = sqlite3.connect(uri, uri=True, isolation_level=None)
     conn.row_factory = sqlite3.Row
+    from .attendance import install_attendance_view
+    install_attendance_view(conn)
     return conn
 
 

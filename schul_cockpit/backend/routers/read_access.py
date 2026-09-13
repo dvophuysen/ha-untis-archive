@@ -95,7 +95,7 @@ def manifest(allowed:set[int]=Depends(authenticate)):
             'datasets':{k:{'date_basis':v[4],'modified_basis':v[5]} for k,v in DATASETS.items()},
             'pagination':'after uses the last _cursor; repeat until has_more=false. Pages are not a cross-request snapshot.',
             'refresh':'updated_since supports listed modified_basis fields. Use full rescan to detect deletions.',
-            'notes':'Raw archive retains cancelled/hidden courses and partial absences. Apply hidden_courses and time overlap before counting missed lessons. Self-reports are not objective mastery.'}
+            'notes':'Archive rows retain cancelled/hidden courses and partial absences. Lesson attendance ignores explicit lateness; absences retains the source records. Apply hidden_courses and time overlap before counting missed lessons. Self-reports are not objective mastery.'}
 
 
 @router.get('/{name}')
