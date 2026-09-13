@@ -1,3 +1,19 @@
+# Optionale Erinnerungssicherung 0.30.0
+
+Ein täglicher gebündelter Tagescheck für offene Aufgaben mit Fälligkeit bis morgen, noch nicht bestätigtes Fachmaterial für morgen und fehlende Rückmeldung zu beendeten heutigen Stunden. Kein KI-Aufruf, keine Ableitung eines tatsächlichen Versäumnisses aus fehlendem Häkchen. Standard aus; Eltern wählen ausdrücklich eine Zeit zwischen 14 und 21 Uhr (Europe/Berlin). Versand nur im folgenden 30-Minuten-Fenster. Kinder melden Geräte selbst an; Eltern erhalten keine automatischen Eskalationen.
+
+Persistente Reservierung vor Versand verhindert Doppelversand nach Neustarts. Bei unklarem/fehlgeschlagenem Versand kein automatisches Wiederholen am selben Tag; Status sichtbar, Testweg vorhanden. Push-TTL 30 Minuten. Providerannahme ist kein Empfangsnachweis. Daten und Empfänger werden vor Versand erneut geprüft. Ungültige Geräte (404/410) werden entfernt; Transporttimeout zehn Sekunden. Neue Geräte werden nur für unterstützte HTTPS-Pushdienste registriert. Account-Reconciliation bezieht Packlisten und Erinnerungen ein.
+
+Service Worker ergänzt Push-/Klickhandler mit auf die App begrenzten Links. Alle privaten API-Aufrufe umgehen seinen Cache; API-Antworten erhalten no-store. Alte Cacheversion wird bei Aktivierung gelöscht. Offline wird für diese Daten ein Fehler statt eines alten Erledigungsstands gezeigt.
+
+Prüfung: 71 Python-Tests aus Lern-/Mentor-/Plan-/Pack-/Integritäts- und Erinnerungsbereichen (70 gemeinsam, zusätzliche Account-Neuzuordnung separat); Service-Worker-Ereignistest für Anzeige, fehlerhafte Payload, sichere Links und API-Cacheausschluss; bestehende Browserabläufe plus Eltern-Zeitwahl und Kinder-Leseansicht; Produktionsbuild. Reale Registrierung/Zustellung auf Kindergeräten noch nicht abgenommen, keine echte Nachricht versendet, keine Uhrzeit eingeschaltet.
+
+Nutzung: Einstellungen → Erinnerungen. Im Elternkonto Zeit speichern/einschalten; im Kinderkonto auf dem betreffenden Gerät anmelden und Testnachricht prüfen. Auf iOS/iPadOS als Home-Screen-Web-App und nach ausdrücklichem Tippen auf Anmeldung; siehe [WebKit-Dokumentation](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/). Ruhe-/Fokus-Einstellungen können die Anzeige beeinflussen. Fehlende Empfangsbestätigung wird nicht als Kinderfehler interpretiert.
+
+Weiter: echte Geräteabnahme und Alltagserfahrung; danach bedarfsgerechte zusätzliche Zeitfenster, Mentor-Coaching und faire optionale Erfolgsrückmeldung. Aktuell eine tägliche Fangleine, kein vollständiges Mehrphasen-Reminder-System.
+
+---
+
 # Materialcheck im Stundenplan 0.29.4
 
 Packen zeigt den vollständigen nächsten Schultag in chronologischer Reihenfolge einschließlich Ausfällen, Anfang/Ende, Raum- und Lehrerwechseln. Beim ersten stattfindenden Vorkommen jedes Fachs steht ein Material-Häkchen, danach kein weiteres für dasselbe Fach. Doppelstunden bleiben als Zeiten sichtbar. Ausgefallene/abwesende Stunden erzeugen kein Material-Häkchen. Ausgeblendete Kurse bleiben ausgeblendet.

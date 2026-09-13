@@ -358,6 +358,17 @@ CREATE TABLE IF NOT EXISTS packing_items (
 );
 """))
 
+_MIGRATIONS.append(("reminders_001", """
+CREATE TABLE IF NOT EXISTS reminder_settings (
+ account_id INTEGER PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 0, remind_at TEXT
+);
+CREATE TABLE IF NOT EXISTS reminder_deliveries (
+ account_id INTEGER NOT NULL, school_day TEXT NOT NULL, subscription_id INTEGER NOT NULL,
+ status TEXT NOT NULL, created_at TEXT NOT NULL, finished_at TEXT,
+ PRIMARY KEY(account_id,school_day,subscription_id)
+);
+"""))
+
 def history_conn() -> sqlite3.Connection:
     """Read-only connection to the UNTIS Archive's history.db."""
     uri = f"file:{SETTINGS.history_db_path}?mode=ro"

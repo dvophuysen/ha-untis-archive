@@ -40,6 +40,7 @@ from .routers import (
     plan as plan_router,
     packing as packing_router,
     push as push_router,
+    reminders as reminders_router,
     search,
     settings_router,
     setup,
@@ -78,6 +79,8 @@ async def lifespan(app: FastAPI):
 
     _BG_TASK = asyncio.create_task(background_sync_loop())
     mentor_task = asyncio.create_task(mentor_loop())
+    from .reminders import loop as reminder_loop
+    reminder_task = asyncio.create_task(reminder_loop())
     # A process restart cannot leave a grading lease permanently stuck.
     from .db import webapp_conn
     with __import__("contextlib").closing(webapp_conn()) as c:
@@ -86,6 +89,11 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        reminder_task.cancel()
+        try:
+            await reminder_task
+        except asyncio.CancelledError:
+            pass
         mentor_task.cancel()
         try:
             await mentor_task
@@ -112,7 +120,7 @@ async def slide_pin_cookie(request: Request, call_next):
     must not be overwritten by stale incoming-cookie values."""
     response = await call_next(request)
     path = request.url.path
-    if ("/learning" in path and path.startswith("/api/accounts/")) or path.startswith("/api/integration/learning"):
+    if path.startswith("/api/"):
         response.headers["Cache-Control"] = "private, no-store"
     if path.startswith("/api/auth/"):
         return response
@@ -158,6 +166,7 @@ app.include_router(afternoon.router, prefix=API)
 app.include_router(settings_router.router, prefix=API)
 app.include_router(audit.router, prefix=API)
 app.include_router(push_router.router, prefix=API)
+app.include_router(reminders_router.router, prefix=API)
 app.include_router(notify.router, prefix=API)
 app.include_router(exams.router, prefix=API)
 app.include_router(plan_router.router, prefix=API)

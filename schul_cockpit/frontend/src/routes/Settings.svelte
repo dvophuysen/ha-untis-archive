@@ -1,4 +1,5 @@
 <script>
+  import ReminderSettings from '../lib/ReminderSettings.svelte';
   import { api } from '../lib/api.js';
   import { appState, loadMe } from '../lib/store.svelte.js';
 
@@ -185,6 +186,8 @@
   <h2 style="margin:0; font-size:1.1rem;">Einstellungen</h2>
   <button class="ghost" onclick={() => history.back()}>← zurück</button>
 </div>
+{#if accountId}{#key accountId}<ReminderSettings {accountId}/>{/key}{/if}
+
 
 {#if error}<div class="error-box">{error}</div>{/if}
 

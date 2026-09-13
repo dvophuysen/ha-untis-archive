@@ -1,3 +1,12 @@
+## 0.30.0
+
+- Optionale tägliche Push-Erinnerung für offene Aufgaben bis morgen, Fachmaterial für morgen und Rückmeldungen zu beendeten Stunden. Gebündelt, nur an angemeldete Kindergeräte und ohne Versand bei erledigten Punkten.
+- Eltern legen die Uhrzeit ausdrücklich fest; zunächst ausgeschaltet. Geräteanmeldung, Abmeldung und Testversand in den Einstellungen. Kein automatischer Elternalarm.
+- Persistenter Schutz vor doppeltem Versand, begrenztes Zeitfenster, Fehlerstatus und Entfernung ungültiger Geräteanmeldungen. Annahme durch den Pushdienst wird nicht als bestätigter Empfang dargestellt.
+- Service Worker zeigt Push-Nachrichten an und öffnet den richtigen Tagesbereich. Private API-Daten werden nicht mehr offline aus einem alten Cache geladen.
+- Material- und Erinnerungsdaten folgen bei Konto-ID-Änderungen dem zugehörigen Kind.
+- Neue API-, Service-Worker- und Browserprüfungen. Echte Zustellung auf dem jeweiligen Gerät muss nach Anmeldung per Testnachricht geprüft werden.
+
 ## 0.29.4
 
 - Nächster Schultag als vollständiger Stundenplan mit Anfang/Ende, Räumen, Lehrerwechseln, Vertretungen und Ausfällen.
