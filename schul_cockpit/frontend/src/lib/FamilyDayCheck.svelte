@@ -1,4 +1,5 @@
 <script>
+  import ActionLabel from './ActionLabel.svelte';
   import { api } from './api.js';
   import { splitLessons, splitTasks } from './dayDashboard.js';
   let { kid, day, open } = $props();
@@ -38,17 +39,17 @@
   <button data-status={taskStatus} onclick={() => open(kid, 'today')}>
     <span aria-hidden="true">📝</span><span><strong>{overdue ? `${overdue} ${overdue===1?'Aufgabe':'Aufgaben'} überfällig` : tasks.due.length ? `${tasks.due.length} ${tasks.due.length === 1 ? 'Aufgabe' : 'Aufgaben'} bis morgen offen` : 'Für morgen nichts mehr offen'}</strong>
     {#if tasks.undated.length}<small>{tasks.undated.length} ohne Termin · bitte einordnen</small>{/if}
-    {#if tasks.ahead.length}<small>{tasks.ahead.length} weitere Aufgaben · später fällig</small>{/if}</span>
+    {#if tasks.ahead.length}<small>{tasks.ahead.length} weitere Aufgaben · später fällig</small>{/if}</span><span class="nav-mark"><ActionLabel /></span>
   </button>
   {#if loading}<p class="small dim">Tagescheck wird geladen …</p>
   {:else if error}<p class="error-box" role="alert">{error}</p>
   {:else}
     <button data-status={bagStatus} onclick={() => open(kid, 'today')}>
       <span aria-hidden="true">🎒</span><span><strong>{bag ? (bag.items.length ? `${bag.confirmed_count} von ${bag.items.length} Fächern abgehakt` : 'Keine Fachmaterialien im Plan') : 'Noch kein nächster Schultag im Plan'}</strong>
-      {#if packDate}<small>Material für {packDate}</small>{/if}</span>
+      {#if packDate}<small>Material für {packDate}</small>{/if}</span><span class="nav-mark"><ActionLabel /></span>
     </button>
     <button data-status={feedbackCount ? 'attention' : 'good'} onclick={() => open(kid, 'week')}>
-      <span aria-hidden="true">🗣️</span><span><strong>{feedbackCount ? `${feedbackCount} ${feedbackCount === 1 ? 'Rückmeldung' : 'Rückmeldungen'} offen` : 'Keine Rückmeldungen offen'}</strong><small>Rückmeldungen · letzte 7 Tage und heute</small></span>
+      <span aria-hidden="true">🗣️</span><span><strong>{feedbackCount ? `${feedbackCount} ${feedbackCount === 1 ? 'Rückmeldung' : 'Rückmeldungen'} offen` : 'Keine Rückmeldungen offen'}</strong><small>Rückmeldungen · letzte 7 Tage und heute</small></span><span class="nav-mark"><ActionLabel /></span>
     </button>
   {/if}
 </div>
@@ -61,7 +62,8 @@
   [data-status="problem"]{background:color-mix(in srgb,var(--rating-1) 14%,var(--bg-card));border-color:var(--rating-1)}
   .overall{padding:2px 4px;font-size:1rem}
   button > span:first-child { font-size:1.3rem; }
-  button > span:last-child { min-width:0; overflow-wrap:anywhere; }
+  button > span:nth-child(2) { min-width:0; overflow-wrap:anywhere; }
+  .nav-mark{margin-left:auto;flex:none;color:var(--accent)}
   strong { font-size:.9rem; }
   small { display:block; color:var(--fg-muted); margin-top:.2rem; }
 </style>

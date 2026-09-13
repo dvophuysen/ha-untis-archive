@@ -1,4 +1,5 @@
 <script>
+  import ActionLabel from '../lib/ActionLabel.svelte';
   import { api } from '../lib/api.js';
   import { formatShortDate, daysBetween, isoToday } from '../lib/format.js';
   import { appState } from '../lib/store.svelte.js';
@@ -138,7 +139,7 @@
   {#if data.upcoming.length === 0}
     <div class="empty" style="padding:1rem;">
       Keine Arbeiten eingetragen.
-      {#if canManage}<a href="#/exams">Termin ergänzen →</a>{/if}
+      {#if canManage}<a href="#/exams">Termin ergänzen <ActionLabel /></a>{/if}
     </div>
   {:else}
     {#each data.upcoming as e (e.exam_key)}

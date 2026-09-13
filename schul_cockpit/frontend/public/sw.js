@@ -7,7 +7,7 @@
 // The cache name carries a build marker so a new add-on version invalidates
 // the old cache automatically on activate.
 
-const CACHE = 'schul-cockpit-0.30.0';
+const CACHE = 'schul-cockpit-0.34.0';
 const SHELL = [
   './',
   './manifest.webmanifest',

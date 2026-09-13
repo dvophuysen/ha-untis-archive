@@ -21,7 +21,7 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
  });
  await page.goto('http://127.0.0.1:4178/#/today');await page.getByRole('heading',{name:'Heute erledigen',exact:true}).waitFor({timeout:8000}).catch(async e=>{console.log('ERRORS',errors,'BODY',await page.locator('body').innerText());throw e;});
- for(const title of ['Schon vorziehen','Noch ohne Termin','🌱 Üben & vorbereiten →'])assert.equal(await page.getByRole('heading',{name:title,exact:true}).count(),1);
+ for(const title of ['Schon vorziehen','Noch ohne Termin','Üben & vorbereiten'])assert.equal(await page.getByRole('heading',{name:title,exact:true}).count(),1);
  await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.getByRole('alert').filter({hasText:'Nicht gespeichert'}).waitFor();assert.equal(await page.getByRole('button',{name:'Verstanden',exact:true}).count(),1);
  failRating=false;await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.getByRole('button',{name:/Vergangene Stunden ansehen/}).waitFor();assert.equal(await page.getByRole('button',{name:'Verstanden',exact:true}).count(),0);
  await page.getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Test failure',{exact:true}).waitFor();assert.equal(done,false);
@@ -33,10 +33,19 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  await page.reload();await page.locator('.pack-row[aria-pressed="true"]').waitFor();
  assert.equal(await page.locator('.pack-row[aria-pressed="true"]').count(),1);
  await page.getByRole('button',{name:'Material für Mathematik',exact:true}).click();await page.getByText('✓ Material für alle Fächer abgehakt.').first().waitFor();
- for(const width of [320,390,768]){await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'overflow '+width);}
+ for(const width of [320,390,430,768]){
+  await page.setViewportSize({width,height:900});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'overflow '+width);
+  const geometry=await page.locator('.task-row:has(.due):has(.practice-link)').evaluateAll(rows=>rows.map(row=>{
+    const due=row.querySelector('.due').getBoundingClientRect(),help=row.querySelector('.practice-link').getBoundingClientRect();
+    return {dueRight:due.right,helpRight:help.right,dueBottom:due.bottom,helpTop:help.top,helpHeight:help.height};
+  }));
+  assert(geometry.length>0);
+  for(const row of geometry){assert(row.helpTop>=row.dueBottom,'help below due at '+width);assert(Math.abs(row.dueRight-row.helpRight)<1,'aligned right edge at '+width);assert(row.helpHeight>=44,'touch target at '+width);}
+ }
  await page.setViewportSize({width:768,height:900});const edges=await page.locator('.row-actions').evaluateAll(rows=>rows.map(r=>r.getBoundingClientRect().right));assert(edges.every(x=>Math.abs(x-edges[0])<1),'task actions have one right edge');if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-tablet.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-390.png'),fullPage:true});
  await page.emulateMedia({colorScheme:'dark'});if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-dark.png'),fullPage:true});
  schoolDate='2026-09-15';await page.clock.setFixedTime(new Date('2026-09-15T07:00:00+02:00'));await page.reload();await page.getByText('✓ Material für alle Fächer abgehakt.').first().waitFor();assert.equal(await page.locator('.school .pack-row[aria-pressed="true"]').count(),2,'evening confirmations remain in morning checklist');
- assert.deepEqual(errors,[]);console.log('PASS: dashboard sections, failed/successful checkin and task save, persistent packing and failed packing save, 320/390/768 px, no JS exceptions');await browser.close();await new Promise(r=>server.close(r));
+ assert.deepEqual(errors,[]);console.log('PASS: dashboard sections, failed/successful checkin and task save, persistent packing and failed packing save, 320/390/430/768 px, stacked actions, no JS exceptions');await browser.close();await new Promise(r=>server.close(r));
 })().catch(e=>{console.error(e);process.exit(1)});

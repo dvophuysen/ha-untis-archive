@@ -1,4 +1,5 @@
 <script>
+  import ActionLabel from './ActionLabel.svelte';
   import {subjectStyle} from './subjectStyle.js';
   import { api, ApiError } from './api.js';
   import { isoToday, daysBetween, dueLabel, stripUntisMetadata } from './format.js';
@@ -96,19 +97,19 @@
           {dueLabel(task.due_date, today)}
         </span>
       {/if}
-  {#if !isDone}<a class="practice-link" aria-label={`Hilfe bei ${task.title}`} title="Dabei brauche ich Hilfe" href={`#/learning?help=${task.id}`}>💬 Hilfe</a>{/if}
+  {#if !isDone}<a class="practice-link" aria-label={`Hilfe bei ${task.title}`} title="Dabei brauche ich Hilfe" href={`#/learning?help=${task.id}`}><ActionLabel kind="chat" label="Hilfe" /></a>{/if}
   </div>
 </div>
 
 <style>
-  .row-actions{display:flex;flex-direction:column;align-items:flex-end;gap:6px;width:10rem;flex-shrink:0}
-  @media(max-width:540px){.task-row{flex-wrap:wrap}.row-actions{width:100%;flex-direction:row;justify-content:flex-end;align-items:center}.body{flex-basis:calc(100% - 60px)}}
-  .practice-link{align-self:flex-end;padding:10px;min-height:44px;box-sizing:border-box;color:var(--accent);flex-shrink:0}
+  .row-actions{display:flex;flex-direction:column;align-items:flex-end;gap:0;width:5.5rem;flex-shrink:0}
+
+  .practice-link{align-self:flex-end;display:flex;align-items:center;justify-content:flex-end;padding:4px 0;min-height:44px;box-sizing:border-box;color:var(--accent);flex-shrink:0}
   .task-row {
     display: flex;
     align-items: flex-start;
-    gap: 0.7rem;
-    padding: 0.7rem 0.4rem 0.7rem 0.2rem;
+    gap: 0.35rem;
+    padding: 0.55rem 0;
     border-bottom: 1px solid var(--border);
   }
   .task-row:last-child { border-bottom: none; }
@@ -124,8 +125,9 @@
     margin-top: 2px;
     padding: 0;
     border-radius: 8px;
-    border: 2px solid var(--fg-muted);
-    background: var(--bg-card);
+    border: 0;
+    position: relative;
+    background: transparent;
     color: #fff;
     cursor: pointer;
     display: flex;
@@ -134,11 +136,10 @@
     transition: transform 80ms ease, background 120ms ease, border-color 120ms ease;
   }
   .check:active { transform: scale(0.92); }
-  .check.checked {
-    background: var(--rating-3);
-    border-color: var(--rating-3);
-  }
+  .check::before{content:"";position:absolute;width:24px;height:24px;border:2px solid var(--fg-muted);border-radius:6px;background:var(--bg-card)}
+  .check.checked::before{background:var(--rating-3);border-color:var(--rating-3)}
   .check .tick {
+    position:relative;z-index:1;
     font-size: 1.1rem;
     line-height: 1;
     font-weight: bold;
@@ -173,6 +174,7 @@
     color: var(--fg-muted);
     margin-top: 2px;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
   .notes.done { text-decoration: line-through; color: var(--fg-dim); }
   .sub { font-size: 0.75rem; margin-top: 2px; }
@@ -180,15 +182,15 @@
   .due {
     flex-shrink: 0;
     font-size: 0.75rem;
-    padding: 0.15rem 0.45rem;
-    border-radius: 999px;
-    background: var(--bg-elevated);
+    padding: 2px 0;
+    border-radius: 4px;
+    background: transparent;
     color: var(--fg-muted);
-    border: 1px solid var(--border);
+    border: 0;
     white-space: nowrap;
   }
-  .due.overdue { background: var(--rating-1); color: #fff; border-color: transparent; }
-  .due.soon { background: var(--rating-2); color: #fff; border-color: transparent; }
+  .due.overdue { background: var(--rating-1); color: #fff; padding:2px 5px; }
+  .due.soon { background: var(--warm-soft); color:var(--fg); padding:2px 5px; }
   .row-error {
     color: var(--rating-1);
     font-size: 0.75rem;

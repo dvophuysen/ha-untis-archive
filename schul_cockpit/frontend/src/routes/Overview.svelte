@@ -1,4 +1,5 @@
 <script>
+  import ActionLabel from '../lib/ActionLabel.svelte';
   import {subjectStyle} from '../lib/subjectStyle.js';
   import { untrack } from 'svelte';
   import FamilyDayCheck from '../lib/FamilyDayCheck.svelte';
@@ -56,21 +57,21 @@
       <section class="kid card">
         <header class="kid-head">
           <h2>{kid.name}</h2>
-          <button class="ghost open-btn" onclick={() => open(kid, 'today')}>Kinderansicht →</button>
+          <button class="ghost open-btn" onclick={() => open(kid, 'today')}>Kinderansicht <ActionLabel /></button>
         </header>
 
         <div class="now">{kid.now.icon} {kid.now.label}</div>
         <FamilyDayCheck {kid} day={data.today} {open} />
 
         <div class="summary-links">
-          <button class="summary-link" onclick={() => open(kid, 'klausuren')}><span>📝 Arbeiten & Tests</span><strong>{kid.exams.length ? `${kid.exams.length} angekündigt` : 'Keine eingetragen'} →</strong></button>
-          <button class="summary-link" class:needs-attention={kid.support.length > 0} onclick={() => open(kid, 'subjects')}><span>📚 Fächer</span><strong>{kid.support.length ? `${kid.support.length} mit offenen Fragen` : 'Keine gehäuften Fragen'} →</strong></button>
-          {#if kid.support.length}<div class="support-subjects">{#each kid.support as s}<button onclick={() => open(kid, 'subject', s.subject_id)}>{subjectStyle(s.subject_name || s.subject_short).emoji} {subjectStyle(s.subject_name || s.subject_short).name} →</button>{/each}</div>{/if}
+          <button class="summary-link" onclick={() => open(kid, 'klausuren')}><span>Arbeiten & Tests</span><strong>{kid.exams.length ? `${kid.exams.length} angekündigt` : 'Keine eingetragen'} <ActionLabel /></strong></button>
+          <button class="summary-link" class:needs-attention={kid.support.length > 0} onclick={() => open(kid, 'subjects')}><span>Fächer</span><strong>{kid.support.length ? `${kid.support.length} mit offenen Fragen` : 'Keine gehäuften Fragen'} <ActionLabel /></strong></button>
+          {#if kid.support.length}<div class="support-subjects">{#each kid.support as s}<button onclick={() => open(kid, 'subject', s.subject_id)}>{subjectStyle(s.subject_name || s.subject_short).emoji} {subjectStyle(s.subject_name || s.subject_short).name} <ActionLabel /></button>{/each}</div>{/if}
         </div>
         <!-- Plan-Grid: fixe Periodenzeilen, damit gleiche Stunden über die
              Tage hinweg untereinander stehen (wie das Woche-Layout). -->
         <div class="block">
-          <h3><button class="schedule-link" onclick={() => open(kid, 'week')}>📅 Stundenplan {kid.plan.is_weekend ? '· nächste Woche' : '· diese Woche'} →</button></h3>
+          <h3><button class="schedule-link" onclick={() => open(kid, 'week')}>Stundenplan {kid.plan.is_weekend ? '· nächste Woche' : '· diese Woche'} <ActionLabel /></button></h3>
           <div
             class="plan-grid"
             style="grid-template-rows: auto repeat({kid.plan.period_times.length || 1}, minmax(26px, auto));"
