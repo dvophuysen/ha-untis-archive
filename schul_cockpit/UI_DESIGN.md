@@ -33,3 +33,15 @@ Die App begleitet Kinder am Übergang zur weiterführenden Schule. Sie bietet Or
 3. Echte Geräteabnahme der optionalen Erinnerungen und kindliche Alltagserprobung. Danach optionale Erfolgsrückmeldung/Belohnung mit abgestimmten Regeln.
 
 Abnahme: synthetische Browserkonten, Smartphone-/Tabletbreiten, keine horizontalen Überläufe, direkte Auswahl eines nicht für heute geplanten Themas, Ausrichtung der Aktionsspalte, bekannte/fehlende Daten und Fehlersituationen. Echte Nutzbarkeit durch die Kinder ist damit nicht pädagogisch nachgewiesen.
+
+## Präzisierung iPhone, 13.09.2026 (0.33.1)
+
+- Datum und Hilfe bleiben **auf jeder Breite vertikal** rechts ausgerichtet, auch unter 540 px. Die bisherige mobile horizontale Aktionszeile ist abgelöst. Keine separate volle Zeile unter dem Aufgabentext.
+- Sichtbares Aufgaben-Häkchen 24 px innerhalb einer 44 × 44 px großen Schaltfläche. Normale Fristen sind ruhiger Text; Dringlichkeit erhält weiterhin eigenen sichtbaren Status.
+- ActionLabel.svelte ist die gemeinsame Darstellung: Gespräch = einfarbige Sprechblase vor Text, ohne Zusatzpfeil; Seitenwechsel = einheitlicher Chevron nach Text. Fachsymbole bleiben beim Fach. Bereichsnavigation behält ihre festen Symbole; dekorative wechselnde Emojis in Aktionslinks entfallen. Aufklappen nutzt den Aufklappindikator, Speichern/Abhaken erhalten keinen Navigationspfeil.
+- Heute und Lernzeilen verwenden kleinere Innenabstände. Vollständige Aufträge bleiben lesbar; keine automatische Textkürzung und keine kleineren Touch-Ziele.
+- Fachübersicht als eigenes Folgepaket: [Grafische Fächerübersicht](konzept/FAECHERUEBERSICHT.md). Ein dokumentierter Entwurf ist kein implementierter Lernscore.
+
+## Grafische Fächerliste 0.34.0
+
+Das Folgepaket ist als erste testbare Fächerliste umgesetzt. Balken zeigen bestehende Themen-Selbsteinschätzungen, Mini-Verläufe tatsächliche Einzelrückmeldungen. Keine Gesamtbewertung behaupten. Themen und Handlungseinstiege sind im Drilldown. Die Elternstartseite übernimmt die Liste noch nicht.
