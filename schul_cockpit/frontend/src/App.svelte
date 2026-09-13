@@ -88,7 +88,7 @@
     defaultLandingApplied = true;
     if (
       hadEmptyInitialHash &&
-      (appState.me.accounts?.length ?? 0) >= 2 &&
+      (appState.me.is_admin || appState.me.role === 'parent') &&
       route.name === 'today'
     ) {
       navigate('overview');
@@ -102,16 +102,12 @@
   // dann eine reine Solo-Spalte.
   const navItems = $derived.by(() => {
     const items = [
-      { name: 'today', icon: '📅', label: 'Heute' },
-      { name: 'plan', icon: '🎯', label: 'Plan' },
-      { name: 'learning', icon: '🌱', label: 'Lernen' },
-      { name: 'week', icon: '📊', label: 'Woche' },
-      { name: 'subjects', icon: '📚', label: 'Fächer' },
-      { name: 'klausuren', icon: '📝', label: 'Klausur' },
-      { name: 'absences', icon: '🤒', label: 'Fehlt' },
+      { name: 'today', label: 'Heute' },
+      { name: 'learning', label: 'Lernen' },
+      { name: 'more', label: 'Übersichten' },
     ];
-    if ((appState.me?.accounts?.length ?? 0) >= 2) {
-      items.unshift({ name: 'overview', icon: '🏠', label: 'Übersicht' });
+    if (appState.me?.is_admin || appState.me?.role === 'parent') {
+      items.unshift({ name: 'overview', label: 'Familie' });
     }
     return items;
   });
@@ -222,6 +218,13 @@
       <MyChanges />
     {:else if route.name === 'overview'}
       <Overview {navigate} />
+    {:else if route.name === 'more'}
+      <h2>Übersichten</h2>
+      <div class="overview-links">
+        {#each [['week','Stundenplan'],['subjects','Fächer'],['klausuren','Arbeiten'],['absences','Nachholen'],['plan','Aufgaben und Wochenplanung']] as [target,label]}
+          <button onclick={() => navigate(target)}>{label} →</button>
+        {/each}
+      </div>
     {:else if route.name === 'today'}
       <Today accountId={appState.activeAccountId} />
     {:else if route.name === 'plan' || route.name === 'tasks'}
@@ -249,10 +252,9 @@
     <nav class="bottom-nav">
       {#each navItems as item}
         <button
-          class:active={route.name === item.name || (item.name === 'subjects' && route.name === 'subject')}
+          class:active={route.name === item.name || (item.name === 'more' && ['plan','tasks','week','subjects','subject','klausuren','absences'].includes(route.name))}
           onclick={() => navigate(item.name)}
         >
-          <span class="icon">{item.icon}</span>
           <span>{item.label}</span>
         </button>
       {/each}
@@ -260,3 +262,7 @@
   {/if}
 </div>
 {/if}
+
+<style>
+.overview-links{display:grid;gap:12px}.overview-links button{text-align:left;min-height:52px}
+</style>

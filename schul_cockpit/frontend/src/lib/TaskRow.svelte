@@ -25,14 +25,12 @@
     busy = true;
     error = null;
     const newStatus = isDone ? 'open' : 'done';
-    // Optimistic update — flip the UI immediately so the tap feels instant.
-    const prevStatus = task.status;
-    task.status = newStatus;
+    // Keep the row visible until persistence succeeds (dashboard filters done rows).
     try {
       await api.patch(`/api/tasks/${task.id}`, { status: newStatus });
+      task.status = newStatus;
       onchange();
     } catch (e) {
-      task.status = prevStatus;
       error = e instanceof ApiError ? e.message : 'Speichern fehlgeschlagen';
     } finally {
       busy = false;
@@ -113,9 +111,9 @@
      visible affordance both empty and ticked. */
   .check {
     flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    min-height: 32px;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
     margin-top: 2px;
     padding: 0;
     border-radius: 8px;
@@ -155,6 +153,7 @@
     display: flex;
     justify-content: space-between;
     align-items: baseline;
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
   .title {

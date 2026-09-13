@@ -1,3 +1,11 @@
+## 0.29.0
+
+- Tagesdashboard mit Unterricht, offenen Rückmeldungen, heutigen und vorziehbaren Aufgaben sowie Lernvorschlägen.
+- Freie Aufgabenwahl; gespeicherte Rückmeldungen wechseln in den erreichbaren Verlauf. Speicherfehler lassen offene Einträge bestehen.
+- Tagesanzeige aktualisiert sich bei Wiederaufnahme und Tageswechsel; veraltete Antworten nach Kontowechsel werden verworfen.
+- Allgemeine Vorschau auf den nächsten Schultag, größere Aufgaben-Häkchen und deutsche Datumsanzeigen in Fachansichten.
+- Gespeicherte Packbestätigungen, automatische Reminder und optionale Belohnungen folgen separat.
+
 ## 0.28.2
 
 - Kommentare ohne Emoji erzeugen keine Verständnisbewertung; historische Werte bleiben erhalten.
