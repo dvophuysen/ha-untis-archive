@@ -35,9 +35,9 @@ def can_write(user, account_id):
 def get_packing(account_id: int, school_day: date, user: CurrentUser = Depends(get_current_user)):
     access(user, account_id)
     check_day(school_day)
-    items, fingerprint = packing_plan(account_id, school_day)
+    items, fingerprint, schedule = packing_plan(account_id, school_day)
     with closing(webapp_conn()) as conn:
-        result = view(account_id, school_day, items, fingerprint, conn)
+        result = view(account_id, school_day, items, fingerprint, conn, schedule)
     return dict(**result, can_write=can_write(user, account_id))
 
 
@@ -45,7 +45,7 @@ def get_packing(account_id: int, school_day: date, user: CurrentUser = Depends(g
 def put_packing(account_id: int, school_day: date, body: PackingIn, user: CurrentUser = Depends(get_current_user)):
     access(user, account_id, write=True)
     check_day(school_day)
-    items, fingerprint = packing_plan(account_id, school_day)
+    items, fingerprint, schedule = packing_plan(account_id, school_day)
     if body.plan_key != fingerprint or body.item_key not in {i['key'] for i in items}:
         raise HTTPException(409, 'Der Stundenplan hat sich geändert. Bitte die Packliste neu laden.')
     with closing(webapp_conn()) as conn, conn:
@@ -60,5 +60,5 @@ def put_packing(account_id: int, school_day: date, body: PackingIn, user: Curren
             conn.execute('INSERT INTO packing_items(account_id,school_day,item_key,done,revision,updated_at,confirmed_by) VALUES(?,?,?,?,?,?,?) '
                          'ON CONFLICT(account_id,school_day,item_key) DO UPDATE SET done=excluded.done,revision=excluded.revision,updated_at=excluded.updated_at,confirmed_by=excluded.confirmed_by',
                          (account_id, school_day.isoformat(), body.item_key, int(body.done), revision + 1, now_iso(), user.id))
-        result = view(account_id, school_day, items, fingerprint, conn)
+        result = view(account_id, school_day, items, fingerprint, conn, schedule)
     return dict(**result, can_write=True)

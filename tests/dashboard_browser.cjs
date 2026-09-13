@@ -9,7 +9,7 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  await page.clock.install({time:new Date('2026-09-14T14:00:00+02:00')});
  let rating=null,done=false,failRating=true,failTask=true,failPack=true;
  const bags={};let schoolDate='2026-09-14';
- function bag(day){const states=bags[day]||={};const items=[{key:'basic:pencilcase',label:'Mäppchen'},{key:'subject:sport',label:'Sportzeug'}].map(i=>({...i,done:!!states[i.key],revision:states[i.key]?1:0}));return {school_day:day,items,plan_key:'a'.repeat(64),can_write:true,confirmed_count:items.filter(i=>i.done).length,status:items.every(i=>i.done)?'packed':'open'};}
+ function bag(day){const states=bags[day]||={};const items=[{key:'subject:math',label:'Mathematik'},{key:'subject:sport',label:'Sport'}].map(i=>({...i,done:!!states[i.key],revision:states[i.key]?1:0}));return {school_day:day,items,schedule:[{id:1,subject_name:'Mathematik',start_hhmm:'08:00',end_hhmm:'08:45',room:'204',material_key:'subject:math',material_checkbox:true},{id:2,subject_name:'Mathematik',start_hhmm:'08:45',end_hhmm:'09:30',room:'204',material_key:'subject:math',material_checkbox:false},{id:3,subject_name:'Sport',start_hhmm:'09:50',end_hhmm:'10:35',room:'Halle 2',room_orig:'Halle 1',is_room_substituted:true,teacher_name:'Vertretung',teacher_orig_name:'Stammlehrkraft',is_teacher_substituted:true,material_key:'subject:sport',material_checkbox:true},{id:4,subject_name:'Physik',start_hhmm:'10:50',end_hhmm:'11:35',is_cancelled:true}],plan_key:'a'.repeat(64),can_write:true,confirmed_count:items.filter(i=>i.done).length,status:items.every(i=>i.done)?'packed':'open'};}
  await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url()).pathname;let body={};let status=200;
  if(u==='/api/me')body={accounts:[{id:1,name:'Beispielkind'}],role:'child',is_admin:false};
  else if(u.includes('/packing/')){const day=u.split('/').at(-1);if(req.method()==='PUT'){if(failPack){status=500;body={detail:'Packen nicht gespeichert'};}else{const update=req.postDataJSON();(bags[day]||={})[update.item_key]=update.done;body=bag(day);}}else body=bag(day);}
@@ -25,16 +25,17 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.getByRole('alert').filter({hasText:'Nicht gespeichert'}).waitFor();assert.equal(await page.getByRole('button',{name:'Verstanden',exact:true}).count(),1);
  failRating=false;await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.getByRole('button',{name:/Vergangene Stunden ansehen/}).waitFor();assert.equal(await page.getByRole('button',{name:'Verstanden',exact:true}).count(),0);
  await page.getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Test failure',{exact:true}).waitFor();assert.equal(done,false);
- failTask=false;await page.getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Keine offenen Aufgaben bis morgen eingetragen.').waitFor();
- await page.getByRole('button',{name:'Sportzeug',exact:true}).click();await page.getByRole('alert').filter({hasText:'Packen nicht gespeichert'}).waitFor();
+ failTask=false;await page.getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Für morgen ist nichts mehr offen!').waitFor();
+ assert.equal(await page.locator('.schedule-row').count(),4);assert.equal(await page.getByRole('button',{name:'Material für Mathematik',exact:true}).count(),1);await page.getByText('❌ Entfällt',{exact:true}).waitFor();await page.getByText(/Raum Halle 2.*statt Halle 1/).waitFor();
+ await page.getByRole('button',{name:'Material für Sport',exact:true}).click();await page.getByRole('alert').filter({hasText:'Packen nicht gespeichert'}).waitFor();
  assert.equal(await page.locator('.pack-row[aria-pressed="true"]').count(),0);
- failPack=false;await page.getByRole('button',{name:'Sportzeug',exact:true}).click();await page.locator('.pack-row[aria-pressed="true"]').waitFor();
+ failPack=false;await page.getByRole('button',{name:'Material für Sport',exact:true}).click();await page.locator('.pack-row[aria-pressed="true"]').waitFor();
  await page.reload();await page.locator('.pack-row[aria-pressed="true"]').waitFor();
  assert.equal(await page.locator('.pack-row[aria-pressed="true"]').count(),1);
- await page.getByRole('button',{name:'Mäppchen',exact:true}).click();await page.getByText('Deine Packliste ist abgehakt.').waitFor();
+ await page.getByRole('button',{name:'Material für Mathematik',exact:true}).click();await page.getByText('✓ Material für alle Fächer abgehakt.').first().waitFor();
  for(const width of [320,390,768]){await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'overflow '+width);}
  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-390.png'),fullPage:true});
  await page.emulateMedia({colorScheme:'dark'});if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-dark.png'),fullPage:true});
- schoolDate='2026-09-15';await page.clock.setFixedTime(new Date('2026-09-15T07:00:00+02:00'));await page.reload();await page.getByText('Deine Packliste ist abgehakt.').waitFor();assert.equal(await page.locator('.school .pack-row[aria-pressed="true"]').count(),2,'evening confirmations remain in morning checklist');
+ schoolDate='2026-09-15';await page.clock.setFixedTime(new Date('2026-09-15T07:00:00+02:00'));await page.reload();await page.getByText('✓ Material für alle Fächer abgehakt.').first().waitFor();assert.equal(await page.locator('.school .pack-row[aria-pressed="true"]').count(),2,'evening confirmations remain in morning checklist');
  assert.deepEqual(errors,[]);console.log('PASS: dashboard sections, failed/successful checkin and task save, persistent packing and failed packing save, 320/390/768 px, no JS exceptions');await browser.close();await new Promise(r=>server.close(r));
 })().catch(e=>{console.error(e);process.exit(1)});

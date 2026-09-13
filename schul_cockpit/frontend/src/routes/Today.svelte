@@ -45,7 +45,6 @@
   const lessons = $derived(splitLessons(data?.lessons ?? [], data?.date, now));
   const work = $derived(splitTasks(tasks, data?.date ?? isoToday()));
   const activeUpcoming = $derived(lessons.upcoming.filter(l => !l.is_cancelled && !l.was_absent));
-  const nextLessons = $derived((data?.next?.lessons ?? []).filter(l => !l.is_cancelled));
   const beforeSchool = $derived.by(() => {
     const first = data?.lessons?.find(l => !l.is_cancelled && !l.was_absent);
     if (!first || !Number.isInteger(first.start_time)) return false;
@@ -65,7 +64,7 @@
       <div class="section-head"><h3>{activeUpcoming.length ? 'In der Schule' : 'Dein Schultag'}</h3><a href="#/week">Woche ansehen</a></div>
       {#if activeUpcoming.length}<p class="next-lesson"><strong>{activeUpcoming[0].subject_name || activeUpcoming[0].subject_short}</strong> · {activeUpcoming[0].start_hhmm}{#if activeUpcoming[0].room} · Raum {activeUpcoming[0].room}{/if}</p>{/if}
       {#if beforeSchool}<PackingChecklist {accountId} schoolDay={data.date} />{/if}
-      {#each lessons.upcoming as lesson (lesson.id)}<LessonCard {accountId} {lesson} preview />{/each}
+      {#if !beforeSchool}{#each lessons.upcoming as lesson (lesson.id)}<LessonCard {accountId} {lesson} preview />{/each}{/if}
       {#if lessons.open.length}<h4>Noch kurz zurückmelden · {lessons.open.length}</h4><p class="eyebrow">Wie gut hast du den Stoff verstanden?</p>
         {#each lessons.open as lesson (lesson.id)}<LessonCard {accountId} {lesson} onsaved={feedbackSaved} />{/each}
       {:else if data.lessons.length && !activeUpcoming.length}<p class="muted">Keine offenen Rückmeldungen zu beendeten Stunden.</p>
@@ -77,8 +76,7 @@
   {/if}
   <section class="day-section obligations">
     <div class="section-head"><h3>Heute erledigen</h3><button class="text-action" onclick={() => creating = true}>Aufgabe ergänzen</button></div>
-    <p class="eyebrow">Du entscheidest, womit du anfängst.</p>
-    {#each work.due as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{:else}<p>{error ? 'Aufgabenstand bitte aktualisieren.' : 'Keine offenen Aufgaben bis morgen eingetragen.'}</p>{/each}
+    {#each work.due as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{:else}{#if error}<p>Aufgabenstand bitte aktualisieren.</p>{:else}<p class="all-clear"><span aria-hidden="true">🎉</span><strong>Für morgen ist nichts mehr offen!</strong></p>{/if}{/each}
   </section>
   {#if work.ahead.length}<section class="day-section"><h3>Schon vorziehen</h3>{#each work.ahead as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</section>{/if}
   {#if work.undated.length}<section class="day-section"><h3>Noch ohne Termin</h3>{#each work.undated as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</section>{/if}
@@ -93,9 +91,7 @@
   </section>
   {#if data?.next}<section class="day-section tomorrow">
     <h3>Nächster Schultag · {formatShortDate(data.next.date)}</h3>
-    {#if nextLessons.length}<p><strong>Beginn: {nextLessons[0].start_hhmm}</strong>{#if nextLessons[0].room} · Raum {nextLessons[0].room}{/if}</p>{/if}
-    {#if !beforeSchool}<PackingChecklist {accountId} schoolDay={data.next.date} />{/if}
-    {#each data.next.lessons.filter(l => l.is_cancelled || l.is_irregular || l.is_room_substituted || l.is_teacher_substituted) as lesson (lesson.id)}<LessonCard {accountId} {lesson} preview />{/each}
+    <PackingChecklist {accountId} schoolDay={data.next.date} />
   </section>{/if}
   {#if work.done.length}<section class="day-section"><button class="text-action" aria-expanded={showDone} onclick={() => showDone = !showDone}>{showDone ? 'Erledigte Aufgaben schließen' : 'Erledigte Aufgaben ansehen'}</button>{#if showDone}{#each work.done as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}{/if}</section>{/if}
 {/if}
@@ -103,6 +99,7 @@
 {#if creating}<TaskEditor {accountId} task={null} onclose={() => creating = false} onsaved={taskSaved} />{/if}
 
 <style>
+  .all-clear{display:flex;align-items:center;gap:12px;padding:10px 0;margin:0}.all-clear>span{font-size:2rem}.all-clear strong{font-size:1rem;font-weight:550}
   .day-title,.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
   .day-title h2{margin:0;font-size:1.6rem}.eyebrow{color:var(--fg-muted);margin:0 0 8px;font-size:.9rem}
   .day-section{background:var(--bg-card);border:1px solid var(--border);border-radius:18px;padding:16px;margin:0 0 16px}

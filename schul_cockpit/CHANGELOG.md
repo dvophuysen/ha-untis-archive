@@ -1,3 +1,11 @@
+## 0.29.4
+
+- Nächster Schultag als vollständiger Stundenplan mit Anfang/Ende, Räumen, Lehrerwechseln, Vertretungen und Ausfällen.
+- Ein Material-Häkchen beim ersten stattfindenden Termin je Fach; wiederholte Stunden bleiben sichtbar. Mäppchen und Trinken entfallen. Gespeicherte Fachbestätigungen bleiben erhalten.
+- Morgenübersicht verwendet denselben Material-Stundenplan ohne doppelte Stundenkarten.
+- Kürzerer Hausaufgabenbereich: unnötiger Erklärungssatz entfernt, freundlicher Abschluss mit Party-Emoji bei keinen offenen Aufgaben bis morgen.
+- Datenbank- und Browserprüfungen für Materialzustände, Stundenplanänderungen, Doppelstunden und Speicherung bestanden.
+
 ## 0.29.3
 
 - Ruhigere gemeinsame Farbpalette: Petrol und Mint, blaue Schulbereiche und dezente Lavendelflächen fürs Üben, mit abgestimmtem Dunkelmodus.
