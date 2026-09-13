@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends
 
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..db import history_conn, webapp_conn
+from ..attendance import LATE_REASON_SQL
 from ..queries import _fmt_hhmm, _subject_short_from_payload
 
 router = APIRouter()
@@ -45,7 +46,7 @@ def absences(
         ).fetchall()
         absence_meta = conn.execute(
             "SELECT start_date, end_date, reason, is_excused FROM absences "
-            "WHERE account_id = ? ORDER BY start_date",
+            f"WHERE account_id = ? AND NOT ({LATE_REASON_SQL}) ORDER BY start_date",
             (account_id,),
         ).fetchall()
     finally:

@@ -71,7 +71,8 @@ def snapshot(account_id, include_previous=False, include_all_homework=False):
             if include_previous: start=str(int(start[:4])-1)+start[4:]
             lessons=rows(c,'lessons','id untis_period_id date start_time end_time subject_name subject_untis_id teacher_untis_id teacher_name lstext lstext_manual_override was_absent is_supervision_guess supervision_manual_override code last_updated_at',account_id,
                          'AND date>=? AND date<=? ORDER BY date DESC,id DESC LIMIT 6001',(start,(day+timedelta(days=7)).isoformat()))
-            absence=rows(c,'absences','start_date end_date start_time end_time',account_id)
+            absence=rows(c,'absences','start_date end_date start_time end_time reason',account_id)
+            absence=[a for a in absence if str(a.get('reason') or '').strip().casefold() not in {'verspätet','verspätung'}]
             homework=rows(c,'homework','id untis_lesson_id subject_name text assigned_date due_date completed',account_id,'AND assigned_date>=? ORDER BY assigned_date DESC LIMIT '+('8001' if include_all_homework else '200'),(start,))
             if include_all_homework and len(homework)>8000:errors.append('Die Hausaufgabenhistorie überschreitet die vollständige Lesemenge.')
         hidden=hidden_keys(account_id)

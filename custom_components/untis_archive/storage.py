@@ -1092,7 +1092,7 @@ class UntisStorage:
         self, account_id: int, start_day: str, end_day: str
     ) -> int:
         """Mark every lesson in [start_day, end_day] as absent if it overlaps
-        an absence record. Returns the number of lessons flagged absent.
+        an absence record other than explicit lateness. Returns the number of lessons flagged absent.
 
         Overlap rule: lesson.date is within [absence.start_date, end_date]
         and lesson's HHMM interval [start_time, end_time) intersects
@@ -1114,8 +1114,9 @@ class UntisStorage:
                          FROM absences a
                          WHERE a.account_id = l.account_id
                            AND l.date BETWEEN a.start_date AND a.end_date
-                           AND l.start_time < a.end_time
-                           AND l.end_time   > a.start_time
+                           AND lower(trim(COALESCE(a.reason, ''))) NOT IN ('verspätet', 'verspätung')
+                           AND (l.date < a.end_date OR l.start_time < a.end_time)
+                           AND (l.date > a.start_date OR l.end_time > a.start_time)
                          ORDER BY a.start_time
                          LIMIT 1
                        )
@@ -1125,8 +1126,9 @@ class UntisStorage:
                        SELECT 1 FROM absences a
                        WHERE a.account_id = l.account_id
                          AND l.date BETWEEN a.start_date AND a.end_date
-                         AND l.start_time < a.end_time
-                         AND l.end_time   > a.start_time
+                         AND lower(trim(COALESCE(a.reason, ''))) NOT IN ('verspätet', 'verspätung')
+                         AND (l.date < a.end_date OR l.start_time < a.end_time)
+                         AND (l.date > a.start_date OR l.end_time > a.start_time)
                      )""",
                 (account_id, start_day, end_day),
             )

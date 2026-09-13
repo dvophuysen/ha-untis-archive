@@ -1,3 +1,10 @@
+## 0.30.1
+
+- Explizite Untis-Meldungen „Verspätet“ zählen nicht als Fehlstunden und sperren die Stundenrückmeldung nicht. Keine Schätzung anhand einer Minutengrenze.
+- Korrektur gilt auch für bereits importierte Meldungen: Tagesansicht, Fehlzeiten, Lernmentor und Erinnerungen verwenden denselben bereinigten Anwesenheitsstand. Das Quellarchiv bleibt unverändert.
+- Tatsächliche Abwesenheit bleibt berücksichtigt, auch wenn zusätzlich eine Verspätung vorliegt.
+- Archiv-Integration korrigiert ihre Zuordnung beim nächsten Abgleich nach ihrem separaten Update ebenfalls.
+
 ## 0.30.0
 
 - Optionale tägliche Push-Erinnerung für offene Aufgaben bis morgen, Fachmaterial für morgen und Rückmeldungen zu beendeten Stunden. Gebündelt, nur an angemeldete Kindergeräte und ohne Versand bei erledigten Punkten.
