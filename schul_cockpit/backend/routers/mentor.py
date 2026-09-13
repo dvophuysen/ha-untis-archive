@@ -132,7 +132,7 @@ async def dashboard(account_id:int,demo:bool=False,user:CurrentUser=Depends(get_
     shared=planning['shared_plan']
     progress=[{**r,"label":next((x["label"] for g in shared["goals"] for x in g.get("skill_states",[]) if x["id"]==r["id"]),r["label"])} for r in progress]
     return dict(demo=False,legacy_sessions=legacy,enabled=s['enabled'],background=s['background'],profile=s['profile'],candidates=shared["today"]["actions"],shared_plan=shared,sessions=sessions,progress=progress,
-                subjects=sorted({r['subject_name'] for r in s['lessons'] if r.get('subject_name')}),errors=s['errors'],read_at=s['read_at'],
+                subjects=sorted({r['subject_name'] for r in s['lessons'] if r.get('subject_name')} | {r.get('subject_name') or r['title'] for r in s['tasks'] if r.get('subject_name') or r.get('title')}),homework_choices=[dict(id=r['id'],subject=r.get('subject_name') or r['title'],title=r.get('notes') or r['title'],due_date=r.get('due_date')) for r in s['tasks'] if r['status']!='done'],errors=s['errors'],read_at=s['read_at'],
                 can_manage=parent,can_write=planning['can_write'],today=planning['today'],budget=ai.status() if parent else None,
                 exams=planning.get('exams',[]),warnings=planning.get('warnings',[]))
 
@@ -202,9 +202,11 @@ async def start(account_id:int,body:StartIn,user:CurrentUser=Depends(get_current
         existing=c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND subject=? AND status='active' AND is_test=? AND is_demo=0 ORDER BY id DESC LIMIT 1",(account_id,body.subject,int(test_mode))).fetchone()
         if existing:
             old_source=json.loads(existing['source_json'] or '{}')
-            if body.goal_key and old_source.get('goal_key')!=body.goal_key:
-                raise HTTPException(409,'In diesem Fach ist noch eine andere Einheit offen. Bitte unter Weitermachen zuerst abschließen.')
-            return view(c,dict(existing))
+            same_goal=(old_source.get('goal_key')==body.goal_key) if body.goal_key else existing['goal']==goal
+            if same_goal:
+                return view(c,dict(existing))
+            # A different chosen topic must not silently reopen unrelated work.
+            c.execute('UPDATE mentor_sessions SET elapsed_seconds=?,active_since=NULL WHERE id=?',(elapsed(dict(existing)),existing['id']))
         used=lp.usage(c,account_id,today_local())
         remaining=min(remaining,t['budget_minutes']-t['homework_minutes']-used['homework']-used['learning'])
         if not test_mode and not body.voluntary and (not t['study_day'] or remaining<3 or used['slots']>=p['max_sessions']+(1 if t['day_load']=='room' else 0)):
@@ -380,6 +382,30 @@ def evidence(account_id:int,skill_id:int,user:CurrentUser=Depends(get_current_us
     access(user,account_id)
     with closing(webapp_conn()) as c:
         return [dict(r) for r in c.execute('SELECT id,session_id,answer,result,rationale,help_used,source,invalidated,created_at FROM mentor_evidence WHERE account_id=? AND skill_id=? ORDER BY id DESC LIMIT 100',(account_id,skill_id))]
+
+
+class DeleteSessionIn(InputModel):
+    version:int=Field(ge=0)
+
+
+@router.delete('/sessions/{sid}')
+def delete_session(account_id:int,sid:int,body:DeleteSessionIn,user:CurrentUser=Depends(get_current_user)):
+    access(user,account_id,write=True,parent=True)
+    with closing(webapp_conn()) as c,c:
+        c.execute('BEGIN IMMEDIATE')
+        session=get_session(c,account_id,sid)
+        if session['version']!=body.version or session['pending_key']:
+            raise HTTPException(409,'Die Einheit wurde geändert oder wird gerade bearbeitet. Bitte neu laden.')
+        skills={r[0] for r in c.execute('SELECT DISTINCT skill_id FROM mentor_evidence WHERE account_id=? AND session_id=?',(account_id,sid))}
+        if session['skill_id']:skills.add(session['skill_id'])
+        c.execute('DELETE FROM mentor_reviews WHERE last_evidence_id IN (SELECT id FROM mentor_evidence WHERE account_id=? AND session_id=?)',(account_id,sid))
+        c.execute('DELETE FROM mentor_evidence WHERE account_id=? AND session_id=?',(account_id,sid))
+        c.execute('DELETE FROM learning_plan_blocks WHERE account_id=? AND session_id=?',(account_id,sid))
+        # Costs remain accounted for after removal of a learning attempt.
+        c.execute('UPDATE mentor_ai_calls SET session_id=NULL WHERE account_id=? AND session_id=?',(account_id,sid))
+        c.execute('DELETE FROM mentor_sessions WHERE account_id=? AND id=?',(account_id,sid))
+        for skill in skills:lp.refresh_skill(c,account_id,skill)
+    return {'ok':True,'deleted_session_id':sid}
 
 
 @router.post('/evidence/{eid}/invalidate')

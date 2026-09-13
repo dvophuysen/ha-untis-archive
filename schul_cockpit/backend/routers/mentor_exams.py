@@ -98,13 +98,14 @@ def listing(account_id:int,demo:bool=False,user:CurrentUser=Depends(get_current_
 
 @router.post('/scope')
 async def scope_plan(account_id:int,body:exam_scope.ScopeRequest,user:CurrentUser=Depends(get_current_user)):
-    access(user,account_id,write=True,parent=True)
+    access(user,account_id,write=True,parent=body.demo)
     return await exam_scope.build(account_id,body)
 
 
 @router.post('')
 async def generate(account_id:int,body:Generate,user:CurrentUser=Depends(get_current_user)):
-    access(user,account_id,write=True,parent=True);s=demo_data.snapshot() if body.demo else mc.snapshot(account_id)
+    access(user,account_id,write=True,parent=body.demo);s=demo_data.snapshot() if body.demo else mc.snapshot(account_id)
+    child_created=not (user.is_admin or user.role=='parent')
     if not s['profile'] or not s['profile']['ai_enabled']:raise HTTPException(403,'KI im Lernrahmen aktivieren.')
     if any(not x.strip() or len(x)>250 for x in body.scope):raise HTTPException(422,'Bitte kurze, konkrete Themen angeben.')
     if len(set(x.strip().casefold() for x in body.scope))!=len(body.scope):raise HTTPException(422,'Bitte doppelte Themen entfernen.')
@@ -139,7 +140,9 @@ async def generate(account_id:int,body:Generate,user:CurrentUser=Depends(get_cur
     except (ValueError,ValidationError):raise HTTPException(502,'Der Entwurf deckt Umfang oder Zeit noch nicht verlässlich ab. Er wurde nicht freigegeben.') from None
     with closing(webapp_conn()) as c:
         eid=c.execute('INSERT INTO mentor_exams(account_id,title,subject,scope_json,tasks_json,minutes,created_at,is_demo) VALUES(?,?,?,?,?,?,?,?)',
-                      (account_id,pack.title,body.subject,json.dumps({'topics':body.scope,'confirmed':body.confirmed_scope,'curriculum':plan},ensure_ascii=False),json.dumps([t.model_dump() for t in pack.tasks],ensure_ascii=False),body.minutes,now_iso(),int(body.demo))).lastrowid
+                      (account_id,pack.title,body.subject,json.dumps({'topics':body.scope,'confirmed':body.confirmed_scope,'curriculum':plan,'child_created':child_created,'parent_reviewed':False},ensure_ascii=False),json.dumps([t.model_dump() for t in pack.tasks],ensure_ascii=False),body.minutes,now_iso(),int(body.demo))).lastrowid
+        if child_created:
+            c.execute("UPDATE mentor_exams SET status='published',published_at=? WHERE id=?",(now_iso(),eid))
     return {'id':eid}
 
 
@@ -172,8 +175,9 @@ def publish(account_id:int,eid:int,body:Publish,user:CurrentUser=Depends(get_cur
     access(user,account_id,write=True,parent=True)
     if not body.reviewed:raise HTTPException(422,'Bitte Aufgaben, Lösungen und Punkte zuerst prüfen.')
     with closing(webapp_conn()) as c:
-        exam_row(c,account_id,eid,True)
-        c.execute("UPDATE mentor_exams SET status='published',published_at=COALESCE(published_at,?) WHERE id=?",(now_iso(),eid))
+        r=exam_row(c,account_id,eid,True)
+        scope=json.loads(r['scope_json']);scope['parent_reviewed']=True
+        c.execute("UPDATE mentor_exams SET status='published',published_at=COALESCE(published_at,?),scope_json=? WHERE id=?",(now_iso(),json.dumps(scope,ensure_ascii=False),eid))
     return {'ok':True}
 
 
