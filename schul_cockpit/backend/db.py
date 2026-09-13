@@ -318,6 +318,33 @@ _MIGRATIONS.append(("mentor_003", (Path(__file__).parent / "exam_scope_schema.sq
 
 _MIGRATIONS.append(("learning_plan_001", (Path(__file__).parent / "learning_plan_schema.sql").read_text()))
 
+# Preserve every existing value and stable ID. A comment can now stand on its
+# own; NULL is never interpreted as an understanding score.
+_MIGRATIONS.append(("checkins_030_optional_rating", """
+BEGIN IMMEDIATE;
+CREATE TABLE lesson_checkins_optional (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    lesson_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    rating INTEGER,
+    note TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    untis_period_id INTEGER,
+    UNIQUE(account_id, lesson_id)
+);
+INSERT INTO lesson_checkins_optional
+    (id, account_id, lesson_id, user_id, rating, note, created_at, updated_at, untis_period_id)
+SELECT id, account_id, lesson_id, user_id, rating, note, created_at, updated_at, untis_period_id
+FROM lesson_checkins;
+DROP TABLE lesson_checkins;
+ALTER TABLE lesson_checkins_optional RENAME TO lesson_checkins;
+CREATE INDEX idx_checkins_account_lesson ON lesson_checkins(account_id, lesson_id);
+INSERT INTO schema_meta(key, value) VALUES ('migration:checkins_030_optional_rating', '1');
+COMMIT;
+"""))
+
 def history_conn() -> sqlite3.Connection:
     """Read-only connection to the UNTIS Archive's history.db."""
     uri = f"file:{SETTINGS.history_db_path}?mode=ro"

@@ -74,17 +74,15 @@
 
   async function saveNote() {
     if (!canRate || busy) return;
-    // Saving a comment requires a rating; default to 😐 if none picked yet.
-    const r = rating ?? 2;
     busy = true;
     cleanError = null;
     try {
-      await api.post(`/api/accounts/${accountId}/lessons/${lesson.id}/checkin`, {
-        rating: r,
+      const saved = await api.post(`/api/accounts/${accountId}/lessons/${lesson.id}/checkin`, {
+        rating: null,
         note: note || null,
       });
-      rating = r;
-      lesson.checkin = { rating: r, note: note || null };
+      rating = saved.rating;
+      lesson.checkin = { rating: saved.rating, note: saved.note };
       onsaved();
     } catch (e) {
       cleanError = e.message || 'Speichern fehlgeschlagen';

@@ -103,7 +103,8 @@ def _comprehension_for_subjects(
     account_id: int, subject_ids: set[int]
 ) -> dict[int, dict]:
     """Pro Fach: {hard, total} an Checkins im 21-Tage-Fenster.
-    `hard` zählt rating ≤ 2; `total` zählt alle abgegebenen Checkins."""
+    `hard` zählt rating 1/2; `total` nur Verständnisbewertungen 1–3.
+    Kommentare und reine Aufsicht sind keine Verständnisbewertungen."""
     out: dict[int, dict] = {sid: {"hard": 0, "total": 0} for sid in subject_ids}
     if not subject_ids:
         return out
@@ -135,7 +136,7 @@ def _comprehension_for_subjects(
         wconn.close()
     for r in rating_rows:
         sid = lesson_to_subject.get(r["lesson_id"])
-        if sid is None or sid not in out:
+        if sid is None or sid not in out or r["rating"] not in (1, 2, 3):
             continue
         out[sid]["total"] += 1
         if r["rating"] <= 2:
@@ -294,7 +295,7 @@ def _feedback_gap(account_id: int, today: date) -> dict:
         placeholder = ",".join("?" for _ in ids)
         rated = wconn.execute(
             f"SELECT COUNT(DISTINCT lesson_id) AS c FROM lesson_checkins "
-            f"WHERE account_id = ? AND lesson_id IN ({placeholder})",
+            f"WHERE account_id = ? AND rating IS NOT NULL AND lesson_id IN ({placeholder})",
             [account_id, *ids],
         ).fetchone()["c"]
     finally:

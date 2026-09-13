@@ -197,7 +197,8 @@ def notify_summary(
         ]
 
         users_summary = []
-        if linked_users and real_lesson_ids:
+        unrated_ended = 0
+        if real_lesson_ids:
             lid_placeholder = ",".join("?" for _ in real_lesson_ids)
             # Check-ins gehören dem Account, nicht der einzelnen Person —
             # einmal abfragen, derselbe „unrated"-Stand gilt für alle
@@ -207,7 +208,7 @@ def notify_summary(
                 r["lesson_id"]
                 for r in wconn.execute(
                     f"SELECT lesson_id FROM lesson_checkins "
-                    f"WHERE account_id = ? AND lesson_id IN ({lid_placeholder})",
+                    f"WHERE account_id = ? AND rating IS NOT NULL AND lesson_id IN ({lid_placeholder})",
                     [account_id, *real_lesson_ids],
                 ).fetchall()
             }
@@ -302,7 +303,7 @@ def notify_summary(
     # the count is 0.
     suggested_messages = _make_messages(
         account_name=account_name,
-        users_summary=users_summary,
+        unrated_total=unrated_ended,
         overdue=overdue,
         due_today=due_today,
         due_tomorrow=due_tomorrow,
@@ -317,6 +318,7 @@ def notify_summary(
         "today": today_iso,
         "now": datetime.now().astimezone().isoformat(),
         "users": users_summary,
+        "unrated_lessons_today": unrated_ended,
         "tasks": {
             "open_total": open_total,
             "overdue": overdue,
@@ -336,7 +338,7 @@ def notify_summary(
 def _make_messages(
     *,
     account_name: str,
-    users_summary: list,
+    unrated_total: int,
     overdue: int,
     due_today: int,
     due_tomorrow: int,
@@ -347,9 +349,7 @@ def _make_messages(
 ) -> dict[str, str]:
     out: dict[str, str] = {}
 
-    # Sum unrated across linked users (good for a single notification line).
-    unrated_total = sum(u.get("unrated_lessons_today", 0) for u in users_summary)
-
+    # Account-wide count: linked users are recipients, not extra lessons.
     if unrated_total > 0:
         out["checkin_reminder"] = (
             f"{account_name}, du hast heute noch {unrated_total} Stunden zu "

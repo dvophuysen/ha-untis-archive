@@ -8,7 +8,6 @@
   let { accountId, lesson, preview = false } = $props();
 
   let busy = $state(false);
-  let note = $state(lesson.checkin?.note ?? '');
   let showDetail = $state(false);
 
   const isCancelled = $derived(lesson.is_cancelled);
@@ -24,6 +23,7 @@
   );
 
   async function checkin(r) {
+    const note = lesson.checkin?.note ?? null;
     busy = true;
     try {
       await api.post(
@@ -34,13 +34,6 @@
     } finally {
       busy = false;
     }
-  }
-
-  async function saveNote() {
-    // A note belongs to a check-in (rating is required). If none is set yet,
-    // default to 😐 so the comment can be stored.
-    const r = lesson.checkin?.rating ?? 2;
-    await checkin(r);
   }
 
   async function markCaughtUp() {
@@ -59,7 +52,6 @@
   }
 
   function openDetail() {
-    note = lesson.checkin?.note ?? '';
     showDetail = true;
   }
 </script>

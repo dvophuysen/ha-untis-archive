@@ -1,3 +1,21 @@
+# Korrekturpaket 0.28.2
+
+Stand: 13.09.2026. Ausgangspunkt: Remote 58cf623, laufende App 0.28.1 über Supervisor und Health-API bestätigt. Zunächst geprüfter Code; Veröffentlichung und Live-Abnahme separat nachtragen.
+
+- Kommentar ohne Emoji erzeugt keine Bewertung. Transaktionale Migration erhält alte Werte, IDs, Zeitstempel und stabile Unterrichtsbezüge. Keine rückwirkende Interpretation alter Kommentare.
+- Verständnisstatistik zählt nur 1–3; Aufsicht und Kommentare sind ausgeschlossen. Notizen ohne Bewertung bleiben als Rückmeldelücke sichtbar.
+- Erinnerungszahl ist accountweit. Bestehende Benutzerfelder bleiben kompatibel. In durchsuchbaren HA-Automationen und Skripten kein Treffer für `checkin_reminder` oder `unrated_lessons_today`; keine Zustellwirkung nachgewiesen, keine Nachricht versendet.
+- Elternansicht begrenzt ihre Aussage auf Unterrichtsrückmeldungen. Spätere Mentorfortschritte einzubeziehen bleibt Aufgabe der gemeinsamen Fachauswertung.
+- 55 Lern-/Mentor-/Plan-/Integritätstests bestanden. Produktionsbuild erfolgreich mit bestehenden Svelte-Barrierefreiheitshinweisen. Neue Version noch nicht live geprüft.
+
+Vor Installation einen Wiederherstellungspunkt der App-Daten vorhalten. Alter Code allein ist nach neuen NULL-Bewertungen kein vollständiger Rückweg. Wiederherstellung alter App-Daten würde spätere Eingaben verlieren; bevorzugt vorwärts korrigieren. Migration lokal auf Datenerhalt und wiederholten Start geprüft.
+
+Nächster Produktschritt: Fachzustände und iPhone-Vorschau mit repräsentativen Fällen ausarbeiten. Bewertungs-/Trendregeln vor produktiver Nutzung entscheiden.
+
+---
+
+## Historischer Stand
+
 # Belegter Stand und nächste Arbeit
 
 Stand: 13.09.2026. Codebasis: Release 0.28.1, GitHub-Commit 16a7c44c2c2fb41ad5ea55a0f4643fd336a05330. Konzeptfortschreibung ändert keine laufende App.
