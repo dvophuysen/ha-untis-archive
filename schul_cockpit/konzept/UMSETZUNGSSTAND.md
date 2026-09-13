@@ -1,3 +1,7 @@
+# Einheitlicher Leseexport 0.30.2
+
+Die Installationsnachprüfung von 0.30.1 identifizierte den separaten schreibgeschützten Integrationszugang als weiteren Verbraucher. Er installiert nun dieselbe Anwesenheitssicht vor query_only. Die Sicht erhält explizit die Archiv-rowid, damit Pagination stabil bleibt. Absenz-Rohmeldungen bleiben erhalten. Regressionstest prüft mehrere Seiten, Kontogrenzen, korrigierte Fehlmarkierung und Schreibschutz. 82 Python-Tests und Frontend-Produktionsbuild erfolgreich.
+
 # Anwesenheitskorrektur 0.30.1
 
 Die expliziten Untis-Gründe „Verspätet“/„Verspätung“ werden für Fehlstunden, Feedbacksperren und Nachholbedarf ignoriert. Keine Minutenschwelle. Eine verbindungslokale SQLite-Sicht korrigiert vorhandene Fehlmarkierungen zentral für alle App-Abfragen, ohne das schreibgeschützte Quellarchiv zu verändern. Überlappende tatsächliche Abwesenheiten haben Vorrang; Meldungen anderer Konten oder außerhalb der Stunde verändern nichts. Fehlzeitenmetadaten und Mentor-Zeitberechnung schließen Verspätungen ebenfalls aus. Originalmeldungen bleiben im Integrationsdatensatz absences nachvollziehbar.

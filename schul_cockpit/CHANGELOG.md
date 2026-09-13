@@ -1,3 +1,8 @@
+## 0.30.2
+
+- Auch der geschützte Leseexport verwendet die korrigierte Anwesenheit. Verspätungen erzeugen so keine falschen Fehlstunden in externen Lern-Auswertungen.
+- Seitenweises Lesen behält die stabilen Archiv-Cursor; originale Verspätungsmeldungen bleiben im Absenzexport erhalten.
+
 ## 0.30.1
 
 - Explizite Untis-Meldungen „Verspätet“ zählen nicht als Fehlstunden und sperren die Stundenrückmeldung nicht. Keine Schätzung anhand einer Minutengrenze.

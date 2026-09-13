@@ -23,7 +23,8 @@ def install_attendance_view(conn: sqlite3.Connection) -> None:
     late = LATE_REASON_SQL.replace('reason', 'a.reason')
     only_late = f"""EXISTS (SELECT 1 FROM main.absences a WHERE {overlap} AND {late})
         AND NOT EXISTS (SELECT 1 FROM main.absences a WHERE {overlap} AND NOT ({late}))"""
-    fields = []
+    # Preserve the archive row cursor for paginated read integrations.
+    fields = ['l.rowid AS rowid']
     for name in columns:
         quoted = '"' + name.replace('"', '""') + '"'
         if name == 'was_absent':
