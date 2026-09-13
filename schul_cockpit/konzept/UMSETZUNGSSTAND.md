@@ -1,3 +1,22 @@
+# Gesamtfortschritt und Familien-Tagescheck 0.31.0
+
+Die Tagesorganisation ist als nutzbarer Kern umgesetzt: Tagesansicht, Material-Stundenplan, freie Lernwahl, selbst erzeugte Übungstests, Elternfreigabe, Löschweg, optionale Push-Fangleine und Anwesenheitskorrektur. Die Gesamtvision ist noch nicht vollständig umgesetzt; keine belastbare Prozentangabe und keine Behauptung einer pädagogisch fertig abgenommenen App.
+
+0.31.0 ergänzt den kompakten Eltern-Tagescheck pro Kind, gespeist aus den bestehenden Tages-/Pack-APIs und derselben Aufgaben-/Feedbacklogik. Angezeigt werden offene Aufgaben bis morgen, undatierte/spätere Aufgaben, bestätigte Fächer am nächsten geplanten Schultag sowie offene Rückmeldungen nur zu beendeten heutigen Stunden. Fehlende Daten zeigen einen Fehler statt Entwarnung. Direkter Zugang zur Kinderansicht. Fokus-/Minutenaktualisierung mit Schutz gegen veraltete Antworten; keine zweite Packliste, kein zusätzlicher KI-Aufruf. Überfällige Aufgaben werden nicht als nachweislich versäumt bezeichnet. Bestehende Fach-/Klausurdetails bleiben zugänglich.
+
+Prüfung: Produktionsbuild sowie Browserablauf mit zwei synthetischen Kindern, unterschiedlichen Bestätigungen, zukünftigen Stunden, Datenfehler und Breiten 320/390/768 Pixel erfolgreich. Keine echten Kinderbestätigungen geändert.
+
+## Nächste größere Phasen
+
+1. **Elternüberblick konsolidieren:** Tagescheck ist erster Meilenstein. Nächster Meilenstein sind gemeinsame Fachauswertungen mit klar getrennten Selbsteinschätzungen, Übungsbelegen und Organisationsnachweisen; redundante Detailblöcke reduzieren.
+2. **Coach im Tagesablauf:** dieselben sichtbaren Aufgaben und Checklisten aufgreifen, hilfreiche kurze Rückmeldung nach Aktionen, frei wählbare Reihenfolge. Meilenstein: kompletter Morgen-/Schul-/Nachmittags-/Abendablauf ohne doppelte Planung oder neue Dateneingabepflichten.
+3. **Lernqualität und Testvorbereitung:** tatsächliche Lernanlässe, altersgerechte Aufgaben, verlässliche Stoffgrenzen, vollständige lesbare Ausgaben; Erzeugung bis Bearbeitung und Auswertung zusammen abnehmen. Kein erfundener Buchinhalt.
+4. **Erfolge und Fangleine:** zunächst belegbare freundliche Erfolgsrückmeldung; konkrete Punkte-/Streakregeln vor Aktivierung abstimmen. Geräteberechtigung und Push-Empfang auf den Kindergeräten noch praktisch abnehmen. Mehrere Erinnerungszeitfenster sind noch offen.
+
+Autark möglich: Umsetzung, Konsolidierung, technische Prüfungen und geprüfte Veröffentlichung. Einbeziehung erforderlich bei neuen Bewertungs-/Belohnungsregeln, Eskalationen und konkreten Geräte-/Erinnerungseinstellungen, die noch nicht gewählt wurden.
+
+---
+
 # Einheitlicher Leseexport 0.30.2
 
 Die Installationsnachprüfung von 0.30.1 identifizierte den separaten schreibgeschützten Integrationszugang als weiteren Verbraucher. Er installiert nun dieselbe Anwesenheitssicht vor query_only. Die Sicht erhält explizit die Archiv-rowid, damit Pagination stabil bleibt. Absenz-Rohmeldungen bleiben erhalten. Regressionstest prüft mehrere Seiten, Kontogrenzen, korrigierte Fehlmarkierung und Schreibschutz. 82 Python-Tests und Frontend-Produktionsbuild erfolgreich.

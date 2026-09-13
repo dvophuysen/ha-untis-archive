@@ -1,4 +1,6 @@
 <script>
+  import { untrack } from 'svelte';
+  import FamilyDayCheck from '../lib/FamilyDayCheck.svelte';
   import { api } from '../lib/api.js';
   import { setActiveAccount } from '../lib/store.svelte.js';
 
@@ -8,23 +10,32 @@
   let loading = $state(true);
   let error = $state(null);
 
+  let request = 0;
   async function load() {
-    loading = true;
+    const current = ++request;
+    loading = !data;
     error = null;
     try {
-      data = await api.get('/api/dashboard');
+      const result = await api.get('/api/dashboard');
+      if (current === request) data = result;
     } catch (e) {
-      error = e.message;
+      if (current === request) error = e.message;
     } finally {
-      loading = false;
+      if (current === request) loading = false;
     }
   }
 
-  $effect(() => { load(); });
+  $effect(() => {
+    untrack(load);
+    const refresh = () => { if (!document.hidden) load(); };
+    window.addEventListener('focus', refresh);
+    const timer = setInterval(refresh, 60000);
+    return () => { request++; clearInterval(timer); window.removeEventListener('focus', refresh); };
+  });
 
   const PRIO_DOT = { red: '🔴', orange: '🟠', green: '🟢' };
   const LEARN_EMOJI = ['⚪', '😟', '😐', '😀'];
-  const URG_DOT = { missed: '❗', red: '🔴', orange: '🟠', green: '🟢' };
+  const URG_DOT = { overdue: '🕓', red: '🔴', orange: '🟠', green: '🟢' };
 
   function open(kid, page = 'today', ...args) {
     setActiveAccount(kid.account_id);
@@ -47,7 +58,7 @@
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const d = new Date(iso + 'T00:00:00');
     const delta = Math.round((d - today) / 86400000);
-    if (delta < 0) return 'verpasst';
+    if (delta < 0) return 'überfällig';
     if (delta === 0) return 'heute';
     if (delta === 1) return 'morgen';
     if (delta <= 6) return d.toLocaleDateString('de-DE', { weekday: 'short' });
@@ -72,10 +83,11 @@
       <section class="kid card">
         <header class="kid-head">
           <h2>{kid.name}</h2>
-          <button class="ghost open-btn" onclick={() => open(kid, 'today')}>öffnen →</button>
+          <button class="ghost open-btn" onclick={() => open(kid, 'today')}>Kinderansicht →</button>
         </header>
 
         <div class="now">{kid.now.icon} {kid.now.label}</div>
+        <FamilyDayCheck {kid} day={data.today} {open} />
 
         <!-- Klausuren -->
         <div class="block">
@@ -206,10 +218,10 @@
         {#if kid.feedback_gap.total_lessons > 0}
           <div class="block hyg-block">
             {#if kid.feedback_gap.unrated_lessons === 0}
-              <div class="small dim">🩺 alles bewertet (7 Tage)</div>
+              <div class="small dim">💬 Alle Rückmeldungen eingetragen (7 Tage)</div>
             {:else}
               <button class="hyg-row" onclick={() => open(kid, 'week')}>
-                🩺 <strong>{kid.feedback_gap.unrated_lessons}</strong>
+                💬 <strong>{kid.feedback_gap.unrated_lessons}</strong>
                 Stunden noch ohne Feedback
               </button>
             {/if}

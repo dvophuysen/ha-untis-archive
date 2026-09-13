@@ -52,8 +52,7 @@ def _exam_priority(days_until: int, learn_state: int | None, comp: dict | None) 
 
 
 def _hw_urgency(due_date: str | None, today: date) -> str | None:
-    # Heute fällige Aufgabe = im Unterricht schon abgefragt → gescheitert.
-    # Echte „rot" ist erst morgen (jetzt handeln, noch retten).
+    # A missing completion mark is not proof that homework was missed.
     if not due_date:
         return None
     try:
@@ -61,8 +60,10 @@ def _hw_urgency(due_date: str | None, today: date) -> str | None:
     except ValueError:
         return None
     delta = (d - today).days
-    if delta <= 0:
-        return "missed"
+    if delta < 0:
+        return "overdue"
+    if delta == 0:
+        return "red"
     if delta == 1:
         return "red"
     if delta <= 7:
