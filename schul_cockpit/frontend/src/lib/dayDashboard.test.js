@@ -31,3 +31,12 @@ test('all open work stays visible, future work and undated work separate, done w
 test('tomorrow works across month, year and daylight-saving boundaries',()=>{
  for(const [date,due] of [['2026-12-31','2027-01-01'],['2026-03-28','2026-03-29'],['2026-10-24','2026-10-25']])assert.equal(splitTasks([{id:1,due_date:due}],date).due.length,1);
 });
+test('completed work is newest-first by actual completion; old imports fall back to due date',()=>{
+ const rows=[{id:1,status:'done',due_date:'2025-06-01'},
+ {id:2,status:'done',due_date:'2026-09-14',completed_at:'2026-09-14T14:00:00+02:00'},
+ {id:3,status:'done',due_date:'2026-09-13',completed_at:'2026-09-14T12:01:00Z'},
+ {id:4,status:'done',due_date:'2026-09-12'},
+ {id:5,status:'done',due_date:null,completed_at:'invalid'}];
+ assert.deepEqual(splitTasks(rows,day).done.map(t=>t.id),[3,2,4,1,5]);
+ assert.deepEqual(rows.map(t=>t.id),[1,2,3,4,5]);
+});

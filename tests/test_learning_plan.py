@@ -140,5 +140,46 @@ def test_week_rotates_verified_topics_and_refreshes_lesson_dates(setup):
     actions=[g for d in result['week'] for g in d['actions']]
     assert len([g for g in actions if g.get('topic_id')==10])==1
     assert any(g['subject']=='Geschichte' for g in actions)
-    assert len([g for g in result['goals'] if g.get('topic_id')==10])==6 # No mastery merge.
+    grouped=[g for g in result['goals'] if g.get('topic_id')==10]
+    assert len(grouped)==1 and len(grouped[0]['sources'])==6
+    assert grouped[0]['skill_ids']==[] # Grouping observations does not prove mastery.
     assert all(not g['next_lesson'] or g['next_lesson']>=g['planned_date'] for g in actions)
+
+
+def test_same_topic_across_days_preserves_feedback_and_old_session_link(setup):
+    client,state,patch=setup;install(client);child(state)
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:
+        c.execute("UPDATE lessons SET date='2026-09-08'")
+    oldlesson=mc.snapshot(1)['lessons'][0]
+    oldkey=lp.legacy_goal_key(oldlesson)
+    with closing(db.webapp_conn()) as c:
+        sid=c.execute("INSERT INTO mentor_sessions(account_id,user_id,subject,goal,source_json,created_at,updated_at) VALUES(1,2,'Deutsch','Adjektive großschreiben',?,'2026-09-08','2026-09-08')",(json.dumps({'goal_key':oldkey,'lesson_id':1,'text':'Adjektive großschreiben'}),)).lastrowid
+        c.execute("INSERT INTO lesson_checkins(account_id,lesson_id,user_id,rating,created_at,updated_at) VALUES(1,1,2,1,'now','now'),(1,2,2,2,'now','now'),(1,3,2,3,'now','now')")
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:
+        c.execute("INSERT INTO lessons VALUES(2,1,'2026-09-10','07:50','08:35','Deutsch',1,1,'Adjektive großschreiben',0,NULL)")
+        c.execute("INSERT INTO lessons VALUES(3,1,'2026-09-10','08:35','09:20','Deutsch',1,1,'Adjektive großschreiben',0,NULL)")
+        c.execute("INSERT INTO lessons VALUES(4,1,'2026-09-10','10:00','10:45','Deutsch',1,1,'Andere Teilfertigkeit',0,NULL)")
+    goals,_=lp.catalogue(1)
+    matches=[g for g in goals if g['kind']=='lesson' and g['title']=='Adjektive großschreiben']
+    assert len(matches)==1
+    g=matches[0]
+    assert g['source_count']==3 and g['uncertain_count']==2 and g['rating']==3
+    assert [x['rating'] for x in g['sources']]==[3,2,1]
+    assert oldkey in g['previous_keys'] and g['session_id']==sid
+    assert any(x['title']=='Andere Teilfertigkeit' for x in goals)
+    with closing(db.webapp_conn()) as c:
+        assert json.loads(c.execute('SELECT source_json FROM mentor_sessions WHERE id=?',(sid,)).fetchone()[0])['goal_key']==g['key']
+        assert c.execute('SELECT COUNT(*) FROM lesson_checkins').fetchone()[0]==3
+
+
+def test_verified_discovery_cluster_unifies_different_lesson_wording(setup):
+    client,_,_=setup
+    s=mc.snapshot(1)
+    first=dict(s['lessons'][0],text='Gleichungen umformen',topic={'id':321,'title':'Gleichungen lösen'})
+    second=dict(first,id=2,date='2026-09-10',text='Terme sortieren und Klammern auflösen')
+    s['lessons']=[first,second]
+    goals,_=lp.catalogue(1,s)
+    g=[x for x in goals if x['kind']=='lesson']
+    assert len(g)==1 and g[0]['source_count']==2
+    assert {x['text'] for x in g[0]['sources']}=={'Gleichungen umformen','Terme sortieren und Klammern auflösen'}
+    assert lp.goal_key(dict(first,topic={'id':322}))!=lp.goal_key(first)

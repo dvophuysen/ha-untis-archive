@@ -1,3 +1,18 @@
+# Konsolidierte Fächer und Hausaufgabenhilfe 0.32.0
+
+Vier zusammenhängende Nutzerkorrekturen umgesetzt:
+
+1. Erledigte Aufgaben werden absteigend nach completed_at angezeigt, bei fehlender Zeit absteigend nach Fälligkeit. Die neueste versehentlich bestätigte Aufgabe bleibt so auffindbar und über den bestehenden Haken wieder zu öffnen.
+2. Hausaufgabe ist selbst die Übung: redundante Zusatzübungs-/Übungstestkarte entfernt. Kleiner Hilfe-Link übermittelt ausschließlich die Aufgaben-ID. Der Server prüft Kontozugehörigkeit und lädt den aktuellen Auftrag. Separater Coach-Prompt erklärt Auftrag, Vorwissen und einzelne Schritte mit höchstens einer neuen Frage. Kein vorweggenommenes Gesamtergebnis; keine zusätzliche Testaufgabe oder Kompetenzbewertung. Serverseitig werden task/assessment-Ausgaben in diesem Modus nicht als Lernaufgaben/Belege gespeichert. Kein automatischer Erledigt-Haken, kein zusätzlicher Lernslot und keine doppelte Zeitreservierung. KI-Freigabe, Kostenbegrenzung, Foto-/Nachrichtenrechte bleiben bestehen. Elternansicht folgt den vorhandenen getrennten Test-/Leseregeln.
+3. Fachkatalog aus kontoabhängigen Unterrichtsnamen, Quellkürzeln, bekannten Synonymen und konfigurierten Aliasen. Exakte Zuordnung statt Freitextraten. Auswahl wird ohne Schreibvarianten-Dubletten angeboten; Aufgaben behalten freie Titel und bekommen nur bei eindeutigem Fachtitel den ausgeschriebenen Namen. Bestehende Quellwerte müssen dafür nicht pauschal überschrieben werden.
+4. Fachkarten zeigen gemeinsam genutzte Lernziele, keine mehrfachen Listen pro Datum. Zielidentität ist datumunabhängig; bereits erkannte Themencluster mit weiterhin gültigen Quellfingerprints werden wiederverwendet. Alle Stundenquellen inklusive einzelner Ratings und Zeiten bleiben erhalten. Neueste Rückmeldung statt dauerhaftem Vorrang einer älteren negativen Rückmeldung. Alte Zielschlüssel werden auf die neuen Gruppen abgebildet, bestehende Session-/Skill-Verknüpfungen bleiben nachvollziehbar. Eine Gruppierung ist kein Beweis für Beherrschung und führt unterschiedliche Skill-Nachweise nicht zusammen. Verwandte, aber noch nicht gemeinsam erkannte Themen bleiben getrennte Teilanliegen; der Mentor erhält konsolidierten Themenkontext und soll vorhandene Kenntnisse nutzen, statt doppelte Lernpflichten zu erzeugen.
+
+Prüfung: 91 Python-Tests, fünf JavaScript-Logiktests, Browserabläufe für Eltern-/Fächeransicht, Kinderlernen/Tests/Hilfe und Tagesdashboard. Breiten 320/390/768 Pixel ohne horizontales Überlaufen; Fachkarten visuell kontrolliert. Browser-Emoji-Schriften eingeschränkt. Keine pädagogische Echtabnahme oder vollständige automatische semantische Gleichsetzung behauptet.
+
+Gesamtvision weiter offen: gemeinsame Fachauswertung mit tatsächlichen späteren Übungsbelegen stärker integrieren, Coach durch den ganzen Tagesablauf, reale Geräteabnahme der Push-Fangleine und abgestimmte optionale Belohnungsregeln. Diese Veröffentlichung ist ein größerer Konsolidierungsblock, kein fertiger Endstand.
+
+---
+
 # Gesamtfortschritt und Familien-Tagescheck 0.31.0
 
 Die Tagesorganisation ist als nutzbarer Kern umgesetzt: Tagesansicht, Material-Stundenplan, freie Lernwahl, selbst erzeugte Übungstests, Elternfreigabe, Löschweg, optionale Push-Fangleine und Anwesenheitskorrektur. Die Gesamtvision ist noch nicht vollständig umgesetzt; keine belastbare Prozentangabe und keine Behauptung einer pädagogisch fertig abgenommenen App.

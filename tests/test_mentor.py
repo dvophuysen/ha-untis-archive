@@ -490,3 +490,38 @@ def test_free_topic_does_not_reopen_an_unrelated_active_session(setup):
     assert client.get(B+f"/sessions/{first['id']}").status_code==200
     again=client.post(B+'/sessions',json={'subject':'Deutsch','goal':'Argumentieren','voluntary':True}).json()
     assert again['id']==second['id']
+
+
+def test_homework_help_is_scoped_current_and_not_a_practice_or_completion(setup):
+    from backend import learning_plan as lp
+    client,state,patch=setup;child(state)
+    with closing(db.webapp_conn()) as c:
+        tid=c.execute("INSERT INTO tasks(account_id,title,subject_name,notes,source,created_at,updated_at) VALUES(1,'Aufgabe 4','Deutsch','Erkläre den Arbeitsauftrag','manual','now','now')").lastrowid
+        other=c.execute("INSERT INTO tasks(account_id,title,source,created_at,updated_at) VALUES(2,'Privat','manual','now','now')").lastrowid
+        before=lp.usage(c,1,date(2026,9,11))
+    payload={'subject':'untrusted','homework_task_id':tid}
+    result=client.post(B+'/sessions',json=payload)
+    assert result.status_code==200,result.text
+    s=result.json();assert s['subject']=='Deutsch' and s['mode']=='homework_help'
+    assert client.post(B+'/sessions',json=payload).json()['id']==s['id']
+    assert client.post(B+'/sessions',json={**payload,'homework_task_id':other}).status_code==404
+    assert client.post(B+'/sessions',json={**payload,'lesson_id':1}).status_code==422
+    captured=[]
+    async def complete(account,purpose,instruction,context,*args,**kw):
+        assert instruction==m.HOMEWORK_INSTRUCTION+json.dumps(m.Reply.model_json_schema())
+        captured.append(context)
+        # Even an unwanted generated exercise cannot create mastery evidence.
+        return json.dumps(reply(assessment={'result':'correct','rationale':'Test'})),{},'fake'
+    patch.setattr(ai,'complete',complete)
+    r=send(client,s,text='Was soll ich hier machen?')
+    assert r.status_code==200,r.text
+    assert r.json()['task'] is None
+    assert captured[0]['source']['task']['id']==tid
+    with closing(db.webapp_conn()) as c:
+        assert lp.usage(c,1,date(2026,9,11))==before
+        assert c.execute('SELECT COUNT(*) FROM mentor_evidence WHERE session_id=?',(s['id'],)).fetchone()[0]==0
+        assert c.execute('SELECT status FROM tasks WHERE id=?',(tid,)).fetchone()[0]=='open'
+        c.execute("UPDATE tasks SET notes='Neuer Arbeitsauftrag' WHERE id=?",(tid,))
+    r=send(client,r.json(),text='Hilf mir beim ersten Schritt')
+    assert r.status_code==200,r.text
+    assert captured[-1]['source']['task']['notes']=='Neuer Arbeitsauftrag'

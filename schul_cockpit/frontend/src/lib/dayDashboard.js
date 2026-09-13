@@ -29,5 +29,18 @@ export function splitTasks(tasks, today) {
   }
   const byDate = (a, b) => a.due_date.localeCompare(b.due_date) || a.id - b.id;
   due.sort(byDate); ahead.sort(byDate);
+  const completed = task => {
+    const value = Date.parse(task.completed_at || '');
+    return Number.isFinite(value) ? value : null;
+  };
+  done.sort((a,b) => {
+    const ac=completed(a), bc=completed(b);
+    if (ac !== null || bc !== null) {
+      if (ac === null) return 1;
+      if (bc === null) return -1;
+      if (ac !== bc) return bc-ac;
+    }
+    return (b.due_date || '').localeCompare(a.due_date || '') || b.id-a.id;
+  });
   return { due, ahead, undated, done };
 }

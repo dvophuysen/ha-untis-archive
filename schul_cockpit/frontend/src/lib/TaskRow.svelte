@@ -94,7 +94,7 @@
     {/if}
     {#if error}<div class="row-error">{error}</div>{/if}
   </div>
-  {#if !isDone}<a class="practice-link" href={`#/learning?subject=${encodeURIComponent(task.subject_name||task.title)}&topic=${encodeURIComponent(cleanNotes.slice(0,250))}`}>Dafür üben</a>{/if}
+  {#if !isDone}<a class="practice-link" aria-label={`Hilfe bei ${task.title}`} title="Dabei brauche ich Hilfe" href={`#/learning?help=${task.id}`}>💬 Hilfe</a>{/if}
 </div>
 
 <style>

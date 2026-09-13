@@ -26,7 +26,7 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  failRating=false;await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.getByRole('button',{name:/Vergangene Stunden ansehen/}).waitFor();assert.equal(await page.getByRole('button',{name:'Verstanden',exact:true}).count(),0);
  await page.getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Test failure',{exact:true}).waitFor();assert.equal(done,false);
  failTask=false;await page.getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Für morgen ist nichts mehr offen!').waitFor();
- assert.equal(await page.locator('.schedule-row').count(),4);assert.equal(await page.getByRole('button',{name:'Material für Mathematik',exact:true}).count(),1);await page.getByText('❌ Entfällt',{exact:true}).waitFor();await page.getByText(/Raum Halle 2.*statt Halle 1/).waitFor();
+ await page.locator('.schedule-row').first().waitFor();assert.equal(await page.locator('.schedule-row').count(),4);assert.equal(await page.getByRole('button',{name:'Material für Mathematik',exact:true}).count(),1);await page.getByText('❌ Entfällt',{exact:true}).waitFor();await page.getByText(/Raum Halle 2.*statt Halle 1/).waitFor();
  await page.getByRole('button',{name:'Material für Sport',exact:true}).click();await page.getByRole('alert').filter({hasText:'Packen nicht gespeichert'}).waitFor();
  assert.equal(await page.locator('.pack-row[aria-pressed="true"]').count(),0);
  failPack=false;await page.getByRole('button',{name:'Material für Sport',exact:true}).click();await page.locator('.pack-row[aria-pressed="true"]').waitFor();

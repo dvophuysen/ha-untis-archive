@@ -9,6 +9,7 @@ from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..courses import hidden_keys, lesson_is_hidden, visible_subject_ids
 from ..db import history_conn, webapp_conn
 from ..queries import _fmt_hhmm
+from ..subject_names import label
 
 router = APIRouter()
 
@@ -61,12 +62,18 @@ def list_subjects(
             shorts[sid] = _subject_short(prow["payload_json"]) if prow else None
     finally:
         conn.close()
+    merged={}
+    for r in rows:
+        sid=r["subject_untis_id"]
+        if sid not in merged:merged[sid]=dict(r)
+        else:merged[sid]["lessons_total"]+=r["lessons_total"]
+    rows=list(merged.values())
     visible = visible_subject_ids(account_id)
     return {
         "subjects": [
             {
                 "subject_id": r["subject_untis_id"],
-                "name": r["subject_name"],
+                "name": label(r["subject_name"]),
                 "short": shorts.get(r["subject_untis_id"]),
                 "lessons_total": r["lessons_total"],
                 "last_date": r["last_date"],
