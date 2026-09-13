@@ -1,3 +1,15 @@
+# Materialcheck im Stundenplan 0.29.4
+
+Packen zeigt den vollständigen nächsten Schultag in chronologischer Reihenfolge einschließlich Ausfällen, Anfang/Ende, Raum- und Lehrerwechseln. Beim ersten stattfindenden Vorkommen jedes Fachs steht ein Material-Häkchen, danach kein weiteres für dasselbe Fach. Doppelstunden bleiben als Zeiten sichtbar. Ausgefallene/abwesende Stunden erzeugen kein Material-Häkchen. Ausgeblendete Kurse bleiben ausgeblendet.
+
+Allgemeine Packpunkte Mäppchen und Trinken entfernt; alte gespeicherte Fachschlüssel bleiben gültig. Alte allgemeine Bestätigungen werden nicht mehr gezählt. Morgens derselbe Stundenplan für heute, nächster Schultag weiterhin vollständig sichtbar. Keine getrennten doppelten Vorschau-Karten.
+
+Hausaufgabenabschluss verkürzt und mit Party-Emoji gestaltet. Fehler beim Laden zeigen weiter einen Fehler statt falscher Entwarnung. Keine variable KI-Textgenerierung nötig.
+
+Prüfung: sechs Packlisten-API-Tests, Produktionsbuild und Tagesdashboard-Browserablauf mit synthetischen Daten. Doppelstunden mit einem Häkchen, sichtbarer Ausfall/Raumwechsel, Speicherung/Fehler, Abend-Morgen-Erhalt und 320/390/768 Pixel geprüft. Darstellung geprüft; Testsystem hat weiterhin unvollständige Emoji-Schriften. Live-Installation separat bestätigen.
+
+---
+
 # Gemeinsame Farb- und Navigationsgestaltung 0.29.3
 
 Petrol als Handlungsfarbe; Mint für Packen/freies Üben, Blau für Schule, Lavendel für Lernvorschläge. Farben dienen Orientierung, nicht einer neuen Leistungsbewertung. Heller und dunkler Modus verwenden abgestimmte Flächen. Hauptnavigation und Lernreiter kombinieren Emoji und Text; aktive Zustände zusätzlich per Fläche/Schrift und zugänglichen Attributen.

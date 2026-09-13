@@ -30,7 +30,9 @@ def mark(client, data, item, done=True):
 def test_general_items_dedup_and_saved_until_the_actual_school_day(env):
     client, _, patch, _ = install(env)
     result = client.get(url()).json()
-    assert [i['label'] for i in result['items']] == ['Mäppchen','Trinken','Unterlagen für Mathematik','Sportzeug']
+    assert [i['label'] for i in result['items']] == ['Mathematik','Sport']
+    assert len(result['schedule'])==3
+    assert [r['material_checkbox'] for r in result['schedule']]==[True,True,False]
     for item in result['items']:
         response = mark(client, result, item)
         assert response.status_code == 200
@@ -50,8 +52,8 @@ def test_changed_subjects_leave_only_new_items_open_and_reject_old_plan(env):
     assert client.get(url()).json()['status']=='packed'
     lessons.append(dict(subject_name='Kunst'))
     updated=client.get(url()).json()
-    assert updated['status']=='open' and updated['confirmed_count']==4
-    assert [i['label'] for i in updated['items'] if not i['done']]==['Unterlagen für Kunst']
+    assert updated['status']=='open' and updated['confirmed_count']==2
+    assert [i['label'] for i in updated['items'] if not i['done']]==['Kunst']
     assert mark(client,old,old['items'][0]).status_code==409
     lessons[-1]['is_cancelled']=True
     assert client.get(url()).json()['status']=='packed'
@@ -90,3 +92,19 @@ def test_demo_and_invalid_input_cannot_change_state(env):
     with closing(db.webapp_conn()) as c:c.execute('UPDATE users SET demo_mode=1 WHERE id=2')
     assert client.get(url()).json()['can_write'] is False
     assert mark(client,data,item).status_code==409
+
+
+def test_timetable_retains_cancellations_changes_and_ignores_old_general_items(env):
+    client,_,_,lessons=install(env)
+    lessons[0].update(id=1,start_hhmm='08:00',end_hhmm='08:45',room='204',room_orig='102',is_room_substituted=True,teacher_name='Vertretung',teacher_orig_name='Stammlehrkraft',is_teacher_substituted=True)
+    lessons.append(dict(id=4,subject_name='Physik',is_cancelled=True,start_hhmm='11:00',end_hhmm='11:45'))
+    data=client.get(url()).json()
+    assert len(data['schedule'])==4
+    assert data['schedule'][0]['room_orig']=='102' and data['schedule'][0]['teacher_orig_name']=='Stammlehrkraft'
+    assert data['schedule'][-1]['is_cancelled'] and data['schedule'][-1]['material_key'] is None
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO packing_items VALUES(1,?,'basic:drink',0,1,'now',2)",(DAY.isoformat(),))
+    for item in data['items']:assert mark(client,data,item).status_code==200
+    saved=client.get(url()).json()
+    assert saved['status']=='packed' and saved['confirmed_count']==2
+    assert not any(i['key'].startswith('basic:') for i in saved['items'])

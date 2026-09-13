@@ -16,32 +16,34 @@ def packing_plan(account_id, day):
         with closing(history_conn()) as conn:
             lessons = lessons_for_date(conn, account_id, day.isoformat())
         hidden = hidden_keys(account_id)
-        lessons = [l for l in lessons if not l.get('is_cancelled') and not l.get('was_absent') and not lesson_is_hidden(l, hidden)]
+        lessons = [l for l in lessons if not lesson_is_hidden(l, hidden)]
     except sqlite3.Error as exc:
         raise HTTPException(503, 'Der Stundenplan ist gerade nicht verfügbar. Deine Packliste bleibt gespeichert.') from exc
-    items = []
-    if lessons:
-        items = [dict(key='basic:pencilcase', label='Mäppchen'), dict(key='basic:drink', label='Trinken')]
-        seen = set()
-        for lesson in lessons:
+    items, schedule, seen = [], [], set()
+    # Preserve chronological lessons, including cancellations and substitution details.
+    for lesson in lessons:
+        row = dict(lesson, material_key=None, material_checkbox=False)
+        if not lesson.get('is_cancelled') and not lesson.get('was_absent'):
             name = (lesson.get('subject_name') or lesson.get('subject_short') or '').strip()
             normalized = unicodedata.normalize('NFKC', name).casefold()
             if not normalized:
-                key, label = 'subject:unknown', 'Unterlagen für das noch unbekannte Fach prüfen'
+                key, label = 'subject:unknown', 'Unbekanntes Fach'
             elif normalized in {'sport', 'sp', 'spo', 'sport / bewegung'}:
-                key, label = 'subject:sport', 'Sportzeug'
+                key, label = 'subject:sport', name
             else:
-                # Stable across reimported lesson IDs and altered rooms or times.
                 key = 'subject:' + sha256(normalized.encode()).hexdigest()[:24]
-                label = 'Unterlagen für ' + name
+                label = name
+            row['material_key'] = key
             if key not in seen:
                 items.append(dict(key=key, label=label))
+                row['material_checkbox'] = True
                 seen.add(key)
+        schedule.append(row)
     fingerprint = sha256(json.dumps(sorted((i['key'], i['label']) for i in items), ensure_ascii=False).encode()).hexdigest()
-    return items, fingerprint
+    return items, fingerprint, schedule
 
 
-def view(account_id, day, items, fingerprint, conn):
+def view(account_id, day, items, fingerprint, conn, schedule):
     states = {r['item_key']: dict(r) for r in conn.execute(
         'SELECT item_key, done, revision, updated_at, confirmed_by FROM packing_items WHERE account_id=? AND school_day=?',
         (account_id, day.isoformat()))}
@@ -50,6 +52,6 @@ def view(account_id, day, items, fingerprint, conn):
                    updated_at=states.get(item['key'], {}).get('updated_at'),
                    confirmed_by=states.get(item['key'], {}).get('confirmed_by')) for item in items]
     complete = bool(result) and all(i['done'] for i in result)
-    return dict(account_id=account_id, school_day=day.isoformat(), plan_key=fingerprint, items=result,
+    return dict(account_id=account_id, school_day=day.isoformat(), plan_key=fingerprint, items=result, schedule=schedule,
                 status='packed' if complete else 'open' if result else 'no_lessons',
                 confirmed_count=sum(i['done'] for i in result))
