@@ -1,3 +1,15 @@
+# Gespeicherte Packcheckliste 0.29.1
+
+Direkt sichtbare Checkliste im Tagesdashboard, morgens für den aktuellen und danach für den nächsten Schultag. Bestätigungen bleiben pro Konto und Datum erhalten. Ausfall, Abwesenheit und ausgeblendete Kurse werden berücksichtigt; unbekannte Unterrichtsdaten werden nicht als vollständige Packliste ausgegeben. Materialien bleiben allgemein, etwa Sportzeug und Fachunterlagen. Konkrete Sondermaterialien aus Unterrichtsnotizen werden noch nicht ausgewertet.
+
+Additive Datenbankmigration; stabile Materialschlüssel bewahren Bestätigungen bei Raum- und Zeitänderungen. Neue Fächer öffnen nur neue Punkte. Schreibrechte, Demo-Schutz, Versionskonflikte und Quellenänderungen werden serverseitig geprüft. Elternbestätigungen speichern die tatsächliche Benutzerkennung; aus Häkchen wird keine eigenständige Leistung des Kindes abgeleitet.
+
+Prüfung: 60 Python-Tests, vier JavaScript-Tests, Produktionsbuild sowie Browserprüfung mit synthetischen Daten für Speicherfehler, Neuladen und 320/390/768 Pixel. Bestehende Svelte-Barrierefreiheitshinweise bleiben; kein Nachweis für echte Geräte oder Push-Zustellung. Live-Installation wird separat dokumentiert.
+
+Nächstes Paket: konfigurierbare, gebündelte Erinnerungen anhand tatsächlich offener Aufgaben und Packpunkte. Zeitfenster und Geräte vor Aktivierung konkret abstimmen. Mentor-Checklisten, gemeinsame Fachauswertung, Elternübersicht und optionale Erfolgsrückmeldungen bleiben weitere Phasen.
+
+---
+
 # Tagesdashboard 0.29.0
 
 Erster Umsetzungsschritt des UI-Redesigns: direkt sichtbare Tagesaufgaben und Lernvorschläge, offene Rückmeldungen mit erreichbarem Verlauf, allgemeine nächste Schulvorschau und reduzierte Hauptnavigation. Vorhandene Direktlinks bleiben erhalten. Elternstart anhand der Rolle statt nur der Kontenzahl.

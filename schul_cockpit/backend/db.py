@@ -345,6 +345,19 @@ INSERT INTO schema_meta(key, value) VALUES ('migration:checkins_030_optional_rat
 COMMIT;
 """))
 
+_MIGRATIONS.append(("packing_001", """
+CREATE TABLE IF NOT EXISTS packing_items (
+    account_id INTEGER NOT NULL,
+    school_day TEXT NOT NULL,
+    item_key TEXT NOT NULL,
+    done INTEGER NOT NULL CHECK(done IN (0,1)),
+    revision INTEGER NOT NULL DEFAULT 1,
+    updated_at TEXT NOT NULL,
+    confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    PRIMARY KEY(account_id, school_day, item_key)
+);
+"""))
+
 def history_conn() -> sqlite3.Connection:
     """Read-only connection to the UNTIS Archive's history.db."""
     uri = f"file:{SETTINGS.history_db_path}?mode=ro"

@@ -4,6 +4,7 @@
   import { isoToday, formatShortDate } from '../lib/format.js';
   import { splitLessons, splitTasks } from '../lib/dayDashboard.js';
   import LessonCard from '../lib/LessonCard.svelte';
+  import PackingChecklist from '../lib/PackingChecklist.svelte';
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskEditor from '../lib/TaskEditor.svelte';
 
@@ -45,7 +46,12 @@
   const work = $derived(splitTasks(tasks, data?.date ?? isoToday()));
   const activeUpcoming = $derived(lessons.upcoming.filter(l => !l.is_cancelled && !l.was_absent));
   const nextLessons = $derived((data?.next?.lessons ?? []).filter(l => !l.is_cancelled));
-  const nextSubjects = $derived([...new Set(nextLessons.map(l => l.subject_name || l.subject_short).filter(Boolean))]);
+  const beforeSchool = $derived.by(() => {
+    const first = data?.lessons?.find(l => !l.is_cancelled && !l.was_absent);
+    if (!first || !Number.isInteger(first.start_time)) return false;
+    const start = new Date(`${data.date}T${String(Math.floor(first.start_time / 100)).padStart(2,'0')}:${String(first.start_time % 100).padStart(2,'0')}:00`);
+    return now < start;
+  });
   function feedbackSaved() { message = 'Rückmeldung gespeichert.'; }
   function taskSaved() { message = 'Aufgabe gespeichert.'; load(); }
 </script>
@@ -58,6 +64,7 @@
     <section class="day-section school" class:school-done={!lessons.upcoming.length && !lessons.open.length}>
       <div class="section-head"><h3>{activeUpcoming.length ? 'In der Schule' : 'Dein Schultag'}</h3><a href="#/week">Woche ansehen</a></div>
       {#if activeUpcoming.length}<p class="next-lesson"><strong>{activeUpcoming[0].subject_name || activeUpcoming[0].subject_short}</strong> · {activeUpcoming[0].start_hhmm}{#if activeUpcoming[0].room} · Raum {activeUpcoming[0].room}{/if}</p>{/if}
+      {#if beforeSchool}<PackingChecklist {accountId} schoolDay={data.date} />{/if}
       {#each lessons.upcoming as lesson (lesson.id)}<LessonCard {accountId} {lesson} preview />{/each}
       {#if lessons.open.length}<h4>Noch kurz zurückmelden · {lessons.open.length}</h4><p class="eyebrow">Wie gut hast du den Stoff verstanden?</p>
         {#each lessons.open as lesson (lesson.id)}<LessonCard {accountId} {lesson} onsaved={feedbackSaved} />{/each}
@@ -86,9 +93,8 @@
   </section>
   {#if data?.next}<section class="day-section tomorrow">
     <h3>Nächster Schultag · {formatShortDate(data.next.date)}</h3>
-    {#if nextLessons.length}<p><strong>Beginn: {nextLessons[0].start_hhmm}</strong>{#if nextLessons[0].room} · Raum {nextLessons[0].room}{/if}</p>{#if nextSubjects.some(s => !/sport/i.test(s))}<p>Unterlagen für {nextSubjects.filter(s => !/sport/i.test(s)).join(', ')} bereitlegen.</p>{/if}
-      {#if nextSubjects.some(s => /sport/i.test(s))}<p><strong>An dein Sportzeug denken.</strong></p>{/if}
-    {/if}
+    {#if nextLessons.length}<p><strong>Beginn: {nextLessons[0].start_hhmm}</strong>{#if nextLessons[0].room} · Raum {nextLessons[0].room}{/if}</p>{/if}
+    {#if !beforeSchool}<PackingChecklist {accountId} schoolDay={data.next.date} />{/if}
     {#each data.next.lessons.filter(l => l.is_cancelled || l.is_irregular || l.is_room_substituted || l.is_teacher_substituted) as lesson (lesson.id)}<LessonCard {accountId} {lesson} preview />{/each}
   </section>{/if}
   {#if work.done.length}<section class="day-section"><button class="text-action" aria-expanded={showDone} onclick={() => showDone = !showDone}>{showDone ? 'Erledigte Aufgaben schließen' : 'Erledigte Aufgaben ansehen'}</button>{#if showDone}{#each work.done as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}{/if}</section>{/if}
