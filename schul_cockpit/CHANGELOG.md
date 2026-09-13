@@ -1,3 +1,13 @@
+## 0.32.0
+
+- Erledigte Aufgaben: zuletzt abgehakt zuerst; ältere Einträge ohne Abschlusszeit folgen nach Fälligkeit absteigend.
+- Kleiner „Hilfe“-Einstieg an offenen Aufgaben statt zusätzlicher Hausaufgabenübungen. Eigenständiger Nachhilfe-Gesprächsmodus erklärt Auftrag und Grundlagen und begleitet einzelne Schritte. Keine zusätzliche Übungsaufgabe, automatische Erledigung oder Anrechnung als selbstständiger Übungsnachweis.
+- Redundanter Block „Für deine Aufgaben üben“ entfernt. Freie Fachwahl und selbst gewählte Übungstests bleiben erhalten.
+- Gemeinsame Fachzuordnung für Namen, Groß-/Kleinschreibung und bekannte Kürzel. Hausaufgabentitel werden nur bei eindeutiger Fachzuordnung ausgeschrieben; Freitext bleibt erhalten.
+- Fächerübersicht als kompakte Fachkarten mit zusammengeführten Themen und separat einsehbaren Stundenrückmeldungen.
+- Identische Themen über mehrere Tage und bereits erkannte gemeinsame Themencluster erzeugen einen Lernpunkt. Alte Verknüpfungen, einzelne Rückmeldungen und unterschiedliche Teilfähigkeiten bleiben erhalten; zeitlich neueste Rückmeldung wird berücksichtigt.
+- 91 Backendtests, fünf Dashboard-Logiktests, drei Browserabläufe und Produktionsbuild erfolgreich. Hausaufgaben-Coach technisch mit simulierten KI-Antworten geprüft; keine echte Kinderleistung erzeugt.
+
 ## 0.31.0
 
 - Elternübersicht mit kompaktem Tagescheck pro Kind: Aufgaben bis morgen, bestätigtes Fachmaterial für den nächsten Schultag und fehlende Rückmeldungen zu beendeten Stunden. Direkter Wechsel in die jeweilige Kinderansicht.

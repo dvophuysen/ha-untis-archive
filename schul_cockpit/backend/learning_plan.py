@@ -52,7 +52,14 @@ def refresh_skill(c, account, skill):
 
 
 def goal_key(lesson):
-    # Identical entries within a day are one occasion, not two deficiencies.
+    # Reuse verified discovery clusters even when the original lesson wording differs.
+    if lesson.get('topic',{}).get('id'):
+        return 'discovered:'+str(lesson['topic']['id'])
+    # Same topic across dates stays one goal; all hourly feedback remains in sources.
+    return 'topic:'+mc.fingerprint([lesson.get('subject_untis_id') or lesson['subject_name'].strip().casefold(),' '.join(lesson['text'].split()).casefold()])[:24]
+
+
+def legacy_goal_key(lesson):
     return 'lesson:'+mc.fingerprint([lesson.get('subject_untis_id') or lesson['subject_name'],lesson['date'],' '.join(lesson['text'].split())])[:24]
 
 
@@ -64,25 +71,28 @@ def link_session(c, account, session, skill):
 
 
 def catalogue(account, snapshot=None):
-    s=snapshot or mc.snapshot(account); day=today_local(); groups={}; lesson_keys={}
+    s=snapshot or mc.snapshot(account); day=today_local(); groups={}; lesson_keys={}; aliases={}
     next_lesson={}
-    for r in s['lessons']:
+    for r in sorted(s['lessons'],key=lambda x:(x['date'],str(x.get('start_time') or '').replace(':','').zfill(4),x['id']),reverse=True):
         subject=(r.get('subject_name') or '').strip()
         if not subject:continue
         if r.get('future'):
             next_lesson[subject]=min(next_lesson.get(subject,'9999'),r['date']);continue
         if not r['text'].strip() or r.get('rating')==4:continue
         if any(x in subject.casefold() for x in ('sport','schwimm','pause','klassenrat')):continue
-        key=goal_key(r);lesson_keys[r['id']]=key
+        key=goal_key(r);lesson_keys[r['id']]=key;aliases[legacy_goal_key(r)]=key
         g=groups.setdefault(key,dict(key=key,kind='lesson',subject=subject,subject_id=r.get('subject_untis_id'),topic_id=r.get('topic',{}).get('id'),title=r.get('topic',{}).get('title') or r['text'][:150],lesson_id=r['id'],sources=[],rating=r.get('rating'),catch_up_open=False,date=r['date'],skill_ids=[],sessions=[],state='Noch nicht geprüft',due_date=None,last_day=None,reason='',minutes=8))
-        g['sources'].append({k:r.get(k) for k in ('id','untis_period_id','date','text','rating','note','catch_up_open')})
-        if r.get('rating') in (1,2):g['rating']=r['rating']
+        g['sources'].append({k:r.get(k) for k in ('id','untis_period_id','date','start_time','text','rating','note','catch_up_open')})
+        if g['rating'] is None and r.get('rating') in (1,2,3):g['rating']=r['rating']
         g['catch_up_open'] |= r.get('catch_up_open',False)
     with closing(webapp_conn()) as c:
         skills=[dict(r) for r in c.execute('SELECT * FROM mentor_skills WHERE account_id=?',(account,))]
-        sessions=[dict(r) for r in c.execute('SELECT * FROM mentor_sessions WHERE account_id=? AND is_test=0 ORDER BY id',(account,))]
+        sessions=[dict(r) for r in c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND is_test=0 AND COALESCE(json_extract(source_json,'$.mode'),'')!='homework_help' ORDER BY id",(account,))]
         for session in sessions:
             source=json.loads(session['source_json'] or '{}');key=source.get('goal_key')
+            if key in aliases:
+                key=aliases[key];source['goal_key']=key
+                c.execute('UPDATE mentor_sessions SET source_json=? WHERE id=? AND account_id=?',(json.dumps(source,ensure_ascii=False),session['id'],account))
             if not key and source.get('lesson_id') in lesson_keys:
                 key=lesson_keys[source['lesson_id']]
                 # Do not silently attach an obsolete source version to changed text.
@@ -91,7 +101,9 @@ def catalogue(account, snapshot=None):
                 groups[key]['sessions'].append({k:session[k] for k in ('id','status','summary','updated_at')})
                 if session['skill_id']:c.execute('INSERT OR IGNORE INTO learning_plan_links VALUES(?,?,?)',(account,key,session['skill_id']))
         links={}
-        for r in c.execute('SELECT * FROM learning_plan_links WHERE account_id=?',(account,)):links.setdefault(r['skill_id'],[]).append(r['goal_key'])
+        for r in c.execute('SELECT * FROM learning_plan_links WHERE account_id=?',(account,)):
+            target=aliases.get(r['goal_key'],r['goal_key'])
+            if target not in links.setdefault(r['skill_id'],[]):links[r['skill_id']].append(target)
         for skill in skills:
             state=refresh_skill(c,account,skill['id'])
             keys=[k for k in links.get(skill['id'],[]) if k in groups]
@@ -106,6 +118,9 @@ def catalogue(account, snapshot=None):
             key='activity:'+str(a['id'])
             groups[key]=dict(key=key,kind='activity',activity_id=a['id'],subject=a['subject'],title=a['title'],sources=[],skill_ids=[],sessions=[],rating=None,catch_up_open=False,date=day.isoformat(),state='Selbst eingeschätzt · kein unabhängiger Nachweis' if a['outcome'] else 'Eigene Übung',due_date=a['next_due'] or day.isoformat(),last_day=(a['completed_at'] or '')[:10],minutes=a['minutes'])
     for g in groups.values():
+        g['source_count']=len(g['sources'])
+        g['uncertain_count']=sum(x.get('rating') in (1,2) for x in g['sources'])
+        g['previous_keys']=[k for k,v in aliases.items() if v==g['key']]
         states=g.get('skill_states',[])
         if states:
             dates=[x['due_date'] for x in states if x['due_date']]
@@ -140,7 +155,7 @@ def usage(c,account,day):
     d=day.isoformat()
     blocks=c.execute('SELECT COALESCE(SUM(minutes),0),COUNT(*) FROM learning_plan_blocks WHERE account_id=? AND day=?',(account,d)).fetchone()
     # Earlier sessions retain their allotted block; early completion never refills the day.
-    old=c.execute('SELECT COALESCE(SUM(max_minutes),0),COUNT(*) FROM mentor_sessions WHERE account_id=? AND is_test=0 AND substr(created_at,1,10)=? AND id NOT IN (SELECT session_id FROM learning_plan_blocks WHERE account_id=? AND day=?)',(account,d,account,d)).fetchone()
+    old=c.execute("SELECT COALESCE(SUM(max_minutes),0),COUNT(*) FROM mentor_sessions WHERE account_id=? AND is_test=0 AND COALESCE(json_extract(source_json,'$.mode'),'')!='homework_help' AND substr(created_at,1,10)=? AND id NOT IN (SELECT session_id FROM learning_plan_blocks WHERE account_id=? AND day=?)",(account,d,account,d)).fetchone()
     legacy=c.execute("SELECT COALESCE(SUM(MAX(COALESCE(s.minutes,0),COALESCE(json_extract(s.snapshot,'$.minutes'),a.minutes))),0),COUNT(*) FROM learning_sessions s JOIN users u ON u.id=s.user_id JOIN learning_activities a ON a.id=s.activity_id JOIN learning_topics t ON t.id=a.topic_id JOIN learning_profiles p ON p.id=t.profile_id WHERE p.account_id=? AND u.role='child' AND u.is_admin=0 AND (substr(s.completed_at,1,10)=? OR (s.completed_at IS NULL AND substr(s.started_at,1,10)=?))",(account,d,d)).fetchone()
     homework=c.execute("SELECT COALESCE(SUM(COALESCE(estimated_minutes,20)),0) FROM tasks WHERE account_id=? AND status='done' AND substr(completed_at,1,10)=?",(account,d)).fetchone()[0]
     exams=c.execute("SELECT COALESCE(SUM(MAX(elapsed_seconds,COALESCE(json_extract(snapshot,'$.minutes'),0)*60)),0) FROM mentor_exam_attempts WHERE account_id=? AND is_test=0 AND substr(started_at,1,10)=?",(account,d)).fetchone()[0]
@@ -227,6 +242,7 @@ def build(account,exams=(),snapshot=None,budget_override=None):
 
 def reserve_resume(c, account, session, day):
     """Account for continuing a real mentor session on another local day."""
+    if json.loads(session.get('source_json') or '{}').get('mode')=='homework_help':return
     if session['is_test'] or session['created_at'][:10]==day.isoformat():return
     if c.execute('SELECT 1 FROM learning_plan_blocks WHERE account_id=? AND day=? AND session_id=?',(account,day.isoformat(),session['id'])).fetchone():return
     from fastapi import HTTPException

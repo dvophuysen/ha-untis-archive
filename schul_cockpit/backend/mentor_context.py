@@ -95,6 +95,12 @@ def snapshot(account_id, include_previous=False, include_all_homework=False):
         lessons=clean
     except (sqlite3.Error,OSError):
         start=None;lessons=[];homework=[];clipped=False;errors.append('Unterrichtsarchiv konnte nicht gelesen werden.')
+    from .subject_names import SubjectCatalog
+    try:
+        catalog=SubjectCatalog(account_id)
+        tasks=[catalog.task(t) for t in tasks]
+    except (sqlite3.Error,OSError):
+        errors.append('Fachzuordnung derzeit nicht verfügbar.')
     profile=dict(p) if p else None
     return dict(profile=profile,enabled=bool(not settings or settings['enabled']),background=bool(settings and settings['background_enabled']),
                 since=start,lessons=lessons,homework=homework,tasks=tasks,reviews=reviews,recent=recent,errors=errors,truncated=clipped,read_at=now_iso())
@@ -132,6 +138,10 @@ def context(account_id,session):
     s=snapshot(account_id);subject=session['subject']
     lessons=[r for r in s['lessons'] if same_subject(r.get('subject_name'),subject)][:18]
     source=json.loads(session.get('source_json') or '{}')
+    if source.get('mode')=='homework_help':
+        with closing(webapp_conn()) as c:
+            task=c.execute('SELECT id,title,notes,subject_name,status,due_date FROM tasks WHERE id=? AND account_id=?',(source.get('task_id'),account_id)).fetchone()
+        source={**source,'task':dict(task)} if task else {**source,'unavailable':True}
     if source.get('lesson_id'):
         focus=next((r for r in s['lessons'] if (r.get('untis_period_id')==source['untis_period_id'] if source.get('untis_period_id') else r['id']==source['lesson_id'])),None)
         source={'lesson_id':focus['id'],'date':focus['date'],'text':focus['text']} if focus else {'unavailable':True}
@@ -155,6 +165,13 @@ def context(account_id,session):
             topics[t['id']]={k:(v[:700] if isinstance(v,str) else v) for k,v in t.items()}
             topics[t['id']].update(source_lesson_id=lesson['id'],source_date=lesson['date'],status='KI-Themenvorschlag aus dokumentiertem Unterricht; keine gemessene Kompetenz')
     state['topic_connections']=list(topics.values())
+    consolidated={}
+    for lesson in lessons:
+        normalized=('discovered:'+str(lesson['topic']['id'])) if lesson.get('topic',{}).get('id') else ' '.join((lesson.get('text') or '').split()).casefold()
+        if not normalized:continue
+        item=consolidated.setdefault(normalized,{'topic':lesson.get('topic',{}).get('title') or lesson['text'],'feedback':[]})
+        item['feedback'].append({k:lesson.get(k) for k in ('id','date','rating','note')})
+    state['consolidated_topics']=list(consolidated.values())
     version=fingerprint(state)
     state.update(messages=msgs,summary=session['summary'],phase=session['phase'],current_task=json.loads(session['current_task']) if session['current_task'] else None,
                  help_count=session['help_count'],task_help=bool(session['task_help']),read_at=s['read_at'])

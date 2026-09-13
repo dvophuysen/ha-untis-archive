@@ -1,92 +1,55 @@
 <script>
   import { api } from '../lib/api.js';
   import { formatShortDate } from '../lib/format.js';
-
+  function hour(value){if(value==null)return '';const s=String(value).replace(':','').padStart(4,'0');return s.slice(0,2)+':'+s.slice(2);}
   let { accountId, navigate } = $props();
-
-  function urgencyLabel(g) {
-    if (g.days_until_next === 0) return `noch heute · ${g.next_start_hhmm}`;
-    if (g.days_until_next === 1) return `morgen · ${g.next_start_hhmm}`;
-    if (g.days_until_next === 2) return `übermorgen · ${g.next_start_hhmm}`;
-    return `${formatShortDate(g.next_date)} · ${g.next_start_hhmm}`;
-  }
-
-  let subjects = $state([]);
-  let loading = $state(true);
-  let error = $state(null);
-  let suggestions = $state(null);
-
-  async function load() {
-    if (!accountId) return;
-    loading = true;
-    try {
-      const [subs, sug] = await Promise.all([
-        api.get(`/api/accounts/${accountId}/subjects`),
-        api.get(`/api/accounts/${accountId}/oral-suggestions`),
-      ]);
-      subjects = subs.subjects;
-      suggestions = sug;
-    } catch (e) {
-      error = e.message;
-    } finally {
-      loading = false;
-    }
-  }
-
-  $effect(() => { void accountId; load(); });
+  let subjects=$state([]),suggestions=$state(null),loading=$state(true),error=$state('');
+  $effect(()=>{
+    const account=accountId;let active=true;
+    loading=true;error='';subjects=[];suggestions=null;
+    if(account)Promise.all([api.get(`/api/accounts/${account}/subjects`),api.get(`/api/accounts/${account}/oral-suggestions`)]).then(([subs,sug])=>{
+      if(active){subjects=subs.subjects;suggestions=sug;}
+    }).catch(e=>{if(active)error=e.message;}).finally(()=>{if(active)loading=false;});
+    return()=>{active=false;};
+  });
 </script>
 
-{#if loading}
-  <div class="empty"><span class="spinner"></span></div>
-{:else if error}
-  <div class="error-box">{error}</div>
+<header><h1>Deine Fächer</h1><p class="dim">Was du verstehst. Wo du noch Fragen hast.</p></header>
+{#if loading}<div class="empty"><span class="spinner"></span></div>
+{:else if error}<div class="error-box" role="alert">{error}</div>
 {:else}
-  {#if suggestions && suggestions.groups.length > 0}
-    <div class="section-title">🎤 Vor der nächsten Stunde nochmal anschauen</div>
-    <div class="banner">
-      Themen, die zuletzt schwer waren — geordnet danach, bei welchem Fach
-      die nächste Stunde am dringendsten ist.
-    </div>
-    {#each suggestions.groups as g (g.subject_id)}
-      <div class="card">
-        <div class="row between" style="margin-bottom:0.4rem;">
-          <div class="row gap-sm" style="min-width:0;">
-            {#if g.subject_short}<span class="badge" style="font-weight:600;">{g.subject_short}</span>{/if}
-            <strong>{g.subject_name}</strong>
-          </div>
-          <span class="badge" class:soon-badge={g.days_until_next <= 1}>
-            ⏳ {urgencyLabel(g)}
-          </span>
-        </div>
-        {#each g.items as it (it.lesson_id)}
-          <div class="muted" style="border-top:1px solid var(--border); padding-top:0.4rem; margin-top:0.4rem;">
-            <span class="dim">{formatShortDate(it.date)} · {it.rating === 1 ? '😟' : '😐'}</span><br>
-            {it.lstext || it.note || '—'}
-            <p>{it.state} · Wieder ansehen ab {formatShortDate(it.due_date)}</p><a href={it.url}>Zum Lernplan</a>
-          </div>
-        {/each}
+  {#each suggestions?.errors || [] as warning}<p class="error-box" role="alert">{warning}</p>{/each}
+  <div class="subjects-grid">
+  {#each subjects as s (s.subject_id)}
+    {@const group=suggestions?.groups.find(g=>g.subject_id===s.subject_id)}
+    <section class="card subject-card">
+      <header class="subject-head"><h2>{s.name}</h2><button class="ghost" onclick={()=>navigate('subject',s.subject_id)} aria-label={`Stundenverlauf ${s.name}`}>Verlauf →</button></header>
+      <div class="subject-state">
+        {#if group?.uncertain_topics}<strong>💬 {group.uncertain_topics} {group.uncertain_topics===1?'Thema zum Klären':'Themen zum Klären'}</strong>
+        {:else if group?.feedback_count}<strong>🌿 Zuletzt keine offenen Verständnisfragen gemeldet</strong>
+        {:else}<span>📝 Noch keine Einschätzung zu den Themen</span>{/if}
+        {#if group?.understood_topics}<span class="small dim">{group.understood_topics} {group.understood_topics===1?'Thema zuletzt als verstanden eingeschätzt':'Themen zuletzt als verstanden eingeschätzt'}</span>{/if}
       </div>
-    {/each}
-  {/if}
-
-  <div class="section-title">Fächer</div>
-  {#each subjects as s}
-    <button class="card compact" style="width:100%; text-align:left;" onclick={() => navigate('subject', s.subject_id)}>
-      <div class="row between">
-        <div class="row gap-sm" style="min-width:0;">
-          {#if s.short}<span class="badge" style="font-weight:600;">{s.short}</span>{/if}
-          <strong style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{s.name}</strong>
-        </div>
-        <span class="dim" style="white-space:nowrap;">{s.lessons_total}×</span>
-      </div>
-    </button>
+      {#each group?.items || [] as it (it.lesson_id)}
+        <article class="topic">
+          <h3>{it.lstext}</h3>
+          <div class="topic-actions"><span class="small dim">{it.source_count} {it.source_count===1?'Stunde':'Stunden'} · zuletzt {formatShortDate(it.date)}</span><a href={it.url}>Anschauen →</a></div>
+          <details><summary>Rückmeldungen ansehen</summary>
+            {#each it.sources as source}<p class="small">{formatShortDate(source.date)}{#if source.start_time} · {hour(source.start_time)}{/if} · {source.rating===1?'Noch schwierig':source.rating===2?'Teilweise verstanden':source.rating===3?'Verstanden':'Ohne Einschätzung'}</p>{/each}
+          </details>
+        </article>
+      {/each}
+    </section>
   {/each}
+  </div>
 {/if}
-
 <style>
-  .soon-badge {
-    background: var(--rating-2);
-    color: #fff;
-    border-color: transparent;
-  }
+  .subjects-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:1rem;align-items:start}
+  .subject-card{margin:0;min-width:0;border-top:4px solid var(--accent);}
+  .subject-head{display:flex;justify-content:space-between;align-items:center;gap:.5rem}
+  h2{font-size:1.1rem;margin:0;overflow-wrap:anywhere}.subject-head button{flex-shrink:0}
+  .subject-state{display:grid;gap:.4rem;padding:.8rem;margin:.8rem 0;background:var(--school-soft);border-radius:12px;font-size:.9rem}
+  .topic{padding:.75rem 0;border-top:1px solid var(--border)}h3{font-size:.95rem;line-height:1.45;margin:0 0 .6rem;overflow-wrap:anywhere}
+  .topic-actions{display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap}.topic-actions a{padding:.4rem 0;min-height:44px;box-sizing:border-box}
+  details{font-size:.8rem;color:var(--fg-muted);margin-top:.3rem}summary{cursor:pointer;padding:.4rem 0}
 </style>

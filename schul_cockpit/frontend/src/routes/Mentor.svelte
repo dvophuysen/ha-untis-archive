@@ -1,6 +1,5 @@
 <script>
   import {onMount,tick} from 'svelte';
-  import {stripUntisMetadata} from '../lib/format.js';
   import {api} from '../lib/api.js';
   import SharedLearningPlan from '../lib/SharedLearningPlan.svelte';
   import MentorExams from '../lib/MentorExams.svelte';
@@ -24,7 +23,7 @@
   async function leave(){if(running?.status==='active'&&(!data.can_manage||running.is_test))await api.post(`${base}/sessions/${running.id}/pause`,{paused:true});running=null;await load();}
   async function pause(hidden){if(running?.status==='active'&&(!data?.can_manage||running.is_test)&&!busy){try{const r=await api.post(`${base}/sessions/${running.id}/pause`,{paused:hidden});if(running?.id===r.id)running=r;}catch{/* next explicit action shows an error */}}}
   const choices=$derived(running?.messages.filter(m=>m.role==='assistant').at(-1)?.payload?.choices||[]);
-  onMount(()=>{act(async()=>{await load();const q=new URLSearchParams(window.location.hash.split('?')[1]||'');if(q.get('session'))await open({id:Number(q.get('session'))});else if(q.get('subject')){subject=q.get('subject');goal=q.get('topic')||'';tab=q.get('mode')==='exam'?'exams':'today';}else if(q.get('goal')){const g=data.shared_plan?.goals.find(g=>g.key===q.get('goal'));if(g){focusKey=g.key;goal=g.title;subject=g.subject;if(g.session_id)await open({id:g.session_id});else if(!data.can_manage)await start(g);else tab='today';}}});const t=setInterval(()=>pause(document.hidden),30000);const v=()=>pause(document.hidden);document.addEventListener('visibilitychange',v);return()=>{clearInterval(t);document.removeEventListener('visibilitychange',v);};});
+  onMount(()=>{act(async()=>{await load();const q=new URLSearchParams(window.location.hash.split('?')[1]||'');if(q.get('session'))await open({id:Number(q.get('session'))});else if(q.get('help')){running=await api.post(`${base}/sessions`,{subject:'Hausaufgabe',homework_task_id:Number(q.get('help')),voluntary:true});}else if(q.get('subject')){subject=q.get('subject');goal=q.get('topic')||'';tab=q.get('mode')==='exam'?'exams':'today';}else if(q.get('goal')){const g=data.shared_plan?.goals.find(g=>g.key===q.get('goal')||g.previous_keys?.includes(q.get('goal')));if(g){focusKey=g.key;goal=g.title;subject=g.subject;if(g.session_id)await open({id:g.session_id});else if(!data.can_manage)await start(g);else tab='today';}}});const t=setInterval(()=>pause(document.hidden),30000);const v=()=>pause(document.hidden);document.addEventListener('visibilitychange',v);return()=>{clearInterval(t);document.removeEventListener('visibilitychange',v);};});
 </script>
 <div class="mentor">
   {#if data?.can_manage}<nav class="mode-switch" aria-label="Mentor-Modus"><button aria-pressed={!demo} class:chosen={!demo} disabled={busy||examBusy} onclick={()=>act(()=>switchMode(false))}>Kinderstand</button><button aria-pressed={demo} class:chosen={demo} disabled={busy||examBusy} onclick={()=>act(()=>switchMode(true))}>Demo ausprobieren</button></nav>
@@ -33,7 +32,7 @@
   {#if error}<div class="notice" role="alert"><p>{error}</p>{#if running}<button disabled={busy} onclick={()=>act(()=>open(running))}>Aktuellen Stand laden</button>{/if}</div>{/if}
   {#if running && data?.can_manage}<button disabled={busy} onclick={()=>removeConfirm=!removeConfirm}>Diese Einheit entfernen</button>{#if removeConfirm}<p class="notice">Gespräch, Antworten und Anrechnung dieser Einheit löschen?</p><button disabled={busy} onclick={()=>act(removeSession)}>Einheit endgültig löschen</button>{/if}{/if}
   {#if running}
-    <header class="session-head"><button class="quiet" disabled={busy} onclick={()=>act(leave)}>← Lernen</button><span>{running.subject} · etwa {running.max_minutes} Minuten</span></header>
+    <header class="session-head"><button class="quiet" disabled={busy} onclick={()=>act(leave)}>← Lernen</button><span>{running.subject} · {running.mode==='homework_help'?'Hilfe bei deiner Aufgabe':`etwa ${running.max_minutes} Minuten`}</span></header>
     {#if running.is_test}<p class="notice">{running.is_demo?'Demo-Gespräch mit Beispieldaten. Kein Lernnachweis des Kindes.':'Früherer Eltern-Testlauf mit echtem Unterrichtskontext. Kein Kinderverlauf.'}</p>{/if}
     <h1>{running.goal}</h1>
     {#if running.task && running.status==='active'}<details class="task"><summary>Deine aktuelle Aufgabe</summary><p class="preserve">{running.task.prompt}</p></details>{/if}
@@ -62,7 +61,6 @@
     {#each data.errors as warning}<p class="notice">{warning}</p>{/each}
     {#if tab==='today'}
       {#if !data.can_manage||demo}<section class="card free-choice"><h2>Was möchtest du üben?</h2><form onsubmit={e=>{e.preventDefault();act(()=>start({subject,title:goal,voluntary:true}));}}><label>Fach<select required bind:value={subject}><option value="">Auswählen</option>{#each [...new Set([...data.subjects,subject].filter(Boolean))] as s}<option>{s}</option>{/each}</select></label><label>Worum geht es ungefähr?<input bind:value={goal} maxlength="250" placeholder="Du kannst es auch gleich im Gespräch zeigen."/></label><button disabled={busy||!data.can_write}>Üben starten</button><button type="button" disabled={busy||!subject} onclick={()=>tab='exams'}>Übungstest erstellen</button></form></section>{/if}
-      {#if !demo && data.homework_choices?.length}<section class="card"><h2>Für deine Aufgaben üben</h2>{#each data.homework_choices as h}<article class="homework-choice"><strong>{h.subject}</strong><p class="preserve">{stripUntisMetadata(h.title)}</p><button disabled={busy} onclick={()=>{subject=h.subject;goal=stripUntisMetadata(h.title).slice(0,250);}}>Thema auswählen</button><button disabled={busy} onclick={()=>{subject=h.subject;goal=stripUntisMetadata(h.title).slice(0,250);tab='exams';}}>Übungstest vorbereiten</button></article>{/each}</section>{/if}
       {#each data.sessions.filter(s=>s.status==='active').slice(0,2) as s}<section class="card"><span class="eyebrow">Angefangen · {s.subject}</span><h2>{s.goal}</h2><button class="primary" disabled={busy} onclick={()=>act(()=>open(s))}>{data.can_manage&&!demo?'Verlauf ansehen':'Hier weitermachen'}</button></section>{/each}
       {#if !demo&&focusKey&&data.can_manage}<section class="card"><h2>{goal}</h2><p>{data.shared_plan?.goals.find(g=>g.key===focusKey)?.state}</p><p>Für dieses Thema gibt es noch keinen Kinderverlauf. Mit seiner Anmeldung kann das Kind direkt beim gewählten Lernschritt beginnen.</p><a href="#/plan">Zum Plan</a></section>{/if}
       {#if !demo}<SharedLearningPlan plan={data.shared_plan} compact={!data.can_manage} onstart={data.can_manage?null:c=>act(()=>start(c))}/>{:else}

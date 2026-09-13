@@ -98,7 +98,9 @@ def list_tasks(
     conn = webapp_conn()
     try:
         rows = conn.execute(sql, params).fetchall()
-        tasks = [_row_to_task(r) for r in rows]
+        from ..subject_names import SubjectCatalog
+        catalog = SubjectCatalog(account_id)
+        tasks = [catalog.task(_row_to_task(r)) for r in rows]
         ids = [t["id"] for t in tasks]
         sub_map: dict[int, list[dict]] = {}
         if ids:
