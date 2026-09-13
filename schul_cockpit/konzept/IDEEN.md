@@ -33,3 +33,7 @@ Vorgeschlagen: begrenzter Pilot mit Ausgangslage, verständlichen Beobachtungskr
 - [Gamification-Metaanalyse 2024](https://link.springer.com/article/10.1007/s11423-023-10337-7)
 - [Belohnungen und intrinsische Motivation](https://pubmed.ncbi.nlm.nih.gov/10589297/)
 - [Duolingo: Streak-Experiment](https://blog.duolingo.com/improving-the-streak/) – Anbieterexperiment zur Nutzung, kein Nachweis nachhaltigen Lernens unserer Kinder.
+
+## Konkretisierter Folgeentwurf 13.09.2026
+
+[Grafische Fächerübersicht](FAECHERUEBERSICHT.md): kompakte Balken, Mini-Verlauf und Drilldown. Darstellungs- und Bewertungsdetails dort ausdrücklich als Vorschläge markiert. Noch keine produktive Score-/Trendberechnung, Elternintegration zurückgestellt.

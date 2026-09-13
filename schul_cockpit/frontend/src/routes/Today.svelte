@@ -1,4 +1,5 @@
 <script>
+  import ActionLabel from '../lib/ActionLabel.svelte';
   import LearningGoal from '../lib/LearningGoal.svelte';
   import { onMount } from 'svelte';
   import { api } from '../lib/api.js';
@@ -62,7 +63,7 @@
 {#if loading}<p>Lade deinen Tag …</p>{:else}
   {#if data}
     <section class="day-section school" class:school-done={!lessons.upcoming.length && !lessons.open.length}>
-      <div class="section-head"><h3>{activeUpcoming.length ? 'In der Schule' : 'Dein Schultag'}</h3><a href="#/week">Woche ansehen</a></div>
+      <div class="section-head"><h3>{activeUpcoming.length ? 'In der Schule' : 'Dein Schultag'}</h3><a href="#/week"><ActionLabel label="Woche ansehen" /></a></div>
       {#if activeUpcoming.length}<p class="next-lesson"><strong>{activeUpcoming[0].subject_name || activeUpcoming[0].subject_short}</strong> · {activeUpcoming[0].start_hhmm}{#if activeUpcoming[0].room} · Raum {activeUpcoming[0].room}{/if}</p>{/if}
       {#if beforeSchool}<PackingChecklist {accountId} schoolDay={data.date} />{/if}
       {#if !beforeSchool}{#each lessons.upcoming as lesson (lesson.id)}<LessonCard {accountId} {lesson} preview />{/each}{/if}
@@ -82,10 +83,10 @@
   {#if work.ahead.length}<section class="day-section"><h3>Schon vorziehen</h3>{#each work.ahead as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</section>{/if}
   {#if work.undated.length}<section class="day-section"><h3>Noch ohne Termin</h3>{#each work.undated as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</section>{/if}
   <section class="day-section practice">
-    <div class="section-head"><h3><a href="#/learning">🌱 Üben & vorbereiten →</a></h3></div>
+    <div class="section-head"><h3><a href="#/learning"><ActionLabel label="Üben & vorbereiten" /></a></h3></div>
     {#if planError}<p role="status">{planError}</p>{/if}
     {#each plan?.errors ?? [] as problem}<p class="muted">{problem}</p>{/each}
-    {#each plan?.upcoming_exams ?? [] as exam}<a class="exam-link" href="#/klausuren">{exam.subject_name || exam.subject || exam.title || 'Arbeit'} · {formatShortDate(exam.date)}</a>{/each}
+    {#each plan?.upcoming_exams ?? [] as exam}<a class="exam-link" href="#/klausuren">{exam.subject_name || exam.subject || exam.title || 'Arbeit'} · {formatShortDate(exam.date)} <ActionLabel /></a>{/each}
     {#each plan?.today?.actions ?? [] as item (item.key)}
       <LearningGoal goal={item}/>
     {:else}{#if !planError}<p class="muted">Heute ist keine zusätzliche Übung eingeplant.</p>{/if}{/each}
@@ -103,8 +104,8 @@
   .all-clear{display:flex;align-items:center;gap:12px;padding:10px 0;margin:0}.all-clear>span{font-size:2rem}.all-clear strong{font-size:1rem;font-weight:550}
   .day-title,.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
   .day-title h2{margin:0;font-size:1.6rem}.eyebrow{color:var(--fg-muted);margin:0 0 8px;font-size:.9rem}
-  .day-section{background:var(--bg-card);border:1px solid var(--border);border-radius:18px;padding:16px;margin:0 0 16px}
-  h3{font-size:1.1rem;margin:0 0 12px}h4{margin:16px 0 8px}.section-head h3{margin:0}.section-head{margin-bottom:12px}
+  .day-section{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:12px;margin:0 0 8px}
+  h3{font-size:1.1rem;margin:0 0 8px}h4{margin:16px 0 8px}.section-head h3{margin:0}.section-head{margin-bottom:8px}
   .section-head>a,.text-action{font-size:.9rem}.section-head h3 a{font:inherit;color:var(--fg)}.text-action{padding:8px 0;background:transparent;border:0;color:var(--accent);text-align:left}
   .next-lesson{padding:10px 0;border-bottom:1px solid var(--border)}.save-message{min-height:1.3em;color:var(--accent);font-size:.9rem;margin:6px 0}
   .learning-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border)}.learning-row:last-child{border:0}.learning-row p{margin:4px 0;overflow-wrap:anywhere}
@@ -112,5 +113,5 @@
   .school-done{padding:8px 0;background:transparent;border:0;margin-bottom:8px}.school-done .section-head{margin-bottom:4px}.school-done p{margin:4px 0}.school-done h3{font-size:1rem}
   .school:not(.school-done){background:var(--school-soft)}.obligations{border-top:4px solid var(--accent)}.practice{background:var(--learn-soft)}
   .tomorrow{background:var(--accent-soft);border-left:4px solid var(--accent)}
-  @media(max-width:380px){.day-section{padding:12px}.learning-row{flex-wrap:wrap}}
+  @media(max-width:380px){.day-section{padding:10px}.learning-row{flex-wrap:wrap}}
 </style>

@@ -1,4 +1,5 @@
 <script>
+  import ActionLabel from '../lib/ActionLabel.svelte';
   import {splitTasks} from '../lib/dayDashboard.js';
   import SharedLearningPlan from '../lib/SharedLearningPlan.svelte';
   import { api } from '../lib/api.js';
@@ -95,7 +96,7 @@
 
 </script>
 
-<p><a href="#/learning">🌱 Zum Lernraum →</a></p>
+<p><a href="#/learning">Zum Lernraum <ActionLabel /></a></p>
 
 
 <div class="row between" style="margin: 0.3rem 0.2rem 0.5rem;">

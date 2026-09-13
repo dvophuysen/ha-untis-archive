@@ -1,4 +1,5 @@
 <script>
+  import ActionLabel from '../lib/ActionLabel.svelte';
   import {formatShortDate} from '../lib/format.js';
   import {onMount,tick} from 'svelte';
   import {api} from '../lib/api.js';
@@ -40,7 +41,7 @@
     <div class="messages" aria-live="polite">
       {#each running.messages as m}<article class:own={m.role==='user'}><span class="speaker">{m.role==='user'?(data?.can_manage&&!running.is_test?'Kind':'Du'):'Mentor'}</span><p class="preserve">{m.text}</p>
         {#if m.payload.task}<div class="task"><strong>Deine Aufgabe</strong><p class="preserve">{m.payload.task.prompt}</p></div>{/if}
-        {#if m.payload.attachment_id}<a href={`./${base.slice(1)}/photos/${m.payload.attachment_id}`} target="_blank" rel="noreferrer">Dein Foto öffnen</a>{/if}
+        {#if m.payload.attachment_id}<a href={`./${base.slice(1)}/photos/${m.payload.attachment_id}`} target="_blank" rel="noreferrer"><ActionLabel label="Dein Foto öffnen" /></a>{/if}
         {#if m.payload.assessment}<p class="assessment">{m.payload.assessment.rationale}<small>{m.payload.assessment.label}{m.payload.assessment.help_used?' · mit Unterstützung':''}</small></p>{/if}
       </article>{/each}<div bind:this={end}></div>
     </div>
@@ -53,7 +54,7 @@
         <div class="actions"><button class="primary" disabled={busy||(!text.trim()&&!attachment)||!data?.can_write}>Senden</button><button type="button" disabled={busy||!data?.can_write} onclick={()=>fileInput?.click()}>Foto zeigen</button><input class="file" type="file" accept="image/*" bind:this={fileInput} onchange={upload}/></div>
         <div class="actions"><button type="button" disabled={busy||!data?.can_write} onclick={()=>act(()=>send('hint','Bitte anders erklären.'))}>Anders erklären</button><button type="button" disabled={busy||!data?.can_write} onclick={()=>act(()=>send('finish','Für heute fertig.'))}>Für heute fertig</button></div>
       </form>
-    {:else}<section class="card"><h2>{running.status==='active'?'Gespeicherter Kinderverlauf':'Für heute geschafft'}</h2><p>{running.summary||'Dein Gespräch und deine Antworten bleiben gespeichert.'}</p><button onclick={()=>act(leave)}>Zur Übersicht</button><a href="#/plan">Aktualisierten Lernplan ansehen</a></section>{/if}
+    {:else}<section class="card"><h2>{running.status==='active'?'Gespeicherter Kinderverlauf':'Für heute geschafft'}</h2><p>{running.summary||'Dein Gespräch und deine Antworten bleiben gespeichert.'}</p><button onclick={()=>act(leave)}>Zur Übersicht</button><a href="#/plan"><ActionLabel label="Aktualisierten Lernplan ansehen" /></a></section>{/if}
     {#if busy}<p role="status" class="working">Einen Moment – deine Antwort wird vorbereitet …</p>{/if}
   {:else if data}
     <header><span class="eyebrow">Dein Lernbegleiter</span><h1>{data.can_manage&&!demo?'Der echte Lernverlauf.':'Was hast du vor?'}</h1><p>{data.can_manage&&!demo?'Wähle oben das Kind. Hier findest du seine gespeicherten Gespräche, Antworten und Lernbeobachtungen.':'Du wählst das Thema. Ich helfe dir beim Üben.'}</p></header>
@@ -61,11 +62,11 @@
     {#if !data.profile?.ai_enabled}<p class="notice">Der Lernrahmen muss zuerst mit deinen Eltern eingerichtet und die KI aktiviert werden.</p>{/if}
     {#each data.errors as warning}<p class="notice">{warning}</p>{/each}
     {#if tab==='today'}
-      {#if !data.can_manage||demo}<section class="card free-choice"><h2>Was möchtest du üben?</h2><form onsubmit={e=>{e.preventDefault();act(()=>start({subject,title:goal,voluntary:true}));}}><label>Fach<select required bind:value={subject}><option value="">Auswählen</option>{#each [...new Set([...data.subjects,subject].filter(Boolean))] as s}<option>{s}</option>{/each}</select></label><label>Worum geht es ungefähr?<input bind:value={goal} maxlength="250" placeholder="Du kannst es auch gleich im Gespräch zeigen."/></label><button disabled={busy||!data.can_write}>💬 Üben starten</button><button type="button" disabled={busy||!subject} onclick={()=>tab='exams'}>Übungstest erstellen</button></form></section>{/if}
-      {#each data.sessions.filter(s=>s.status==='active').slice(0,2) as s}<section class="card"><span class="eyebrow">Angefangen · {s.subject}</span><h2>{s.goal}</h2><button class="primary" disabled={busy} onclick={()=>act(()=>open(s))}>{data.can_manage&&!demo?'Verlauf ansehen':'💬 Hier weitermachen'}</button></section>{/each}
-      {#if !demo&&focusKey&&data.can_manage}<section class="card"><h2>{goal}</h2><p>{data.shared_plan?.goals.find(g=>g.key===focusKey)?.state}</p><p>Für dieses Thema gibt es noch keinen Kinderverlauf. Mit seiner Anmeldung kann das Kind direkt beim gewählten Lernschritt beginnen.</p><a href="#/plan">Zum Plan</a></section>{/if}
+      {#if !data.can_manage||demo}<section class="card free-choice"><h2>Was möchtest du üben?</h2><form onsubmit={e=>{e.preventDefault();act(()=>start({subject,title:goal,voluntary:true}));}}><label>Fach<select required bind:value={subject}><option value="">Auswählen</option>{#each [...new Set([...data.subjects,subject].filter(Boolean))] as s}<option>{s}</option>{/each}</select></label><label>Worum geht es ungefähr?<input bind:value={goal} maxlength="250" placeholder="Du kannst es auch gleich im Gespräch zeigen."/></label><button disabled={busy||!data.can_write}><ActionLabel kind="chat" label="Üben starten" /></button><button type="button" disabled={busy||!subject} onclick={()=>tab='exams'}>Übungstest erstellen</button></form></section>{/if}
+      {#each data.sessions.filter(s=>s.status==='active').slice(0,2) as s}<section class="card"><span class="eyebrow">Angefangen · {s.subject}</span><h2>{s.goal}</h2><button class="primary" disabled={busy} onclick={()=>act(()=>open(s))}><ActionLabel kind={data.can_manage&&!demo?'navigate':'chat'} label={data.can_manage&&!demo?'Verlauf ansehen':'Hier weitermachen'}/></button></section>{/each}
+      {#if !demo&&focusKey&&data.can_manage}<section class="card"><h2>{goal}</h2><p>{data.shared_plan?.goals.find(g=>g.key===focusKey)?.state}</p><p>Für dieses Thema gibt es noch keinen Kinderverlauf. Mit seiner Anmeldung kann das Kind direkt beim gewählten Lernschritt beginnen.</p><a href="#/plan"><ActionLabel label="Zum Plan" /></a></section>{/if}
       {#if !demo}<SharedLearningPlan plan={data.shared_plan} compact={!data.can_manage} onstart={data.can_manage?null:c=>act(()=>start(c))}/>{:else}
-      {#each data.candidates.slice(0,3) as c}<section class="card"><span>{c.subject}</span><h2>{c.title}</h2><p>{c.reason}</p><button disabled={busy} onclick={()=>act(()=>start(c))}>💬 Gemeinsam anschauen</button></section>{/each}{/if}
+      {#each data.candidates.slice(0,3) as c}<section class="card"><span>{c.subject}</span><h2>{c.title}</h2><p>{c.reason}</p><button disabled={busy} onclick={()=>act(()=>start(c))}><ActionLabel kind="chat" label="Gemeinsam anschauen" /></button></section>{/each}{/if}
 
     {:else if tab==='history'}
       {#each data.sessions as s}<button class="history" disabled={busy} onclick={()=>act(()=>open(s))}><strong>{s.subject} · {s.goal}</strong><span>{s.status==='active'&&(!data.can_manage||demo)?'Fortsetzen':'Verlauf ansehen'} · {formatShortDate(s.updated_at.slice(0,10))}</span></button>{:else}<p>{data.can_manage&&!demo?'Noch keine Gespräche des Kindes gespeichert. Eltern-Testläufe werden hier nicht eingemischt.':'Deine ersten Gespräche erscheinen hier.'}</p>{/each}

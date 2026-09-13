@@ -1,4 +1,5 @@
 <script>
+  import ActionLabel from './ActionLabel.svelte';
  import {api} from './api.js';
  import LearningGoal from './LearningGoal.svelte';
  import {subjectStyle} from './subjectStyle.js';
@@ -16,13 +17,13 @@
   {#if error}<p role="alert">{error}</p>{/if}
   {#each plan.errors||[] as e}<p class="notice">{e}</p>{/each}
   {#if plan.today.overload_minutes}<p class="notice">Heute ist viel offen. Schau zuerst auf deine Hausaufgaben.</p>{/if}
-  <section class="goal-group"><h3>☀️ Für heute</h3>
+  <section class="goal-group"><h3>Für heute</h3>
    {#each plan.today.actions as goal (goal.key)}<LearningGoal {goal} {onstart}/>{:else}<p class="muted">Heute ist nichts zusätzlich eingeplant. 🌿</p>{/each}
   </section>
-  <section class="goal-group"><header><h3>🚀 Schon vorziehen</h3>{#if subjects.length>1}<label><span class="sr-only">Nach Fach filtern</span><select bind:value={filter}><option value="">Alle Fächer</option>{#each subjects as subject}<option>{subject}</option>{/each}</select></label>{/if}</header>
+  <section class="goal-group"><header><h3>Schon vorziehen</h3>{#if subjects.length>1}<label><span class="sr-only">Nach Fach filtern</span><select bind:value={filter}><option value="">Alle Fächer</option>{#each subjects as subject}<option>{subject}</option>{/each}</select></label>{/if}</header>
    {#each otherGoals.filter(g=>!filter||subjectStyle(g.subject).name===filter) as goal (goal.key)}<LearningGoal {goal} {onstart}/>{:else}<p class="muted">Keine weiteren Themen. Ein eigenes Thema kannst du im Lernraum wählen.</p>{/each}
   </section>
-  <a class="free-link" href="#/learning">🌱 Fach und Thema selbst wählen →</a>
+  <a class="free-link" href="#/learning">Fach und Thema selbst wählen <ActionLabel /></a>
  </section>
 {/if}
 <style>
