@@ -80,3 +80,28 @@ def test_archive_recompute_repairs_old_flags_and_keeps_real_absences(env):
         assert store._conn.execute('SELECT absence_reason FROM lessons WHERE id=1').fetchone()[0] == 'Abwesend'
     finally:
         store._conn.close()
+
+
+def test_read_export_uses_corrected_attendance_preserving_cursors_and_raw_events(env):
+    from backend.routers import read_access as r
+    client,_=seed(env)
+    patch=env[2]
+    client.app.include_router(r.router,prefix='/api')
+    patch.setattr(r,'SETTINGS',db.SETTINGS)
+    patch.setenv('LEARNING_READ_TOKEN','a'*48)
+    patch.setenv('LEARNING_READ_ACCOUNTS','1')
+    headers={'X-Learning-Read-Key':'a'*48}
+    base='/api/integration/learning/'
+    first=client.get(base+'lessons?account_id=1&limit=1',headers=headers).json()
+    assert first['rows'][0]['id'] == first['rows'][0]['_cursor'] == 1
+    assert first['rows'][0]['was_absent'] == 0
+    assert first['rows'][0]['absence_reason'] is None
+    assert first['next_after'] == 1 and first['has_more']
+    second=client.get(base+'lessons?account_id=1&after=1',headers=headers).json()
+    assert [x['id'] for x in second['rows']] == [2,3,4,5]
+    assert not second['has_more']
+    raw=client.get(base+'absences?account_id=1',headers=headers).json()
+    assert raw['rows'][0]['reason'] == 'Verspätet'
+    with closing(r.open_readonly('archive')) as c:
+        with pytest.raises(sqlite3.OperationalError):
+            c.execute('UPDATE main.lessons SET was_absent=0')

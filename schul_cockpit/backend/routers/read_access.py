@@ -85,6 +85,9 @@ def open_readonly(source):
     path=SETTINGS.history_db_path if source=='archive' else SETTINGS.webapp_db_path
     conn=sqlite3.connect(path.resolve().as_uri()+'?mode=ro',uri=True,timeout=5)
     conn.row_factory=sqlite3.Row
+    if source == 'archive':
+        from ..attendance import install_attendance_view
+        install_attendance_view(conn)
     conn.execute('PRAGMA query_only=ON')
     return conn
 
