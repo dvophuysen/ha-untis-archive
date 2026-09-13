@@ -6,7 +6,8 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from urllib.parse import urlsplit
 
 from ..auth import CurrentUser, get_current_user
 from ..db import webapp_conn
@@ -33,6 +34,15 @@ class SubscribeIn(BaseModel):
     endpoint: str
     keys: SubKeys
     ua_label: str | None = None
+
+    @field_validator('endpoint')
+    @classmethod
+    def valid_endpoint(cls,value):
+        parsed=urlsplit(value);host=(parsed.hostname or '').lower()
+        allowed=host=='fcm.googleapis.com' or any(host.endswith('.'+domain) for domain in ('push.apple.com','push.services.mozilla.com','notify.windows.com'))
+        if parsed.scheme!='https' or parsed.username or parsed.password or parsed.port not in (None,443) or not allowed:
+            raise ValueError('Bitte einen unterstützten Browser-Pushdienst verwenden.')
+        return value
 
 
 @router.get("/push/vapid-key")

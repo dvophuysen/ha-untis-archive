@@ -112,11 +112,12 @@ def send_push(
             vapid_private_key=keys["private_pem"],
             vapid_claims={"sub": keys["subject"]},
             ttl=ttl,
+            timeout=10,
         )
         return True, 200
     except WebPushException as exc:
         status = getattr(exc.response, "status_code", None) if exc.response is not None else None
-        _LOGGER.warning("Push failed (status=%s): %s", status, exc)
+        _LOGGER.warning("Push failed (status=%s)", status)
         return False, status
     except Exception:
         _LOGGER.exception("Unexpected push error")
