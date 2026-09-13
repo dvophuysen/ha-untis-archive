@@ -8,11 +8,11 @@
 </script>
 {#if plan}
  <section class="shared-plan">
-  <h2>Dein Lernplan</h2>
+  <h2>{compact?'Ideen zum Üben':'Dein Lernplan'}</h2>
   <p>Wie passt Lernen heute in deinen Tag?</p><div class="day-choice">{#each [['busy','Voller Tag'],['normal','Normal'],['room','Mehr Luft']] as [value,label]}<button aria-pressed={plan.today.day_load===value} disabled={adjusting} onclick={()=>adjust(value)}>{label}</button>{/each}</div>
   {#if error}<p role="alert">{error}</p>{/if}<p>{plan.today.load_reason}</p>
   <p><strong>Vorschlag: heute etwa {plan.today.planned_minutes} Minuten</strong>{#if plan.today.used_minutes} · {plan.today.used_minutes} Minuten für erledigte Aufgaben und begonnene Übungen angerechnet (Schätzung){/if}</p>
-  <p class="muted">Hausaufgaben und Üben sind gemeinsam berücksichtigt. Die Zeiten helfen beim Einteilen; sie sind kein Pflichtpensum.</p>
+  <p class="muted">{compact?'Vorschläge, keine Pflicht. Du kannst oben auch ein anderes Thema wählen.':'Hausaufgaben und Üben sind gemeinsam berücksichtigt. Die Zeiten helfen beim Einteilen; sie sind kein Pflichtpensum.'}</p>
   {#each plan.errors||[] as e}<p class="notice">{e}</p>{/each}
   {#if plan.today.overload_minutes}<p class="notice">Die noch offenen, zeitnah fälligen Hausaufgaben überschreiten die verbleibende Orientierung um etwa {plan.today.overload_minutes} Minuten. Bitte gemeinsam priorisieren; es kommen keine zusätzlichen Übungen dazu.</p>{/if}
   {#each plan.today.actions as g (g.key)}

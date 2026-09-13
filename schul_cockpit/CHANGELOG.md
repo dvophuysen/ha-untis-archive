@@ -1,3 +1,11 @@
+## 0.29.3
+
+- Ruhigere gemeinsame Farbpalette: Petrol und Mint, blaue Schulbereiche und dezente Lavendelflächen fürs Üben, mit abgestimmtem Dunkelmodus.
+- Emojis mit Text in Hauptnavigation, Lernreitern und Übersichten. Aktiver Bereich zusätzlich mit Fläche und Schriftgewicht markiert.
+- Kinder-Lernbereich mit kürzerem Einstieg und kompakteren Empfehlungen. Freie Themenwahl und aktuelle Aufgaben bleiben direkt sichtbar; ausführliche Planung weiterhin in der Planansicht.
+- Tastaturfokus auch für Links und Formulare, reduzierte Bewegung gemäß Geräteeinstellung.
+- Produktionsbuild sowie Browserprüfungen der Tages-, Kinder-, Eltern- und Löschwege bei 320/390/768 Pixel bestanden.
+
 ## 0.29.2
 
 - Freie Fach- und Themenwahl direkt sichtbar; Hausaufgaben führen über „Dafür üben“ in den Lernbereich. Andere Themen öffnen keine unpassende laufende Einheit mehr.

@@ -75,14 +75,14 @@
       {/if}
     </section>
   {/if}
-  <section class="day-section">
+  <section class="day-section obligations">
     <div class="section-head"><h3>Heute erledigen</h3><button class="text-action" onclick={() => creating = true}>Aufgabe ergänzen</button></div>
     <p class="eyebrow">Du entscheidest, womit du anfängst.</p>
     {#each work.due as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{:else}<p>{error ? 'Aufgabenstand bitte aktualisieren.' : 'Keine offenen Aufgaben bis morgen eingetragen.'}</p>{/each}
   </section>
   {#if work.ahead.length}<section class="day-section"><h3>Schon vorziehen</h3>{#each work.ahead as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</section>{/if}
   {#if work.undated.length}<section class="day-section"><h3>Noch ohne Termin</h3>{#each work.undated as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</section>{/if}
-  <section class="day-section">
+  <section class="day-section practice">
     <div class="section-head"><h3>Üben & vorbereiten</h3><a href="#/learning">Eigene Aufgabe zeigen</a></div>
     {#if planError}<p role="status">{planError}</p>{/if}
     {#each plan?.errors ?? [] as problem}<p class="muted">{problem}</p>{/each}
@@ -112,6 +112,7 @@
   .learning-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border)}.learning-row:last-child{border:0}.learning-row p{margin:4px 0;overflow-wrap:anywhere}
   .open-action{padding:10px;border:1px solid var(--border);border-radius:10px;min-height:44px;flex-shrink:0}.exam-link{display:block;padding:12px 0;border-bottom:1px solid var(--border)}
   .school-done{padding:8px 0;background:transparent;border:0;margin-bottom:8px}.school-done .section-head{margin-bottom:4px}.school-done p{margin:4px 0}.school-done h3{font-size:1rem}
-  .tomorrow{border-left:4px solid var(--accent)}
+  .school:not(.school-done){background:var(--school-soft)}.obligations{border-top:4px solid var(--accent)}.practice{background:var(--learn-soft)}
+  .tomorrow{background:var(--accent-soft);border-left:4px solid var(--accent)}
   @media(max-width:380px){.day-section{padding:12px}.learning-row{flex-wrap:wrap}}
 </style>

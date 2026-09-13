@@ -102,12 +102,12 @@
   // dann eine reine Solo-Spalte.
   const navItems = $derived.by(() => {
     const items = [
-      { name: 'today', label: 'Heute' },
-      { name: 'learning', label: 'Lernen' },
-      { name: 'more', label: 'Übersichten' },
+      { name: 'today', icon: '☀️', label: 'Heute' },
+      { name: 'learning', icon: '🌱', label: 'Lernen' },
+      { name: 'more', icon: '🧭', label: 'Übersichten' },
     ];
     if (appState.me?.is_admin || appState.me?.role === 'parent') {
-      items.unshift({ name: 'overview', label: 'Familie' });
+      items.unshift({ name: 'overview', icon: '🏡', label: 'Familie' });
     }
     return items;
   });
@@ -221,8 +221,8 @@
     {:else if route.name === 'more'}
       <h2>Übersichten</h2>
       <div class="overview-links">
-        {#each [['week','Stundenplan'],['subjects','Fächer'],['klausuren','Arbeiten'],['absences','Nachholen'],['plan','Aufgaben und Wochenplanung']] as [target,label]}
-          <button onclick={() => navigate(target)}>{label} →</button>
+        {#each [['week','Stundenplan','🗓️'],['subjects','Fächer','📚'],['klausuren','Arbeiten','📝'],['absences','Nachholen','🧩'],['plan','Aufgaben und Wochenplanung','✅']] as [target,label,icon]}
+          <button onclick={() => navigate(target)}><span aria-hidden="true">{icon}</span> {label} →</button>
         {/each}
       </div>
     {:else if route.name === 'today'}
@@ -249,13 +249,14 @@
   </main>
 
   {#if acc && !['setup','settings'].includes(route.name)}
-    <nav class="bottom-nav">
+    <nav class="bottom-nav" aria-label="Hauptnavigation">
       {#each navItems as item}
         <button
           class:active={route.name === item.name || (item.name === 'more' && ['plan','tasks','week','subjects','subject','klausuren','absences'].includes(route.name))}
+          aria-current={route.name === item.name || (item.name === 'more' && ['plan','tasks','week','subjects','subject','klausuren','absences'].includes(route.name)) ? 'page' : undefined}
           onclick={() => navigate(item.name)}
         >
-          <span>{item.label}</span>
+          <span class="icon" aria-hidden="true">{item.icon}</span><span>{item.label}</span>
         </button>
       {/each}
     </nav>
@@ -264,5 +265,5 @@
 {/if}
 
 <style>
-.overview-links{display:grid;gap:12px}.overview-links button{text-align:left;min-height:52px}
+.overview-links{display:grid;gap:12px}.overview-links button{text-align:left;min-height:68px;border-radius:16px;padding:16px;background:var(--bg-card)}.overview-links button span{font-size:1.4rem;margin-right:12px}.overview-links button:nth-child(3n+1){background:var(--school-soft)}.overview-links button:nth-child(3n+2){background:var(--accent-soft)}.overview-links button:nth-child(3n){background:var(--learn-soft)}
 </style>
