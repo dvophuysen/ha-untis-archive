@@ -113,7 +113,7 @@
 </script>
 
 <div class="row between" style="margin: 0 0 0.6rem; align-items:center;">
-  <h2 style="margin:0; font-size:1.15rem;">Klausuren</h2>
+  <h2 style="margin:0; font-size:1.15rem;">📝 Arbeiten & Tests</h2>
   {#if canManage}
     <button
       class="ghost"
@@ -134,11 +134,11 @@
   {/if}
 
   <!-- AUSSTEHEND -->
-  <div class="section-title">Ausstehend</div>
+  <div class="section-title">Demnächst</div>
   {#if data.upcoming.length === 0}
     <div class="empty" style="padding:1rem;">
-      Keine anstehenden Klausuren erkannt.<br>
-      <span class="dim">Kalender verknüpfen oder Termin ergänzen: Setup → Klausuren verwalten.</span>
+      Keine Arbeiten eingetragen.
+      {#if canManage}<a href="#/exams">Termin ergänzen →</a>{/if}
     </div>
   {:else}
     {#each data.upcoming as e (e.exam_key)}

@@ -1,4 +1,5 @@
 <script>
+  import {subjectStyle} from '../lib/subjectStyle.js';
   import { untrack } from 'svelte';
   import FamilyDayCheck from '../lib/FamilyDayCheck.svelte';
   import { api } from '../lib/api.js';
@@ -33,37 +34,9 @@
     return () => { request++; clearInterval(timer); window.removeEventListener('focus', refresh); };
   });
 
-  const PRIO_DOT = { red: '🔴', orange: '🟠', green: '🟢' };
-  const LEARN_EMOJI = ['⚪', '😟', '😐', '😀'];
-  const URG_DOT = { overdue: '🕓', red: '🔴', orange: '🟠', green: '🟢' };
-
   function open(kid, page = 'today', ...args) {
     setActiveAccount(kid.account_id);
     navigate(page, ...args);
-  }
-
-  function whenLabel(iso, days) {
-    if (days === 0) return 'heute';
-    if (days === 1) return 'morgen';
-    if (days <= 6) {
-      const d = new Date(iso + 'T00:00:00');
-      return d.toLocaleDateString('de-DE', { weekday: 'short' });
-    }
-    const d = new Date(iso + 'T00:00:00');
-    return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-  }
-
-  function dueLabel(iso) {
-    if (!iso) return '';
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const d = new Date(iso + 'T00:00:00');
-    const delta = Math.round((d - today) / 86400000);
-    if (delta < 0) return 'überfällig';
-    if (delta === 0) return 'heute';
-    if (delta === 1) return 'morgen';
-    if (delta <= 6) return d.toLocaleDateString('de-DE', { weekday: 'short' });
-    if (delta <= 13) return 'nä. Wo.';
-    return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
   }
 
   function planDate(iso) {
@@ -89,74 +62,15 @@
         <div class="now">{kid.now.icon} {kid.now.label}</div>
         <FamilyDayCheck {kid} day={data.today} {open} />
 
-        <!-- Klausuren -->
-        <div class="block">
-          <h3>Klausuren {#if kid.exams.length}<span class="count">{kid.exams.length}</span>{/if}</h3>
-          {#if kid.exams.length === 0}
-            <div class="small dim">keine geplant</div>
-          {:else}
-            <div class="exam-table">
-              {#each kid.exams as e}
-                <button class="ex-row" onclick={() => open(kid, 'klausuren')}>
-                  <span class="ex-dot">{PRIO_DOT[e.priority]}</span>
-                  <span class="ex-subj">{e.subject_short}</span>
-                  <span class="ex-when">{whenLabel(e.date, e.days_until)}</span>
-                  <span class="ex-days">{e.days_until}</span>
-                  <span class="ex-learn">{LEARN_EMOJI[e.learn_state ?? 0]}</span>
-                  <span class="ex-hard">
-                    {#if e.comprehension && e.comprehension.hard > 0}⚠{e.comprehension.hard}{/if}
-                  </span>
-                </button>
-              {/each}
-            </div>
-          {/if}
+        <div class="summary-links">
+          <button class="summary-link" onclick={() => open(kid, 'klausuren')}><span>📝 Arbeiten & Tests</span><strong>{kid.exams.length ? `${kid.exams.length} angekündigt` : 'Keine eingetragen'} →</strong></button>
+          <button class="summary-link" class:needs-attention={kid.support.length > 0} onclick={() => open(kid, 'subjects')}><span>📚 Fächer</span><strong>{kid.support.length ? `${kid.support.length} mit offenen Fragen` : 'Keine gehäuften Fragen'} →</strong></button>
+          {#if kid.support.length}<div class="support-subjects">{#each kid.support as s}<button onclick={() => open(kid, 'subject', s.subject_id)}>{subjectStyle(s.subject_name || s.subject_short).emoji} {subjectStyle(s.subject_name || s.subject_short).name} →</button>{/each}</div>{/if}
         </div>
-
-        <!-- Mitlernen -->
-        <div class="block">
-          <h3>Mitlernen <span class="emoji-h">🤝</span></h3>
-          {#if kid.support.length === 0}
-            <div class="small dim">Keine gehäuften Unsicherheitsmeldungen in den letzten 21 Tagen.</div>
-          {:else}
-            <div class="sup-table">
-              {#each kid.support as s}
-                <button class="sup-row" onclick={() => open(kid, 'subject', s.subject_id)}>
-                  <span class="sup-subj">{s.subject_short || s.subject_name}</span>
-                  <span class="sup-hard">⚠ {s.hard_count}</span>
-                  <span class="sup-total">/{s.total_count}</span>
-                </button>
-              {/each}
-            </div>
-          {/if}
-          <details class="small dim">
-            <summary>Was zeigt diese Übersicht?</summary>
-            <p>Selbsteinschätzungen aus dem Unterricht, keine Prüfung des aktuellen Könnens. Wenige Rückmeldungen reichen nicht für eine Einordnung. Spätere Fortschritte im Mentor sind hier noch nicht berücksichtigt.</p>
-          </details>
-        </div>
-
-        <!-- Hausaufgaben -->
-        <div class="block">
-          <h3>Hausaufgaben {#if kid.tasks.open_count}<span class="count">{kid.tasks.open_count}</span>{/if}</h3>
-          {#if kid.tasks.open_count === 0}
-            <div class="small dim">keine offenen Aufgaben</div>
-          {:else}
-            <div class="hw-table">
-              {#each kid.tasks.items as t}
-                <button class="hw-row" onclick={() => open(kid, 'plan')}>
-                  <span class="hw-dot">{URG_DOT[t.urgency] ?? ''}</span>
-                  <span class="hw-subj">{t.subject_short}</span>
-                  <span class="hw-title">{t.title}</span>
-                  <span class="hw-when">{dueLabel(t.due_date)}</span>
-                </button>
-              {/each}
-            </div>
-          {/if}
-        </div>
-
         <!-- Plan-Grid: fixe Periodenzeilen, damit gleiche Stunden über die
              Tage hinweg untereinander stehen (wie das Woche-Layout). -->
         <div class="block">
-          <h3>Plan {#if kid.plan.is_weekend}<span class="small dim">· nächste Woche</span>{/if}</h3>
+          <h3><button class="schedule-link" onclick={() => open(kid, 'week')}>📅 Stundenplan {kid.plan.is_weekend ? '· nächste Woche' : '· diese Woche'} →</button></h3>
           <div
             class="plan-grid"
             style="grid-template-rows: auto repeat({kid.plan.period_times.length || 1}, minmax(26px, auto));"
@@ -214,32 +128,21 @@
           </div>
         </div>
 
-        <!-- Feedback-Hygiene -->
-        {#if kid.feedback_gap.total_lessons > 0}
-          <div class="block hyg-block">
-            {#if kid.feedback_gap.unrated_lessons === 0}
-              <div class="small dim">💬 Alle Rückmeldungen eingetragen (7 Tage)</div>
-            {:else}
-              <button class="hyg-row" onclick={() => open(kid, 'week')}>
-                💬 <strong>{kid.feedback_gap.unrated_lessons}</strong>
-                Stunden noch ohne Feedback
-              </button>
-            {/if}
-          </div>
-        {/if}
       </section>
     {/each}
   </div>
 {/if}
 
 <style>
+  .summary-links{display:grid;gap:8px}.summary-link{display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:left;border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg-elevated);font-size:.9rem}.summary-link strong{font-size:.85rem}.needs-attention{background:color-mix(in srgb,var(--rating-2) 15%,var(--bg-card))}.support-subjects{display:flex;flex-wrap:wrap;gap:6px}.support-subjects button{font-size:.85rem;min-height:44px}.schedule-link{background:transparent;border:0;padding:8px 0;text-align:left;color:var(--accent);min-height:44px}
   .dash {
     display: grid;
     gap: 1rem;
     grid-template-columns: 1fr;
   }
   @media (min-width: 720px) {
-    .dash { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .summary-links{display:grid;gap:8px}.summary-link{display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:left;border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg-elevated);font-size:.9rem}.summary-link strong{font-size:.85rem}.needs-attention{background:color-mix(in srgb,var(--rating-2) 15%,var(--bg-card))}.support-subjects{display:flex;flex-wrap:wrap;gap:6px}.support-subjects button{font-size:.85rem;min-height:44px}.schedule-link{background:transparent;border:0;padding:8px 0;text-align:left;color:var(--accent);min-height:44px}
+  .dash { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
   .kid { padding: 0.8rem; display: flex; flex-direction: column; gap: 0.5rem; }
@@ -277,45 +180,6 @@
     border: 1px solid var(--border);
   }
   .small { font-size: 0.8rem; }
-
-  /* Generic table-row buttons share a row look. */
-  .ex-row, .sup-row, .hw-row {
-    display: grid; align-items: center; gap: 0.4rem;
-    background: transparent; border: none;
-    padding: 0.3rem 0.25rem;
-    min-height: 30px;
-    border-radius: 5px;
-    color: var(--fg);
-    text-align: left;
-    cursor: pointer;
-    font-size: 0.86rem;
-  }
-  .ex-row:hover, .sup-row:hover, .hw-row:hover { background: var(--bg-elevated); }
-
-  /* Klausuren: Ampel · Fach · Wann · Tage · Lern · Sorgen */
-  .ex-row { grid-template-columns: 18px 38px 1fr 28px 24px 32px; }
-  .ex-dot { text-align: center; }
-  .ex-subj { font-weight: 600; }
-  .ex-when { color: var(--fg-muted); font-size: 0.8rem; }
-  .ex-days { color: var(--fg-dim); font-size: 0.78rem; text-align: right; font-variant-numeric: tabular-nums; }
-  .ex-learn { text-align: center; }
-  .ex-hard { color: var(--rating-2); font-size: 0.74rem; text-align: right; }
-
-  /* Mitlernen */
-  .sup-row { grid-template-columns: 1fr auto auto; }
-  .sup-subj { font-weight: 600; }
-  .sup-hard { color: var(--rating-2); font-size: 0.82rem; }
-  .sup-total { color: var(--fg-dim); font-size: 0.78rem; }
-
-  /* Hausaufgaben */
-  .hw-row { grid-template-columns: 18px 36px 1fr auto; }
-  .hw-dot { text-align: center; }
-  .hw-subj { font-weight: 600; }
-  .hw-title {
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    min-width: 0;
-  }
-  .hw-when { color: var(--fg-muted); font-size: 0.78rem; }
 
   /* Plan-Grid — fünf feste Mo–Fr-Spalten, eine Zeile pro Periode (über
      alle Tage hinweg gemeinsame Startzeit). Vergangene Wochentage rollen
@@ -387,18 +251,4 @@
     line-height: 1;
   }
 
-  /* Hygiene */
-  .hyg-block { border-top: 1px dashed var(--border); margin-top: 0.2rem; padding-top: 0.5rem; }
-  .hyg-row {
-    width: 100%;
-    background: transparent;
-    border: none;
-    text-align: left;
-    color: var(--fg-muted);
-    font-size: 0.82rem;
-    padding: 0.2rem 0;
-    cursor: pointer;
-    min-height: auto;
-  }
-  .hyg-row strong { color: var(--rating-2); }
 </style>

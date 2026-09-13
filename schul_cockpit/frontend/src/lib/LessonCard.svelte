@@ -1,4 +1,5 @@
 <script>
+  import {subjectStyle} from './subjectStyle.js';
   import { api } from './api.js';
   import { onMount } from 'svelte';
   import { lessonEnded } from './dayDashboard.js';
@@ -19,7 +20,7 @@
   const wasAbsent = $derived(!!lesson.was_absent);
   const hasExam = $derived(!!lesson.exam);
   const rating = $derived(lesson.checkin?.rating ?? null);
-  const subjectLabel = $derived(lesson.subject_short || lesson.subject_name || '—');
+  const subjectLabel = $derived(subjectStyle(lesson.subject_name || lesson.subject_short).name || '—');
   const canRate = $derived(!isCancelled && !wasAbsent && lessonEnded(lesson, lesson.date, clock));
   // 👀 "nur Aufsicht" makes sense only for actual substitution lessons,
   // not for the regular teacher delivering the regular subject.
@@ -73,7 +74,7 @@
     <div class="lesson-left">
       <div class="lesson-head">
         <span class="lesson-time">{lesson.start_hhmm}</span>
-        <span class="lesson-subj" title={lesson.subject_name}>{subjectLabel}</span>
+        <span class="lesson-subj" title={lesson.subject_name}>{subjectStyle(lesson.subject_name || lesson.subject_short).emoji} {subjectLabel}</span>
         {#if isCancelled}<span class="badge cancelled">❌ Ausfall</span>{/if}
         {#if isSubst && !isCancelled}<span class="badge substitution">↺ Vertretung</span>{/if}
         {#if hasExam}<span class="badge exam">📝 Klausur</span>{/if}
@@ -92,7 +93,7 @@
     <button class="lesson-left" onclick={openDetail} aria-label="Details und Kommentar">
       <div class="lesson-head">
         <span class="lesson-time">{lesson.start_hhmm}</span>
-        <span class="lesson-subj" title={lesson.subject_name}>{subjectLabel}</span>
+        <span class="lesson-subj" title={lesson.subject_name}>{subjectStyle(lesson.subject_name || lesson.subject_short).emoji} {subjectLabel}</span>
         {#if isCancelled}<span class="badge cancelled">❌ Ausfall</span>{/if}
         {#if isSubst && !isCancelled}<span class="badge substitution">↺ Vertretung</span>{/if}
         {#if wasAbsent}<span class="badge absent">🤒 versäumt</span>{/if}
@@ -160,7 +161,7 @@
      visuell führend bleibt. */
   .lesson.preview {
     background: transparent;
-    border-style: dashed;
+    border-style: solid;
   }
   .lesson.preview .lesson-left { cursor: default; }
   .lesson-left {
@@ -198,10 +199,7 @@
     font-size: 0.82rem;
     margin-top: 0.25rem;
     color: var(--fg);
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    overflow-wrap: anywhere;
   }
   /* Fixed 4 columns; first column is the optional 👀 slot (kept empty on
      normal lessons so the other three always line up across cards). */
@@ -221,5 +219,6 @@
   .ci.r2.active { background: var(--rating-2); border-color: var(--rating-2); }
   .ci.r1.active { background: var(--rating-1); border-color: var(--rating-1); }
   .ci.r4.active { background: var(--cancelled); border-color: var(--cancelled); }
+  @media(max-width:540px){.lesson{flex-wrap:wrap}.lesson-left{flex-basis:100%}.lesson-right{margin-left:auto;width:184px}.ci{min-height:44px}}
   .orig { color: var(--fg-dim); }
 </style>

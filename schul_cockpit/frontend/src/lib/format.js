@@ -39,6 +39,7 @@ const _WD = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.'];
 export function formatShortDate(iso) {
   if (!iso) return '';
   const d = new Date(iso + 'T12:00:00');
+  if (Number.isNaN(d.getTime())) return '';
   return `${_WD[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
 }
 

@@ -1,4 +1,5 @@
 <script>
+  import {splitTasks} from '../lib/dayDashboard.js';
   import SharedLearningPlan from '../lib/SharedLearningPlan.svelte';
   import { api } from '../lib/api.js';
   import { isoToday, shiftDateIso, daysBetween, learnStateEmoji } from '../lib/format.js';
@@ -89,19 +90,19 @@
       const d = daysBetween(today, t.due_date);
       if (d <= 7) week.push(t); else later.push(t);
     }
-    return { week, later, noDate, done };
+    return { week, later, noDate, done:splitTasks(tasks,today).done };
   });
 
 </script>
 
-<p><a href="#/learning">🌱 Lernraum: kurze Übungen und spätere Wiederholungen →</a></p>
+<p><a href="#/learning">🌱 Zum Lernraum →</a></p>
 
 
 <div class="row between" style="margin: 0.3rem 0.2rem 0.5rem;">
   <button onclick={() => (showDone = !showDone)} style="font-size:0.85rem; min-height:36px;">
     {showDone ? 'Erledigte ausblenden' : 'Erledigte anzeigen'}
   </button>
-  <button class="ghost" onclick={syncNow} disabled={syncing}>{syncing ? '↻ …' : '↻ Sync'}</button>
+  <button class="ghost" onclick={syncNow} disabled={syncing}>{syncing ? '↻ …' : '↻ Aktualisieren'}</button>
 </div>
 {#if syncMsg}
   <div class="sync-toast">✓ {syncMsg}</div>

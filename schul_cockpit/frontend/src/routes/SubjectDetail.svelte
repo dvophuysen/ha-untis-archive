@@ -1,4 +1,5 @@
 <script>
+  import {subjectStyle} from '../lib/subjectStyle.js';
   import { formatShortDate } from '../lib/format.js';
   import { api } from '../lib/api.js';
 
@@ -37,8 +38,7 @@
   <div class="error-box">{error}</div>
 {:else if data}
   <h2 style="margin-bottom:0.4rem;">
-    {#if data.short}<span class="badge" style="font-weight:600; vertical-align:middle;">{data.short}</span>{/if}
-    {data.name}
+    {subjectStyle(data.name).emoji} {subjectStyle(data.name).name}
   </h2>
   <div class="dim" style="margin-bottom:0.6rem;">{data.timeline.length} Stunden in den letzten 120 Tagen</div>
 

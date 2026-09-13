@@ -1,4 +1,5 @@
 <script>
+  import {subjectStyle} from './subjectStyle.js';
   import { onMount } from 'svelte';
   import { api } from './api.js';
   let { accountId, schoolDay } = $props();
@@ -51,7 +52,7 @@
             {#if lesson.material_checkbox && item}<button class="pack-row" class:packed={item.done} aria-label={`Material für ${item.label}`} aria-pressed={item.done} disabled={busy || loading || !data.can_write} onclick={() => toggle(item)}><span class="pack-check" aria-hidden="true">{item.done ? '✓' : ''}</span></button>{/if}
           </div>
           <div class="schedule-info">
-            <div class="schedule-head"><strong>{lesson.subject_name || lesson.subject_short || 'Fach noch offen'}</strong><span class="schedule-time">{lesson.start_hhmm || 'Zeit offen'}{#if lesson.end_hhmm}–{lesson.end_hhmm}{/if}</span></div>
+            <div class="schedule-head"><strong>{subjectStyle(lesson.subject_name || lesson.subject_short).emoji} {subjectStyle(lesson.subject_name || lesson.subject_short).name || 'Fach noch offen'}</strong><span class="schedule-time">{lesson.start_hhmm || 'Zeit offen'}{#if lesson.end_hhmm}–{lesson.end_hhmm}{/if}</span></div>
             {#if lesson.is_cancelled}<span class="change">❌ Entfällt</span>
             {:else}
               {#if lesson.room}<p class:change={lesson.is_room_substituted}>Raum {lesson.room}{#if lesson.is_room_substituted && lesson.room_orig}{' · statt '}{lesson.room_orig}{/if}</p>{/if}

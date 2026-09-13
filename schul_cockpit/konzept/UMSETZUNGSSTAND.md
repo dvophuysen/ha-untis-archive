@@ -1,3 +1,11 @@
+# UI-Konsolidierung 0.33.0
+
+Neue verbindliche Gestaltungsregeln und Ansichtsprüfung: [UI_DESIGN.md](../UI_DESIGN.md). Gemeinsame Aufgaben-/Lernzeilen, frei wählbarer Themenkatalog, farbiges Elterncockpit ohne doppelte Listen, Fachsymbole und deutsche Datumsanzeigen umgesetzt. Freiwillig gewählte Übung wird auch bei späterer Fortsetzung nicht durch den automatischen Tagesvorschlag gesperrt; tatsächliche Tagesanrechnung bleibt einmalig.
+
+Die alten Beschreibungen unten sind historische Umsetzungsschritte. Insbesondere die erklärungsreiche Wochenvorschau und das additive Elterncockpit sind durch die neue Gestaltung ersetzt. Spätere Leistungsbelege sind noch nicht vollständig in die Fachampel integriert.
+
+---
+
 # Konsolidierte Fächer und Hausaufgabenhilfe 0.32.0
 
 Vier zusammenhängende Nutzerkorrekturen umgesetzt:
