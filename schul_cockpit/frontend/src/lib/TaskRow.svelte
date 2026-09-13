@@ -94,9 +94,11 @@
     {/if}
     {#if error}<div class="row-error">{error}</div>{/if}
   </div>
+  {#if !isDone}<a class="practice-link" href={`#/learning?subject=${encodeURIComponent(task.subject_name||task.title)}&topic=${encodeURIComponent(cleanNotes.slice(0,250))}`}>Dafür üben</a>{/if}
 </div>
 
 <style>
+  .practice-link{align-self:center;padding:10px;min-height:44px;box-sizing:border-box;color:var(--accent);flex-shrink:0}
   .task-row {
     display: flex;
     align-items: flex-start;

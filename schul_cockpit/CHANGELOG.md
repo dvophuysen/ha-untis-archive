@@ -1,3 +1,11 @@
+## 0.29.2
+
+- Freie Fach- und Themenwahl direkt sichtbar; Hausaufgaben führen über „Dafür üben“ in den Lernbereich. Andere Themen öffnen keine unpassende laufende Einheit mehr.
+- Kinder können eigene Übungstests ohne Kalendereintrag erstellen. KI-Übungen sind als noch nicht elterngeprüft gekennzeichnet; Lösungen bleiben vor Abgabe verborgen.
+- Elternentwürfe benennen ihren Freigabestatus deutlich. Vollständige Leseansicht der Aufgaben; Eingabefelder erst nach „Aufgaben bearbeiten“. Demo bleibt getrennt.
+- Eltern können einzelne Mentoreinheiten nach Bestätigung entfernen. Gespräch, Antworten, Lernbelege und angerechnete Zeit werden entfernt; Lernstand und Wiederholungen werden neu berechnet. Angefallene KI-Kosten bleiben erhalten.
+- Zusätzliche API- und Browserprüfungen für Kinderwege, Elternfreigabe und Löschung einschließlich Fehlerfall.
+
 ## 0.29.1
 
 - Packcheckliste direkt im Tagesdashboard: morgens für heute, danach für den nächsten Schultag.

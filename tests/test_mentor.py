@@ -442,3 +442,51 @@ def test_unclear_scope_cannot_become_automatic_exam_content(setup):
     assert plan['groups'][0]['category']=='unclear'
     result=client.post(B+'/exams',json={'subject':'Deutsch','scope':['Unbekannte Aufgaben'],'minutes':15,'scope_plan_id':plan['plan_id'],'selected_groups':[{'group_id':0,'title':'Unbekannte Aufgaben'}]})
     assert result.status_code==422,result.text
+
+
+def test_child_can_generate_test_without_calendar_and_without_solution_leak(setup):
+    client,state,patch=setup;child(state)
+    tasks=[{**TASK,'prompt':f'Erkläre Beispiel {i}','minutes':5,'points':4} for i in range(3)]
+    mock(patch,[{'title':'Mein Übungstest','tasks':tasks}])
+    result=client.post(B+'/exams',json={'subject':'Physik','scope':['Nominalisierung'],'minutes':15})
+    assert result.status_code==200,result.text
+    eid=result.json()['id']
+    row=client.get(B+'/exams').json()['exams'][0]
+    assert row['status']=='published' and row['scope']['child_created'] and not row['scope']['parent_reviewed']
+    assert TASK['solution'] not in json.dumps(row)
+    assert client.get(B+f'/exams/{eid}/review').status_code==403
+    attempt=client.post(B+f'/exams/{eid}/start')
+    assert attempt.status_code==200 and TASK['solution'] not in attempt.text
+    assert client.post(B+'/exams',json={'subject':'Physik','scope':['Nominalisierung'],'minutes':15,'demo':True}).status_code==403
+    assert client.post(B+'/exams/scope',json={'subject':'Physik','demo':True}).status_code==403
+
+
+def test_remove_session_deletes_evidence_and_time_but_preserves_other_work_and_costs(setup):
+    client,state,patch=setup;parent=state.user;child(state)
+    mock(patch,[reply(),reply(task=None,action='finish',assessment={'result':'correct','rationale':'Passend begründet.'})])
+    s=start(client);s=send(client,s).json();s=send(client,s,kind='answer',text='Die Regel passt.').json()
+    sid=s['id'];endpoint=B+f'/sessions/{sid}'
+    assert client.request('DELETE',endpoint,json={'version':s['version']}).status_code==403
+    state.user=parent
+    with closing(db.webapp_conn()) as c:
+        skill=c.execute('SELECT skill_id FROM mentor_evidence WHERE session_id=?',(sid,)).fetchone()[0]
+        other=c.execute("INSERT INTO mentor_sessions(account_id,user_id,subject,goal,created_at,updated_at) VALUES(2,3,'Deutsch','Andere Einheit','now','now')").lastrowid
+    assert client.request('DELETE',endpoint,json={'version':0}).status_code==409
+    assert client.request('DELETE',endpoint,json={'version':s['version']}).status_code==200
+    with closing(db.webapp_conn()) as c:
+        for table in ('mentor_evidence','mentor_messages','mentor_attachments','learning_plan_blocks'):
+            assert c.execute(f'SELECT COUNT(*) FROM {table} WHERE session_id=?',(sid,)).fetchone()[0]==0
+        assert c.execute('SELECT COUNT(*) FROM mentor_sessions WHERE id=?',(other,)).fetchone()[0]==1
+        assert c.execute('SELECT COUNT(*) FROM mentor_reviews WHERE skill_id=?',(skill,)).fetchone()[0]==0
+        assert c.execute('SELECT level FROM learning_skill_state WHERE skill_id=?',(skill,)).fetchone()[0]==0
+    assert client.request('DELETE',endpoint,json={'version':s['version']}).status_code==404
+
+
+def test_free_topic_does_not_reopen_an_unrelated_active_session(setup):
+    client,state,_=setup;child(state)
+    first=client.post(B+'/sessions',json={'subject':'Deutsch','goal':'Rechtschreibung','voluntary':True}).json()
+    second=client.post(B+'/sessions',json={'subject':'Deutsch','goal':'Argumentieren','voluntary':True}).json()
+    assert first['id']!=second['id'] and second['goal']=='Argumentieren'
+    assert client.get(B+f"/sessions/{first['id']}").status_code==200
+    again=client.post(B+'/sessions',json={'subject':'Deutsch','goal':'Argumentieren','voluntary':True}).json()
+    assert again['id']==second['id']
