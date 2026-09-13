@@ -1,3 +1,10 @@
+## 0.31.0
+
+- Elternübersicht mit kompaktem Tagescheck pro Kind: Aufgaben bis morgen, bestätigtes Fachmaterial für den nächsten Schultag und fehlende Rückmeldungen zu beendeten Stunden. Direkter Wechsel in die jeweilige Kinderansicht.
+- Gemeinsame Datenbasis mit den Kinder-Checklisten; unbekannte oder nicht lesbare Daten werden nicht als erledigt dargestellt. Aktualisierung bei Rückkehr und jede Minute.
+- Offene überfällige Aufgaben heißen nicht mehr „verpasst“: Ein fehlendes Häkchen beweist kein tatsächliches Versäumnis.
+- Browserprüfung mit zwei Kindern, Datenfehlern und 320/390/768 Pixeln erfolgreich.
+
 ## 0.30.2
 
 - Auch der geschützte Leseexport verwendet die korrigierte Anwesenheit. Verspätungen erzeugen so keine falschen Fehlstunden in externen Lern-Auswertungen.
@@ -443,8 +450,8 @@ der Umschalter kaputt, obwohl die Verlinkung das Problem war.
 ## 0.19.8 — HA-Todo-Sync räumt Orphans und Duplikate auf
 - **Bugfix:** Wenn die HA-Automation für dieselbe Hausaufgabe pro Lauf
   eine neue UID vergeben hat (oder wenn ein HA-Eintrag gelöscht wurde),
-  blieb der Eintrag in der App-DB stehen. Bei Kind B hatten sich so 17
-  identische „Mathematik / Seite 201 7)" angesammelt.
+  blieb der Eintrag in der App-DB stehen. Dadurch konnten sich
+  identische Aufgaben mehrfach ansammeln.
 - Sync löscht jetzt **offene `ha_todo`-Zeilen**, deren UID nicht mehr in
   der HA-Liste auftaucht. Erledigte Einträge bleiben (sind Historie).
 - Zusätzlich werden offene Einträge mit identischem `(Fach, Fälligkeit,
@@ -497,9 +504,8 @@ der Umschalter kaputt, obwohl die Verlinkung das Problem war.
 
 ## 0.19.4 — Alle anstehenden Klausuren als eigene Chips
 - Bisher hat der Header nur die **nächste** Klausur als 📝-Chip gezeigt.
-  Wer zwei Klausuren in zwei Tagen schreibt, sah nur die erste — genau
-  das war der Auslöser: Kind A hatte morgen Spanisch und übermorgen die
-  zweite, im Header tauchte nur Spanisch auf.
+  Wer zwei Klausuren in zwei Tagen schreibt, sah nur die erste;
+  weitere anstehende Klausuren fehlten im Header.
 - Jetzt bekommt jede Klausur in den nächsten 7 Tagen einen eigenen
   Chip. Das harte 4-Chip-Limit ist weg; die Reihe wickelt sich um.
 
