@@ -1,3 +1,11 @@
+## 0.29.1
+
+- Packcheckliste direkt im Tagesdashboard: morgens für heute, danach für den nächsten Schultag.
+- Häkchen werden je Schulkonto und Schultag gespeichert und bleiben beim Neuladen erhalten.
+- Allgemeine Materialien aus dem Stundenplan, Sportzeug ohne erfundene Spezialausrüstung. Raum- und Zeitänderungen setzen erledigte Punkte nicht zurück; neue Fächer ergänzen offene Punkte.
+- Speicherfehler und konkurrierende Änderungen bleiben sichtbar. Keine scheinbar erfolgreiche Bestätigung bei fehlgeschlagener Speicherung.
+- Zusätzliche Tests für Datenerhalt, Kontenzugriff, Stundenplanänderungen und Bedienung im Browser. Automatische Reminder folgen separat.
+
 ## 0.29.0
 
 - Tagesdashboard mit Unterricht, offenen Rückmeldungen, heutigen und vorziehbaren Aufgaben sowie Lernvorschlägen.

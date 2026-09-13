@@ -7,10 +7,13 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  const browser=await pw.launch({executablePath:process.env.SCHOOL_TEST_CHROMIUM,args:['--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-zygote'],headless:true});
  const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Europe/Berlin',serviceWorkers:'block'});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.clock.install({time:new Date('2026-09-14T14:00:00+02:00')});
- let rating=null,done=false,failRating=true,failTask=true;
+ let rating=null,done=false,failRating=true,failTask=true,failPack=true;
+ const bags={};let schoolDate='2026-09-14';
+ function bag(day){const states=bags[day]||={};const items=[{key:'basic:pencilcase',label:'Mäppchen'},{key:'subject:sport',label:'Sportzeug'}].map(i=>({...i,done:!!states[i.key],revision:states[i.key]?1:0}));return {school_day:day,items,plan_key:'a'.repeat(64),can_write:true,confirmed_count:items.filter(i=>i.done).length,status:items.every(i=>i.done)?'packed':'open'};}
  await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url()).pathname;let body={};let status=200;
  if(u==='/api/me')body={accounts:[{id:1,name:'Beispielkind'}],role:'child',is_admin:false};
- else if(u.endsWith('/today'))body={date:'2026-09-14',lessons:[{id:1,date:'2026-09-14',subject_name:'Deutsch',subject_short:'DE',start_hhmm:'08:00',start_time:800,end_time:845,room:'204',lstext:'Groß- und Kleinschreibung',checkin:{rating,note:null}}],next:{date:'2026-09-15',lessons:[{id:2,subject_name:'Sport',start_hhmm:'08:00',end_time:845,room:'Halle'}]}};
+ else if(u.includes('/packing/')){const day=u.split('/').at(-1);if(req.method()==='PUT'){if(failPack){status=500;body={detail:'Packen nicht gespeichert'};}else{const update=req.postDataJSON();(bags[day]||={})[update.item_key]=update.done;body=bag(day);}}else body=bag(day);}
+ else if(u.endsWith('/today'))body={date:schoolDate,lessons:[{id:1,date:schoolDate,subject_name:'Deutsch',subject_short:'DE',start_hhmm:'08:00',start_time:800,end_time:845,room:'204',lstext:'Groß- und Kleinschreibung',checkin:{rating,note:null}}],next:{date:'2026-09-15',lessons:[{id:2,subject_name:'Sport',start_hhmm:'08:00',end_time:845,room:'Halle'}]}};
  else if(u.endsWith('/tasks')&&req.method()==='GET')body={tasks:[{id:1,title:'Mathematik',notes:'Brüche: Aufgabe 3',due_date:'2026-09-15',status:done?'done':'open',estimated_minutes:10},{id:2,title:'Englisch',notes:'Seite 24 lesen',due_date:'2026-09-18',status:'open'},{id:3,title:'Notiz ohne Termin',status:'open'}]};
  else if(u.endsWith('/plan'))body={today:{actions:[{key:'math',subject:'Mathematik',title:'Brüche vergleichen',minutes:8,url:'#/learning?focus=math'}]},upcoming_exams:[],errors:[]};
  else if(u.endsWith('/checkin')){if(failRating){status=500;body={detail:'Test failure'};}else{rating=req.postDataJSON().rating;body={rating,note:null};}}
@@ -23,8 +26,15 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  failRating=false;await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.getByRole('button',{name:/Vergangene Stunden ansehen/}).waitFor();assert.equal(await page.getByRole('button',{name:'Verstanden',exact:true}).count(),0);
  await page.getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Test failure',{exact:true}).waitFor();assert.equal(done,false);
  failTask=false;await page.getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Keine offenen Aufgaben bis morgen eingetragen.').waitFor();
+ await page.getByRole('button',{name:'Sportzeug',exact:true}).click();await page.getByRole('alert').filter({hasText:'Packen nicht gespeichert'}).waitFor();
+ assert.equal(await page.locator('.pack-row[aria-pressed="true"]').count(),0);
+ failPack=false;await page.getByRole('button',{name:'Sportzeug',exact:true}).click();await page.locator('.pack-row[aria-pressed="true"]').waitFor();
+ await page.reload();await page.locator('.pack-row[aria-pressed="true"]').waitFor();
+ assert.equal(await page.locator('.pack-row[aria-pressed="true"]').count(),1);
+ await page.getByRole('button',{name:'Mäppchen',exact:true}).click();await page.getByText('Deine Packliste ist abgehakt.').waitFor();
  for(const width of [320,390,768]){await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'overflow '+width);}
- await page.setViewportSize({width:390,height:844});if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-390.png'),fullPage:true});
+ await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-390.png'),fullPage:true});
  await page.emulateMedia({colorScheme:'dark'});if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-dark.png'),fullPage:true});
- assert.deepEqual(errors,[]);console.log('PASS: dashboard sections, failed/successful checkin and task save, 320/390/768 px, no JS exceptions');await browser.close();await new Promise(r=>server.close(r));
+ schoolDate='2026-09-15';await page.clock.setFixedTime(new Date('2026-09-15T07:00:00+02:00'));await page.reload();await page.getByText('Deine Packliste ist abgehakt.').waitFor();assert.equal(await page.locator('.school .pack-row[aria-pressed="true"]').count(),2,'evening confirmations remain in morning checklist');
+ assert.deepEqual(errors,[]);console.log('PASS: dashboard sections, failed/successful checkin and task save, persistent packing and failed packing save, 320/390/768 px, no JS exceptions');await browser.close();await new Promise(r=>server.close(r));
 })().catch(e=>{console.error(e);process.exit(1)});
