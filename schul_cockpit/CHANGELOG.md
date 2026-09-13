@@ -1,3 +1,11 @@
+## 0.28.2
+
+- Kommentare ohne Emoji erzeugen keine Verständnisbewertung; historische Werte bleiben erhalten.
+- Reine Aufsicht zählt nicht als Verständnisnachweis. Notizen allein schließen Rückmeldelücken nicht.
+- Erinnerungszahlen zählen das Schulkonto einmal, unabhängig von verknüpften Benutzern. Neues oberstes Feed-Feld: `unrated_lessons_today`.
+- Elternübersicht benennt Grenzen ihrer bisherigen Rückmeldeauswertung.
+- Regressionen für Migration, Kontentrennung und Zählung ergänzt.
+
 ## 0.28.1
 
 - Wochenvorschau verteilt Fächer und plant je erkanntem Themengebiet zunächst einen Unterrichtsanlass; einzelne Lernbelege bleiben getrennt.

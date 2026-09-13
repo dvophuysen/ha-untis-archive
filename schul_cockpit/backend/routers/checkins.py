@@ -19,7 +19,8 @@ router = APIRouter()
 class CheckinIn(BaseModel):
     # 1 = nicht verstanden, 2 = teilweise, 3 = verstanden,
     # 4 = nur Aufsicht / kein neuer Stoff (zählt nicht als Verständnis)
-    rating: int = Field(ge=1, le=4)
+    # None records a comment without claiming a comprehension assessment.
+    rating: int | None = Field(default=None, ge=1, le=4)
     note: str | None = None
 
 
@@ -62,7 +63,7 @@ def post_checkin(
             " created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(account_id, lesson_id) DO UPDATE SET "
-            "  rating = excluded.rating, "
+            "  rating = COALESCE(excluded.rating, lesson_checkins.rating), "
             "  note = excluded.note, "
             "  user_id = excluded.user_id, "
             "  untis_period_id = excluded.untis_period_id, "
@@ -77,13 +78,13 @@ def post_checkin(
             op_type="insert" if before is None else "update",
             target_kind="checkin",
             target_id=after["id"] if after else None,
-            label=f"Check-in Stunde #{lesson_id} → {body.rating}",
+            label=f"Check-in Stunde #{lesson_id}" if body.rating is not None else f"Kommentar Stunde #{lesson_id}",
             before=before,
             after=after,
         )
     finally:
         conn.close()
-    return {"ok": True, "lesson_id": lesson_id, "rating": body.rating}
+    return {"ok": True, "lesson_id": lesson_id, "rating": after["rating"], "note": after["note"]}
 
 
 @router.delete("/accounts/{account_id}/lessons/{lesson_id}/checkin")

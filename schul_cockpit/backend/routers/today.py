@@ -77,7 +77,7 @@ def today(
         cin = checkins_by_lesson.get(lid)
         lesson["checkin"] = cin
         lesson["caught_up"] = lid in caught_up_lessons
-        if cin is None and not lesson["is_cancelled"] and not lesson["was_absent"]:
+        if (cin is None or cin["rating"] is None) and not lesson["is_cancelled"] and not lesson["was_absent"]:
             unrated += 1
         enriched.append(lesson)
 

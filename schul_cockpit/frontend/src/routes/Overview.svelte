@@ -104,7 +104,7 @@
         <div class="block">
           <h3>Mitlernen <span class="emoji-h">🤝</span></h3>
           {#if kid.support.length === 0}
-            <div class="small dim">alles im grünen Bereich</div>
+            <div class="small dim">Keine gehäuften Unsicherheitsmeldungen in den letzten 21 Tagen.</div>
           {:else}
             <div class="sup-table">
               {#each kid.support as s}
@@ -116,6 +116,10 @@
               {/each}
             </div>
           {/if}
+          <details class="small dim">
+            <summary>Was zeigt diese Übersicht?</summary>
+            <p>Selbsteinschätzungen aus dem Unterricht, keine Prüfung des aktuellen Könnens. Wenige Rückmeldungen reichen nicht für eine Einordnung. Spätere Fortschritte im Mentor sind hier noch nicht berücksichtigt.</p>
+          </details>
         </div>
 
         <!-- Hausaufgaben -->
