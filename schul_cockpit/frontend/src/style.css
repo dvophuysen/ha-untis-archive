@@ -1,12 +1,16 @@
 :root {
-  --bg: #f5f6f8;
+  --bg: #f3f7f8;
   --bg-card: #ffffff;
   --bg-elevated: #ffffff;
-  --fg: #1a1a1a;
-  --fg-muted: #5b6b7c;
-  --fg-dim: #98a4b1;
+  --fg: #20333e;
+  --fg-muted: #536875;
+  --fg-dim: #667986;
   --border: #e2e6ea;
-  --accent: #2563eb;
+  --accent: #176b72;
+  --accent-soft: #e0f2ef;
+  --school-soft: #eaf1fc;
+  --learn-soft: #f0ebfa;
+  --warm-soft: #fff3dd;
   --accent-fg: #ffffff;
   --rating-1: #ef4444;
   --rating-2: #f59e0b;
@@ -15,22 +19,26 @@
   --substitution: #8b5cf6;
   --exam: #db2777;
   --absent: #fb7185;
-  --radius: 12px;
+  --radius: 18px;
   --radius-sm: 8px;
   --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.04);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1419;
-    --bg-card: #1a2028;
-    --bg-elevated: #232a34;
+    --bg: #111d25;
+    --bg-card: #1b2b35;
+    --bg-elevated: #273945;
     --fg: #e6e9ed;
     --fg-muted: #9ba8b5;
     --fg-dim: #9aa9b8;
-    --accent: #9bbcff;
-    --accent-fg: #14243e;
-    --border: #2a323c;
+    --accent: #8cdbcc;
+    --accent-soft: #203e3d;
+    --school-soft: #233448;
+    --learn-soft: #322e47;
+    --warm-soft: #3c3426;
+    --accent-fg: #112d2b;
+    --border: #354650;
   }
 }
 
@@ -150,8 +158,9 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
   min-height: 56px;
   gap: 2px;
 }
-.bottom-nav button.active { color: var(--accent); }
-.bottom-nav button .icon { font-size: 1.2rem; line-height: 1; }
+.bottom-nav button.active { color: var(--accent); font-weight: 650; }
+.bottom-nav button.active .icon { background: var(--accent-soft); }
+.bottom-nav button .icon { font-size: 1.3rem; line-height: 1; padding: 5px 16px; border-radius: 14px; }
 .bottom-nav button span:last-child {
   max-width: 100%;
   overflow: hidden;
@@ -387,3 +396,7 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
   animation: spin 0.8s linear infinite;
   display: inline-block;
 }
+
+/* Keyboard access and comfortable movement across the shared interface. */
+a:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}

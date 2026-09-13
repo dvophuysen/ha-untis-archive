@@ -1,3 +1,13 @@
+# Gemeinsame Farb- und Navigationsgestaltung 0.29.3
+
+Petrol als Handlungsfarbe; Mint für Packen/freies Üben, Blau für Schule, Lavendel für Lernvorschläge. Farben dienen Orientierung, nicht einer neuen Leistungsbewertung. Heller und dunkler Modus verwenden abgestimmte Flächen. Hauptnavigation und Lernreiter kombinieren Emoji und Text; aktive Zustände zusätzlich per Fläche/Schrift und zugänglichen Attributen.
+
+Kinder sehen im Mentor kompakte aktuelle Empfehlungen statt der vollständigen zweiten Wochenplanung. Freie Wahl und Aufgaben bleiben sichtbar, Detailplanung bleibt erreichbar. Fokusdarstellung und reduzierte Bewegung ergänzt.
+
+Prüfung: Produktionsbuild und vorhandene Browserabläufe für Tagesdashboard, Packen, Kinderwahl/Übungstests, Elternfreigabe und Löschung erfolgreich; 320/390/768 Pixel ohne horizontales Überlaufen. Helle/dunkle Screenshots geprüft. Test-Chromium hat keine vollständigen Emoji-Schriften; tatsächliche Apple-Emoji-Darstellung nicht damit abgenommen. Backend unverändert. Bestehende Barrierefreiheitshinweise nicht vollständig bereinigt.
+
+---
+
 # Freies Üben und gezielte Verlaufskorrektur 0.29.2
 
 Freie Fachwahl steht direkt vor den Vorschlägen. Offene Hausaufgaben sind als Übungsanlass auswählbar; ein Kalendereintrag ist keine Voraussetzung. Kinder können Fach, Themen und Dauer eines Übungstests selbst wählen. Bestehende Konto-/Schreibrechte, KI-Freischaltung und Kostenkontrolle bleiben wirksam. Kinderentwürfe werden direkt als nutzbare, noch nicht elterngeprüfte KI-Übungen gespeichert. Elternprüfung und isolierte Demo bleiben erhalten. Bestehende Elternentwürfe benötigen die sichtbare Freigabe, damit Kinder sie sehen.
