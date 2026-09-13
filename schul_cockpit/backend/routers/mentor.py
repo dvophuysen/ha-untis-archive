@@ -219,6 +219,7 @@ async def start(account_id:int,body:StartIn,user:CurrentUser=Depends(get_current
     elif body.lesson_id:
         source['goal_key']=lp.goal_key(lesson)
     elif skill:source['goal_key']='skill:'+str(skill)
+    source['voluntary']=body.voluntary
     t=planning['today']
     remaining=t['remaining_minutes']+sum(g['minutes'] for g in t['actions'])
     with closing(webapp_conn()) as c,c:
@@ -228,7 +229,10 @@ async def start(account_id:int,body:StartIn,user:CurrentUser=Depends(get_current
             old_source=json.loads(existing['source_json'] or '{}')
             same_goal=(old_source.get('goal_key')==body.goal_key) if body.goal_key else existing['goal']==goal
             if same_goal:
-                return view(c,dict(existing))
+                if body.voluntary:
+                    old_source['voluntary']=True
+                    c.execute('UPDATE mentor_sessions SET source_json=? WHERE id=?',(json.dumps(old_source,ensure_ascii=False),existing['id']))
+                return view(c,get_session(c,account_id,existing['id']))
             # A different chosen topic must not silently reopen unrelated work.
             c.execute('UPDATE mentor_sessions SET elapsed_seconds=?,active_since=NULL WHERE id=?',(elapsed(dict(existing)),existing['id']))
         used=lp.usage(c,account_id,today_local())

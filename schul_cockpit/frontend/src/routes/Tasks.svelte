@@ -1,4 +1,6 @@
 <script>
+  import {isoToday} from '../lib/format.js';
+  import {splitTasks} from '../lib/dayDashboard.js';
   import { api } from '../lib/api.js';
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskEditor from '../lib/TaskEditor.svelte';
@@ -44,7 +46,7 @@
 
   $effect(() => { void accountId; void showAll; load(); });
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = isoToday();
 
   const sections = $derived.by(() => {
     const buckets = { overdue: [], today: [], tomorrow: [], week: [], later: [], noDate: [] };
@@ -52,6 +54,7 @@
     const tomorrow = new Date(todayDate); tomorrow.setDate(tomorrow.getDate() + 1);
     const weekEnd = new Date(todayDate); weekEnd.setDate(weekEnd.getDate() + 7);
     for (const t of tasks) {
+      if (t.status === 'done') continue;
       if (!t.due_date) { buckets.noDate.push(t); continue; }
       const d = new Date(t.due_date);
       if (d < todayDate) buckets.overdue.push(t);
@@ -60,7 +63,7 @@
       else if (d <= weekEnd) buckets.week.push(t);
       else buckets.later.push(t);
     }
-    return buckets;
+    return {...buckets,done:splitTasks(tasks,today).done};
   });
 
   const sectionDefs = [
@@ -70,6 +73,7 @@
     { key: 'week', label: 'Diese Woche' },
     { key: 'later', label: 'Später' },
     { key: 'noDate', label: 'Ohne Datum' },
+    { key: 'done', label: 'Erledigt' },
   ];
 </script>
 
@@ -77,7 +81,7 @@
   <div class="row gap-sm">
     <button onclick={() => (showAll = !showAll)}>{showAll ? 'Nur offene' : 'Alle anzeigen'}</button>
   </div>
-  <button class="ghost" onclick={syncNow} disabled={syncing}>{syncing ? '↻' : '↻ Sync'}</button>
+  <button class="ghost" onclick={syncNow} disabled={syncing}>{syncing ? '↻' : '↻ Aktualisieren'}</button>
 </div>
 
 {#if error}<div class="error-box">{error}</div>{/if}

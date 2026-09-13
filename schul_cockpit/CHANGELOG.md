@@ -1,3 +1,11 @@
+## 0.33.0
+
+- Gemeinsame Lernkarten: ganze Zeile antippbar, feste Fachsymbole, kurze Beschriftung und einheitliches Chatzeichen. Fälligkeit und Hausaufgabenhilfe stehen in einer gemeinsamen rechten Spalte.
+- Lernplan mit sichtbaren Bereichen „Für heute“ und „Schon vorziehen“; gesamter weiterer Themenkatalog frei auswählbar und nach Fach filterbar. Geplante Termine bleiben lesbar. Bewusst gewählte Übungen lassen sich auch an späteren Tagen außerhalb des automatischen Zeitvorschlags fortsetzen; Anrechnung und KI-Kostenkontrollen bleiben erhalten.
+- Elterncockpit mit farbigen Bereichs- und Gesamtzuständen: erledigt, offen, überfällig oder unbekannt. Doppelte Aufgabenliste, doppelte Rückmeldungszeile und Erklärungskasten entfernt. Fachprobleme und Arbeiten führen direkt zu Details; Stundenplan bleibt sichtbar.
+- Deutsche Datumsanzeige auch in Lernverläufen und Themenquellen. Weniger Erklärungstext, lesbare Fachnamen und keine abgeschnittenen Unterrichtsthemen in Stundenkarten.
+- Browserprüfungen für freie Themenwahl, Statusfarben, Speichern/Fehler und responsive Darstellung; Backendprüfung der freiwilligen Fortsetzung einschließlich einmaliger Tagesanrechnung.
+
 ## 0.32.0
 
 - Erledigte Aufgaben: zuletzt abgehakt zuerst; ältere Einträge ohne Abschlusszeit folgen nach Fälligkeit absteigend.

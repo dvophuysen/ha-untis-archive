@@ -1,4 +1,5 @@
 <script>
+ import {formatShortDate} from '../lib/format.js';
   import { onMount } from 'svelte';
   import { api } from '../lib/api.js';
   import LearningActivityEditor from '../lib/LearningActivityEditor.svelte';
@@ -196,11 +197,11 @@
               {#if t.catch_up_open}<p class="muted">Bei mindestens einer versäumten Stunde ist das Nachholen noch offen.</p>{/if}
               <details><summary>Einfach erklärt · gemeinsam ansehen</summary><p class="preserve">{t.explanation}</p><p class="preserve">{t.bridge}</p><p class="muted">KI-Vorschlag aus Allgemeinwissen: bitte fachlich prüfen. Wer die Erklärung gerade gelesen hat, übt anschließend mit Hilfe.</p></details>
               <details><summary>Das hängt damit zusammen</summary><h4>Hilfreiche Grundlagen</h4><p class="preserve">{t.prerequisites}</p><h4>Möglicher nächster Gedanke</h4><p class="preserve">{t.outlook}</p><p class="muted">Fachliche Verbindungen, keine bestätigte Unterrichts- oder Klausurplanung.</p></details>
-              <details><summary>Woran macht die App das fest?</summary>{#each t.evidence as e}<p>{e.date}: {e.text} <small>{e.rating ? ['','· unsicher','· teilweise verstanden','· verstanden'][e.rating] : '· keine Rückmeldung'}</small></p>{/each}</details>
+              <details><summary>Woran macht die App das fest?</summary>{#each t.evidence as e}<p>{formatShortDate(e.date)}: {e.text} <small>{e.rating ? ['','· unsicher','· teilweise verstanden','· verstanden'][e.rating] : '· keine Rückmeldung'}</small></p>{/each}</details>
               <button class="primary" disabled={busy} onclick={()=>act(()=>openDetail(t.id))}>Kurzcheck prüfen und freigeben</button>
             </section>
           {/each}
-          {#each discovery?.questions || [] as q}<section class="card"><div class="eyebrow">{q.subject} · {q.date}</div><h3>Hier fehlt noch eine konkrete Angabe</h3><p>{q.question}</p></section>{/each}
+          {#each discovery?.questions || [] as q}<section class="card"><div class="eyebrow">{q.subject} · {formatShortDate(q.date)}</div><h3>Hier fehlt noch eine konkrete Angabe</h3><p>{q.question}</p></section>{/each}
         {/if}
         {#if current?.personal_goal}<div class="goal"><span>Mein Ziel</span><p>{current.personal_goal}</p></div>{/if}
         {#each data.warnings as warning}<p class="notice">{warning}</p>{/each}
@@ -211,7 +212,7 @@
         {:else}
           <section class="card"><h3>Heute ist nichts zusätzlich eingeplant.</h3><p>Das kann am Zeitrahmen, an einem freien Tag oder an noch fehlenden Übungen liegen. Bereits erledigte Lernzeit wird berücksichtigt.</p><button onclick={() => tab='topics'}>Themen ansehen</button></section>
         {/each}
-        {#if data.exams.length}<section class="card"><h2>Anstehende Arbeiten</h2>{#each data.exams as e}<p>{e.date} · {e.subject_name || e.title || 'Arbeit'}</p>{/each}<a href="#/klausuren">Termine und Zuordnung prüfen →</a></section>{/if}
+        {#if data.exams.length}<section class="card"><h2>Anstehende Arbeiten</h2>{#each data.exams as e}<p>{formatShortDate(e.date)} · {e.subject_name || e.title || 'Arbeit'}</p>{/each}<a href="#/klausuren">Termine und Zuordnung prüfen →</a></section>{/if}
       {:else if tab==='topics'}
         {#if topicForm}
           <form class="card" onsubmit={(e)=>{e.preventDefault();act(saveTopic);}}>
@@ -271,11 +272,11 @@
       {:else if tab==='inbox'}
         <h2>Aus dem Unterricht</h2><p class="muted">Ein Eintrag beschreibt Unterricht, noch keinen festgestellten Lernbedarf. Leere Einträge bleiben unbekannt. Vergangene 21 und kommende 7 Tage.</p>
         {#if lessons && !lessons.available}<p class="notice">Unterrichtsarchiv derzeit nicht erreichbar.</p>{/if}
-        {#each lessons?.lessons || [] as l}<section class="card"><div class="eyebrow">{l.date} · {l.subject_name} {l.future ? '· Kommende Stunde' : ''}</div><p class="preserve">{l.lstext || 'Kein Stoff eingetragen.'}</p><p class="muted">{l.rating ? ['','Als unsicher eingeschätzt','Als teilweise verstanden eingeschätzt','Als verstanden eingeschätzt'][l.rating] : 'Keine Verständnisrückmeldung'}{l.was_absent ? (l.caught_up ? ' · Versäumt, bereits nachgeholt' : ' · Versäumt, Nachholstatus offen') : ''}</p>{#if data.can_manage}<button disabled={!current} onclick={()=>openTopic(null,l)}>Als Thema vorbereiten</button>{/if}</section>{:else}{#if lessons?.available}<p class="empty">Keine Einträge in diesem Zeitraum.</p>{/if}{/each}
+        {#each lessons?.lessons || [] as l}<section class="card"><div class="eyebrow">{formatShortDate(l.date)} · {l.subject_name} {l.future ? '· Kommende Stunde' : ''}</div><p class="preserve">{l.lstext || 'Kein Stoff eingetragen.'}</p><p class="muted">{l.rating ? ['','Als unsicher eingeschätzt','Als teilweise verstanden eingeschätzt','Als verstanden eingeschätzt'][l.rating] : 'Keine Verständnisrückmeldung'}{l.was_absent ? (l.caught_up ? ' · Versäumt, bereits nachgeholt' : ' · Versäumt, Nachholstatus offen') : ''}</p>{#if data.can_manage}<button disabled={!current} onclick={()=>openTopic(null,l)}>Als Thema vorbereiten</button>{/if}</section>{:else}{#if lessons?.available}<p class="empty">Keine Einträge in diesem Zeitraum.</p>{/if}{/each}
       {:else if tab==='progress'}
         <h2>Entwicklung über die Schuljahre</h2><p>Die letzten bis zu 200 abgeschlossenen Einheiten. Rückmeldungen sind Selbsteinschätzungen und ersetzen keine Leistungsüberprüfung.</p>
         <div class="stats">{#each progress as p}<section class="card"><span>AFB {p.afb}</span><strong>{p.total}</strong><small>Einheiten · davon {p.own} selbstständig eingeschätzt</small></section>{/each}</div>
-        {#each data.recent_attempts as a}<section class="card"><div class="eyebrow">{a.completed_at.slice(0,10)} · {a.school_year} · {a.subject}</div><h3>{a.title}</h3><p>{outcomes[a.outcome]} · {a.minutes} Min. · {a.difficulty==='hard' ? 'Anstrengend' : a.difficulty==='easy' ? 'Leicht' : 'Passend'}</p></section>{:else}<p class="empty">Nach der ersten abgeschlossenen Übung erscheint hier euer Verlauf.</p>{/each}
+        {#each data.recent_attempts as a}<section class="card"><div class="eyebrow">{formatShortDate(a.completed_at.slice(0,10))} · {a.school_year} · {a.subject}</div><h3>{a.title}</h3><p>{outcomes[a.outcome]} · {a.minutes} Min. · {a.difficulty==='hard' ? 'Anstrengend' : a.difficulty==='easy' ? 'Leicht' : 'Passend'}</p></section>{:else}<p class="empty">Nach der ersten abgeschlossenen Übung erscheint hier euer Verlauf.</p>{/each}
       {:else if tab==='manage' && data.can_manage}
         <h2>Gemeinsam den Rahmen festlegen</h2><p>Ein aktives Schuljahr steuert die täglichen Vorschläge. Alte Themen und Lernverläufe bleiben erhalten; Fächer und Materialien werden nach Bedarf ergänzt.</p>
         {#if profileForm}

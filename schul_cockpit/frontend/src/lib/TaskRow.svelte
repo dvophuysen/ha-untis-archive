@@ -1,4 +1,5 @@
 <script>
+  import {subjectStyle} from './subjectStyle.js';
   import { api, ApiError } from './api.js';
   import { isoToday, daysBetween, dueLabel, stripUntisMetadata } from './format.js';
 
@@ -69,12 +70,8 @@
     onkeydown={onBodyKey}
   >
     <div class="head">
-      <span class="title" class:done={isDone}>{task.title}</span>
-      {#if task.due_date}
-        <span class="due" class:overdue={isOverdue} class:soon={isDueTodayOrTomorrow}>
-          {dueLabel(task.due_date, today)}
-        </span>
-      {/if}
+      <span class="title" class:done={isDone}>{subjectStyle(task.subject_name || task.title).emoji} {task.title}</span>
+
     </div>
     {#if cleanNotes}
       <div class="notes" class:done={isDone}>{cleanNotes}</div>
@@ -94,11 +91,19 @@
     {/if}
     {#if error}<div class="row-error">{error}</div>{/if}
   </div>
+  <div class="row-actions">      {#if task.due_date}
+        <span class="due" class:overdue={isOverdue} class:soon={isDueTodayOrTomorrow}>
+          {dueLabel(task.due_date, today)}
+        </span>
+      {/if}
   {#if !isDone}<a class="practice-link" aria-label={`Hilfe bei ${task.title}`} title="Dabei brauche ich Hilfe" href={`#/learning?help=${task.id}`}>💬 Hilfe</a>{/if}
+  </div>
 </div>
 
 <style>
-  .practice-link{align-self:center;padding:10px;min-height:44px;box-sizing:border-box;color:var(--accent);flex-shrink:0}
+  .row-actions{display:flex;flex-direction:column;align-items:flex-end;gap:6px;width:10rem;flex-shrink:0}
+  @media(max-width:540px){.task-row{flex-wrap:wrap}.row-actions{width:100%;flex-direction:row;justify-content:flex-end;align-items:center}.body{flex-basis:calc(100% - 60px)}}
+  .practice-link{align-self:flex-end;padding:10px;min-height:44px;box-sizing:border-box;color:var(--accent);flex-shrink:0}
   .task-row {
     display: flex;
     align-items: flex-start;

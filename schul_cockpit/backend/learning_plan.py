@@ -252,7 +252,8 @@ def reserve_resume(c, account, session, day):
     must=c.execute("SELECT COALESCE(SUM(COALESCE(estimated_minutes,20)),0) FROM tasks WHERE account_id=? AND status IN ('open','in_progress') AND due_date<=?",(account,(day+timedelta(days=1)).isoformat())).fetchone()[0]
     available=min(p['daily_minutes']-used['learning'],total-must-used['homework']-used['learning'])
     rest=max(1,session['max_minutes']-(session['elapsed_seconds']//60))
-    if not allowed or used['slots']>=p['max_sessions'] or available<rest:
+    voluntary=json.loads(session.get('source_json') or '{}').get('voluntary') is True
+    if not voluntary and (not allowed or used['slots']>=p['max_sessions'] or available<rest):
         raise HTTPException(409,'Diese Fortsetzung passt heute nicht mehr in den Zeitrahmen. Du kannst jederzeit abschließen; im Plan steht der nächste Lerntag.')
     key=json.loads(session['source_json'] or '{}').get('goal_key','session:'+str(session['id']))
     c.execute('INSERT INTO learning_plan_blocks VALUES(?,?,?,?,?)',(account,day.isoformat(),session['id'],key,rest))

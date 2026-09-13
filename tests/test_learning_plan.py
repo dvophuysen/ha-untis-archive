@@ -183,3 +183,16 @@ def test_verified_discovery_cluster_unifies_different_lesson_wording(setup):
     assert len(g)==1 and g[0]['source_count']==2
     assert {x['text'] for x in g[0]['sources']}=={'Gleichungen umformen','Terme sortieren und Klammern auflösen'}
     assert lp.goal_key(dict(first,topic={'id':322}))!=lp.goal_key(first)
+
+
+def test_chosen_practice_can_resume_on_a_later_nonstudy_day(setup):
+    client,state,patch=setup;install(client);child(state)
+    response=client.post(B+'/sessions',json={'subject':'Deutsch','goal':'Grammatik','voluntary':True,'minutes':5})
+    assert response.status_code==200,response.text
+    sid=response.json()['id']
+    with closing(db.webapp_conn()) as c,c:
+        c.execute("UPDATE learning_profiles SET study_days='[]',daily_minutes=0 WHERE account_id=1")
+        session=dict(c.execute('SELECT * FROM mentor_sessions WHERE id=?',(sid,)).fetchone())
+        lp.reserve_resume(c,1,session,date(2026,9,14))
+        lp.reserve_resume(c,1,session,date(2026,9,14))
+        assert c.execute("SELECT COUNT(*) FROM learning_plan_blocks WHERE session_id=? AND day='2026-09-14'",(sid,)).fetchone()[0]==1

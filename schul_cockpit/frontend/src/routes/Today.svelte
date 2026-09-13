@@ -1,4 +1,5 @@
 <script>
+  import LearningGoal from '../lib/LearningGoal.svelte';
   import { onMount } from 'svelte';
   import { api } from '../lib/api.js';
   import { isoToday, formatShortDate } from '../lib/format.js';
@@ -81,12 +82,12 @@
   {#if work.ahead.length}<section class="day-section"><h3>Schon vorziehen</h3>{#each work.ahead as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</section>{/if}
   {#if work.undated.length}<section class="day-section"><h3>Noch ohne Termin</h3>{#each work.undated as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</section>{/if}
   <section class="day-section practice">
-    <div class="section-head"><h3>Üben & vorbereiten</h3><a href="#/learning">Eigene Aufgabe zeigen</a></div>
+    <div class="section-head"><h3><a href="#/learning">🌱 Üben & vorbereiten →</a></h3></div>
     {#if planError}<p role="status">{planError}</p>{/if}
     {#each plan?.errors ?? [] as problem}<p class="muted">{problem}</p>{/each}
     {#each plan?.upcoming_exams ?? [] as exam}<a class="exam-link" href="#/klausuren">{exam.subject_name || exam.subject || exam.title || 'Arbeit'} · {formatShortDate(exam.date)}</a>{/each}
     {#each plan?.today?.actions ?? [] as item (item.key)}
-      <article class="learning-row"><div><strong>{item.subject}</strong><p>{item.title}</p><span class="muted">{#if item.minutes}Etwa {item.minutes} Minuten · {/if}Vorschlag</span></div><a class="open-action" href={item.url || '#/learning'}>Öffnen</a></article>
+      <LearningGoal goal={item}/>
     {:else}{#if !planError}<p class="muted">Heute ist keine zusätzliche Übung eingeplant.</p>{/if}{/each}
   </section>
   {#if data?.next}<section class="day-section tomorrow">
@@ -104,7 +105,7 @@
   .day-title h2{margin:0;font-size:1.6rem}.eyebrow{color:var(--fg-muted);margin:0 0 8px;font-size:.9rem}
   .day-section{background:var(--bg-card);border:1px solid var(--border);border-radius:18px;padding:16px;margin:0 0 16px}
   h3{font-size:1.1rem;margin:0 0 12px}h4{margin:16px 0 8px}.section-head h3{margin:0}.section-head{margin-bottom:12px}
-  .section-head a,.text-action{font-size:.9rem}.text-action{padding:8px 0;background:transparent;border:0;color:var(--accent);text-align:left}
+  .section-head>a,.text-action{font-size:.9rem}.section-head h3 a{font:inherit;color:var(--fg)}.text-action{padding:8px 0;background:transparent;border:0;color:var(--accent);text-align:left}
   .next-lesson{padding:10px 0;border-bottom:1px solid var(--border)}.save-message{min-height:1.3em;color:var(--accent);font-size:.9rem;margin:6px 0}
   .learning-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border)}.learning-row:last-child{border:0}.learning-row p{margin:4px 0;overflow-wrap:anywhere}
   .open-action{padding:10px;border:1px solid var(--border);border-radius:10px;min-height:44px;flex-shrink:0}.exam-link{display:block;padding:12px 0;border-bottom:1px solid var(--border)}
