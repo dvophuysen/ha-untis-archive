@@ -1,3 +1,17 @@
+## 0.34.0
+
+- Grafische Fächerliste mit gleichen Balkenskalen, Anteil verstandener/teilweiser/schwieriger und noch nicht eingeschätzter Themen. Sortierung nach Anteil verstandener unter eingeschätzten Themen; unbekannte Fächer neutral danach.
+- Kleine Verlaufslinien aus bis zu zwölf gespeicherten Unterrichtsrückmeldungen, keine geglättete Leistungsprognose. Themen, Quellen, Übungszugänge und einzelne Rückmeldungen erst beim Antippen.
+- Enthält das zuvor noch nicht veröffentlichte iPhone-Korrekturpaket 0.33.1. Service-Worker-Cache aktualisiert.
+- Keine neue Gesamtnote, keine Kompetenzbewertung durch Erledigungen, keine zusätzliche KI-Anfrage. Elternintegration der Balkenliste bleibt zurückgestellt.
+
+## 0.33.1
+
+- Fälligkeit und Hilfe auch auf dem iPhone rechts untereinander; keine zusätzliche breite Aktionszeile.
+- Kleinere sichtbare Checkboxen bei unverändert 44 px großer Bedienfläche, ruhigere Fristen und kompaktere Aufgaben-/Lernzeilen.
+- Gemeinsame einfarbige Gesprächssymbole und Navigations-Chevrons statt gemischter Emoji-/Pfeilkombinationen in den zentralen Ansichten.
+- Grafische Fächerübersicht mit Statusbalken, Verlauf und Drilldown als separates Folgepaket ausgearbeitet; keine neue Bewertungsformel eingeführt.
+
 ## 0.33.0
 
 - Gemeinsame Lernkarten: ganze Zeile antippbar, feste Fachsymbole, kurze Beschriftung und einheitliches Chatzeichen. Fälligkeit und Hausaufgabenhilfe stehen in einer gemeinsamen rechten Spalte.

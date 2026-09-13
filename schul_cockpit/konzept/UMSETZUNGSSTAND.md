@@ -1,3 +1,27 @@
+# Grafische Fächerliste 0.34.0
+
+Auf ausdrücklichen Auftrag, das Gesamtpaket fertigzustellen und bereitzustellen, wurde die grafische Fachliste ergänzt. Balken visualisieren bestehende Themen-Selbsteinschätzungen einschließlich neutraler unbekannter Themen; keine neue Kompetenzformel. Sortierung stärkorientiert nach Anteil verstandener unter eingeschätzten Themen, bekannte Fächer vor unbekannten, Gleichstände alphabetisch. Alle sichtbaren Fächer bleiben erreichbar.
+
+Verlauf: bis zu zwölf tatsächliche Rückmeldungen, dedupliziert nach Unterrichtsstunde, chronologisch sortiert; gleiche Skala 1/2/3. Gleiche horizontale Abstände stehen für aufeinanderfolgende Beobachtungen, nicht gleich lange Zeitintervalle. Keine Glättung, keine Leistungs-/Trendklassifikation, keine vermischten KI-Leistungsbelege. Datierte Einzelwerte, Themen und Quellen im Drilldown erreichbar. Ein Fach gleichzeitig offen, Tastaturbedienung erhalten. Elternstartseite nicht um die neue Liste ergänzt.
+
+Prüfung: 10 gezielte Python-Tests (bestehender Plan plus Unbekannt-/Historien-/Deduplizierungsfälle), Produktionsbuild, Browserprüfung für Sortierung, neutrale Unbekannte, einen Drilldown, Übungslinks, Quellen, Tastatur, Datenfehler, 320/390/430/768 px und größere Schrift erfolgreich. Helle Smartphone-Ansicht visuell kontrolliert. Die Prüfbelege für das enthaltene iPhone-Paket stehen darunter. Keine echte Geräte-/PWA-Abnahme behauptet.
+
+Veröffentlichung/Installation werden nach tatsächlicher Ausführung dokumentiert. Voriger lokaler Stand 0.33.1 wird durch dieses Gesamtpaket abgelöst.
+
+---
+
+# iPhone-Korrekturpaket 0.33.1
+
+Fälligkeit und Hilfe bleiben in der rechten Spalte untereinander bei 320/390/430/768 px. Sichtbare Checkbox 24 px bei 44 px Bedienfläche; weniger Karten-/Zeilenabstände. Gemeinsames ActionLabel für Gespräch und Navigation in zentralen Tages-, Lern-, Fach- und Elternansichten. Fachsymbole bleiben erhalten. Keine Änderung der Bewertungslogik.
+
+Produktionsbuild erfolgreich. Bestehende Browserabläufe für Tagesdashboard (einschließlich Speichern und Fehler), Elternansicht und Kinderlernen erfolgreich. Geometrieprüfung: Hilfe unter Datum, gleiche rechte Kante, mindestens 44 px Hilfe-Bedienfläche und kein horizontaler Überlauf auf den vier Breiten. Helle/dunkle iPhone-Screenshots visuell geprüft. Browser verfügt nicht über vollständige Emoji-Schriften; echte Apple-Emoji/PWA-Abnahme steht aus.
+
+Grafische Fachübersicht als getrenntes Folgepaket in [FAECHERUEBERSICHT.md](FAECHERUEBERSICHT.md) ausgearbeitet. Kompakte Statusbalken, Verlauf und Drilldown sind Ziel; Bewertungs-/Trendregeln bleiben offen. Einbau in Elternstartseite ausdrücklich spätere Entscheidung.
+
+Veröffentlichung blockiert: Git-Push konnte sich nicht authentifizieren (could not read Username). Nur lokal auf Branch codex/iphone-ui-0331 vorbereitet; weder Remote-Veröffentlichung noch Live-Installation behauptet. Änderungspaket separat gesichert.
+
+---
+
 # UI-Konsolidierung 0.33.0
 
 Neue verbindliche Gestaltungsregeln und Ansichtsprüfung: [UI_DESIGN.md](../UI_DESIGN.md). Gemeinsame Aufgaben-/Lernzeilen, frei wählbarer Themenkatalog, farbiges Elterncockpit ohne doppelte Listen, Fachsymbole und deutsche Datumsanzeigen umgesetzt. Freiwillig gewählte Übung wird auch bei späterer Fortsetzung nicht durch den automatischen Tagesvorschlag gesperrt; tatsächliche Tagesanrechnung bleibt einmalig.

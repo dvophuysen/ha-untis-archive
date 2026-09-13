@@ -1,4 +1,5 @@
 <script>
+  import ActionLabel from '../lib/ActionLabel.svelte';
  import {formatShortDate} from '../lib/format.js';
   import { onMount } from 'svelte';
   import { api } from '../lib/api.js';
@@ -205,14 +206,14 @@
         {/if}
         {#if current?.personal_goal}<div class="goal"><span>Mein Ziel</span><p>{current.personal_goal}</p></div>{/if}
         {#each data.warnings as warning}<p class="notice">{warning}</p>{/each}
-        {#if data.today.tasks.length}<section class="card"><h2>Hausaufgaben zuerst einplanen</h2><p class="muted">Für offene Aufgaben sind ungefähr {data.today.reserved_homework_minutes} Minuten reserviert. Ohne Schätzung rechnen wir mit 20 Minuten je Aufgabe.</p>{#each data.today.tasks as t}<p>{t.title} <small>· {t.due_date}</small></p>{/each}<a href="#/plan">Zum gemeinsamen Tagesplan →</a></section>{/if}
+        {#if data.today.tasks.length}<section class="card"><h2>Hausaufgaben zuerst einplanen</h2><p class="muted">Für offene Aufgaben sind ungefähr {data.today.reserved_homework_minutes} Minuten reserviert. Ohne Schätzung rechnen wir mit 20 Minuten je Aufgabe.</p>{#each data.today.tasks as t}<p>{t.title} <small>· {t.due_date}</small></p>{/each}<a href="#/plan">Zum gemeinsamen Tagesplan <ActionLabel /></a></section>{/if}
         <div class="section-title"><h2>Dein nächster Schritt</h2><span>{data.today.completed_sessions} heute abgeschlossen</span></div>
         {#each data.today.activities as a}
           <section class="card activity"><div class="eyebrow">{a.subject} · {kindNames[a.kind]} · {a.minutes} Min.</div><h3>{a.title}</h3><p>{a.prompt}</p><p class="muted">{a.reason}</p><button class="primary" disabled={busy || !data.can_write} onclick={() => act(() => start(a.id))}>Lerneinheit öffnen</button></section>
         {:else}
           <section class="card"><h3>Heute ist nichts zusätzlich eingeplant.</h3><p>Das kann am Zeitrahmen, an einem freien Tag oder an noch fehlenden Übungen liegen. Bereits erledigte Lernzeit wird berücksichtigt.</p><button onclick={() => tab='topics'}>Themen ansehen</button></section>
         {/each}
-        {#if data.exams.length}<section class="card"><h2>Anstehende Arbeiten</h2>{#each data.exams as e}<p>{formatShortDate(e.date)} · {e.subject_name || e.title || 'Arbeit'}</p>{/each}<a href="#/klausuren">Termine und Zuordnung prüfen →</a></section>{/if}
+        {#if data.exams.length}<section class="card"><h2>Anstehende Arbeiten</h2>{#each data.exams as e}<p>{formatShortDate(e.date)} · {e.subject_name || e.title || 'Arbeit'}</p>{/each}<a href="#/klausuren">Termine und Zuordnung prüfen <ActionLabel /></a></section>{/if}
       {:else if tab==='topics'}
         {#if topicForm}
           <form class="card" onsubmit={(e)=>{e.preventDefault();act(saveTopic);}}>
@@ -303,7 +304,7 @@
           {#each data.profiles as p}<section class="card"><h3>{p.school_year} · Jahrgang {p.grade} {p.active ? '· Aktiv' : ''}</h3><p>{p.personal_goal || 'Noch kein persönliches Ziel hinterlegt'}</p><button onclick={()=>openProfile(p)}>Einstellungen bearbeiten</button></section>{/each}
           <button class="primary" onclick={()=>openProfile()}>Neues Schuljahr anlegen</button>
         {/if}
-        <section class="card"><h3>Lernzeit und Daten</h3><p>Das gesamte Tagesbudget wird in den bestehenden Kind-Einstellungen verwaltet. Dateien und Verlauf werden mit der App-Datenbank gesichert.</p><div class="actions"><a href="#/settings">Tagesbudget öffnen →</a><a href={`.${base}/export`} download="lernverlauf.json">Lernverlauf exportieren</a></div><p class="muted">Der JSON-Export enthält Texte und Ergebnisse. Dateianhänge sind im vollständigen Datenbank-Backup enthalten.</p></section>
+        <section class="card"><h3>Lernzeit und Daten</h3><p>Das gesamte Tagesbudget wird in den bestehenden Kind-Einstellungen verwaltet. Dateien und Verlauf werden mit der App-Datenbank gesichert.</p><div class="actions"><a href="#/settings">Tagesbudget öffnen <ActionLabel /></a><a href={`.${base}/export`} download="lernverlauf.json">Lernverlauf exportieren</a></div><p class="muted">Der JSON-Export enthält Texte und Ergebnisse. Dateianhänge sind im vollständigen Datenbank-Backup enthalten.</p></section>
       {/if}
     {/if}
   {/if}

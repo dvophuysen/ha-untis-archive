@@ -1,4 +1,5 @@
 <script>
+  import ActionLabel from './lib/ActionLabel.svelte';
   import { onMount } from 'svelte';
   import { appState, loadMe, setActiveAccount, activeAccount } from './lib/store.svelte.js';
   import Today from './routes/Today.svelte';
@@ -222,7 +223,7 @@
       <h2>Übersichten</h2>
       <div class="overview-links">
         {#each [['week','Stundenplan','🗓️'],['subjects','Fächer','📚'],['klausuren','Arbeiten','📝'],['absences','Nachholen','🧩'],['plan','Aufgaben und Wochenplanung','✅']] as [target,label,icon]}
-          <button onclick={() => navigate(target)}><span aria-hidden="true">{icon}</span> {label} →</button>
+          <button onclick={() => navigate(target)}><span aria-hidden="true">{icon}</span> {label} <ActionLabel /></button>
         {/each}
       </div>
     {:else if route.name === 'today'}

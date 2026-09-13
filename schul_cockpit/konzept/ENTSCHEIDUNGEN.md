@@ -30,3 +30,7 @@ Exakte Vier-Tab-Navigation, 0–100-Score, konkrete Tages-/Wochenprämien, Strea
 ## Veröffentlichung
 
 D15 · 13.09.2026 · Beschlossen: Allgemein formulierte Produktkonzepte dürfen im Projekt-Repository dauerhaft gespeichert werden. Persönliche Lernbefunde, Namen, Familienangaben und Betriebsgeheimnisse bleiben außerhalb dieser Fassung.
+
+D16 · 13.09.2026 · Beschlossen: Fälligkeit rechts über Hilfe auch auf dem iPhone. Kleinere visuelle Dichte und konsistente Aktionssymbole; identische Aktion erhält identische Darstellung.
+
+D17 · 13.09.2026 · Zielrichtung präzisiert: Fächerübersicht als kompakte status-sortierte Grafik mit sichtbarer Entwicklung und Details erst nach Antippen. Balken oder Sterne als mögliche Darstellung; exakte Bewertung weiterhin offen. Ausarbeitung in FAECHERUEBERSICHT.md. Elternstartseite: ganze Liste, Auszug oder Verzicht erst später entscheiden.
