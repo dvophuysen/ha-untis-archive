@@ -10,6 +10,8 @@ from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..db import webapp_conn
 from ..iserv_connector import IservLoginError, verify_iserv_login
 from ..secret_store import decrypt_secret, encrypt_secret
+from ..textbook_browser import TextbookScanError
+from ..textbook_catalog import scan_account
 
 router = APIRouter(prefix="/accounts/{account_id}/textbooks", tags=["textbooks"])
 
@@ -172,3 +174,30 @@ async def verify_credentials(
         return _public(row)
     finally:
         conn.close()
+
+
+@router.get("/catalog")
+def get_catalog(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
+    _require_parent(user, account_id)
+    conn = webapp_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id,title,provider,subject_name,discovered_at FROM digital_textbook_catalog WHERE account_id=? ORDER BY COALESCE(subject_name,'zz'),title",
+            (account_id,),
+        ).fetchall()
+        status = conn.execute(
+            "SELECT verification_status FROM digital_textbook_credentials WHERE account_id=?", (account_id,)
+        ).fetchone()
+        return {"status": status[0] if status else None, "books": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@router.post("/catalog/scan")
+async def scan_catalog(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
+    _require_parent(user, account_id)
+    try:
+        await scan_account(account_id)
+    except TextbookScanError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return get_catalog(account_id, user)
