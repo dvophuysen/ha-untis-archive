@@ -403,6 +403,9 @@ def test_the_scope_of_an_exam_starts_after_the_previous_one(env):
     assert scope_start("DEUTSCH", "2026-10-10", entries) == "2026-08-01"
     # Eine Arbeit im Frühjahr zählt weiterhin ab dem vorigen August.
     assert scope_start("KUNST", "2027-03-05", entries) == "2026-08-01"
+    # Eine Arbeit aus dem vorigen Schuljahr öffnet kein Fenster über die Ferien.
+    alt = [{"subject_name": "SPANISCH", "date": "2026-06-11"}]
+    assert scope_start("SPANISCH", "2026-09-24", alt) == "2026-08-01"
 
 
 def test_a_taught_topic_counts_as_scope_until_it_is_shown(mentor_setup):
