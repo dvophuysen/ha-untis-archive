@@ -256,3 +256,22 @@ def test_the_exam_plan_counts_as_exams_without_being_asked(env):
     assert roles["Ferien & Feiertage"] == "other"
     # A plain collection still waits for the parents to decide.
     assert roles["Klasse8D"] == "unused"
+
+
+def test_a_subject_written_into_one_word_still_matches():
+    from backend.exams import match_subject
+
+    amap = {
+        "spanisch": {"subject_name": "SPANISCH", "subject_untis_id": 1, "multiword": False},
+        "englisch": {"subject_name": "ENGLISCH", "subject_untis_id": 2, "multiword": False},
+        "ku": {"subject_name": "KUNST", "subject_untis_id": 3, "multiword": False},
+        "werte und normen": {"subject_name": "Werte und Normen", "subject_untis_id": 4, "multiword": True},
+    }
+    status, subs = match_subject("Spanischarbeit n°1 (Klausur) - Klasse8D", amap)
+    assert status == "auto" and subs[0]["subject_name"] == "SPANISCH"
+    status, subs = match_subject("Englischarbeit Nr. 1 (Klausur)", amap)
+    assert status == "auto" and subs[0]["subject_name"] == "ENGLISCH"
+    # A Kürzel stays exact, otherwise it claims every word that starts alike.
+    assert match_subject("Kuchenverkauf in der Pause", amap)[0] == "unmatched"
+    assert match_subject("Arbeit in Ku", amap)[1][0]["subject_name"] == "KUNST"
+    assert match_subject("Klausur Werte und Normen", amap)[1][0]["subject_name"] == "Werte und Normen"

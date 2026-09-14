@@ -151,7 +151,14 @@ def match_subject(summary: str, amap: dict[str, dict]) -> tuple[str, list[dict]]
     toks = _tokens(summary)
     matched: dict[int | str, dict] = {}
     for alias, info in amap.items():
-        hit = (alias in norm_full) if info["multiword"] else (alias in toks)
+        if info["multiword"]:
+            hit = alias in norm_full
+        else:
+            # German writes these as one word: Spanischarbeit, Englischarbeit,
+            # Physiktest. Short names and Kürzel stay exact, or "Ku" would
+            # claim the Kuchenverkauf.
+            hit = alias in toks or (
+                len(alias) >= 5 and any(token.startswith(alias) for token in toks))
         if hit:
             key = info["subject_untis_id"] or info["subject_name"]
             matched[key] = {
