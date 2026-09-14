@@ -1,3 +1,8 @@
+## 0.40.1
+
+- Der Einstieg zum Ablegen heißt jetzt überall „Material hinzufügen" statt „Blatt".
+- Er steht nicht mehr in der Aufgabenliste, sondern dort, wo man ohnehin hinschaut: beim Öffnen einer Aufgabe im Detail und im Mentorgespräch neben „Foto zeigen". Aus einer Hausaufgabenhilfe heraus gehört das Abgelegte automatisch zu dieser Aufgabe.
+
 ## 0.40.0
 
 - Neue zentrale Materialablage unter „Übersichten → Materialien". Ein Foto genügt: Fach, Materialart, Datum, Themenbezug und der lesbare Text werden erkannt, niemand muss ein Formular ausfüllen. Mehrere Seiten lassen sich auf einmal aufnehmen.

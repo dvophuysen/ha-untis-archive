@@ -97,8 +97,7 @@
           {dueLabel(task.due_date, today)}
         </span>
       {/if}
-  {#if !isDone}<a class="practice-link" aria-label={`Blatt zu ${task.title}`} title="Arbeitsblatt oder Heftseite fotografieren" href={`#/materialien/${encodeURIComponent(task.subject_name ?? '')}/${task.id}`}><ActionLabel label="📎 Blatt" /></a>
-  <a class="practice-link" aria-label={`Hilfe bei ${task.title}`} title="Dabei brauche ich Hilfe" href={`#/learning?help=${task.id}`}><ActionLabel kind="chat" label="Hilfe" /></a>{/if}
+  {#if !isDone}<a class="practice-link" aria-label={`Hilfe bei ${task.title}`} title="Dabei brauche ich Hilfe" href={`#/learning?help=${task.id}`}><ActionLabel kind="chat" label="Hilfe" /></a>{/if}
   </div>
 </div>
 

@@ -1,5 +1,6 @@
 <script>
   import { api } from './api.js';
+  import ActionLabel from './ActionLabel.svelte';
 
   let { accountId, task = null, onclose, onsaved } = $props();
 
@@ -150,6 +151,16 @@
         <textarea bind:value={notes} rows="3"></textarea>
       </div>
 
+      {#if isExisting}
+        <div class="material-row">
+          <a href={`#/materialien/${encodeURIComponent(task.subject_name ?? '')}/${task.id}`}
+             onclick={() => onclose?.()}>
+            <ActionLabel label="Material zu dieser Aufgabe hinzufügen" />
+          </a>
+          <small>Arbeitsblatt, Heftseite oder PDF fotografieren. Es gehört dann zu dieser Aufgabe.</small>
+        </div>
+      {/if}
+
       <div class="row gap-sm" style="margin-top:0.4rem;">
         <button class="primary" disabled={busy || !title.trim()} onclick={save} style="flex:1;">{isExisting ? 'Speichern' : 'Anlegen'}</button>
         {#if isExisting && !isHaTask}
@@ -159,3 +170,8 @@
     </div>
   </div>
 </div>
+
+<style>
+  .material-row { display: grid; gap: 0.15rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border); }
+  .material-row small { color: var(--fg-dim); }
+</style>

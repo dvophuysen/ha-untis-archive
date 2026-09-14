@@ -97,7 +97,8 @@ def elapsed(s):
 
 def view(c,s):
     result={k:v for k,v in s.items() if k not in ('current_task','source_json','pending_key','pending_since','user_id')}
-    result['mode']=json.loads(s.get('source_json') or '{}').get('mode','practice')
+    source=json.loads(s.get('source_json') or '{}')
+    result['mode']=source.get('mode','practice');result['task_id']=source.get('task_id')
     result['goal_key']=json.loads(s.get('source_json') or '{}').get('goal_key');result['task']=public_task(s['current_task']);result['elapsed_seconds']=elapsed(s)
     result['messages']=[{**dict(r),'payload':json.loads(r['payload'])} for r in c.execute('SELECT id,role,text,payload,created_at FROM mentor_messages WHERE session_id=? ORDER BY id',(s['id'],))]
     result['attachments']=[dict(r) for r in c.execute('SELECT id,mime_type,transcript FROM mentor_attachments WHERE session_id=? ORDER BY id',(s['id'],))]
