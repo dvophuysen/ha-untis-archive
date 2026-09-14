@@ -175,6 +175,21 @@ den übrigen Punkten kommen. Bis dahin gilt die schärfere Regel: Ist ein Eintra
 überwiegend organisatorisch, wird er als unklar geführt und erscheint nicht als
 Lerneinheit, auch wenn am Rand ein Fachwort vorkommt.
 
+## Stoff einer Klassenarbeit
+
+Entschieden am 15.09.2026: Solange keine Lehrkraft eingegrenzt hat, gehört zum Stoff
+einer Arbeit alles, was seit der letzten Arbeit desselben Fachs unterrichtet wurde, bei
+der ersten Arbeit alles seit Schuljahresbeginn. Ohne eine solche Annahme lässt sich
+nicht vorbereiten, und eine engere Annahme wäre geraten.
+
+Die Klausurkarte führt diesen Stoff als Liste der Teilthemen mit Haken und zählt, wie
+viele davon selbstständig gezeigt wurden. Die Annahme steht sichtbar dabei, damit
+niemand sie für eine Vorgabe der Schule hält.
+
+Noch nicht gebaut: die Eingrenzung durch die Lehrkraft. Kommt kurz vor einer Arbeit eine
+Schwerpunktliste, soll sie den angenommenen Stoff ersetzen und als geprüft gekennzeichnet
+werden. Das Feld dafür ist im Datensatz vorgesehen und steht bis dahin auf ungeprüft.
+
 ## Offene Fragen
 
 Ob sechs Themen je Fach und Schuljahr der richtige Anlass für eine Umstrukturierung

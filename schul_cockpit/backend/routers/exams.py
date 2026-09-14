@@ -6,13 +6,15 @@ IServ exam plan, and a second place to maintain them only drifts.
 
 from __future__ import annotations
 
+import sqlite3
+from contextlib import closing
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..auth import CurrentUser, assert_account_access, get_current_user, require_admin
-from ..db import webapp_conn
+from ..db import history_conn, webapp_conn
 from ..exams import (
     DEFAULT_EXCLUDE_KEYWORDS,
     _norm,
@@ -106,6 +108,66 @@ def _set_archive_before(account_id: int, value: str | None) -> None:
 PRACTICE_DAYS = 60
 
 
+def scope_start(subject: str | None, exam_date: str, entries: list[dict]) -> str:
+    """Ab wann der Stoff für diese Arbeit zählt.
+
+    Angenommen wird: alles, was seit der letzten Arbeit desselben Fachs
+    unterrichtet wurde, sonst seit Schuljahresbeginn. Eine Eingrenzung durch die
+    Lehrkraft gibt es vorher nicht, und ohne Annahme lässt sich nicht vorbereiten.
+    """
+    previous = [e.get("date") for e in entries
+                if e.get("subject_name") == subject and e.get("date") and e["date"] < exam_date]
+    if previous:
+        return max(previous)
+    return school_year_start(date.fromisoformat(exam_date)).isoformat()
+
+
+def _shown_topics(conn, account_id: int, topic_ids: set[int]) -> set[int]:
+    """Teilthemen, zu denen ohne Hilfe eine richtige Antwort belegt ist."""
+    if not topic_ids:
+        return set()
+    marks = ",".join("?" * len(topic_ids))
+    rows = conn.execute(
+        f"SELECT DISTINCT CAST(substr(l.goal_key,12) AS INTEGER) AS topic_id FROM learning_plan_links l "
+        f"JOIN mentor_evidence e ON e.skill_id=l.skill_id AND e.account_id=l.account_id "
+        f"WHERE l.account_id=? AND l.goal_key LIKE 'discovered:%' AND e.invalidated=0 "
+        f"AND e.result='correct' AND e.help_used=0 "
+        f"AND CAST(substr(l.goal_key,12) AS INTEGER) IN ({marks})",
+        (account_id, *sorted(topic_ids))).fetchall()
+    return {r["topic_id"] for r in rows}
+
+
+def exam_scope(account_id: int, subject: str | None, since: str, until: str) -> dict | None:
+    """Der angenommene Stoff einer Arbeit: alle Themen des Fachs im Zeitraum."""
+    if not subject:
+        return None
+    try:
+        with closing(history_conn()) as hconn:
+            lessons = [r["id"] for r in hconn.execute(
+                "SELECT id FROM lessons WHERE account_id=? AND subject_name=? AND date>=? AND date<=?",
+                (account_id, subject, since, until)).fetchall()]
+    except sqlite3.Error:
+        return None
+    if not lessons:
+        return {"since": since, "topics": [], "parts": 0, "shown": 0, "verified": False}
+    conn = webapp_conn()
+    try:
+        marks = ",".join("?" * len(lessons))
+        rows = conn.execute(
+            f"SELECT DISTINCT t.id, t.title, t.field_id, f.title AS field FROM learning_discovery_items i "
+            f"JOIN learning_topics t ON t.id=i.topic_id LEFT JOIN learning_fields f ON f.id=t.field_id "
+            f"WHERE i.account_id=? AND i.lesson_id IN ({marks})", (account_id, *lessons)).fetchall()
+        topics = [dict(r) for r in rows]
+        shown = _shown_topics(conn, account_id, {r["id"] for r in topics})
+    finally:
+        conn.close()
+    for entry in topics:
+        entry["shown"] = entry["id"] in shown
+    topics.sort(key=lambda e: ((e["field"] or "\uffff").casefold(), e["title"].casefold()))
+    return {"since": since, "topics": topics, "parts": len(topics),
+            "shown": sum(1 for e in topics if e["shown"]), "verified": False}
+
+
 def practice_by_subject(account_id: int, days: int = PRACTICE_DAYS) -> dict[str, dict]:
     """What has actually been practised per subject, as measured, not as felt.
 
@@ -181,6 +243,8 @@ async def exams_all(
         }
         if e["date"] >= today_iso:
             e["practice"] = practice.get(_norm(e.get("subject_name") or ""))
+            e["scope"] = exam_scope(account_id, e.get("subject_name"),
+                                    scope_start(e.get("subject_name"), e["date"], data["exams"]), e["date"])
         (upcoming if e["date"] >= today_iso else past).append(e)
 
     cutoff = archive_before(account_id)

@@ -1,3 +1,8 @@
+## 0.50.0
+
+- Jede anstehende Arbeit zeigt ihren angenommenen Stoff: alle Themen des Fachs seit der letzten Arbeit desselben Fachs, sonst seit Schuljahresbeginn. Dazu, wie viele davon schon selbstständig gezeigt wurden, und die Themen einzeln zum Aufklappen mit Haken.
+- Die Annahme steht ausdrücklich dabei. Solange keine Lehrkraft eingegrenzt hat, gilt alles als relevant, was im Unterricht behandelt wurde; anders lässt sich nicht vorbereiten.
+
 ## 0.49.2
 
 - Die Deckung eines Themenfeldes zählt über alle seine Teile, nicht nur über die gerade angezeigten. Vorher konnte dort „Schritt 3 von 2" stehen, weil ältere Teile außerhalb des Planfensters lagen. Sind nicht alle Teile in der Liste, steht jetzt dabei, wie viele davon gerade zu sehen sind.
