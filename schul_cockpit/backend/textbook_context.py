@@ -1,10 +1,12 @@
 from __future__ import annotations
-import base64, io, re
+import base64, io, logging, re
 from contextlib import closing
 from PIL import Image
 from .db import webapp_conn
 from .secret_store import decrypt_secret
 from .textbook_browser import capture_pages
+
+_LOGGER=logging.getLogger("schul_cockpit.textbooks")
 
 def page_numbers(text: str) -> list[int]:
     pages=[]
@@ -28,6 +30,9 @@ async def homework_page_images(account_id:int,subject:str,task_text:str):
     if not book or not credentials:return [],{"status":"not_configured","pages":pages}
     password=decrypt_secret(credentials["password_ciphertext"])
     try: captured=await capture_pages(credentials["portal_url"],credentials["username"],password,book["title"],pages)
+    except Exception as exc:
+        _LOGGER.warning("digital textbook page fetch failed for account %s: %s",account_id,str(exc))
+        raise
     finally: password=""
     parts=[]
     for i in range(0,min(len(captured),4),2):

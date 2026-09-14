@@ -1,3 +1,8 @@
+## 0.38.1
+
+- Der Buchstart akzeptiert jetzt auch Verlagsviewer, die innerhalb der bestehenden Medienregal-Seite statt in einem neuen Fenster öffnen.
+- Fehler beim Seitenabruf benennen ausschließlich den sicheren Navigationsschritt, damit Verlagsunterschiede ohne Zugangsdaten oder Buchinhalte diagnostizierbar sind.
+
 ## 0.38.0
 
 - Die Hausaufgabenhilfe ordnet Seitenangaben automatisch dem Fachbuch zu, öffnet das persönliche Medienregal und navigiert im Verlagsviewer zu den genannten Seiten.
