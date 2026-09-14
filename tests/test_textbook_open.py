@@ -418,3 +418,34 @@ const opens = link('E-Book öffnen', 400);
 assert.equal(run([skip, opens]), opens);
 '''
     subprocess.run(['node', '-e', script, browser._ENTER_READER_SCRIPT], check=True)
+
+
+def test_page_rect_spans_both_open_pages_and_ignores_thumbnails():
+    script = '''
+const assert = require('node:assert/strict');
+global.innerWidth = 1400; global.innerHeight = 940;
+global.window = {devicePixelRatio: 1};
+function area(label, rect) {
+  return {getAttribute: k => (k === 'aria-label' ? label : null),
+    getBoundingClientRect: () => rect, shadowRoot: null, querySelectorAll: () => []};
+}
+const left = area('Seite 54', {left: 510, top: 200, right: 900, bottom: 740, width: 390, height: 540});
+const right = area('Seite 55', {left: 905, top: 200, right: 1300, bottom: 740, width: 395, height: 540});
+const thumb = area('Seite 12', {left: 10, top: 10, right: 90, bottom: 120, width: 80, height: 110});
+global.document = {querySelectorAll: () => [left, right, thumb]};
+const box = new Function(process.argv[1])();
+assert.deepEqual([box.left, box.top, box.right, box.bottom], [510, 200, 1300, 740]);
+'''
+    subprocess.run(['node', '-e', script, browser._PAGE_RECT_SCRIPT], check=True)
+
+
+def test_crop_keeps_the_original_when_the_area_is_tiny():
+    import io
+    from PIL import Image
+
+    out = io.BytesIO()
+    Image.new('RGB', (400, 300), 'white').save(out, 'PNG')
+    blob = out.getvalue()
+    assert browser._crop(blob, {'left': 0, 'top': 0, 'right': 20, 'bottom': 20, 'ratio': 1}) == blob
+    cropped = browser._crop(blob, {'left': 50, 'top': 40, 'right': 350, 'bottom': 260, 'ratio': 1})
+    assert Image.open(io.BytesIO(cropped)).size == (300, 220)

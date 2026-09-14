@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import os
 import re
 import time
@@ -486,6 +487,32 @@ function look(root){
 look(document); return out.join('|');
 """
 
+_PAGE_RECT_SCRIPT = r"""
+// Union of the page areas actually on screen. Thumbnails carry the same
+// labels, so only areas of a readable size count.
+let box=null;
+function grow(r){
+  if(r.width<innerWidth*0.15||r.height<innerHeight*0.3) return;
+  if(r.bottom<=0||r.top>=innerHeight||r.right<=0||r.left>=innerWidth) return;
+  box=box?{left:Math.min(box.left,r.left),top:Math.min(box.top,r.top),
+           right:Math.max(box.right,r.right),bottom:Math.max(box.bottom,r.bottom)}
+         :{left:r.left,top:r.top,right:r.right,bottom:r.bottom};
+}
+function look(root){
+  for(const e of root.querySelectorAll('*')){
+    for(const marked of [e.getAttribute('aria-label'),e.getAttribute('title')]){
+      if(/(?:Seite|Page)\s+\d{1,4}/i.test(marked||'')){grow(e.getBoundingClientRect());break;}
+    }
+    if(e.shadowRoot) look(e.shadowRoot);
+  }
+}
+look(document);
+if(!box) return null;
+return {left:Math.max(0,Math.floor(box.left)),top:Math.max(0,Math.floor(box.top)),
+        right:Math.min(innerWidth,Math.ceil(box.right)),bottom:Math.min(innerHeight,Math.ceil(box.bottom)),
+        ratio:window.devicePixelRatio||1};
+"""
+
 _VIEWER_AREA_SCRIPT = """
 let best=null, area=0;
 function look(root){
@@ -802,8 +829,29 @@ def _go_to_page(driver, page: int, trace: list | None = None) -> bool:
     return False
 
 
+def _crop(blob: bytes, rect: dict) -> bytes:
+    from PIL import Image
+
+    ratio = rect.get("ratio") or 1
+    box = tuple(int(rect[key] * ratio) for key in ("left", "top", "right", "bottom"))
+    image = Image.open(io.BytesIO(blob))
+    box = (max(0, box[0]), max(0, box[1]), min(image.width, box[2]), min(image.height, box[3]))
+    if box[2] - box[0] < 80 or box[3] - box[1] < 80:
+        return blob
+    out = io.BytesIO()
+    image.crop(box).save(out, "PNG")
+    return out.getvalue()
+
+
 def _viewer_shot(driver) -> bytes:
-    """The book area alone if the viewer exposes one, otherwise the window."""
+    """The book pages alone if the viewer marks them, otherwise the window."""
+    driver.switch_to.default_content()
+    try:
+        rect = driver.execute_script(_PAGE_RECT_SCRIPT)
+        if rect:
+            return _crop(driver.get_screenshot_as_png(), rect)
+    except Exception:
+        pass
     driver.switch_to.default_content()
     try:
         area = _in_frames(driver, _VIEWER_AREA_SCRIPT)
