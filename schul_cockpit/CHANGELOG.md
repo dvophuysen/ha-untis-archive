@@ -1,3 +1,7 @@
+## 0.44.3
+
+- „Spanischarbeit" und „Englischarbeit" werden dem Fach zugeordnet. Bisher zählte nur ein eigenes Wort, und zusammengeschriebene Titel blieben ohne Fach liegen. Kürzel bleiben exakt, damit „Ku" nicht den Kuchenverkauf beansprucht.
+
 ## 0.44.2
 
 - Der Rückfallweg über den Browser fragte eine falsch zusammengesetzte Adresse ab und kam deshalb leer zurück. Der Klausurplan wird jetzt tatsächlich geholt.
