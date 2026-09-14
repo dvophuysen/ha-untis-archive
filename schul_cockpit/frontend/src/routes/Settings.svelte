@@ -56,6 +56,19 @@
     }
   }
 
+  async function verifyTextbookAccess() {
+    textbookBusy = true;
+    textbookMessage = null;
+    try {
+      textbookAccess = await api.post(`/api/accounts/${accountId}/textbooks/verify`);
+      textbookMessage = { ok: true, text: `✓ Verbindung für ${activeName} funktioniert.` };
+    } catch (e) {
+      textbookMessage = { ok: false, text: e.message };
+    } finally {
+      textbookBusy = false;
+    }
+  }
+
   async function toggleDemo() {
     togglingDemo = true;
     try {
@@ -247,7 +260,7 @@
         <div class="dim">Damit der Lernmentor genannte Buchseiten einsehen kann.</div>
       </div>
       <span class:textbook-ok={textbookAccess.configured} class="textbook-status">
-        {textbookAccess.configured ? '✓ gespeichert' : 'noch offen'}
+        {textbookAccess.verification_status === 'connected' ? '✓ verbunden' : textbookAccess.configured ? 'gespeichert' : 'noch offen'}
       </span>
     </div>
     <div class="textbook-grid">
@@ -273,6 +286,9 @@
       <button class="primary" disabled={textbookBusy} onclick={saveTextbookAccess}>
         {textbookBusy ? 'Speichere…' : 'Zugang speichern'}
       </button>
+      {#if textbookAccess.configured}
+        <button disabled={textbookBusy} onclick={verifyTextbookAccess}>Verbindung prüfen</button>
+      {/if}
       {#if textbookAccess.configured}
         <button disabled={textbookBusy} onclick={removeTextbookAccess}>Entfernen</button>
       {/if}

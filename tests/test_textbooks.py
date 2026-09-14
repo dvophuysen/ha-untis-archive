@@ -71,3 +71,23 @@ def test_credentials_are_parent_only_and_validate_portal(env):
         assert client.put(URL, json={
             "portal_url": "https://gaw-iserv.de", "username": "x", "password": "y"
         }).status_code == 403
+
+
+def test_parent_can_verify_saved_access_without_exposing_secret(env):
+    for client, _ in setup(env):
+        assert client.put(URL, json={
+            "portal_url": "https://gaw-iserv.de", "username": "noah", "password": "secret"
+        }).status_code == 200
+        seen = {}
+
+        async def verified(portal, username, password):
+            seen.update(portal=portal, username=username, password=password)
+
+        from unittest.mock import patch
+        with patch.object(textbooks, "verify_iserv_login", verified):
+            response = client.post(URL + "/verify")
+        assert response.status_code == 200
+        assert response.json()["verification_status"] == "connected"
+        assert response.json()["verified_at"]
+        assert "secret" not in response.text
+        assert seen == {"portal": "https://gaw-iserv.de", "username": "noah", "password": "secret"}
