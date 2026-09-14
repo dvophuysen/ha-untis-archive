@@ -4,6 +4,10 @@ import asyncio
 from contextlib import closing
 from datetime import date
 
+
+def _date_today():
+    return date.today()
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -357,3 +361,26 @@ def test_the_school_year_starts_in_august():
     assert school_year_start(_date(2026, 9, 14)) == _date(2026, 8, 1)
     assert school_year_start(_date(2026, 7, 31)) == _date(2025, 8, 1)
     assert school_year_start(_date(2027, 1, 5)) == _date(2026, 8, 1)
+
+
+def test_practice_is_counted_only_within_the_window(env):
+    from contextlib import closing as _closing
+    from datetime import timedelta as _td
+    from backend.routers.exams import practice_by_subject
+
+    today = _date_today()
+    with _closing(db.webapp_conn()) as conn, conn:
+        for when, subject in (
+            (today - _td(days=3), 'PHYSIK'),
+            (today - _td(days=200), 'PHYSIK'),
+            (today - _td(days=200), 'MUSIK'),
+        ):
+            conn.execute(
+                "INSERT INTO mentor_sessions(account_id,user_id,subject,goal,max_minutes,"
+                "created_at,updated_at,is_test,is_demo) VALUES(1,2,?,'Üben',10,?,?,0,0)",
+                (subject, when.isoformat(), when.isoformat()))
+    found = practice_by_subject(1)
+    assert found['physik']['units'] == 1
+    # Was nur weit vor dem Fenster liegt, taucht gar nicht erst auf.
+    assert 'musik' not in found
+    assert found['physik']['days'] == 60

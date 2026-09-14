@@ -1,3 +1,7 @@
+## 0.47.1
+
+- Die Übungsmessung auf der Klausurkarte zählt nur die letzten Wochen und nennt den Zeitraum. Vorher hätte eine Lerneinheit aus dem letzten Schuljahr wie frische Vorbereitung ausgesehen.
+
 ## 0.47.0
 
 - Ab 18 Uhr zeigt „Heute" zuerst, was für morgen fehlt: offene Aufgaben und die Packliste für den nächsten Schultag. Die Packliste war abends bisher gar nicht zu sehen, sondern nur vor Schulbeginn — also dann, wenn es zum Holen zu spät ist. Vorschläge zum Vorziehen und zum Üben klappen abends zu und lassen sich weiter öffnen. Die Uhrzeit ist dieselbe wie die der Erinnerung.

@@ -6,7 +6,7 @@ IServ exam plan, and a second place to maintain them only drifts.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -101,19 +101,26 @@ def _set_archive_before(account_id: int, value: str | None) -> None:
         conn.close()
 
 
-def practice_by_subject(account_id: int) -> dict[str, dict]:
+# Was vor Monaten geübt wurde, sagt über die nächste Arbeit wenig. Die Messung
+# betrachtet deshalb ein Fenster, nicht die gesamte Vergangenheit.
+PRACTICE_DAYS = 60
+
+
+def practice_by_subject(account_id: int, days: int = PRACTICE_DAYS) -> dict[str, dict]:
     """What has actually been practised per subject, as measured, not as felt.
 
     The self-assessment stays useful, but it is a feeling. These numbers come
     from the mentor's own records: units held, topics shown without help, and
-    practice papers written.
+    practice papers written, each within the window.
     """
     found: dict[str, dict] = {}
+    since = (date.today() - timedelta(days=days)).isoformat()
     conn = webapp_conn()
     try:
         rows = conn.execute(
             "SELECT subject, COUNT(*) AS units, MAX(updated_at) AS last_at FROM mentor_sessions "
-            "WHERE account_id=? AND is_test=0 AND is_demo=0 GROUP BY subject", (account_id,)
+            "WHERE account_id=? AND is_test=0 AND is_demo=0 AND updated_at>=? GROUP BY subject",
+            (account_id, since)
         ).fetchall()
         for r in rows:
             found.setdefault(_norm(r["subject"]), {})["units"] = r["units"]
@@ -122,18 +129,19 @@ def practice_by_subject(account_id: int) -> dict[str, dict]:
             "SELECT s.subject AS subject, COUNT(DISTINCT s.id) AS shown FROM mentor_skills s "
             "JOIN mentor_evidence e ON e.skill_id=s.id AND e.account_id=s.account_id "
             "WHERE s.account_id=? AND e.invalidated=0 AND e.result='correct' AND e.help_used=0 "
-            "GROUP BY s.subject", (account_id,)
+            "AND e.created_at>=? GROUP BY s.subject", (account_id, since)
         ).fetchall():
             found.setdefault(_norm(r["subject"]), {})["independent"] = r["shown"]
         for r in conn.execute(
             "SELECT x.subject AS subject, COUNT(*) AS papers FROM mentor_exam_attempts a "
             "JOIN mentor_exams x ON x.id=a.exam_id WHERE a.account_id=? AND a.submitted_at IS NOT NULL "
-            "GROUP BY x.subject", (account_id,)
+            "AND a.submitted_at>=? GROUP BY x.subject", (account_id, since)
         ).fetchall():
             found.setdefault(_norm(r["subject"]), {})["papers"] = r["papers"]
     finally:
         conn.close()
     for entry in found.values():
+        entry["days"] = days
         entry.setdefault("units", 0)
         entry.setdefault("independent", 0)
         entry.setdefault("papers", 0)
