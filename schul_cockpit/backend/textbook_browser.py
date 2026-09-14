@@ -103,16 +103,8 @@ def _scan_shelf_sync(portal_url: str, username: str, password: str) -> list[Shel
 
         driver.get(portal_url.rstrip("/") + "/iserv/eduplacesconnector/")
         WebDriverWait(driver, 10).until(lambda d: d.execute_script("return document.readyState") == "complete")
-        if not _click(driver, re.compile("Eduplaces", re.I)):
-            raise TextbookScanError("Eduplaces wurde nicht gefunden")
-        WebDriverWait(driver, 10).until(lambda d: len(d.find_elements(By.CSS_SELECTOR, "a,button")) > 0)
         if not _click(driver, re.compile("Bildungslogin.*Medienregal|Medienregal", re.I)):
             raise TextbookScanError("Das Bildungslogin-Medienregal wurde nicht gefunden")
-        WebDriverWait(driver, 15).until(lambda d: d.execute_script("return document.readyState") == "complete")
-        # Eduplaces first opens the app detail page.  Only its launch action
-        # performs the authenticated SSO jump into the actual media shelf.
-        if not _click(driver, re.compile(r"^(Öffnen|App öffnen|Starten|Jetzt öffnen)$", re.I)):
-            raise TextbookScanError("Das Medienregal konnte nicht geöffnet werden")
         WebDriverWait(driver, 20).until(lambda d: d.execute_script("return document.readyState") == "complete")
 
         def read_records(d):
