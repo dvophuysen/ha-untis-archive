@@ -111,21 +111,49 @@ Behandeltes ist noch frisch, das Risiko liegt bei dem, was länger zurückliegt 
 
 Die Themenübersicht der Eltern bekommt dieselbe Ordnung. Eine Sache, eine Reihenfolge.
 
-### Nächtliche Konsolidierung
+### Nächtliche Konsolidierung, und warum sie fast nie zusammenführen darf
 
-Einmal pro Nacht, ein Fach je Kind, und nur wenn es dort etwas zu tun gibt: neue
-Einträge seit dem letzten Lauf, oder mehr als sechs Themen im laufenden Schuljahr.
+Mein erster Entwurf hat zwei Vorgänge vermengt, die auseinandergehören. Der Einwand,
+dabei Genauigkeit zu verlieren, trifft genau diese Stelle.
 
-Die KI bekommt die Themen des Fachs mit Zeitraum und Belegzahl und beantwortet zwei
-Fragen. Gehören mehrere Themen zu einem Feld? Dann entsteht ein Oberthema, das die
-Teile in der Reihenfolge führt, in der sie aufeinander aufbauen, und die Teile bleiben
-als Schritte darunter bestehen. Wiederholt sich derselbe Punkt über mehrere Tage in
-nahezu gleicher Form? Dann werden diese Teile zu einem zusammengeführt.
+Gruppieren heißt: Mehrere Themen erscheinen unter einem Feld, in der Reihenfolge, in der
+sie aufeinander aufbauen. Jedes Thema behält seinen Titel, seine Belege, seinen
+Wiederholungsstand und seine Aufgabe. Es geht nichts verloren, die Liste wird nur
+lesbar.
 
-Zwei Grenzen sind wichtig. Ein Thema, an dem bereits geübt wurde, verliert seinen Titel
-nicht und behält seine Wiederholungsstände; ein Oberthema verweist auf es, statt es zu
-ersetzen. Und je Fach höchstens eine Konsolidierung pro Woche, damit die Struktur nicht
-unter den Kindern wegwandert.
+Zusammenführen heißt: Aus zwei Themen wird eines. Dabei geht etwas verloren, und zwar
+das Wichtigste. Werden „Brüche erweitern und kürzen" und „Brüche addieren" zu
+„Bruchrechnung", kann der Lernstand nicht mehr sagen, dass das eine sitzt und das
+andere nicht. Genau diese Unterscheidung ist der Zweck der ganzen Beobachtung.
+
+Das Problem, das wir lösen wollen, ist ein Anzeigeproblem: Die Liste ist unübersichtlich.
+Anzeigeprobleme löst man in der Anzeige. Also gruppieren, und zusammenführen nur im
+Ausnahmefall.
+
+Zusammengeführt wird nur, wenn die beiden Themen nie wirklich verschieden waren. Alle
+drei Bedingungen müssen gelten: Sie beschreiben denselben Vorgang statt zweier Schritte;
+sie liegen unmittelbar beieinander; und an keinem von beiden wurde bereits geübt, es
+gibt also weder Belege noch einen Wiederholungsstand. Trifft eine der drei nicht zu,
+wird gruppiert und nicht zusammengeführt.
+
+Daraus folgt eine Faustregel für den Zuschnitt insgesamt: Für den Nachweis ist fein
+besser, für die Übersicht ist grob besser. Das sind zwei Aufgaben, keine eine. Die
+Belege bleiben so fein, wie unterrichtet wurde; die Übersicht wird so grob, wie ein
+Mensch sie im Kopf behalten kann. Weil sich Gruppen zuklappen lassen, ist beides
+gleichzeitig möglich.
+
+Der nächtliche Lauf nimmt sich daher ein Fach je Kind vor und beantwortet vor allem die
+Gruppierungsfrage: Welche Themen gehören zu einem Feld, und in welcher Reihenfolge bauen
+sie aufeinander auf? Die Zusammenführungsfrage stellt er nur für Themenpaare, die die
+drei Bedingungen oben erfüllen.
+
+Zwei weitere Grenzen. Ein Thema, an dem bereits geübt wurde, verliert seinen Titel nie;
+ein Oberthema verweist darauf, statt es zu ersetzen. Und je Fach höchstens eine
+Umstrukturierung pro Woche, damit die Ordnung nicht unter den Kindern wegwandert.
+
+Offen bleibt, ob ein Oberthema selbst übbar sein soll. Dafür spräche eine
+Wiederholung, die quer über die Teile prüft; dagegen, dass ein Ergebnis darauf keinem
+Teil zugeordnet werden kann. Vorschlag: zunächst nicht übbar, nur Ordnungsrahmen.
 
 ### Schuljahresgrenze
 
@@ -149,9 +177,16 @@ Lerneinheit, auch wenn am Rand ein Fachwort vorkommt.
 
 ## Offene Fragen
 
-Ob sechs Themen je Fach und Schuljahr der richtige Anlass für eine Konsolidierung sind.
-Ob ein Oberthema selbst übbar sein soll oder nur ein Ordnungsrahmen ist. Ob die
-Rückfragen der Auswertung den Eltern aktiv angeboten werden, damit ein unklarer Eintrag
-nachträglich zum Thema werden kann. Ob Fächer ohne Klausuren, etwa Sport oder
-Verfügungsstunde, überhaupt Lerneinheiten bekommen sollen; heute filtert der Plan
-einige davon nach Fachnamen heraus, Verfügungsstunde aber nicht.
+Ob sechs Themen je Fach und Schuljahr der richtige Anlass für eine Umstrukturierung
+sind. Ob die Rückfragen der Auswertung den Eltern aktiv angeboten werden, damit ein
+knapp beschriebener Eintrag nachträglich zum Thema wird; heute bleibt er als Stunde mit
+offener Frage stehen, und niemand sieht die Frage.
+
+Entschieden am 15.09.2026: Sport, Schwimmen und Verfügungsstunde erzeugen keine
+Übungsaufgaben. Bewegung lässt sich am Handy nicht nachholen, die Verfügungsstunde ist
+kein Lernfach.
+
+Ebenfalls entschieden: Ein Eintrag ohne Thema ist nicht gleich ein Eintrag ohne Wert.
+Die Auswertung unterscheidet organisatorisch von inhaltlich zu knapp beschrieben; nur
+das Erste fällt aus den Übungsaufgaben. Anlass war, dass ein Unit-Einstieg und ein
+Lehrwerkkapitel zunächst mit der Bücherausgabe zusammen verschwunden sind.
