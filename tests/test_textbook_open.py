@@ -293,15 +293,32 @@ def test_reader_entry_is_skipped_when_a_page_field_exists(monkeypatch):
     locate.assert_not_called()
 
 
-def test_intercepted_click_is_retried_after_clearing_the_overlay(monkeypatch):
+def test_blocked_click_falls_back_to_driving_the_field(monkeypatch):
     cleared = Mock()
     monkeypatch.setattr(browser, '_dismiss_overlays', cleared)
     monkeypatch.setattr(browser, '_wait_for_page', lambda d, p, **k: True)
+    driver = Mock()
     control = Mock()
-    control.click.side_effect = [browser.TimeoutException('abgefangen'), None]
-    assert browser._type_page(Mock(), control, 18) is True
+    control.click.side_effect = browser.TimeoutException('abgefangen')
+    assert browser._type_page(driver, control, 18) is True
     cleared.assert_called_once()
-    assert control.click.call_count == 2
+    # The overlay cannot swallow a value set on the field itself.
+    driver.execute_script.assert_called_once_with(browser._SET_PAGE_SCRIPT, control, 18)
+
+
+def test_dialog_caption_inside_a_nested_span_is_recognised():
+    script = '''
+const assert = require('node:assert/strict');
+function button(inner) {
+  return {childNodes: [], getAttribute: () => null, innerText: inner,
+    getClientRects: () => [{}], querySelectorAll: () => []};
+}
+const close = button('Verstanden');
+const dialog = {getClientRects: () => [{}], querySelectorAll: () => [close]};
+global.document = {querySelectorAll: sel => (sel === '*' ? [] : [dialog])};
+assert.equal(new Function(process.argv[1])(), close);
+'''
+    subprocess.run(['node', '-e', script, browser._DISMISS_SCRIPT], check=True)
 
 
 def test_settle_waits_while_the_reader_is_still_blank(monkeypatch):
