@@ -356,6 +356,53 @@ function find(root){
 } return find(document);
 """
 
+_DISMISS_SCRIPT = r"""
+// Publishers greet the reader with advertising and cookie dialogs. Their
+// backdrop swallows every click on the page navigation behind it.
+const CLOSE=/(schlie(ß|ss)en|close|ausblenden|nicht mehr anzeigen|verstanden|akzeptieren|zustimmen)/i;
+function look(root){
+  for(const d of root.querySelectorAll('[role="dialog"],[role="alertdialog"],.modal,cdk-dialog-container,mat-dialog-container')){
+    if(!d.getClientRects().length) continue;
+    for(const b of d.querySelectorAll('button,a,[role="button"]')){
+      const own=[...b.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ');
+      const name=((b.getAttribute('aria-label')||'')+' '+(b.getAttribute('title')||'')+' '+own).replace(/\s+/g,' ').trim();
+      if(CLOSE.test(name)&&b.getClientRects().length) return b;
+    }
+  }
+  for(const e of root.querySelectorAll('*')) if(e.shadowRoot){const x=look(e.shadowRoot);if(x)return x;}
+  return null;
+}
+return look(document);
+"""
+
+_PAGE_NEIGHBOUR_SCRIPT = r"""
+// Cornelsen names its page field with a generated React id and hashed
+// classes, but the buttons beside it say "Vorherige Seite" / "Nächste
+// Seite". The field in that same control group is the one we need.
+const NAV=/(n(ä|ae)chste seite|weiterbl(ä|ae)ttern|next page|vorherige seite|zur(ü|ue)ckbl(ä|ae)ttern|previous page)/i;
+const SEARCH=/(such|search|filter)/i;
+function name(e){return ((e.getAttribute('aria-label')||'')+' '+(e.getAttribute('title')||'')).replace(/\s+/g,' ').trim();}
+function look(root){
+  for(const nav of root.querySelectorAll('a,button,div,span,[role="button"],[role="link"]')){
+    if(!NAV.test(name(nav))) continue;
+    let up=nav;
+    for(let step=0;step<4&&up;step++){
+      for(const field of up.querySelectorAll('input,[contenteditable="true"]')){
+        const kind=(field.getAttribute('type')||'text').toLowerCase();
+        if(['checkbox','radio','search','hidden','button','submit'].includes(kind)) continue;
+        const hint=((field.id||'')+' '+(typeof field.className==='string'?field.className:'')+' '+(field.placeholder||'')).toLowerCase();
+        if(SEARCH.test(hint)) continue;
+        if(field.getClientRects().length) return field;
+      }
+      up=up.parentElement;
+    }
+  }
+  for(const e of root.querySelectorAll('*')) if(e.shadowRoot){const x=look(e.shadowRoot);if(x)return x;}
+  return null;
+}
+return look(document);
+"""
+
 _SHOWN_PAGE_SCRIPT = r"""
 const out=[];
 function look(root){
@@ -368,6 +415,10 @@ function look(root){
   for(const e of root.querySelectorAll('*')){
     const own=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ').trim();
     if(own && /^(S\.?|Seite|Page)?\s*\d{1,4}\s*(\/|von|of|-|–)\s*\d{1,4}$/i.test(own)) out.push(own);
+    // Rendered page areas carry their number as a label, one per open page.
+    const marked=((e.getAttribute('aria-label')||'')+' '+(e.getAttribute('title')||'')).trim();
+    const page=marked.match(/(?:Seite|Page)\s+(\d{1,4})/i);
+    if(page) out.push(page[1]);
     if(e.shadowRoot) look(e.shadowRoot);
   }
 }
@@ -460,14 +511,40 @@ def _page_control(driver):
     return _in_frames(driver, _PAGE_FIELD_SCRIPT)
 
 
-def _field_goto(driver, page: int) -> bool:
-    control = _page_control(driver)
-    if control is None:
-        return False
+def _dismiss_overlays(driver, rounds: int = 3) -> None:
+    """Close advertising and cookie dialogs that swallow clicks."""
+    for _ in range(rounds):
+        driver.switch_to.default_content()
+        try:
+            button = _in_frames(driver, _DISMISS_SCRIPT)
+            if button is None:
+                return
+            button.click()
+            time.sleep(0.4)
+        except Exception:
+            return
+    driver.switch_to.default_content()
+
+
+def _type_page(driver, control, page: int) -> bool:
     control.click()
     control.send_keys(Keys.CONTROL, "a")
     control.send_keys(str(page), Keys.ENTER)
     return _wait_for_page(driver, page)
+
+
+def _field_goto(driver, page: int) -> bool:
+    control = _page_control(driver)
+    if control is None:
+        return False
+    return _type_page(driver, control, page)
+
+
+def _neighbour_goto(driver, page: int) -> bool:
+    control = _in_frames(driver, _PAGE_NEIGHBOUR_SCRIPT)
+    if control is None:
+        return False
+    return _type_page(driver, control, page)
 
 
 def _select_goto(driver, page: int) -> bool:
@@ -497,13 +574,19 @@ def _url_goto(driver, page: int) -> bool:
     target = _PAGE_IN_URL.sub(lambda m: m.group(1) + str(page), url, count=1)
     if target == url:
         return False
-    driver.get(target)
+    try:
+        driver.get(target)
+    except TimeoutException:
+        # A single-page app can keep the load flag open long after the route
+        # has changed. Judge by what the viewer shows, not by the flag.
+        pass
     try:
         WebDriverWait(driver, 15).until(
             lambda d: d.execute_script("return document.readyState") == "complete"
         )
     except TimeoutException:
-        return False
+        pass
+    _dismiss_overlays(driver)
     return _wait_for_page(driver, page)
 
 
@@ -511,7 +594,8 @@ def _go_to_page(driver, page: int) -> bool:
     driver.switch_to.default_content()
     if page in _shown_pages(driver):
         return True
-    for strategy in (_field_goto, _select_goto, _button_goto, _url_goto):
+    _dismiss_overlays(driver)
+    for strategy in (_field_goto, _neighbour_goto, _select_goto, _button_goto, _url_goto):
         driver.switch_to.default_content()
         try:
             if strategy(driver, page):
@@ -680,6 +764,7 @@ def _capture_pages_sync(
         new_handles = [h for h in driver.window_handles if h not in before]
         if new_handles:
             driver.switch_to.window(new_handles[-1])
+        _dismiss_overlays(driver)
         stage = "Seitennavigation finden"
         shots: list[PageShot] = []
         note = ""

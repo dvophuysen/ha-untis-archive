@@ -1,3 +1,10 @@
+## 0.39.3
+
+- Werbe- und Cookie-Dialoge der Verlage werden vor dem Blättern geschlossen. Bei BiBox lag ein solcher Dialog über der Seitennavigation und verschluckte jeden Klick.
+- Das Seitenfeld wird auch dann gefunden, wenn es gar keinen Namen hat: Trägt ein Nachbar die Beschriftung „Vorherige Seite" oder „Nächste Seite", gilt das Eingabefeld derselben Bediengruppe als Seitenfeld. Cornelsen vergibt dort nur erzeugte React-Ids und verschlüsselte Klassennamen.
+- Die angezeigte Seite wird zusätzlich an Beschriftungen wie `aria-label="Seite 12"` der dargestellten Seitenflächen abgelesen, sodass auch Doppelseiten sauber erkannt werden.
+- Ein Seitenwechsel über die Adresszeile gilt nicht mehr als gescheitert, nur weil eine Single-Page-Anwendung ihre Ladeanzeige offen lässt.
+
 ## 0.39.2
 
 - Das Seitenfeld des Verlagsviewers wird auch dann gefunden, wenn es weder Beschriftung noch Platzhalter hat. Id, Klasse und Name zählen jetzt als Hinweis. click & study von C.C.Buchner benennt sein Feld ausschließlich über die Id `selectPage` — genau daran scheiterte das Blättern.
