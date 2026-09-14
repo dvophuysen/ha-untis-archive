@@ -1,3 +1,7 @@
+## 0.42.1
+
+- Wird eine Hausaufgabenhilfe geöffnet, gewinnt der Verlauf mit dem meisten Gespräch, nicht der zuletzt angelegte. Leere Doppel, die vor 0.42.0 bei einer Unterbrechung entstanden sind, verdecken das eigentliche Gespräch damit nicht mehr.
+
 ## 0.42.0
 
 - Hausaufgabenhilfe wird nicht mehr nach zehn Minuten oder zwölf Zügen beendet. Sie läuft, bis die Aufgabe verstanden ist; nur „Für heute fertig" schließt sie ab. Vorher brach das Gespräch mitten in einer Rechnung ab.
