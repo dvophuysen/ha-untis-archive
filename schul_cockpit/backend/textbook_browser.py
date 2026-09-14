@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -196,3 +197,102 @@ def _scan_shelf_sync(portal_url: str, username: str, password: str) -> list[Shel
 
 async def scan_shelf(portal_url: str, username: str, password: str) -> list[ShelfBook]:
     return await asyncio.to_thread(_scan_shelf_sync, portal_url, username, password)
+
+
+def _find_and_click_in_frames(driver, title: str, depth: int = 0) -> bool:
+    folded = _clean(title).casefold()
+    for element in driver.find_elements(By.CSS_SELECTOR, "a,button,[role='link'],[role='button'],img"):
+        try:
+            values = (element.text, element.get_attribute("aria-label"), element.get_attribute("title"), element.get_attribute("alt"))
+            if any(folded in _clean(value or "").casefold() for value in values):
+                target = element if element.tag_name != "img" else element.find_element(By.XPATH, "./ancestor::*[self::a or self::button or @role='link' or @role='button'][1]")
+                driver.execute_script("arguments[0].click()", target)
+                return True
+        except Exception:
+            continue
+    if depth < 3:
+        for frame in driver.find_elements(By.CSS_SELECTOR, "iframe,frame"):
+            switched = False
+            try:
+                driver.switch_to.frame(frame)
+                switched = True
+                if _find_and_click_in_frames(driver, title, depth + 1):
+                    return True
+            except Exception:
+                pass
+            finally:
+                if switched:
+                    driver.switch_to.parent_frame()
+    return False
+
+
+def _page_control(driver, depth: int = 0):
+    control = driver.execute_script("""
+      function find(root) {
+        for (const e of root.querySelectorAll('input,[role="spinbutton"],[contenteditable="true"]')) {
+          const hint=((e.getAttribute('aria-label')||'')+' '+(e.getAttribute('title')||'')+' '+(e.placeholder||'')).toLowerCase();
+          if(hint.includes('seite')||hint.includes('page')||e.type==='number') return e;
+        }
+        for(const e of root.querySelectorAll('*')) if(e.shadowRoot){const x=find(e.shadowRoot);if(x)return x;}
+        return null;
+      } return find(document);
+    """)
+    if control or depth >= 3:
+        return control
+    for frame in driver.find_elements(By.CSS_SELECTOR, "iframe,frame"):
+        switched = False
+        try:
+            driver.switch_to.frame(frame)
+            switched = True
+            control = _page_control(driver, depth + 1)
+            if control:
+                return control
+        except Exception:
+            pass
+        finally:
+            if switched and not control:
+                driver.switch_to.parent_frame()
+    return None
+
+
+def _capture_pages_sync(portal_url: str, username: str, password: str, title: str, pages: list[int]):
+    options = webdriver.ChromeOptions()
+    options.binary_location = "/usr/bin/chromium-browser"
+    for arg in ("--headless", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--window-size=1440,1100"):
+        options.add_argument(arg)
+    driver = webdriver.Chrome(options=options); driver.set_page_load_timeout(30)
+    try:
+        driver.get(portal_url.rstrip("/") + "/iserv/")
+        driver.find_element(By.NAME, "_username").send_keys(username)
+        driver.find_element(By.NAME, "_password").send_keys(password)
+        driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
+        WebDriverWait(driver, 15).until(lambda d: "/auth/login" not in d.current_url)
+        driver.get(portal_url.rstrip("/") + "/iserv/eduplacesconnector/")
+        WebDriverWait(driver, 15).until(lambda d: d.execute_script("return document.readyState") == "complete")
+        if not _click(driver, re.compile("Bildungslogin.*Medienregal|Medienregal", re.I)):
+            raise TextbookScanError("Das Medienregal wurde nicht gefunden")
+        WebDriverWait(driver, 20).until(lambda d: d.execute_script("return document.readyState") == "complete")
+        before = set(driver.window_handles); old_url = driver.current_url
+        if not _find_and_click_in_frames(driver, title):
+            raise TextbookScanError("Das zugeordnete Schulbuch wurde im Regal nicht gefunden")
+        WebDriverWait(driver, 15).until(lambda d: len(d.window_handles) > len(before) or d.current_url != old_url)
+        new_handles = [h for h in driver.window_handles if h not in before]
+        if new_handles: driver.switch_to.window(new_handles[-1])
+        result = []
+        for page in pages:
+            driver.switch_to.default_content()
+            control = WebDriverWait(driver, 20).until(_page_control)
+            control.click(); control.send_keys(Keys.CONTROL, "a"); control.send_keys(str(page), Keys.ENTER)
+            WebDriverWait(driver, 12).until(lambda d: str(page) in ((control.get_attribute("value") or control.text or "")))
+            result.append((page, driver.get_screenshot_as_png()))
+        return result
+    except TextbookScanError:
+        raise
+    except Exception as exc:
+        raise TextbookScanError("Die angegebenen Buchseiten konnten nicht geöffnet werden") from exc
+    finally:
+        driver.quit()
+
+
+async def capture_pages(portal_url: str, username: str, password: str, title: str, pages: list[int]):
+    return await asyncio.to_thread(_capture_pages_sync, portal_url, username, password, title, pages)

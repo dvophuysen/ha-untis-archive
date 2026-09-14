@@ -1,3 +1,9 @@
+## 0.38.0
+
+- Die Hausaufgabenhilfe ordnet Seitenangaben automatisch dem Fachbuch zu, öffnet das persönliche Medienregal und navigiert im Verlagsviewer zu den genannten Seiten.
+- Bis zu vier benötigte Seiten werden als zwei Doppelseiten direkt an den Mentor übergeben. Bei erfolgreichem Abruf fordert er weder Foto noch Abschrift an.
+- Nur bei einem echten Viewer-Fehler bleibt das Foto als Rückfalloption erhalten.
+
 ## 0.37.1
 
 - Automatisch erkannte Buchfächer bleiben im Dropdown sichtbar, auch wenn das Fach erst in einem späteren Halbjahr im Stundenplan auftaucht (z. B. Geschichte).
