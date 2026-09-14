@@ -56,13 +56,19 @@ Aus Bild oder PDF entsteht ein Vorschlag: Titel, Kurzbeschreibung, Materialart, 
 
 Regeln: Es wird nur wiedergegeben, was tatsächlich lesbar ist. Unleserliche Stellen werden benannt, nicht ergänzt. Ein Fach wird nur vorgeschlagen, wenn es im Material oder im Zusammenhang belegt ist; andernfalls bleibt das Feld offen und wird erfragt. Themenbezüge werden gegen die vorhandenen `learning_topics` des Kindes geprüft, nicht frei erfunden.
 
+**Wann ausgewertet wird** (D19). Die Auswertung startet sofort nach dem Upload im Hintergrund. Das Kind wartet nicht; der Eintrag erscheint unmittelbar in der Liste und füllt sich innerhalb von Sekunden bis wenigen Minuten. Scheitert der Lauf, bleibt das Material erhalten und wird als noch nicht ausgewertet geführt.
+
+Zusätzlich läuft nachts eine Aktualisierung. Sie ist bewusst kein vollständiger Neudurchlauf über den gesamten Bestand, weil das jede Nacht Geld kostet und fast nichts ändert. Sie erfasst drei Fälle: noch nicht oder fehlgeschlagen ausgewertete Materialien, Materialien mit älterer Auswertungsversion oder älterem Modell als dem aktuell eingerichteten, sowie Materialien mit offenem Fach oder offenem Themenbezug, für die inzwischen ein passendes Thema entstanden ist. Von Menschen korrigierte Felder bleibt der nächtliche Lauf unangetastet. Für den Lauf gilt eine Obergrenze an Materialien je Nacht, damit ein großer Rückstand nicht auf einmal abgearbeitet wird; die Kostenerfassung des Mentors gilt unverändert.
+
 PDFs brauchen zwei Wege, weil beide Sorten vorkommen: Text-PDFs aus Notiz-Apps werden serverseitig ausgelesen, ohne KI und ohne Kosten; gescannte PDFs werden seitenweise in Bilder umgewandelt und dem bildfähigen Modell vorgelegt, mit einer Obergrenze an Seiten je Dokument.
 
 ## Schutz und Grenzen
 
 **Lösungen.** `own_work`, `exam` und alles mit `contains_solutions` darf nicht in den Gesprächskontext des Kindes gelangen. Sonst liest der Mentor dem Kind die Lösung vor, die es selbst gerade erarbeiten soll. Für Elternanalyse, Fehlerbesprechung und gezieltes Training bleiben diese Materialien nutzbar; die Trennung verläuft über den Zweck des Aufrufs, nicht über eine Kennzeichnung im Text.
 
-**Freigabe.** Die Freigabe bleibt bei den Eltern, serverseitig geprüft. Vorgeschlagen wird eine Unterscheidung, die es heute nicht gibt: Ein gerade vom Kind hochgeladenes Material ist **im laufenden Gespräch sofort** nutzbar, so wie ein Chatfoto heute schon. **Dauerhafte Quelle** für andere Einheiten, Übungsklausuren und Themen wird es erst mit der Freigabe. Damit wartet niemand um 16 Uhr auf ein Häkchen, und der Bestand bleibt geprüft.
+**Einsenden und Prüfen** (D18, D20). Kinder dürfen jederzeit und unbegrenzt Material einsenden; das ist ausdrücklich erwünscht. Die Prüfung durch die Eltern bleibt erhalten, wechselt aber die Rolle: Sie ist kein Tor mehr, das den Zugang sperrt, sondern eine Korrektur für Fehlerkennungen und halbfertige Einträge. Ein neues Material ist also sofort Quelle.
+
+Zwei Ausnahmen bleiben gesperrt, bis ein Elternteil daraufgeschaut hat, weil hier ein falscher Automatismus unmittelbar schadet: Material, in dem die Auswertung Lösungen erkennt, und die Arten `own_work` und `exam`. Bis dahin sind sie in der Liste sichtbar und für die Elternanalyse nutzbar, aber nicht im Gespräch des Kindes.
 
 **Sichtbarkeit.** Eltern sehen die Materialien ihrer Kinder. Kinder sehen ihre eigenen. Der bestehende Zugriffsschutz je Konto gilt unverändert.
 
@@ -96,21 +102,26 @@ Ein konkreter Gewinn aus der Aufgabenliste: „Arbeitsheft S. 12 Nr. 3" ist heut
 
 Vorhandene `learning_materials` werden mit ihrem Themenbezug als Verknüpfung übernommen; Text, Datei und Freigabe bleiben erhalten. Chatanhänge bleiben, wo sie sind, bekommen aber die Möglichkeit, als Material übernommen zu werden, samt der bereits vorhandenen Abschrift. Der alte Verwaltungsbildschirm bleibt zunächst erreichbar, bis die neue Liste ihn vollständig ersetzt.
 
+## Entschieden am 14.09.2026
+
+- Kinder senden jederzeit und ausdrücklich erwünscht Material ein (D18).
+- Auswertung sofort im Hintergrund, dazu ein nächtlicher Aktualisierungslauf (D19).
+- Elternprüfung bleibt als Korrekturfunktion erhalten, nicht als Zugangssperre (D20).
+
 ## Offene Fragen
 
-1. Soll die Sofortnutzung im laufenden Gespräch ohne Elternfreigabe gelten, wie oben vorgeschlagen?
+1. Bleiben Lösungsblätter sowie `own_work` und `exam` bis zur Elternprüfung aus dem Kindergespräch heraus, wie oben vorgeschlagen? Ohne diese Ausnahme kann der Mentor eine fotografierte Musterlösung vorlesen.
 2. Dürfen Kinder Material löschen oder nur ausblenden? Vorschlag: ausblenden, löschen bei den Eltern.
 3. Wie lange bleibt Material erhalten? Vorschlag: über Schuljahre hinweg, mit Übernahme wie bei Themen.
-4. Wird eine Neuauswertung automatisch angestoßen, wenn ein neues Modell eingerichtet wird, oder nur auf Anforderung? Kosten sprechen für Anforderung.
-5. Soll die Auswertung sofort beim Upload laufen oder gebündelt im Hintergrund? Sofort ist verständlicher, kostet aber Wartezeit im Gespräch.
-6. Grenze für Seiten je PDF und für die Gesamtzahl ausgewerteter Seiten je Tag.
+4. Obergrenzen: Seiten je PDF, Materialien je nächtlichem Lauf, Speicher je Kind.
+5. Sollen Eltern eine Benachrichtigung über neu eingesandtes Material bekommen, oder genügt die Prüfliste beim nächsten Öffnen?
 
 ## Vorgeschlagene Reihenfolge
 
 1. Datenmodell, Migration, Ablage und Liste ohne KI. Manuelles Fach und manueller Titel möglich, Material ist sofort auffindbar.
-2. Auswertung für Bilder, Übernahme der Chatanhänge, Prüfliste für Eltern.
+2. Auswertung für Bilder, sofort im Hintergrund, Übernahme der Chatanhänge, Prüfliste für Eltern.
 3. PDF-Verarbeitung, Text und Scan.
 4. Mentor- und Klausurnutzung auf die neue Auswahl umstellen.
-5. Neuauswertung, gesperrte Felder, Suche.
+5. Nächtliche Aktualisierung, gesperrte Felder, Suche.
 
 Jede Stufe ist für sich nutzbar. Stufe 1 löst bereits den Anlass: Ein Blatt ist abgelegt und wiederfindbar, statt in einem Chat zu verschwinden.
