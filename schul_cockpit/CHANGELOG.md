@@ -1,3 +1,7 @@
+## 0.44.4
+
+- Die Schulkalender gleichen sich nachts von selbst ab. Klausurtermine verschieben sich im Schuljahr; dafür soll niemand einen Knopf drücken müssen.
+
 ## 0.44.3
 
 - „Spanischarbeit" und „Englischarbeit" werden dem Fach zugeordnet. Bisher zählte nur ein eigenes Wort, und zusammengeschriebene Titel blieben ohne Fach liegen. Kürzel bleiben exakt, damit „Ku" nicht den Kuchenverkauf beansprucht.
