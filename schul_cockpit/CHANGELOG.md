@@ -1,3 +1,7 @@
+## 0.39.8
+
+- Der Einstieg in den Leser wird jetzt immer ausgeführt, wenn eine Schaltfläche wie „E-Book öffnen" sichtbar ist. Cornelsen hält den Leser unsichtbar im Dokument bereit, während noch die Willkommensseite zu sehen ist — der Abruf blätterte dort im verborgenen Leser und fotografierte trotzdem die Startseite.
+
 ## 0.39.7
 
 - Fängt ein Dialog den Klick auf das Seitenfeld ab, setzt der Abruf die Seitenzahl direkt im Feld und löst die Eingabe aus. Das lässt sich von keiner Überlagerung verschlucken.

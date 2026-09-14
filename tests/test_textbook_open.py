@@ -276,21 +276,28 @@ assert.equal(new Function(process.argv[1])(), '18');
 
 def test_start_page_is_followed_into_the_reader(monkeypatch):
     action = Mock()
-    # No page field, no neighbour field, then the "Zum E-Book" link.
-    monkeypatch.setattr(browser, '_page_control', Mock(return_value=None))
-    monkeypatch.setattr(browser, '_in_frames', Mock(side_effect=[None, action, None, Mock()]))
+    monkeypatch.setattr(browser, '_in_frames', Mock(side_effect=[action, None]))
     monkeypatch.setattr(browser, '_dismiss_overlays', lambda d, **k: None)
     monkeypatch.setattr(browser, 'WebDriverWait', Mock(return_value=Mock()))
     assert browser._enter_reader(Mock()) is True
     action.click.assert_called_once()
 
 
-def test_reader_entry_is_skipped_when_a_page_field_exists(monkeypatch):
+def test_reader_entry_happens_even_when_a_page_field_exists(monkeypatch):
+    # Cornelsen keeps the reader in the document behind its welcome page, so
+    # a findable page field must not suppress the entry click.
+    action = Mock()
     monkeypatch.setattr(browser, '_page_control', Mock(return_value=Mock()))
-    locate = Mock()
-    monkeypatch.setattr(browser, '_in_frames', locate)
+    monkeypatch.setattr(browser, '_in_frames', Mock(side_effect=[action, None]))
+    monkeypatch.setattr(browser, '_dismiss_overlays', lambda d, **k: None)
+    monkeypatch.setattr(browser, 'WebDriverWait', Mock(return_value=Mock()))
+    assert browser._enter_reader(Mock()) is True
+    action.click.assert_called_once()
+
+
+def test_reader_entry_stops_when_no_entry_action_is_present(monkeypatch):
+    monkeypatch.setattr(browser, '_in_frames', Mock(return_value=None))
     assert browser._enter_reader(Mock()) is False
-    locate.assert_not_called()
 
 
 def test_blocked_click_falls_back_to_driving_the_field(monkeypatch):
