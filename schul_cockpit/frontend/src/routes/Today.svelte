@@ -119,7 +119,8 @@
       <LearningGoal goal={item}/>
     {:else}{#if !planError}<p class="muted">Heute ist keine zusätzliche Übung eingeplant.</p>{/if}{/each}
   </details>
-  {#if data?.next}<section class="day-section tomorrow">
+  <!-- Abends steht dieselbe Liste bereits oben in der Karte für morgen. -->
+  {#if data?.next && !evening}<section class="day-section tomorrow">
     <h3>Nächster Schultag · {formatShortDate(data.next.date)}</h3>
     <PackingChecklist {accountId} schoolDay={data.next.date} />
   </section>{/if}
