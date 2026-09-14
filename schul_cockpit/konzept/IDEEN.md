@@ -19,6 +19,11 @@ Stand: 13.09.2026. Backlog zur gemeinsamen Klärung, kein verbindlicher Bauauftr
 
 ## Motivation
 
+Ausgearbeiteter Entwurf: [Verantwortung übernehmen statt erinnert werden](VERANTWORTUNG.md).
+Enthält Forschungsstand, Leitlinien und vier Vorschläge (Tagesabschluss mit Wenn-Dann-Plan,
+sichtbare eigene Verlässlichkeit, verabredete Stufen der Übergabe, Wochenrückblick statt
+täglicher Nachfrage) samt Reihenfolge und offenen Fragen. Noch nicht beschlossen.
+
 Gamification bleibt offen. Kandidaten: sichtbare fachliche Fortschritte, dauerhafte Gestaltungselemente, Wochenmarkierungen und verlässlicher Tagesabschluss. Nicht beschlossen: Punkte, Streaks, Belohnungstausch und Sammelwelt. Nachtfristen, Verlustdruck und Bildschirmzeitmaximierung passen nicht zur Vision.
 
 Erinnerungszeitpunkt und Häufigkeit mit den Nutzenden erproben; keine pauschal festgelegte Pushquote. Eine erledigte Handlung darf nicht erneut angemahnt werden. Bestehende HA-Automationen vor Ergänzungen prüfen.
