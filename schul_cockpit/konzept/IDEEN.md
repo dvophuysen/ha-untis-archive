@@ -34,6 +34,12 @@ Vorgeschlagen: begrenzter Pilot mit Ausgangslage, verständlichen Beobachtungskr
 - [Belohnungen und intrinsische Motivation](https://pubmed.ncbi.nlm.nih.gov/10589297/)
 - [Duolingo: Streak-Experiment](https://blog.duolingo.com/improving-the-streak/) – Anbieterexperiment zur Nutzung, kein Nachweis nachhaltigen Lernens unserer Kinder.
 
+## Materialien
+
+- Material entsteht heute an drei Stellen ohne Verbindung: Chatanhang, Lernmaterial am Thema und Buchseiten aus dem Medienregal. Arbeitshefte, Blätter, eigene Mitschriften, digitale Hefte als PDF, bearbeitete Lösungen und zurückgegebene Arbeiten haben keinen gemeinsamen Ort.
+- Der vorhandene Weg zum Ablegen ist für Kinder nicht erreichbar und für Eltern vierfach verschachtelt. Text muss von Hand eingetippt werden, sonst nutzt ihn weder Mentor noch Übungsklausur.
+- Entwurf einer zentralen Ablage mit automatischer Einordnung: [Materialablage](MATERIALIEN.md). Enthält Datenmodell, Materialarten, Datumslogik, Neuauswertung, Schutz vor durchgereichten Lösungen sowie offene Fragen. Noch nicht beschlossen.
+
 ## Konkretisierter Folgeentwurf 13.09.2026
 
 [Grafische Fächerübersicht](FAECHERUEBERSICHT.md): kompakte Balken, Mini-Verlauf und Drilldown. Darstellungs- und Bewertungsdetails dort ausdrücklich als Vorschläge markiert. Noch keine produktive Score-/Trendberechnung, Elternintegration zurückgestellt.
