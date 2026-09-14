@@ -1,3 +1,8 @@
+## 0.39.11
+
+- Sprunglinks werden beim Einstieg in den Leser übergangen. Bei Cornelsen heißt der Sprunglink ganz oben ebenfalls „Zum E-Book", zeigt aber auf die Startadresse der Website und warf den Leser weg.
+- Von mehreren Einstiegen gewinnt die Beschriftung mit „öffnen" oder „lesen" vor einer allgemeinen.
+
 ## 0.39.10
 
 - Führt der Klick auf „E-Book öffnen" nicht in den Leser, wird er zurückgenommen statt den Abruf auf einer leeren Seite stranden zu lassen.

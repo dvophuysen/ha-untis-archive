@@ -405,19 +405,28 @@ const ENTER=/^(zum e-?\s?book|zum buch|buch (ö|oe)ffnen|e-?\s?book (ö|oe)ffnen
 const hits=[];
 function look(root){
   for(const e of root.querySelectorAll('a,button,[role="button"],[role="link"]')){
+    // A skip link named "Zum E-Book" points at the site root and throws the
+    // reader away. Only a link that goes somewhere can be the entry.
+    if(e.tagName==='A'){
+      const href=e.getAttribute('href')||'';
+      if(href===''||href==='/'||href==='#'||/^https?:\/\/[^/]+\/?$/.test(href)) continue;
+    }
     const own=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ');
-    const names=[e.getAttribute('aria-label'),e.getAttribute('title'),own,(e.innerText||'').slice(0,40)];
-    if(names.some(s=>ENTER.test((s||'').replace(/\s+/g,' ').trim()))&&e.getClientRects().length) hits.push(e);
+    const names=[e.getAttribute('aria-label'),e.getAttribute('title'),own,(e.innerText||'').slice(0,40)]
+      .map(s=>(s||'').replace(/\s+/g,' ').trim());
+    if(names.some(s=>ENTER.test(s))&&e.getClientRects().length)
+      hits.push({el:e, opens:names.some(s=>/(ö|oe)ffnen|lesen/i.test(s))});
   }
   for(const e of root.querySelectorAll('*')) if(e.shadowRoot) look(e.shadowRoot);
 }
 look(document);
-// Take the smallest match: the button itself, not a card wrapping it.
-let best=null, area=Infinity;
-for(const e of hits){
-  const r=e.getBoundingClientRect();
-  const a=(r.width||0)*(r.height||0);
-  if(a<area){best=e;area=a;}
+// "E-Book öffnen" beats a bare "Zum E-Book"; among equals the smallest wins,
+// which is the button rather than the card around it.
+let best=null, rank=[9,Infinity];
+for(const hit of hits){
+  const r=hit.el.getBoundingClientRect();
+  const score=[hit.opens?0:1,(r.width||0)*(r.height||0)];
+  if(score[0]<rank[0]||(score[0]===rank[0]&&score[1]<rank[1])){best=hit.el;rank=score;}
 }
 return best;
 """
