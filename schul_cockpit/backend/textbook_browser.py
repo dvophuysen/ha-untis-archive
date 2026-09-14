@@ -603,12 +603,15 @@ def _settle_reader(driver, timeout: float = 30.0) -> None:
 
 
 def _enter_reader(driver, rounds: int = 2) -> bool:
-    """Follow a start page into the reader when no page control exists yet."""
+    """Follow a start page into the reader.
+
+    Cornelsen keeps the reader in the document while still showing its
+    welcome page, so the presence of a page field proves nothing: the field
+    can be driven while the screenshot still shows the start page. Only the
+    entry action itself decides, and its captions never appear in a reader.
+    """
     entered = False
     for _ in range(rounds):
-        driver.switch_to.default_content()
-        if _page_control(driver) or _in_frames(driver, _PAGE_NEIGHBOUR_SCRIPT):
-            break
         driver.switch_to.default_content()
         try:
             action = _in_frames(driver, _ENTER_READER_SCRIPT)
