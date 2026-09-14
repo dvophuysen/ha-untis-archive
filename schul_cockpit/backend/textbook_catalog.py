@@ -47,11 +47,21 @@ async def scan_account(account_id: int) -> list[ShelfBook]:
     now = datetime.now(timezone.utc).isoformat()
     conn = webapp_conn()
     try:
+        existing_subjects = {
+            r["title"]: r["subject_name"]
+            for r in conn.execute(
+                "SELECT title,subject_name FROM digital_textbook_catalog WHERE account_id=?",
+                (account_id,),
+            ).fetchall()
+        }
         conn.execute("DELETE FROM digital_textbook_catalog WHERE account_id=?", (account_id,))
         for book in books:
             conn.execute(
                 "INSERT INTO digital_textbook_catalog(account_id,title,provider,launch_url,subject_name,discovered_at) VALUES(?,?,?,?,?,?)",
-                (account_id, book.title, book.provider, book.launch_url, infer_subject(book.title), now),
+                (
+                    account_id, book.title, book.provider, book.launch_url,
+                    existing_subjects.get(book.title) or infer_subject(book.title), now,
+                ),
             )
         conn.execute(
             "UPDATE digital_textbook_credentials SET verification_status='catalog_ready',updated_at=? WHERE account_id=?",

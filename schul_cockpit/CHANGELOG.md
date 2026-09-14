@@ -1,3 +1,9 @@
+## 0.37.0
+
+- Das persönliche Medienregal wird einschließlich eingebetteter Frames und Shadow-DOM gelesen; Cover-Titel kommen unverändert aus Bildbeschriftung, ARIA-Titel oder Buchkarte.
+- Regal-Bedienelemente wie „Medium entfernen“, „Titel einblenden“ und „Medienregal aktualisieren“ werden ausgeschlossen.
+- Die Elternansicht zeigt links den erkannten Originaltitel und rechts das automatisch erkannte Fach als korrigierbares Dropdown. Korrekturen bleiben bei späteren Scans erhalten.
+
 ## 0.36.6
 
 - Buchcover im persönlichen Medienregal werden auch als interaktive Karten und CSS-Hintergrundcover erkannt; ein klassischer Link mit verschachteltem Bild ist nicht mehr erforderlich.

@@ -36,7 +36,8 @@ _GENERIC_LABELS = re.compile(
 )
 _GENERIC_PHRASES = re.compile(
     r"(digitale(?:s)? Unterrichtssystem|digitale Schulbücher und Lernkurse|"
-    r"direkt in alle digitale Bildungsmedien|Eduplaces)",
+    r"direkt in alle digitale Bildungsmedien|Eduplaces|"
+    r"ausgeblendete Titel|Medium entfernen|Medienregal aktualisieren)",
     re.I,
 )
 
@@ -108,23 +109,51 @@ def _scan_shelf_sync(portal_url: str, username: str, password: str) -> list[Shel
         WebDriverWait(driver, 20).until(lambda d: d.execute_script("return document.readyState") == "complete")
 
         def read_records(d):
-            return d.execute_script(
-                "return [...document.querySelectorAll("
-                "'a,button,[role=link],[role=button],article,"
-                "[class*=card],[class*=Card],[class*=product],[class*=Product],"
-                "[class*=book],[class*=Book],[class*=media],[class*=Media]')]"
-                ".map(e => ({"
-                "text:(e.innerText||e.textContent||'').trim(),"
-                "label:e.getAttribute('aria-label')||e.getAttribute('title')||'',"
-                "image:[...e.querySelectorAll('img')].map(i=>i.alt||i.title||'').filter(Boolean).join(' '),"
-                "hasImage:!!e.querySelector('img')||getComputedStyle(e).backgroundImage!=='none',"
-                "isCard:/card|product|book|media/i.test(e.className||''),href:e.href||null}))"
-            )
+            records = []
+            def collect_current_frame():
+                return d.execute_script("""
+                    const out=[]; const seen=new Set();
+                    function walk(root) {
+                      for (const e of root.querySelectorAll('*')) {
+                        if (seen.has(e)) continue; seen.add(e);
+                        const tag=e.tagName.toLowerCase();
+                        const cls=typeof e.className==='string'?e.className:'';
+                        const label=e.getAttribute('aria-label')||e.getAttribute('title')||'';
+                        const image=tag==='img'?(e.alt||e.title||''):
+                          [...e.querySelectorAll(':scope > img')].map(i=>i.alt||i.title||'').filter(Boolean).join(' ');
+                        const own=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ').trim();
+                        const card=/card|product|book|medium|media|cover|shelf/i.test(cls);
+                        const interactive=['a','button'].includes(tag)||e.getAttribute('role')==='link'||e.getAttribute('role')==='button';
+                        const bg=getComputedStyle(e).backgroundImage!=='none';
+                        if (label||image||own||(card&&e.innerText)) out.push({
+                          text:(own||(card||interactive?e.innerText:'')||'').trim(),
+                          label,image,hasImage:tag==='img'||!!image||bg,isCard:card,
+                          href:e.href||e.getAttribute('data-href')||null
+                        });
+                        if(e.shadowRoot) walk(e.shadowRoot);
+                      }
+                    } walk(document); return out;
+                """)
+            def visit(depth=0):
+                records.extend(collect_current_frame())
+                if depth >= 3:
+                    return
+                frames = d.find_elements(By.CSS_SELECTOR, "iframe,frame")
+                for frame in frames:
+                    try:
+                        d.switch_to.frame(frame)
+                        visit(depth + 1)
+                    except Exception:
+                        pass
+                    finally:
+                        d.switch_to.parent_frame()
+            visit()
+            return records
 
         def record_titles(records):
             values = []
             for record in records:
-                for key in ("text", "label", "image"):
+                for key in ("image", "label", "text"):
                     value = _clean(record.get(key) or "")
                     if (
                         5 <= len(value) <= 180
