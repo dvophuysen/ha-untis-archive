@@ -112,9 +112,12 @@ async def generate(account_id:int,body:Generate,user:CurrentUser=Depends(get_cur
     plan=exam_scope.selected_plan(account_id,body)
     if body.selected_groups and not plan:raise HTTPException(422,'Die Themenübersicht fehlt.')
     if body.minutes < len(body.scope)*3:raise HTTPException(422,'Für diese Themenauswahl bitte mindestens drei Minuten je Themenbereich vorsehen.')
-    with closing(webapp_conn()) as c:
-        mats=[] if body.demo else [dict(r) for r in c.execute('SELECT m.id,m.title,m.content_text,m.source_ref FROM learning_materials m JOIN learning_topics t ON t.id=m.topic_id JOIN learning_profiles p ON p.id=t.profile_id WHERE p.account_id=? AND t.subject=? COLLATE NOCASE AND m.verified=1 ORDER BY m.id DESC LIMIT 5',(account_id,body.subject))]
-        for m in mats:m['content_text']=m['content_text'][:2000]
+    mats=[]
+    if not body.demo:
+        from ..materials import for_context
+        window=plan or {}
+        mats=for_context(account_id,subject=body.subject,start=window.get('start_date'),
+                         end=window.get('end_date'),budget=8000,top=5)
     context=dict(grade=s['profile']['grade'],subject=body.subject,scope=body.scope,minutes=body.minutes,materials=mats,mode='synthetische Demo' if body.demo else 'Echter Unterricht',
                  lessons=[{'date':r['date'],'text':r['text']} for r in s['lessons'] if mc.same_subject(r.get('subject_name'),body.subject) and not r['future']][:12])
     if plan:

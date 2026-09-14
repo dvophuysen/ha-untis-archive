@@ -396,6 +396,74 @@ CREATE TABLE IF NOT EXISTS digital_textbook_catalog (
 CREATE INDEX IF NOT EXISTS idx_textbook_catalog_account ON digital_textbook_catalog(account_id,title);
 """))
 
+_MIGRATIONS.append(("materials_001", """
+CREATE TABLE IF NOT EXISTS materials (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ account_id INTEGER NOT NULL,
+ kind TEXT NOT NULL DEFAULT 'other',
+ subject_name TEXT,
+ title TEXT NOT NULL DEFAULT '',
+ summary TEXT NOT NULL DEFAULT '',
+ content_text TEXT NOT NULL DEFAULT '',
+ document_date TEXT,
+ period_start TEXT,
+ period_end TEXT,
+ captured_at TEXT,
+ created_by INTEGER,
+ filename TEXT,
+ mime_type TEXT,
+ file_bytes BLOB,
+ page_count INTEGER NOT NULL DEFAULT 0,
+ verified INTEGER NOT NULL DEFAULT 0,
+ contains_solutions INTEGER NOT NULL DEFAULT 0,
+ hidden INTEGER NOT NULL DEFAULT 0,
+ locked_fields TEXT NOT NULL DEFAULT '[]',
+ analysis_state TEXT NOT NULL DEFAULT 'pending',
+ analysis_model TEXT,
+ analysis_version INTEGER NOT NULL DEFAULT 0,
+ analyzed_at TEXT,
+ analysis_error TEXT,
+ confidence REAL,
+ legacy_material_id INTEGER,
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_materials_account ON materials(account_id,hidden,document_date);
+CREATE INDEX IF NOT EXISTS idx_materials_subject ON materials(account_id,subject_name);
+CREATE INDEX IF NOT EXISTS idx_materials_state ON materials(analysis_state,analysis_version);
+CREATE TABLE IF NOT EXISTS material_links (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ material_id INTEGER NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
+ kind TEXT NOT NULL,
+ target_id INTEGER NOT NULL,
+ origin TEXT NOT NULL DEFAULT 'ai',
+ created_at TEXT NOT NULL,
+ UNIQUE(material_id,kind,target_id)
+);
+CREATE INDEX IF NOT EXISTS idx_material_links_target ON material_links(kind,target_id);
+"""))
+
+_MIGRATIONS.append(("materials_002_legacy", """
+INSERT INTO materials(account_id,kind,subject_name,title,content_text,filename,mime_type,file_bytes,
+ verified,analysis_state,analysis_version,locked_fields,legacy_material_id,created_at,updated_at)
+SELECT p.account_id,
+ CASE m.source_kind WHEN 'worksheet' THEN 'worksheet' WHEN 'book' THEN 'book_page'
+  WHEN 'teacher' THEN 'assignment' WHEN 'own' THEN 'notes' ELSE 'other' END,
+ t.subject, m.title, m.content_text, m.filename, m.mime_type, m.file_bytes,
+ m.verified,
+ CASE WHEN trim(m.content_text)!='' THEN 'ready' ELSE 'pending' END,
+ 0,
+ CASE WHEN m.verified=1 AND trim(m.content_text)!='' THEN '["content_text","title"]' ELSE '[]' END,
+ m.id, m.created_at, m.created_at
+FROM learning_materials m
+JOIN learning_topics t ON t.id=m.topic_id
+JOIN learning_profiles p ON p.id=t.profile_id
+WHERE NOT EXISTS (SELECT 1 FROM materials x WHERE x.legacy_material_id=m.id);
+INSERT OR IGNORE INTO material_links(material_id,kind,target_id,origin,created_at)
+SELECT n.id,'topic',m.topic_id,'mensch',n.created_at
+FROM materials n JOIN learning_materials m ON m.id=n.legacy_material_id;
+"""))
+
 _MIGRATIONS.append(("digital_textbooks_003_pages", """
 CREATE TABLE IF NOT EXISTS digital_textbook_pages (
  account_id INTEGER NOT NULL,

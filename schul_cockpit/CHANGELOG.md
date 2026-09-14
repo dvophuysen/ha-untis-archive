@@ -1,3 +1,13 @@
+## 0.40.0
+
+- Neue zentrale Materialablage unter „Übersichten → Materialien". Ein Foto genügt: Fach, Materialart, Datum, Themenbezug und der lesbare Text werden erkannt, niemand muss ein Formular ausfüllen. Mehrere Seiten lassen sich auf einmal aufnehmen.
+- Kinder dürfen jederzeit Material einsenden. Direkt an jeder Hausaufgabe gibt es dafür „📎 Blatt"; das Abgelegte gehört dann automatisch zu dieser Aufgabe. Im Lernbereich steht derselbe Einstieg.
+- Unterstützt werden Fotos und PDFs bis 12 MB. Text-PDFs aus Notiz-Apps werden ohne KI ausgelesen, gescannte Seiten werden dem bildfähigen Modell vorgelegt.
+- Die Auswertung läuft sofort im Hintergrund; die Liste füllt sich von selbst. Nachts werden noch offene, fehlgeschlagene und veraltete Einträge nachgezogen, begrenzt auf 40 je Nacht.
+- Eltern korrigieren Fehlerkennungen und markieren Geprüftes. Eine Korrektur bleibt bei jeder späteren Auswertung erhalten. Neu auswerten und Löschen sind ebenfalls dort.
+- Hausaufgabenhilfe und Übungsklausur nutzen die Ablage: Material zur passenden Aufgabe zuerst, dann zum Thema, dann zum Fach. Für eine Übungsklausur zählt jetzt alles, dessen Datum in den gewählten Prüfungszeitraum fällt.
+- Bisherige Lernmaterialien wandern unverändert in die neue Ablage, samt Themenbezug und Prüfstatus.
+
 ## 0.39.13
 
 - Das Seitenbild wird auf die tatsächlich dargestellten Buchseiten zugeschnitten, statt das ganze Fenster samt Werkzeugleisten und Seitenleiste zu zeigen. Bei einer Doppelseite umfasst der Ausschnitt beide Seiten. Miniaturleisten bleiben außen vor. Damit bekommt der Mentor deutlich besser lesbaren Text.
