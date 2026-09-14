@@ -1,3 +1,7 @@
+## 0.43.1
+
+- Die Portalsuche besucht die Terminmodule namentlich, nicht nur was auf der Startseite verlinkt ist, und meldet je Seite, ob überhaupt eine angemeldete Ansicht kam.
+
 ## 0.43.0
 
 - Die App meldet sich mit dem gespeicherten IServ-Zugang am Portal an und sucht dort nach Terminquellen. Hintergrund: über CalDAV sind sämtliche Kalender der Schule leer, die Klausurtermine liegen in einem anderen Modul.
