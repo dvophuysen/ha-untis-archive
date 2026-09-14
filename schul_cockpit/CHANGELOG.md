@@ -1,3 +1,10 @@
+## 0.36.0
+
+- Das Add-on verwendet einen echten isolierten Chromium-Browser für IServ → Eduplaces → Bildungslogin. Damit steht derselbe technische Darstellungsweg wie in Safari auch für JavaScript-/Canvas-basierte Verlagsviewer zur Verfügung.
+- Das Medienregal wird nach einer bestätigten Verbindung automatisch eingelesen und kann in der Elternansicht erneut gescannt werden.
+- Erkannte Bücher erscheinen pro Kind mit automatischer Fachzuordnung; Zugangsdaten, Cookies und Buchinhalte bleiben außerhalb von Logs und API-Antworten.
+- Persistenter Buchkatalog als Grundlage für den gezielten Seitenabruf in Hausaufgabenhilfe, Lernmentor und Klausurvorbereitung.
+
 ## 0.35.2
 
 - Verbindungstest erkennt das aktuelle IServ-Anmeldeformular auch dann korrekt, wenn es ohne `action` an dieselbe URL sendet.
