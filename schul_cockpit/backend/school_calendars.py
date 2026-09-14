@@ -123,14 +123,20 @@ async def sync(account_id: int, *, past_days: int = PAST_DAYS, ahead_days: int =
         today = date.today()
         start, end = today - timedelta(days=past_days), today + timedelta(days=ahead_days)
         total = 0
-        for url, calendar_id in wanted.items():
-            if url not in ids:
-                continue
+        live = {url: cid for url, cid in wanted.items() if url in ids}
+        # Every plugin in one go: each fall back to the browser costs a session.
+        plugins = {iserv_portal._window(url, start, end): cid
+                   for url, cid in live.items() if iserv_portal.is_plugin(url)}
+        if plugins:
+            answers = await iserv_portal.portal_json(
+                row["portal_url"], row["username"], password, tuple(plugins))
+            for full, calendar_id in plugins.items():
+                events = iserv_portal.parse_plugin(answers.get(full), start, end)
+                total += _store_events(account_id, calendar_id, events, start, end)
+        for url, calendar_id in live.items():
             if iserv_portal.is_plugin(url):
-                events = await iserv_portal.plugin_events(
-                    row["portal_url"], row["username"], password, url, start, end)
-            else:
-                events = await iserv_calendar.fetch(row["portal_url"], row["username"], password, url, start, end)
+                continue
+            events = await iserv_calendar.fetch(row["portal_url"], row["username"], password, url, start, end)
             total += _store_events(account_id, calendar_id, events, start, end)
     except (IservCalendarError, IservLoginError) as exc:
         _record(account_id, "failed", str(exc), 0, 0)

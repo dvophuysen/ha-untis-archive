@@ -1,3 +1,7 @@
+## 0.44.1
+
+- Der Klausurplan wird auch dann gelesen, wenn IServ die einfache Anmeldung für seine Kalender-Schnittstelle ablehnt. Dann übernimmt der Browser, und zwar für alle Zusätze in einem Durchgang.
+
 ## 0.44.0
 
 - Die Klausurtermine kommen jetzt an. Sie stehen bei euch nicht in einem Kalender, sondern im Klausurplan — einem Zusatz des IServ-Kalenders, den CalDAV grundsätzlich nicht zeigt. Die sechs erreichbaren Kalender sind das ganze Schuljahr über leer, deshalb blieb die Klausurliste bisher leer.
