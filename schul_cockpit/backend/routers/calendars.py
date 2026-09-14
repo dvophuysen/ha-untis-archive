@@ -9,8 +9,9 @@ from pydantic import Field
 
 from .. import school_calendars as store
 from ..auth import CurrentUser, assert_account_access, get_current_user
-from .. import iserv_calendar
+from .. import iserv_calendar, iserv_portal
 from ..iserv_calendar import IservCalendarError
+from ..iserv_connector import IservLoginError
 from ..learning import InputModel
 
 router = APIRouter(prefix="/accounts/{account_id}/calendars", tags=["calendars"])
@@ -95,6 +96,28 @@ async def inspect(account_id: int, calendar_id: int,
     finally:
         password = ""
     return {"name": entry["name"], "rolle": entry["role"], **result}
+
+
+def _credentials(account_id: int):
+    row = store.credentials(account_id)
+    if row is None:
+        raise HTTPException(404, "Noch kein IServ-Zugang gespeichert")
+    from ..secret_store import decrypt_secret
+
+    return row, decrypt_secret(row["password_ciphertext"])
+
+
+@router.get("/portal")
+async def portal(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Which modules of the IServ portal carry dates, and what they offer."""
+    _parent(user, account_id)
+    row, password = _credentials(account_id)
+    try:
+        return await iserv_portal.survey(row["portal_url"], row["username"], password)
+    except IservLoginError as exc:
+        raise HTTPException(422, str(exc)) from None
+    finally:
+        password = ""
 
 
 @router.get("/probe")

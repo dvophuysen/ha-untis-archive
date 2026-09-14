@@ -1,3 +1,7 @@
+## 0.43.0
+
+- Die App meldet sich mit dem gespeicherten IServ-Zugang am Portal an und sucht dort nach Terminquellen. Hintergrund: über CalDAV sind sämtliche Kalender der Schule leer, die Klausurtermine liegen in einem anderen Modul.
+
 ## 0.42.3
 
 - Der öffentliche Schulkalender wird mitgefunden. Er gehört keiner Gruppe des Kindes, sondern kommt als freigegebener Bereich, und blieb deshalb bisher außen vor.
