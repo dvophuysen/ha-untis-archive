@@ -6,6 +6,7 @@ The seven-day view is a projection, not fabricated future learning outcomes.
 from contextlib import closing
 from datetime import date, timedelta
 import json
+import sqlite3
 from .db import webapp_conn
 from .learning import today_local, now_iso
 from . import mentor_context as mc
@@ -68,6 +69,44 @@ def link_session(c, account, session, skill):
     source=json.loads(session['source_json'] or '{}')
     key=source.get('goal_key')
     if key:c.execute('INSERT OR IGNORE INTO learning_plan_links VALUES(?,?,?)',(account,key,skill))
+
+
+def order_key(goal):
+    """Nach Fach, darin nach Feld, darin in Aufbaureihenfolge, sonst das Älteste
+    zuerst. Bisher war die Liste rein nach Aktualität sortiert, wodurch Einheiten
+    desselben Fachs weit auseinander standen."""
+    return ((goal.get('subject') or '').casefold(),
+            (goal.get('field') or '\uffff').casefold(),
+            goal.get('field_rank') or 0,
+            goal.get('date') or '')
+
+
+def attach_fields(account, goals):
+    """Jedes Ziel erfährt, zu welchem Feld es gehört und wie das Feld dasteht.
+
+    Das Feld ist Orientierung, kein Lernziel: Es trägt keinen eigenen Stand,
+    sondern zählt, wie viele seiner Teile bereits selbstständig gezeigt wurden.
+    Geübt wird weiterhin der einzelne Teil.
+    """
+    from . import learning_fields
+    try:
+        mapping=learning_fields.fields_of(account)
+    except sqlite3.Error:
+        return
+    if not mapping:return
+    for g in goals:
+        entry=mapping.get(g.get('topic_id'))
+        if not entry:continue
+        g['field']=entry['title'];g['field_id']=entry['field_id'];g['field_rank']=entry['field_rank']
+    counts={}
+    for g in goals:
+        if not g.get('field_id'):continue
+        bucket=counts.setdefault(g['field_id'],{'total':0,'shown':0})
+        bucket['total']+=1
+        if 'Selbstständig' in (g.get('state') or ''):bucket['shown']+=1
+    for g in goals:
+        bucket=counts.get(g.get('field_id'))
+        if bucket:g['field_parts'],g['field_shown']=bucket['total'],bucket['shown']
 
 
 def catalogue(account, snapshot=None):
@@ -241,6 +280,8 @@ def build(account,exams=(),snapshot=None,budget_override=None):
         planned=sum(g['minutes'] for g in actions)
         week.append(dict(date=ds,budget_minutes=total,budget_source=source,study_day=allowed or load=='room',day_load=load,target_minutes=target,load_reason='Wenig Bedarf: kurzer Erhaltungscheck genügt' if not need else 'Klausur steht kurz bevor: gezielte Vorbereitung' if urgent else 'Offene Anliegen und fällige Wiederholungen gezielt aufgreifen',homework=must,homework_minutes=homework,used_minutes=already['learning']+already['homework'],learning_used_minutes=already['learning'],used_slots=already['slots'],actions=actions,planned_minutes=planned+homework,remaining_minutes=remaining,overload_minutes=max(0,homework-max(0,total-already['learning']-already['homework'])),message='Das ist der Vorschlag für heute. Du kannst den Tag leichter planen oder bei Bedarf mehr aufgreifen.'))
     today=week[0]
+    attach_fields(account,goals)
+    goals.sort(key=order_key)
     for g in goals:
         if g['key'] not in {x['key'] for x in today['actions']} and g['due_date']<=day.isoformat():deferred.append({**g,'defer_reason':'Heute bereits bearbeitet; später erneut prüfen' if g.get('worked_day')==day.isoformat() or g.get('last_day')==day.isoformat() else 'Nicht zusätzlich eingeplant: Zeitrahmen, Lerntage und Fachwechsel beachten'})
     return dict(account_id=account,date=day.isoformat(),today=today,week=week,goals=goals,deferred=deferred,errors=s['errors'],read_at=s['read_at'],upcoming_exams=list(exams),rule_version='1',workload='viel' if today['overload_minutes'] else 'überschaubar' if today['planned_minutes'] else 'frei',must=today['homework'],should=[],cram=[])
