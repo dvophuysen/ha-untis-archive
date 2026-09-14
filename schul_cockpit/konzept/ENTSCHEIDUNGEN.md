@@ -35,6 +35,8 @@ D19 · 14.09.2026 · Beschlossen: Die KI-Auswertung eines Materials startet sofo
 
 D20 · 14.09.2026 · Beschlossen: Die Elternprüfung bleibt erhalten, wechselt aber die Rolle. Sie sperrt den Zugang nicht mehr, sondern dient der Korrektur von Fehlerkennungen und halbfertigen Einträgen der Kinder. Ein neues Material ist sofort Quelle. Herkunft: Produktabstimmung. Ausgestaltung in [Materialablage](MATERIALIEN.md); ob Lösungsblätter und geschriebene Arbeiten davon ausgenommen bleiben, ist noch offen.
 
+D21 · 14.09.2026 · Beschlossen: Keine Freigabehürde für Lösungsblätter, bearbeitete eigene Aufgaben oder zurückgegebene Klassenarbeiten. Begründung des Nutzers: Der Mentor sagt Lösungen nicht vor, sondern führt mit Fragen zum eigenen Nachdenken, und selbst hochgeladene Lösungen kennt das Kind bereits. Das Kennzeichen für enthaltene Lösungen bleibt als Hinweis an den Mentor erhalten, nicht als Sperre. Herkunft: Produktabstimmung, nach Hinweis des Assistenten auf das Risiko.
+
 ## Veröffentlichung
 
 D15 · 13.09.2026 · Beschlossen: Allgemein formulierte Produktkonzepte dürfen im Projekt-Repository dauerhaft gespeichert werden. Persönliche Lernbefunde, Namen, Familienangaben und Betriebsgeheimnisse bleiben außerhalb dieser Fassung.

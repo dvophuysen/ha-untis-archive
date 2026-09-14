@@ -64,11 +64,11 @@ PDFs brauchen zwei Wege, weil beide Sorten vorkommen: Text-PDFs aus Notiz-Apps w
 
 ## Schutz und Grenzen
 
-**Lösungen.** `own_work`, `exam` und alles mit `contains_solutions` darf nicht in den Gesprächskontext des Kindes gelangen. Sonst liest der Mentor dem Kind die Lösung vor, die es selbst gerade erarbeiten soll. Für Elternanalyse, Fehlerbesprechung und gezieltes Training bleiben diese Materialien nutzbar; die Trennung verläuft über den Zweck des Aufrufs, nicht über eine Kennzeichnung im Text.
+**Lösungen** (D21). Es gibt keine Sperre für Lösungsblätter, eigene bearbeitete Aufgaben oder geschriebene Arbeiten. Der Mentor sagt Lösungen ohnehin nicht vor, sondern führt mit Fragen zum eigenen Nachdenken; und was ein Kind selbst hochlädt, hat es bereits. Eine Freigabehürde würde hier nichts schützen und nur bremsen.
 
-**Einsenden und Prüfen** (D18, D20). Kinder dürfen jederzeit und unbegrenzt Material einsenden; das ist ausdrücklich erwünscht. Die Prüfung durch die Eltern bleibt erhalten, wechselt aber die Rolle: Sie ist kein Tor mehr, das den Zugang sperrt, sondern eine Korrektur für Fehlerkennungen und halbfertige Einträge. Ein neues Material ist also sofort Quelle.
+Das Kennzeichen `contains_solutions` bleibt trotzdem erhalten, aber als Hinweis statt als Sperre: Der Mentor erfährt, dass ein Material Lösungen enthält, und nutzt sie zum Prüfen und Begründen statt zum Vorsagen. Die bestehende Anweisung „keine fertige Gesamtlösung zum Abschreiben" gilt unverändert.
 
-Zwei Ausnahmen bleiben gesperrt, bis ein Elternteil daraufgeschaut hat, weil hier ein falscher Automatismus unmittelbar schadet: Material, in dem die Auswertung Lösungen erkennt, und die Arten `own_work` und `exam`. Bis dahin sind sie in der Liste sichtbar und für die Elternanalyse nutzbar, aber nicht im Gespräch des Kindes.
+**Einsenden und Prüfen** (D18, D20, D21). Kinder dürfen jederzeit und unbegrenzt Material einsenden; das ist ausdrücklich erwünscht. Die Prüfung durch die Eltern bleibt erhalten, wechselt aber die Rolle: Sie ist kein Tor mehr, das den Zugang sperrt, sondern eine Korrektur für Fehlerkennungen und halbfertige Einträge. Jedes Material ist ohne Ausnahme sofort Quelle.
 
 **Sichtbarkeit.** Eltern sehen die Materialien ihrer Kinder. Kinder sehen ihre eigenen. Der bestehende Zugriffsschutz je Konto gilt unverändert.
 
@@ -107,14 +107,14 @@ Vorhandene `learning_materials` werden mit ihrem Themenbezug als Verknüpfung ü
 - Kinder senden jederzeit und ausdrücklich erwünscht Material ein (D18).
 - Auswertung sofort im Hintergrund, dazu ein nächtlicher Aktualisierungslauf (D19).
 - Elternprüfung bleibt als Korrekturfunktion erhalten, nicht als Zugangssperre (D20).
+- Keine Ausnahme für Lösungen, eigene Arbeiten und geschriebene Klassenarbeiten; alles ist sofort nutzbar (D21).
 
 ## Offene Fragen
 
-1. Bleiben Lösungsblätter sowie `own_work` und `exam` bis zur Elternprüfung aus dem Kindergespräch heraus, wie oben vorgeschlagen? Ohne diese Ausnahme kann der Mentor eine fotografierte Musterlösung vorlesen.
-2. Dürfen Kinder Material löschen oder nur ausblenden? Vorschlag: ausblenden, löschen bei den Eltern.
-3. Wie lange bleibt Material erhalten? Vorschlag: über Schuljahre hinweg, mit Übernahme wie bei Themen.
-4. Obergrenzen: Seiten je PDF, Materialien je nächtlichem Lauf, Speicher je Kind.
-5. Sollen Eltern eine Benachrichtigung über neu eingesandtes Material bekommen, oder genügt die Prüfliste beim nächsten Öffnen?
+1. Dürfen Kinder Material löschen oder nur ausblenden? Vorschlag: ausblenden, löschen bei den Eltern.
+2. Wie lange bleibt Material erhalten? Vorschlag: über Schuljahre hinweg, mit Übernahme wie bei Themen.
+3. Obergrenzen: Seiten je PDF, Materialien je nächtlichem Lauf, Speicher je Kind.
+4. Sollen Eltern eine Benachrichtigung über neu eingesandtes Material bekommen, oder genügt die Prüfliste beim nächsten Öffnen?
 
 ## Vorgeschlagene Reihenfolge
 
