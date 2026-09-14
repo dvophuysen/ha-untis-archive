@@ -266,3 +266,63 @@ async def browse(portal_url: str, username: str, password: str,
     import asyncio
 
     return await asyncio.to_thread(_browse_sync, portal_url, username, password, paths)
+
+
+_FETCH_SCRIPT = r"""
+const done = arguments[arguments.length - 1];
+const paths = arguments[0];
+(async () => {
+  const out = [];
+  for (const path of paths) {
+    try {
+      const answer = await fetch(path, {credentials: 'same-origin', headers: {'Accept': 'application/json, text/calendar, */*'}});
+      const text = await answer.text();
+      out.push({pfad: path, status: answer.status, typ: answer.headers.get('content-type') || '', text: text.slice(0, 120000)});
+    } catch (error) {
+      out.push({pfad: path, status: 0, fehler: String(error).slice(0, 200)});
+    }
+  }
+  done(out);
+})();
+"""
+
+
+def _read_sync(portal_url: str, username: str, password: str, paths: tuple[str, ...]) -> list[dict]:
+    from selenium.common.exceptions import TimeoutException
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+
+    from .textbook_browser import _driver
+
+    base = portal_url.rstrip("/") + "/"
+    driver = _driver()
+    try:
+        driver.get(urljoin(base, "iserv/"))
+        driver.find_element(By.NAME, "_username").send_keys(username)
+        driver.find_element(By.NAME, "_password").send_keys(password)
+        driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
+        try:
+            WebDriverWait(driver, 20).until(lambda d: "/auth/login" not in d.current_url)
+        except TimeoutException:
+            raise IservLoginError("Benutzername oder Passwort stimmen nicht")
+        # The request has to come from the page itself, so the session applies.
+        driver.get(urljoin(base, "iserv/calendar"))
+        WebDriverWait(driver, 20).until(
+            lambda d: d.execute_script("return document.readyState") == "complete")
+        driver.set_script_timeout(120)
+        return driver.execute_async_script(_FETCH_SCRIPT, list(paths))
+    finally:
+        try:
+            driver.quit()
+        except Exception:
+            pass
+
+
+async def read(portal_url: str, username: str, password: str, paths: tuple[str, ...]) -> list[dict]:
+    """Ask the portal's own data addresses, from inside the logged-in page."""
+    import asyncio
+
+    for path in paths:
+        if path.startswith("http") and not _same_host(path, portal_url):
+            raise IservLoginError("Diese Adresse gehört nicht zu eurem IServ")
+    return await asyncio.to_thread(_read_sync, portal_url, username, password, paths)

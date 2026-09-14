@@ -124,6 +124,24 @@ async def portal(account_id: int, browser: bool = False, paths: str | None = Non
         password = ""
 
 
+@router.get("/portal/read")
+async def portal_read(account_id: int, paths: str,
+                      user: CurrentUser = Depends(get_current_user)) -> dict:
+    """What the portal's own data addresses answer, from the logged-in page."""
+    _parent(user, account_id)
+    row, password = _credentials(account_id)
+    wanted = tuple(p.strip() for p in paths.split(",") if p.strip())[:8]
+    if not wanted:
+        raise HTTPException(422, "Keine Adresse angegeben")
+    try:
+        return {"antworten": await iserv_portal.read(
+            row["portal_url"], row["username"], password, wanted)}
+    except IservLoginError as exc:
+        raise HTTPException(422, str(exc)) from None
+    finally:
+        password = ""
+
+
 @router.get("/probe")
 async def probe(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
     """Structure of the CalDAV account, to see where shared calendars sit."""
