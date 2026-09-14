@@ -280,6 +280,9 @@
           placeholder={textbookAccess.password_saved ? 'Gespeichert – leer lassen' : 'Passwort'}
           bind:value={textbookPassword}
         />
+        {#if textbookAccess.password_saved && !textbookPassword}
+          <span class="password-saved">🔒 Passwort sicher gespeichert</span>
+        {/if}
       </label>
     </div>
     <div class="row gap-sm textbook-actions">
@@ -520,6 +523,7 @@
   .textbook-grid { display: grid; gap: 0.55rem; margin-top: 0.7rem; }
   .textbook-grid label { margin: 0; }
   .textbook-grid input { width: 100%; margin-top: 0.2rem; }
+  .password-saved { display: block; color: var(--success, #18794e); font-size: 0.8rem; margin-top: 0.15rem; }
   .textbook-actions { margin-top: 0.75rem; flex-wrap: wrap; }
   @media (min-width: 760px) {
     .textbook-grid { grid-template-columns: 1.1fr 1fr 1fr; }
