@@ -369,6 +369,19 @@ CREATE TABLE IF NOT EXISTS reminder_deliveries (
 );
 """))
 
+_MIGRATIONS.append(("digital_textbooks_001", """
+CREATE TABLE IF NOT EXISTS digital_textbook_credentials (
+ account_id INTEGER PRIMARY KEY,
+ portal_url TEXT NOT NULL,
+ username TEXT NOT NULL,
+ password_ciphertext TEXT NOT NULL,
+ verified_at TEXT,
+ verification_status TEXT,
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL
+);
+"""))
+
 def history_conn() -> sqlite3.Connection:
     """Read-only connection to the UNTIS Archive's history.db."""
     uri = f"file:{SETTINGS.history_db_path}?mode=ro"

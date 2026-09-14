@@ -6,6 +6,56 @@
   let { accountId } = $props();
   let togglingDemo = $state(false);
 
+  // --- Digitale Schulbücher (Eltern, getrennt pro Kind) ---
+  let textbookAccess = $state(null);
+  let textbookPassword = $state('');
+  let textbookBusy = $state(false);
+  let textbookMessage = $state(null);
+
+  async function loadTextbookAccess() {
+    if (!accountId || !['parent', 'admin'].includes(appState.me?.role) && !appState.me?.is_admin) return;
+    try {
+      textbookAccess = await api.get(`/api/accounts/${accountId}/textbooks`);
+      textbookPassword = '';
+    } catch (e) {
+      textbookMessage = { ok: false, text: e.message };
+    }
+  }
+
+  $effect(() => { void accountId; void appState.me?.role; loadTextbookAccess(); });
+
+  async function saveTextbookAccess() {
+    textbookBusy = true;
+    textbookMessage = null;
+    try {
+      textbookAccess = await api.put(`/api/accounts/${accountId}/textbooks`, {
+        portal_url: textbookAccess.portal_url,
+        username: textbookAccess.username,
+        password: textbookPassword || null,
+      });
+      textbookPassword = '';
+      textbookMessage = { ok: true, text: `Zugang für ${activeName} gespeichert.` };
+    } catch (e) {
+      textbookMessage = { ok: false, text: e.message };
+    } finally {
+      textbookBusy = false;
+    }
+  }
+
+  async function removeTextbookAccess() {
+    if (!confirm(`Schulbuch-Zugang für ${activeName} entfernen?`)) return;
+    textbookBusy = true;
+    try {
+      await api.delete(`/api/accounts/${accountId}/textbooks`);
+      await loadTextbookAccess();
+      textbookMessage = { ok: true, text: 'Zugang entfernt.' };
+    } catch (e) {
+      textbookMessage = { ok: false, text: e.message };
+    } finally {
+      textbookBusy = false;
+    }
+  }
+
   async function toggleDemo() {
     togglingDemo = true;
     try {
@@ -187,6 +237,53 @@
   <button class="ghost" onclick={() => history.back()}>← zurück</button>
 </div>
 {#if accountId}{#key accountId}<ReminderSettings {accountId}/>{/key}{/if}
+
+{#if textbookAccess && (['parent', 'admin'].includes(appState.me?.role) || appState.me?.is_admin)}
+  <div class="section-title">📚 Digitale Schulbücher · {activeName}</div>
+  <div class="card textbook-card">
+    <div class="row between textbook-heading">
+      <div>
+        <strong>IServ & Bildungslogin</strong>
+        <div class="dim">Damit der Lernmentor genannte Buchseiten einsehen kann.</div>
+      </div>
+      <span class:textbook-ok={textbookAccess.configured} class="textbook-status">
+        {textbookAccess.configured ? '✓ gespeichert' : 'noch offen'}
+      </span>
+    </div>
+    <div class="textbook-grid">
+      <label>
+        IServ-Adresse
+        <input type="url" autocomplete="url" bind:value={textbookAccess.portal_url} />
+      </label>
+      <label>
+        Benutzername
+        <input type="text" autocomplete="username" autocapitalize="none" bind:value={textbookAccess.username} />
+      </label>
+      <label>
+        Passwort
+        <input
+          type="password"
+          autocomplete="new-password"
+          placeholder={textbookAccess.password_saved ? 'Gespeichert – leer lassen' : 'Passwort'}
+          bind:value={textbookPassword}
+        />
+      </label>
+    </div>
+    <div class="row gap-sm textbook-actions">
+      <button class="primary" disabled={textbookBusy} onclick={saveTextbookAccess}>
+        {textbookBusy ? 'Speichere…' : 'Zugang speichern'}
+      </button>
+      {#if textbookAccess.configured}
+        <button disabled={textbookBusy} onclick={removeTextbookAccess}>Entfernen</button>
+      {/if}
+    </div>
+    {#if textbookMessage}
+      <div class={textbookMessage.ok ? 'banner' : 'error-box'} style="margin-top:0.6rem;">
+        {textbookMessage.text}
+      </div>
+    {/if}
+  </div>
+{/if}
 
 
 {#if error}<div class="error-box">{error}</div>{/if}
@@ -393,6 +490,24 @@
 {/if}
 
 <style>
+  .textbook-heading { align-items: flex-start; gap: 0.75rem; }
+  .textbook-status {
+    white-space: nowrap;
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    background: var(--bg-elevated);
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+  .textbook-status.textbook-ok { background: var(--success-soft, #e4f5ed); color: var(--success, #18794e); }
+  .textbook-grid { display: grid; gap: 0.55rem; margin-top: 0.7rem; }
+  .textbook-grid label { margin: 0; }
+  .textbook-grid input { width: 100%; margin-top: 0.2rem; }
+  .textbook-actions { margin-top: 0.75rem; flex-wrap: wrap; }
+  @media (min-width: 760px) {
+    .textbook-grid { grid-template-columns: 1.1fr 1fr 1fr; }
+  }
   .code-box {
     display: block;
     word-break: break-all;

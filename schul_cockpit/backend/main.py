@@ -46,6 +46,7 @@ from .routers import (
     setup,
     subjects,
     tasks,
+    textbooks,
     today,
     week,
 )
@@ -164,6 +165,7 @@ app.include_router(checkins.router, prefix=API)
 app.include_router(tasks.router, prefix=API)
 app.include_router(afternoon.router, prefix=API)
 app.include_router(settings_router.router, prefix=API)
+app.include_router(textbooks.router, prefix=API)
 app.include_router(audit.router, prefix=API)
 app.include_router(push_router.router, prefix=API)
 app.include_router(reminders_router.router, prefix=API)
