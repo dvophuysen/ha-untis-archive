@@ -107,7 +107,9 @@
             {#if e.subject_name && e.title && e.title !== e.subject_name}
               <div class="dim">{e.title}</div>
             {/if}
-            <div class="dim">{formatShortDate(e.date)}</div>
+            <div class="dim">
+              {formatShortDate(e.date)}{#if e.source === 'manual'} · selbst eingetragen{/if}
+            </div>
           </div>
           <span class="badge when {urgencyClass(e.date)}">{whenLabel(e.date)}</span>
         </div>
@@ -127,7 +129,11 @@
 
         {#if canManage}
           <div class="dim" style="margin-top:0.5rem; font-size:0.78rem;">
-            kommt aus dem IServ-Klausurplan — geändert wird er dort.
+            {#if e.source === 'manual'}
+              nicht aus dem Klausurplan — unter <a href="#/exams">Verwalten</a> änderbar.
+            {:else}
+              kommt aus dem IServ-Klausurplan — geändert wird er dort.
+            {/if}
           </div>
         {/if}
       </div>

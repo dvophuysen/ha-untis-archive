@@ -13,6 +13,13 @@
   let excludeText = $state('');
   let savingCal = $state(false);
 
+  // manual exam form
+  let mDate = $state('');
+  let mSubject = $state('');
+  let mTitle = $state('');
+  let mNote = $state('');
+  let addingManual = $state(false);
+
   const acc = $derived(activeAccount());
 
   async function load() {
@@ -72,6 +79,33 @@
     if (!value) return;
     const s = diag.subjects.find((x) => String(x.subject_untis_id) === String(value));
     if (s) override(entry, 'assigned', s.subject_name, s.subject_untis_id);
+  }
+
+  async function addManual() {
+    if (!mDate || !mSubject) { error = 'Datum und Fach sind nötig.'; return; }
+    addingManual = true;
+    try {
+      const s = diag.subjects.find((x) => x.subject_name === mSubject);
+      await api.post(`/api/accounts/${appState.activeAccountId}/manual-exams`, {
+        exam_date: mDate,
+        subject_name: mSubject,
+        subject_untis_id: s?.subject_untis_id ?? null,
+        title: mTitle || null,
+        note: mNote || null,
+      });
+      mDate = ''; mTitle = ''; mNote = ''; mSubject = '';
+      await load();
+    } catch (e) {
+      error = e.message;
+    } finally {
+      addingManual = false;
+    }
+  }
+
+  async function delManual(id) {
+    if (!confirm('Termin löschen?')) return;
+    await api.delete(`/api/accounts/${appState.activeAccountId}/manual-exams/${id}`);
+    await load();
   }
 
   const STATUS_LABEL = {
@@ -190,17 +224,43 @@
     {/each}
   {/if}
 
-  <!-- 4. Frühere Termine von Hand -->
-  {#if manualEntries.length}
-    <div class="section-title">Früher von Hand eingetragen</div>
-    <p class="dim" style="margin:0 0 0.5rem;">
-      Aus der Zeit, als die Klausuren noch nicht abgerufen wurden. Neue Termine kommen
-      ausschließlich aus dem IServ-Klausurplan.
-    </p>
-    {#each manualEntries as e (e.manual_id)}
-      <div class="card compact">
-        <div><strong>{e.title}</strong><div class="dim">{formatShortDate(e.date)} · {e.subject_name}{#if e.note} · {e.note}{/if}</div></div>
+  <!-- 4. Termine, die nicht im Klausurplan stehen -->
+  <div class="section-title">Zusätzliche Termine</div>
+  <p class="dim" style="margin:0 0 0.5rem;">
+    Nur für Arbeiten, die der IServ-Klausurplan nicht führt — etwa ein mündlich genannter
+    Nachschreibtermin. Was dort steht, wird abgerufen und braucht hier nichts.
+  </p>
+  {#each manualEntries as e (e.manual_id)}
+    <div class="card compact">
+      <div class="row between">
+        <div>
+          <strong>{e.title}</strong>
+          <div class="dim">
+            {formatShortDate(e.date)} · {e.subject_name}{#if e.note} · {e.note}{/if}
+          </div>
+          {#if e.created_at}<div class="dim">eingetragen am {formatShortDate(e.created_at.slice(0, 10))}</div>{/if}
+        </div>
+        <button class="ghost danger" onclick={() => delManual(e.manual_id)}>✕</button>
       </div>
-    {/each}
-  {/if}
+    </div>
+  {/each}
+
+  <div class="card">
+    <label>Datum</label>
+    <input type="date" bind:value={mDate} />
+    <label style="margin-top:0.4rem;">Fach</label>
+    <select bind:value={mSubject}>
+      <option value="">– wählen –</option>
+      {#each diag.subjects as s}
+        <option value={s.subject_name}>{s.short ? s.short + ' · ' : ''}{s.subject_name}</option>
+      {/each}
+    </select>
+    <label style="margin-top:0.4rem;">Titel (optional)</label>
+    <input bind:value={mTitle} placeholder="z.B. Nachschreibtermin Mathe" />
+    <label style="margin-top:0.4rem;">Notiz (optional)</label>
+    <input bind:value={mNote} placeholder="z.B. mündlich vereinbart" />
+    <button class="primary" style="width:100%; margin-top:0.6rem;" disabled={addingManual} onclick={addManual}>
+      {addingManual ? 'Füge hinzu…' : 'Termin hinzufügen'}
+    </button>
+  </div>
 {/if}

@@ -275,3 +275,34 @@ def test_a_subject_written_into_one_word_still_matches():
     assert match_subject("Kuchenverkauf in der Pause", amap)[0] == "unmatched"
     assert match_subject("Arbeit in Ku", amap)[1][0]["subject_name"] == "KUNST"
     assert match_subject("Klausur Werte und Normen", amap)[1][0]["subject_name"] == "Werte und Normen"
+
+
+def test_a_date_already_in_the_exam_plan_cannot_be_entered_by_hand(env, monkeypatch):
+    from contextlib import closing as _closing
+    from backend.routers import exams as exam_routes
+
+    client_env, state, _ = env
+    app = FastAPI()
+    app.include_router(exam_routes.router, prefix="/api")
+    app.dependency_overrides[get_current_user] = lambda: state.user
+    with _closing(db.webapp_conn()) as conn, conn:
+        ids = store._remember(conn, 1, [{
+            "url": "https://gaw-iserv.de/iserv/calendar4/plugin?plugin=exam-plan",
+            "name": "Klausurplan"}])
+    store._store_events(1, list(ids.values())[0], [{
+        "uid": "exam-plan-exam-1", "summary": "Physik (Klausur) - Klasse8D", "description": "",
+        "location": "", "start_date": "2026-11-26", "end_date": "2026-11-26",
+        "start_time": "11:35", "end_time": "12:20", "all_day": False,
+    }], date(2026, 11, 1), date(2026, 12, 1))
+    from backend import exams as exam_logic
+    monkeypatch.setattr(exam_logic, "build_alias_map", lambda account: {
+        "physik": {"subject_name": "PHYSIK", "subject_untis_id": 7, "multiword": False}})
+    with TestClient(app) as client:
+        same = client.post("/api/accounts/1/manual-exams", json={
+            "exam_date": "2026-11-26", "subject_name": "PHYSIK"})
+        assert same.status_code == 409, same.text
+        assert "Klausurplan" in same.json()["detail"]
+        # A date the plan does not carry is exactly what the hand entry is for.
+        other = client.post("/api/accounts/1/manual-exams", json={
+            "exam_date": "2026-12-19", "subject_name": "PHYSIK", "title": "Nachschreibtermin"})
+        assert other.status_code == 201, other.text
