@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import date, datetime
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
 
@@ -326,3 +327,91 @@ async def read(portal_url: str, username: str, password: str, paths: tuple[str, 
         if path.startswith("http") and not _same_host(path, portal_url):
             raise IservLoginError("Diese Adresse gehört nicht zu eurem IServ")
     return await asyncio.to_thread(_read_sync, portal_url, username, password, paths)
+
+
+PLUGIN_MARK = "/calendar4/plugin?plugin="
+
+
+def is_plugin(url: str) -> bool:
+    return PLUGIN_MARK in url
+
+
+async def _json(client: httpx.AsyncClient, url: str):
+    try:
+        answer = await client.get(url, headers={"Accept": "application/json"})
+        answer.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise IservLoginError("IServ hat die Terminabfrage abgelehnt") from exc
+    if len(answer.content) > MAX_BYTES:
+        raise IservLoginError("Die Terminantwort ist unerwartet groß")
+    try:
+        return answer.json()
+    except ValueError:
+        raise IservLoginError("Die Terminantwort war nicht lesbar") from None
+
+
+async def sources(portal_url: str, username: str, password: str) -> list[dict]:
+    """The calendar module's own list of sources, plugins included.
+
+    Exam dates at this school are a plugin of the calendar, not a collection,
+    so CalDAV cannot see them at all.
+    """
+    base = portal_url.rstrip("/") + "/"
+    client = await login(portal_url, username, password)
+    try:
+        data = await _json(client, urljoin(base, "iserv/calendar/api/eventsources"))
+    finally:
+        await client.aclose()
+    found = []
+    for entry in data if isinstance(data, list) else []:
+        url = urljoin(base, str(entry.get("url") or ""))
+        if entry.get("type") != "plugin" or not is_plugin(url) or not _same_host(url, portal_url):
+            continue
+        found.append({"url": url, "name": str(entry.get("label") or entry.get("id") or "Plugin")[:80],
+                      "id": str(entry.get("id") or ""), "color": str(entry.get("color") or "")[:9]})
+    return found
+
+
+def _split(value: str | None) -> tuple[str, str | None]:
+    """An ISO moment as a local date and, unless all day, a time."""
+    if not value:
+        return "", None
+    moment = datetime.fromisoformat(value)
+    return moment.date().isoformat(), moment.strftime("%H:%M")
+
+
+async def plugin_events(portal_url: str, username: str, password: str, url: str,
+                        start: date, end: date) -> list[dict]:
+    """Events of one calendar plugin, in the shape the store expects."""
+    if not is_plugin(url) or not _same_host(url, portal_url):
+        raise IservLoginError("Diese Adresse gehört nicht zu eurem IServ")
+    joiner = "&" if "?" in url else "?"
+    full = f"{url}{joiner}start={start.isoformat()}&end={end.isoformat()}"
+    client = await login(portal_url, username, password)
+    try:
+        data = await _json(client, full)
+    finally:
+        await client.aclose()
+    events: list[dict] = []
+    for entry in data if isinstance(data, list) else []:
+        first, first_time = _split(entry.get("start"))
+        last, last_time = _split(entry.get("end") or entry.get("start"))
+        if not first:
+            continue
+        all_day = bool(entry.get("allDay"))
+        fields = entry.get("displayFields") or []
+        note = " · ".join(
+            f"{f.get('label')}: {f.get('text')}" for f in fields
+            if isinstance(f, dict) and f.get("text"))
+        events.append({
+            "uid": str(entry.get("id") or f"{first}-{entry.get('title')}")[:200],
+            "summary": str(entry.get("title") or "Termin")[:300],
+            "description": note[:500],
+            "location": str(entry.get("location") or "")[:200],
+            "start_date": first,
+            "end_date": last or first,
+            "start_time": None if all_day else first_time,
+            "end_time": None if all_day else last_time,
+            "all_day": all_day,
+        })
+    return [e for e in events if e["start_date"] <= end.isoformat() and e["end_date"] >= start.isoformat()]

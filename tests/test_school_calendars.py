@@ -185,3 +185,74 @@ def test_roles_and_listing_are_parent_only(env):
         from tests.test_learning import child
         child(state)
         assert client.get(URL).status_code == 403
+
+
+PLUGIN_ANSWER = [
+    {"id": "exam-plan-exam-17865", "title": "Spanischarbeit n°1 (Klausur) - Klasse8D",
+     "start": "2026-09-24T07:50:00+02:00", "end": "2026-09-24T09:25:00+02:00", "allDay": False,
+     "displayFields": [{"text": "Klasse8D", "label": "Gruppen"}, {"text": None, "label": "Beschreibung"}]},
+    {"id": "holiday-1", "title": "Herbstferien", "start": "2026-10-12T02:00:00+02:00",
+     "end": "2026-10-25T02:00:00+02:00", "allDay": True, "displayFields": []},
+    {"id": "spaeter", "title": "Weit weg", "start": "2027-09-01T08:00:00+02:00",
+     "end": "2027-09-01T09:00:00+02:00", "allDay": False},
+]
+
+
+def test_the_exam_plugin_is_read_because_caldav_cannot_see_it(monkeypatch):
+    from backend import iserv_portal
+
+    async def answer(client, url):
+        assert "start=2026-09-01" in url and "end=2026-10-31" in url
+        return PLUGIN_ANSWER
+
+    class Session:
+        async def aclose(self):
+            return None
+
+    async def login(*args, **kwargs):
+        return Session()
+
+    monkeypatch.setattr(iserv_portal, "login", login)
+    monkeypatch.setattr(iserv_portal, "_json", answer)
+    events = asyncio.run(iserv_portal.plugin_events(
+        "https://gaw-iserv.de", "kind", "geheim",
+        "https://gaw-iserv.de/iserv/calendar4/plugin?plugin=exam-plan",
+        date(2026, 9, 1), date(2026, 10, 31)))
+    by_uid = {e["uid"]: e for e in events}
+    # Outside the window it does not belong in the store.
+    assert "spaeter" not in by_uid
+    exam = by_uid["exam-plan-exam-17865"]
+    assert exam["start_date"] == "2026-09-24" and exam["start_time"] == "07:50"
+    assert exam["all_day"] is False and "Gruppen: Klasse8D" in exam["description"]
+    holiday = by_uid["holiday-1"]
+    assert holiday["all_day"] is True and holiday["start_time"] is None
+    assert holiday["start_date"] == "2026-10-12" and holiday["end_date"] == "2026-10-25"
+
+
+def test_a_foreign_plugin_address_is_refused():
+    from backend import iserv_portal
+    from backend.iserv_connector import IservLoginError
+
+    import pytest
+
+    with pytest.raises(IservLoginError):
+        asyncio.run(iserv_portal.plugin_events(
+            "https://gaw-iserv.de", "kind", "geheim",
+            "https://fremd.example/iserv/calendar4/plugin?plugin=exam-plan",
+            date(2026, 9, 1), date(2026, 10, 1)))
+
+
+def test_the_exam_plan_counts_as_exams_without_being_asked(env):
+    from contextlib import closing as _closing
+
+    with _closing(db.webapp_conn()) as conn, conn:
+        store._remember(conn, 1, [
+            {"url": "https://gaw-iserv.de/iserv/calendar4/plugin?plugin=exam-plan", "name": "Klausurplan"},
+            {"url": "https://gaw-iserv.de/iserv/calendar4/plugin?plugin=holiday", "name": "Ferien & Feiertage"},
+            {"url": "https://gaw-iserv.de/caldav/caldav.php/klasse8d/calendar/", "name": "Klasse8D"},
+        ])
+    roles = {c["name"]: c["role"] for c in store.calendars(1)}
+    assert roles["Klausurplan"] == "exam"
+    assert roles["Ferien & Feiertage"] == "other"
+    # A plain collection still waits for the parents to decide.
+    assert roles["Klasse8D"] == "unused"

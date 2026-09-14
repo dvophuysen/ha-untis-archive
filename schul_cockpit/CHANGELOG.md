@@ -1,3 +1,9 @@
+## 0.44.0
+
+- Die Klausurtermine kommen jetzt an. Sie stehen bei euch nicht in einem Kalender, sondern im Klausurplan — einem Zusatz des IServ-Kalenders, den CalDAV grundsätzlich nicht zeigt. Die sechs erreichbaren Kalender sind das ganze Schuljahr über leer, deshalb blieb die Klausurliste bisher leer.
+- Der Klausurplan zählt ohne Nachfrage als Klausurquelle, Ferien und Feiertage sowie gestellte Aufgaben als sonstige Termine. Die Rolle lässt sich wie bei jedem Kalender ändern.
+- Ein nicht lesbarer Zusatz lässt den übrigen Abgleich weiterlaufen.
+
 ## 0.43.4
 
 - Die Elternansicht kann die Datenadressen des IServ-Kalenders direkt abfragen. Die Anfrage läuft aus der angemeldeten Seite heraus, damit die Sitzung gilt.

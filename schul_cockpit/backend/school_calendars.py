@@ -12,9 +12,10 @@ import logging
 from contextlib import closing
 from datetime import date, datetime, timedelta, timezone
 
-from . import iserv_calendar
+from . import iserv_calendar, iserv_portal
 from .db import webapp_conn
 from .iserv_calendar import IservCalendarError
+from .iserv_connector import IservLoginError
 from .secret_store import decrypt_secret
 
 _LOGGER = logging.getLogger("schul_cockpit.calendar")
@@ -22,6 +23,14 @@ _LOGGER = logging.getLogger("schul_cockpit.calendar")
 ROLES = ("exam", "lessons", "other", "unused")
 PAST_DAYS = 30
 AHEAD_DAYS = 400
+# A plugin whose purpose is obvious should not wait for a decision: the exam
+# plan is why this exists, holidays and set work are context.
+DEFAULT_ROLES = {"exam-plan": "exam", "holiday": "other", "exercise": "other"}
+
+
+def _default_role(entry: dict) -> str:
+    key = entry.get("url", "").rsplit("plugin=", 1)[-1]
+    return DEFAULT_ROLES.get(key, "unused")
 
 
 def now_iso() -> str:
@@ -73,7 +82,7 @@ def _remember(conn, account_id: int, found: list[dict]) -> dict[str, int]:
             # A new address with a familiar name is last year's calendar
             # rebuilt; keep what the parents decided about it.
             previous = by_name.get(entry["name"].casefold())
-            role = previous["role"] if previous else "unused"
+            role = previous["role"] if previous else _default_role(entry)
         conn.execute(
             "INSERT INTO iserv_calendars(account_id,url,name,color,role,last_seen,missing_since,created_at) "
             "VALUES(?,?,?,?,?,?,NULL,?) ON CONFLICT(account_id,url) DO UPDATE SET "
@@ -98,6 +107,13 @@ async def sync(account_id: int, *, past_days: int = PAST_DAYS, ahead_days: int =
     password = decrypt_secret(row["password_ciphertext"])
     try:
         found = await iserv_calendar.discover(row["portal_url"], row["username"], password)
+        try:
+            # The exam plan is a plugin of the calendar module, invisible to
+            # CalDAV. Without it the collections alone stay empty all year.
+            found = found + await iserv_portal.sources(
+                row["portal_url"], row["username"], password)
+        except IservLoginError as exc:
+            _LOGGER.warning("Kalender-Plugins nicht gelesen: %s", exc)
         with closing(webapp_conn()) as conn, conn:
             conn.execute("BEGIN IMMEDIATE")
             ids = _remember(conn, account_id, found)
@@ -110,11 +126,15 @@ async def sync(account_id: int, *, past_days: int = PAST_DAYS, ahead_days: int =
         for url, calendar_id in wanted.items():
             if url not in ids:
                 continue
-            events = await iserv_calendar.fetch(row["portal_url"], row["username"], password, url, start, end)
+            if iserv_portal.is_plugin(url):
+                events = await iserv_portal.plugin_events(
+                    row["portal_url"], row["username"], password, url, start, end)
+            else:
+                events = await iserv_calendar.fetch(row["portal_url"], row["username"], password, url, start, end)
             total += _store_events(account_id, calendar_id, events, start, end)
-    except IservCalendarError as exc:
+    except (IservCalendarError, IservLoginError) as exc:
         _record(account_id, "failed", str(exc), 0, 0)
-        raise
+        raise IservCalendarError(str(exc)) from None
     except Exception as exc:
         _record(account_id, "failed", type(exc).__name__, 0, 0)
         raise IservCalendarError("Die Kalender konnten nicht gelesen werden") from None
