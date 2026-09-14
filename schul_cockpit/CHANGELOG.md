@@ -1,3 +1,10 @@
+## 0.41.2
+
+- Material zu einer Hausaufgabe bekommt jetzt den Tag, an dem die Aufgabe gestellt wurde, nicht das Abgabedatum. Arbeitsblätter werden mit der Aufgabenstellung ausgegeben oder nachgereicht, nie zur Abgabe. Der Tag kommt aus der verknüpften Unterrichtsstunde, sonst aus „Gegeben am" im Aufgabentext.
+- Die Kalendersuche folgt allen freigegebenen IServ-Bereichen, nicht nur dem persönlichen. Klassen- und Kursbereiche haben je einen eigenen Kalender; vorher blieb nur „Home" übrig.
+- Kalendernamen zeigen die Gruppe statt „<Gruppe> Calendar", weil IServ diesen Namen bei Umbenennungen nicht nachzieht. To-do-Listen gelten nicht als Terminkalender.
+- Bereits ausgewertete Materialien werden im nächtlichen Lauf mit der neuen Datumsregel nachgezogen. Von Hand korrigierte Datumsangaben bleiben unangetastet.
+
 ## 0.41.1
 
 - Die Elternansicht kann die Struktur des IServ-Kalenderkontos abfragen, wenn der Abgleich weniger Kalender findet als erwartet. Ausgegeben werden nur Adressen, Anzeigenamen und Sammlungstypen, keine Termininhalte und keine Zugangsdaten.

@@ -57,6 +57,59 @@ def test_unparsable_calendar_does_not_lose_the_others():
     assert len(ical.parse_events(text, date(2026, 9, 1), date(2026, 10, 1))) == 2
 
 
+def test_discovery_follows_every_shared_principal(monkeypatch):
+    """IServ lists one principal per shared group; each keeps its calendar
+    one level below. Following only the first finds no class calendar."""
+    from xml.etree import ElementTree
+
+    homes = """<?xml version="1.0"?>
+    <d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response>
+      <d:href>/caldav/caldav.php/kind/</d:href><d:propstat><d:prop>
+      <c:calendar-home-set>
+        <d:href>/caldav/caldav.php/kind/</d:href>
+        <d:href>/caldav/caldav.php/klasse8d/</d:href>
+      </c:calendar-home-set></d:prop></d:propstat></d:response></d:multistatus>"""
+
+    def collection(home, name, calendar_name):
+        return f"""<?xml version="1.0"?>
+        <d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+          <d:response><d:href>{home}</d:href><d:propstat><d:prop>
+            <d:resourcetype><d:collection/><d:principal/></d:resourcetype>
+            <d:displayname>{name}</d:displayname></d:prop></d:propstat></d:response>
+          <d:response><d:href>{home}calendar/</d:href><d:propstat><d:prop>
+            <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+            <d:displayname>{calendar_name}</d:displayname></d:prop></d:propstat></d:response>
+          <d:response><d:href>{home}todos/</d:href><d:propstat><d:prop>
+            <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+            <d:displayname>To-dos</d:displayname>
+            <c:supported-calendar-component-set><c:comp name="VTODO"/></c:supported-calendar-component-set>
+          </d:prop></d:propstat></d:response>
+        </d:multistatus>"""
+
+    answers = {
+        "https://beispiel-iserv.de/caldav/": '<d:multistatus xmlns:d="DAV:"><d:response><d:propstat><d:prop>'
+                                        "<d:current-user-principal><d:href>/caldav/caldav.php/kind/</d:href>"
+                                        "</d:current-user-principal></d:prop></d:propstat></d:response></d:multistatus>",
+        "https://beispiel-iserv.de/caldav/caldav.php/kind/": homes,
+    }
+    listings = {
+        "https://beispiel-iserv.de/caldav/caldav.php/kind/": collection("/caldav/caldav.php/kind/", "Kind", "Home"),
+        "https://beispiel-iserv.de/caldav/caldav.php/klasse8d/":
+            collection("/caldav/caldav.php/klasse8d/", "Klasse8D", "Klasse8D Calendar"),
+    }
+
+    async def propfind(client, url, body, depth):
+        text = listings[url] if depth == "1" else answers[url]
+        return ElementTree.fromstring(text)
+
+    monkeypatch.setattr(ical, "_propfind", propfind)
+    found = asyncio.run(ical.discover("https://beispiel-iserv.de", "kind", "x"))
+    names = [c["name"] for c in found]
+    # The class calendar comes along, the to-do list does not, and the stale
+    # "<Gruppe> Calendar" label is replaced by the group name.
+    assert names == ["Home", "Klasse8D"]
+
+
 def test_discovery_reads_names_and_skips_non_calendars(monkeypatch):
     answer = """<?xml version="1.0"?>
     <d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"

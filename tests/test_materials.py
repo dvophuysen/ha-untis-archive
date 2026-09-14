@@ -185,3 +185,22 @@ def test_pdf_text_is_read_without_a_model():
     blob = out.getvalue()
     assert store.pdf_pages(blob) == 1
     assert store.sniff(blob) == "application/pdf"
+
+
+def test_material_is_dated_when_the_homework_was_set_not_when_it_is_due():
+    """A worksheet comes with the assignment; the deadline is the wrong anchor."""
+    task = {"lesson_id": None, "due_date": "2026-09-17", "created_at": "2026-09-11T10:00:00+00:00",
+            "notes": "Politik Buch, S.30-32.\n\nGegeben am: Do 10.09.\n\nFällig bis: Do 17.09."}
+    assert analysis.task_given_date(task) == "2026-09-10"
+
+
+def test_a_task_set_before_new_year_keeps_the_old_year():
+    task = {"lesson_id": None, "due_date": "2027-01-08", "created_at": "2026-12-18T10:00:00+00:00",
+            "notes": "Gegeben am: Fr 18.12."}
+    assert analysis.task_given_date(task) == "2026-12-18"
+
+
+def test_without_a_given_date_the_creation_day_is_used():
+    task = {"lesson_id": None, "due_date": "2026-09-17", "created_at": "2026-09-11T10:00:00+00:00",
+            "notes": "ohne Angabe"}
+    assert analysis.task_given_date(task) == "2026-09-11"
