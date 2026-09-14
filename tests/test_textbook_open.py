@@ -2,6 +2,8 @@ import subprocess
 from unittest.mock import Mock
 
 import pytest
+from selenium.common.exceptions import StaleElementReferenceException
+
 from backend import textbook_browser as browser
 
 
@@ -54,4 +56,88 @@ def test_missing_card_reports_safe_error(monkeypatch):
     monkeypatch.setattr(browser, 'WebDriverWait', Mock(return_value=wait))
     with pytest.raises(browser.TextbookScanError, match='im Regal nicht gefunden') as error:
         browser._open_book(Mock(), 'Originaltitel')
+    assert 'private' not in str(error.value)
+
+
+def test_loose_title_match_keeps_a_bare_subject_out():
+    script = '''
+const assert = require('node:assert/strict');
+function element(text='', attrs={}) {
+  return {childNodes:[{nodeType:3,textContent:text}],
+    getAttribute:k=>attrs[k]||null, getClientRects:()=>[{}],
+    matches:()=>false, getRootNode:()=>({}), parentElement:null};
+}
+const shelf=element('Politik & Co. Niedersachsen 8 – BiBox');
+global.document={querySelectorAll:()=>[shelf]};
+const locate=new Function(process.argv[1]);
+// A stored full title still matches when the shelf appends a product suffix.
+assert.equal(locate('Politik & Co. Niedersachsen 8'),shelf);
+// A bare subject stays too short to match anything loosely.
+assert.equal(locate('Politik'),null);
+'''
+    subprocess.run(['node', '-e', script, browser._BOOK_TARGET_SCRIPT], check=True)
+
+
+def test_shown_page_numbers_separate_spread_from_total():
+    # "30 / 210" is page 30 of 210; "30-31" is one open double page.
+    assert browser.shown_page_numbers('30 / 210') == [30]
+    assert browser.shown_page_numbers('30-31') == [30, 31]
+    assert browser.shown_page_numbers('| 12 |') == [12]
+    assert browser.shown_page_numbers('', 'https://viewer.example/buch#/page/34') == [34]
+    assert browser.shown_page_numbers('') == []
+
+
+def test_page_navigation_tries_the_next_way_when_one_fails(monkeypatch):
+    monkeypatch.setattr(browser, '_shown_pages', lambda d: [])
+    monkeypatch.setattr(browser, '_field_goto', Mock(return_value=False))
+    monkeypatch.setattr(browser, '_select_goto', Mock(side_effect=RuntimeError('kaputt')))
+    button = Mock(return_value=True)
+    monkeypatch.setattr(browser, '_button_goto', button)
+    url = Mock(return_value=True)
+    monkeypatch.setattr(browser, '_url_goto', url)
+    assert browser._go_to_page(Mock(), 34) is True
+    button.assert_called_once()
+    url.assert_not_called()
+
+
+def test_page_already_open_needs_no_navigation(monkeypatch):
+    monkeypatch.setattr(browser, '_shown_pages', lambda d: [30, 31])
+    field = Mock(return_value=True)
+    monkeypatch.setattr(browser, '_field_goto', field)
+    assert browser._go_to_page(Mock(), 31) is True
+    field.assert_not_called()
+
+
+def test_page_wait_survives_a_rerendered_control(monkeypatch):
+    # The viewer replaces its controls on every page change; reading a kept
+    # handle would raise instead of reporting the new page.
+    answers = [StaleElementReferenceException('weg'), [34]]
+
+    def shown(_driver):
+        value = answers.pop(0)
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+    monkeypatch.setattr(browser, '_shown_pages', shown)
+    monkeypatch.setattr(browser.time, 'sleep', lambda _s: None)
+    assert browser._wait_for_page(Mock(), 34) is True
+
+
+def test_open_book_falls_back_to_the_stored_launch_address(monkeypatch):
+    wait = Mock()
+    wait.until.side_effect = [browser.TimeoutException('nicht gefunden'), True]
+    monkeypatch.setattr(browser, 'WebDriverWait', Mock(return_value=wait))
+    driver = Mock()
+    browser._open_book(driver, 'Originaltitel', 'https://viewer.example/buch/42')
+    driver.get.assert_called_once_with('https://viewer.example/buch/42')
+
+
+def test_missing_card_without_launch_address_names_the_stage(monkeypatch):
+    wait = Mock()
+    wait.until.side_effect = browser.TimeoutException('private browser details')
+    monkeypatch.setattr(browser, 'WebDriverWait', Mock(return_value=wait))
+    with pytest.raises(browser.TextbookScanError) as error:
+        browser._open_book(Mock(), 'Originaltitel')
+    assert error.value.stage == 'Buch öffnen'
     assert 'private' not in str(error.value)

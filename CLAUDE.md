@@ -13,10 +13,26 @@
   `python3 scripts/ha_diagnose.py` prüft damit die komplette
   Hausaufgaben-Pipeline: Sensor-Inhalt, Todo-Listen (inkl. fälschlich
   erledigter Einträge), Abgleich und Fehlerlog.
+- Add-on-Logs (die einzige Stelle, an der Browser- und Seitenabruf-Fehler
+  des Schul-Cockpits landen) liest `python3 scripts/ha_addon_log.py
+  --lines 20000 --grep textbook`. Der Supervisor-Proxy gibt sie unter
+  `/api/hassio/addons/<slug>/logs` heraus; ein Admin-Token genügt, und
+  ohne `Range: entries=:-N:` kommen nur 100 Zeilen. Slug des Cockpits:
+  `e54108c7_schul_cockpit`. Die Sammelpfade `/api/hassio/addons` und
+  `/api/hassio/app/...` antworten mit 401 — daraus folgt kein fehlender
+  Zugang. In der Claude-Code-Sandbox blockt der Agent-Proxy Python-urllib
+  mit 403; dort dieselbe Adresse per `curl` abrufen.
+- Den vollen Supervisor-Zugriff (Add-on-Info, Optionen, Neustart) gibt es
+  über die HA-Websocket-API `$HA_URL/api/websocket` mit dem Kommando
+  `{"type":"supervisor/api","endpoint":"/addons/<slug>/info","method":"get"}`.
+  Textantworten wie Logs kann dieser Weg nicht liefern, dafür den
+  REST-Proxy nehmen.
 - `.mcp.json` bindet zusätzlich den HA-MCP-Server der Instanz ein
   (`$HA_URL/mcp_server/sse`, Integration „Model Context Protocol
   Server“). Er spricht nur die Assist-Schnittstelle — für Diagnosen die
-  REST-API bevorzugen.
+  REST-API bevorzugen. Solange die Integration nicht eingerichtet ist,
+  antwortet die Adresse mit 404; das installierte Add-on „Home Assistant
+  MCP Server“ ist etwas anderes und nur über Ingress erreichbar.
 - Beide Variablen werden in der Claude-Code-Umgebung gepflegt
   (claude.ai/code → Umgebung → Environment variables) und gelten ab der
   nächsten Session. Der Token gehört niemals ins Repo.

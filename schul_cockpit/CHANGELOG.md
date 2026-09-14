@@ -1,3 +1,14 @@
+## 0.39.0
+
+- Der Seitenabruf meldet die Stufe, an der er scheitert: Anmeldung, Medienregal, Buch öffnen, Seitennavigation oder Seite lesen. Elternansicht und Mentor bekommen dieselbe Angabe statt eines allgemeinen Anzeige-Fehlers.
+- Pro Buch gibt es in den Einstellungen einen Testabruf: Seitenzahl eingeben, Ergebnis mit Stufe und Vorschaubild. Dazu steht dort der letzte Abrufversuch aus dem Chat.
+- Der Seitenwechsel im Verlagsviewer läuft über vier Wege (Eingabefeld, Auswahlliste, Seitenschaltfläche, Adresszeile) und wird an der Seitenanzeige des Viewers geprüft. Die Bedienelemente werden nach jedem Wechsel neu gesucht, weil der Viewer dabei neu zeichnet.
+- Ist das Buch offen, die genannte Seite aber nicht ansteuerbar, geht die sichtbare Doppelseite an den Mentor. Er nennt dann keine Seitenzahl, sondern fragt nach.
+- Bildschirmfotos erfassen den Buchbereich statt des ganzen Fensters und warten, bis der Viewer fertig gezeichnet hat.
+- Abgerufene Seiten werden pro Kind und Buch zwischengespeichert (30 Tage, 60 Seiten). Eine Folgenachricht im Chat startet keinen zweiten Browserlauf; ein Lauf bricht nach vier Minuten ab.
+- Wird der Buchtitel im Regal nicht exakt gefunden, greift ein Titelvergleich mit Zusatz und danach der gespeicherte Öffnen-Link des Regals.
+- Chromium startet direkt mit dem mitgelieferten Treiber. Der vergebliche Treiber-Download auf aarch64 entfällt.
+
 ## 0.38.2
 
 - Buchstart sucht Originaltitel auch in Shadow-DOM und einfachen Produktkarten, nicht nur in klassischen Links und Bildern.

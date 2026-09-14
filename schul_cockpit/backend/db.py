@@ -396,6 +396,27 @@ CREATE TABLE IF NOT EXISTS digital_textbook_catalog (
 CREATE INDEX IF NOT EXISTS idx_textbook_catalog_account ON digital_textbook_catalog(account_id,title);
 """))
 
+_MIGRATIONS.append(("digital_textbooks_003_pages", """
+CREATE TABLE IF NOT EXISTS digital_textbook_pages (
+ account_id INTEGER NOT NULL,
+ book_id INTEGER NOT NULL,
+ page INTEGER NOT NULL,
+ image BLOB NOT NULL,
+ captured_at TEXT NOT NULL,
+ PRIMARY KEY(account_id,book_id,page)
+);
+CREATE TABLE IF NOT EXISTS digital_textbook_fetches (
+ account_id INTEGER PRIMARY KEY,
+ book_title TEXT,
+ pages TEXT,
+ status TEXT NOT NULL,
+ stage TEXT,
+ detail TEXT,
+ delivered INTEGER NOT NULL DEFAULT 0,
+ created_at TEXT NOT NULL
+);
+"""))
+
 def history_conn() -> sqlite3.Connection:
     """Read-only connection to the UNTIS Archive's history.db."""
     uri = f"file:{SETTINGS.history_db_path}?mode=ro"
