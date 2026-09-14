@@ -1,3 +1,9 @@
+## 0.34.1
+
+- Gelöschte Lerngespräche hinterlassen keine leeren Fortschrittskarten mehr. „Was schon klappt“ setzt mindestens einen gültigen Lernnachweis voraus; bereits bestehende leere Reste werden ebenfalls nicht mehr angezeigt oder als Wiederholung eingeplant.
+- Der Eltern-Löschpfad entfernt ungenutzte Themenstammsätze samt Planverknüpfungen und abgeleitetem Stand. Themen mit weiteren Gesprächen oder Nachweisen bleiben erhalten; Kostenaufzeichnungen bleiben unverändert.
+- Regressionstests für bestehende leere Themen, vollständiges Löschen und Erhalt anderer Lernnachweise.
+
 ## 0.34.0
 
 - Grafische Fächerliste mit gleichen Balkenskalen, Anteil verstandener/teilweiser/schwieriger und noch nicht eingeschätzter Themen. Sortierung nach Anteil verstandener unter eingeschätzten Themen; unbekannte Fächer neutral danach.

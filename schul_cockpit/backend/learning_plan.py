@@ -106,6 +106,8 @@ def catalogue(account, snapshot=None):
             if target not in links.setdefault(r['skill_id'],[]):links[r['skill_id']].append(target)
         for skill in skills:
             state=refresh_skill(c,account,skill['id'])
+            # Old deletions and withdrawn assessments must not create empty reviews.
+            if state['last_day'] is None:continue
             keys=[k for k in links.get(skill['id'],[]) if k in groups]
             if not keys:
                 key='skill:'+str(skill['id']);keys=[key]

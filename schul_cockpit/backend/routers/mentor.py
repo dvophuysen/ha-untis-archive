@@ -125,7 +125,7 @@ async def dashboard(account_id:int,demo:bool=False,user:CurrentUser=Depends(get_
     with closing(webapp_conn()) as c:
         sessions=[dict(r) for r in c.execute('SELECT id,subject,goal,status,phase,summary,updated_at,is_test,is_demo FROM mentor_sessions WHERE account_id=? AND is_test=0 ORDER BY updated_at DESC LIMIT 30',(account_id,))]
         legacy=[dict(r) for r in c.execute('SELECT id,subject,goal,status,updated_at,is_test,is_demo FROM mentor_sessions WHERE account_id=? AND is_test=1 AND is_demo=0 ORDER BY updated_at DESC LIMIT 30',(account_id,))] if user.is_admin or user.role=='parent' else []
-        progress=[dict(r) for r in c.execute("SELECT s.id,s.subject,s.title,s.objective,r.due_date,COUNT(e.id) attempts, SUM(CASE WHEN e.result='correct' AND e.help_used=0 THEN 1 ELSE 0 END) independent,COUNT(DISTINCT CASE WHEN e.result='correct' AND e.help_used=0 THEN e.variant_hash END) variants,MIN(CASE WHEN e.result='correct' AND e.help_used=0 THEN e.created_at END) first_success, MAX(CASE WHEN e.result='correct' AND e.help_used=0 THEN e.created_at END) last_success FROM mentor_skills s LEFT JOIN mentor_evidence e ON e.skill_id=s.id AND e.invalidated=0 LEFT JOIN mentor_reviews r ON r.skill_id=s.id WHERE s.account_id=? GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 100",(account_id,))]
+        progress=[dict(r) for r in c.execute("SELECT s.id,s.subject,s.title,s.objective,r.due_date,COUNT(e.id) attempts, SUM(CASE WHEN e.result='correct' AND e.help_used=0 THEN 1 ELSE 0 END) independent,COUNT(DISTINCT CASE WHEN e.result='correct' AND e.help_used=0 THEN e.variant_hash END) variants,MIN(CASE WHEN e.result='correct' AND e.help_used=0 THEN e.created_at END) first_success, MAX(CASE WHEN e.result='correct' AND e.help_used=0 THEN e.created_at END) last_success FROM mentor_skills s JOIN mentor_evidence e ON e.skill_id=s.id AND e.account_id=s.account_id AND e.invalidated=0 AND NOT EXISTS (SELECT 1 FROM mentor_sessions ms WHERE ms.id=e.session_id AND ms.is_test=1) AND NOT EXISTS (SELECT 1 FROM mentor_exam_attempts ma WHERE ma.id=e.exam_attempt_id AND ma.is_test=1) LEFT JOIN mentor_reviews r ON r.skill_id=s.id WHERE s.account_id=? GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 100",(account_id,))]
     for r in progress:
         delayed=bool(r['variants']>=2 and r['first_success'] and r['last_success'] and (datetime.fromisoformat(r['last_success'])-datetime.fromisoformat(r['first_success'])).days>=7)
         r['label']='Mit Abstand selbstständig gezeigt' if delayed else 'Selbstständig gezeigt · später prüfen' if r['independent'] else 'Noch in Arbeit'
@@ -439,7 +439,15 @@ def delete_session(account_id:int,sid:int,body:DeleteSessionIn,user:CurrentUser=
         # Costs remain accounted for after removal of a learning attempt.
         c.execute('UPDATE mentor_ai_calls SET session_id=NULL WHERE account_id=? AND session_id=?',(account_id,sid))
         c.execute('DELETE FROM mentor_sessions WHERE account_id=? AND id=?',(account_id,sid))
-        for skill in skills:lp.refresh_skill(c,account_id,skill)
+        for skill in skills:
+            # Keep a shared skill whenever another conversation or evidence uses it.
+            referenced=c.execute('SELECT 1 FROM mentor_sessions WHERE skill_id=? UNION ALL SELECT 1 FROM mentor_evidence WHERE skill_id=? LIMIT 1',(skill,skill)).fetchone()
+            if referenced:
+                lp.refresh_skill(c,account_id,skill)
+            else:
+                for table in ('mentor_reviews','learning_skill_state','learning_plan_links'):
+                    c.execute(f'DELETE FROM {table} WHERE account_id=? AND skill_id=?',(account_id,skill))
+                c.execute('DELETE FROM mentor_skills WHERE account_id=? AND id=?',(account_id,skill))
     return {'ok':True,'deleted_session_id':sid}
 
 
