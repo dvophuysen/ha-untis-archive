@@ -228,7 +228,7 @@ def _manual_exams(account_id: int, today_iso: str, end_iso: str) -> list[dict]:
     conn = webapp_conn()
     try:
         rows = conn.execute(
-            "SELECT id, exam_date, subject_name, subject_untis_id, title, note "
+            "SELECT id, exam_date, subject_name, subject_untis_id, title, note, created_at "
             "FROM manual_exams WHERE account_id = ? "
             "AND exam_date >= ? AND exam_date <= ? ORDER BY exam_date",
             (account_id, today_iso, end_iso),
@@ -338,6 +338,7 @@ async def resolve_exams(
         entry = {
             "source": "manual",
             "manual_id": m["id"],
+            "created_at": m["created_at"],
             "exam_key": f"manual:{m['id']}",
             "date": m["exam_date"],
             "title": m["title"] or m["subject_name"],

@@ -1,3 +1,8 @@
+## 0.45.1
+
+- Zusätzliche Termine lassen sich wieder von Hand eintragen, aber nur für Arbeiten, die der IServ-Klausurplan nicht führt — etwa einen mündlich genannten Nachschreibtermin. Steht der Termin schon im Plan, wird das Eintragen mit Verweis auf den vorhandenen Eintrag abgelehnt.
+- In der Übersicht steht bei jedem Termin, woher er kommt: aus dem Klausurplan oder selbst eingetragen. In den Einstellungen steht zusätzlich das Eintragungsdatum.
+
 ## 0.45.0
 
 - Klausurtermine lassen sich nicht mehr von Hand eintragen oder ändern. Sie kommen ausschließlich aus dem IServ-Klausurplan und werden nächtlich abgerufen; eine zweite Stelle zum Pflegen läuft nur auseinander.
