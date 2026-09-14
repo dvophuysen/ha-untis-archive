@@ -596,7 +596,13 @@ CREATE TABLE IF NOT EXISTS morning_app_deliveries (
 
 _MIGRATIONS.append(("reminders_morning_at", "ALTER TABLE reminder_settings ADD COLUMN morning_at TEXT"))
 _MIGRATIONS.append(("reminders_morning_enabled",
-                    "ALTER TABLE reminder_settings ADD COLUMN morning_enabled INTEGER NOT NULL DEFAULT 1"))
+                    "ALTER TABLE reminder_settings ADD COLUMN morning_enabled INTEGER NOT NULL DEFAULT 0"))
+
+# Eine Mitteilung um Viertel vor sieben wird verabredet, nicht ausgerollt. Wer
+# schon eine Erinnerungszeit gesetzt hat, bekommt sie erst, wenn er sie
+# einschaltet — sonst weckte die Auslieferung selbst das erste Mal.
+_MIGRATIONS.append(("reminders_morning_off_until_agreed",
+                    "UPDATE reminder_settings SET morning_enabled = 0"))
 
 
 def history_conn() -> sqlite3.Connection:

@@ -91,7 +91,8 @@ def test_the_morning_notification_only_reaches_who_did_not_close(env):
     client, _, patch = setup(env)
     from backend import app_notify
     lessons('2026-09-15')
-    client.put('/api/accounts/1/reminders', json={'enabled': True, 'remind_at': '18:00'})
+    client.put('/api/accounts/1/reminders',
+               json={'enabled': True, 'remind_at': '18:00', 'morning_enabled': True})
     patch.setattr(r, 'snapshot', lambda *a: dict(homework=1, material=0, feedback=3))
     patch.setattr(r, 'packing_plan', lambda account, day: ([], 'x', [dict(id=1)]))
     patch.setattr(app_notify, 'own_panel', lambda: '/e54108c7_schul_cockpit')
@@ -109,7 +110,8 @@ def test_no_morning_notification_after_a_close_on_a_free_day_or_when_switched_of
     client, _, patch = setup(env)
     from backend import app_notify
     lessons('2026-09-15')
-    client.put('/api/accounts/1/reminders', json={'enabled': True, 'remind_at': '18:00'})
+    on = {'enabled': True, 'remind_at': '18:00', 'morning_enabled': True}
+    client.put('/api/accounts/1/reminders', json=on)
     patch.setattr(r, 'snapshot', lambda *a: dict(homework=1, material=1, feedback=0))
     patch.setattr(app_notify, 'own_panel', lambda: '/panel')
     app_notify.set_targets(1, ['mobile_app_kind_iphone'])
@@ -122,7 +124,7 @@ def test_no_morning_notification_after_a_close_on_a_free_day_or_when_switched_of
     client.put('/api/accounts/1/reminders',
                json={'enabled': True, 'remind_at': '18:00', 'morning_enabled': False})
     r.run_once(MORNING)                                    # abgeschaltet: nichts
-    client.put('/api/accounts/1/reminders', json={'enabled': True, 'remind_at': '18:00'})
+    client.put('/api/accounts/1/reminders', json=on)
     with closing(db.webapp_conn()) as c:
         c.execute("INSERT INTO day_closures VALUES(1,'2026-09-14','2026-09-14T19:00','kind',0,0,0,0)")
     r.run_once(MORNING)                                    # abgeschlossen: nichts
@@ -133,7 +135,10 @@ def test_the_morning_time_stays_inside_the_morning(env):
     client, _, _ = setup(env)
     url = '/api/accounts/1/reminders'
     assert client.put(url, json={'enabled': True, 'remind_at': '18:00', 'morning_at': '13:00'}).status_code == 422
-    ok = client.put(url, json={'enabled': True, 'remind_at': '18:00', 'morning_at': '07:10'})
+    # Ab Werk aus: die Morgenmitteilung wird verabredet, nicht ausgeliefert.
+    assert client.get(url).json()['morning_enabled'] is False
+    ok = client.put(url, json={'enabled': True, 'remind_at': '18:00',
+                               'morning_enabled': True, 'morning_at': '07:10'})
     assert ok.status_code == 200 and ok.json()['morning_at'] == '07:10'
     assert client.get(url).json()['morning_enabled'] is True
 

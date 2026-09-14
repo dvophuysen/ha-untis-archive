@@ -15,7 +15,7 @@ class SettingsIn(InputModel):
     enabled: StrictBool
     remind_at: str | None = Field(default=None, pattern=r'^([01][0-9]|2[0-3]):[0-5][0-9]$')
     # Die Morgenmitteilung trifft nur, wer am Abend nicht abgeschlossen hat.
-    morning_enabled: StrictBool = True
+    morning_enabled: StrictBool = False
     morning_at: str | None = Field(default=None, pattern=r'^([01][0-9]|2[0-3]):[0-5][0-9]$')
 
 class TargetsIn(InputModel):
@@ -35,7 +35,7 @@ def get(account_id:int,user:CurrentUser=Depends(get_current_user)):
     with closing(webapp_conn()) as c:
         app_latest=c.execute('SELECT service,status,created_at FROM reminder_app_deliveries WHERE account_id=? ORDER BY created_at DESC LIMIT 1',(account_id,)).fetchone()
     return dict(enabled=bool(row and row['enabled']),remind_at=row['remind_at'] if row else None,devices=devices,
-                morning_enabled=bool(row['morning_enabled']) if row else True,
+                morning_enabled=bool(row['morning_enabled']) if row else False,
                 morning_at=(row['morning_at'] if row else None) or r.DEFAULT_MORNING,
                 can_manage=can_manage,last_delivery=dict(latest) if latest else None,
                 app_targets=app_notify.targets(account_id),
