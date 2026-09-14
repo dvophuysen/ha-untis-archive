@@ -1,9 +1,14 @@
-"""Opt-in, one bundled safety-net reminder per child/device/day."""
+"""Opt-in, one bundled safety-net reminder per child/device/day.
+
+Delivery goes through the Home Assistant companion app; see app_notify for why
+web push is not the way on these devices.
+"""
 import asyncio
 import logging
 from contextlib import closing
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from . import app_notify
 from .db import webapp_conn
 from .packing import packing_plan, view
 from .webpush_setup import send_push
@@ -39,6 +44,36 @@ def due(time_of_day, now):
     return 0 <= (now-target).total_seconds() < 1800
 
 
+def wording(counts):
+    """What is open, in the order it has to be dealt with tonight."""
+    parts = []
+    if counts['homework']: parts.append('Hausaufgaben')
+    if counts['material']: parts.append('Schultasche')
+    if counts['feedback']: parts.append('Rückmeldungen')
+    return ' · '.join(parts)
+
+
+def send_to_app(account, counts, day, now):
+    """One notification per target and day. Tapping it opens the day view."""
+    sent = 0
+    url = app_notify.own_panel()
+    for service in app_notify.targets(account):
+        with closing(webapp_conn()) as c, c:
+            c.execute('BEGIN IMMEDIATE')
+            claimed = c.execute(
+                "INSERT OR IGNORE INTO reminder_app_deliveries(account_id,school_day,service,status,created_at) "
+                "VALUES(?,?,?,'claimed',?)", (account, day, service, now.isoformat())).rowcount
+        if not claimed:
+            continue
+        ok = app_notify.send(service, 'Kurzer Blick auf morgen',
+                             f'Noch offen: {wording(counts)}', url)
+        with closing(webapp_conn()) as c, c:
+            c.execute('UPDATE reminder_app_deliveries SET status=? WHERE account_id=? AND school_day=? AND service=?',
+                      ('accepted' if ok else 'failed', account, day, service))
+        sent += int(ok)
+    return sent
+
+
 def run_once(now=None):
     fixed_clock = now
     now = (now or datetime.now(ZONE)).astimezone(ZONE)
@@ -52,6 +87,7 @@ def run_once(now=None):
             counts = snapshot(account, now)
             if not any(counts.values()):
                 continue
+            send_to_app(account, counts, now.date().isoformat(), now)
             with closing(webapp_conn()) as c:
                 subs = [dict(r) for r in c.execute("SELECT DISTINCT p.* FROM push_subscriptions p JOIN users u ON u.id=p.user_id JOIN user_account_links l ON l.user_id=u.id WHERE l.account_id=? AND l.can_edit=1 AND u.role='child' AND u.demo_mode=0", (account,))]
             for sub in subs:

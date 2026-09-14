@@ -15,6 +15,7 @@ from ..auth import CurrentUser, assert_account_access, get_current_user, require
 from ..db import webapp_conn
 from ..exams import (
     DEFAULT_EXCLUDE_KEYWORDS,
+    _norm,
     account_subjects,
     resolve_exams,
 )
@@ -100,6 +101,46 @@ def _set_archive_before(account_id: int, value: str | None) -> None:
         conn.close()
 
 
+def practice_by_subject(account_id: int) -> dict[str, dict]:
+    """What has actually been practised per subject, as measured, not as felt.
+
+    The self-assessment stays useful, but it is a feeling. These numbers come
+    from the mentor's own records: units held, topics shown without help, and
+    practice papers written.
+    """
+    found: dict[str, dict] = {}
+    conn = webapp_conn()
+    try:
+        rows = conn.execute(
+            "SELECT subject, COUNT(*) AS units, MAX(updated_at) AS last_at FROM mentor_sessions "
+            "WHERE account_id=? AND is_test=0 AND is_demo=0 GROUP BY subject", (account_id,)
+        ).fetchall()
+        for r in rows:
+            found.setdefault(_norm(r["subject"]), {})["units"] = r["units"]
+            found[_norm(r["subject"])]["last_at"] = r["last_at"]
+        for r in conn.execute(
+            "SELECT s.subject AS subject, COUNT(DISTINCT s.id) AS shown FROM mentor_skills s "
+            "JOIN mentor_evidence e ON e.skill_id=s.id AND e.account_id=s.account_id "
+            "WHERE s.account_id=? AND e.invalidated=0 AND e.result='correct' AND e.help_used=0 "
+            "GROUP BY s.subject", (account_id,)
+        ).fetchall():
+            found.setdefault(_norm(r["subject"]), {})["independent"] = r["shown"]
+        for r in conn.execute(
+            "SELECT x.subject AS subject, COUNT(*) AS papers FROM mentor_exam_attempts a "
+            "JOIN mentor_exams x ON x.id=a.exam_id WHERE a.account_id=? AND a.submitted_at IS NOT NULL "
+            "GROUP BY x.subject", (account_id,)
+        ).fetchall():
+            found.setdefault(_norm(r["subject"]), {})["papers"] = r["papers"]
+    finally:
+        conn.close()
+    for entry in found.values():
+        entry.setdefault("units", 0)
+        entry.setdefault("independent", 0)
+        entry.setdefault("papers", 0)
+        entry.setdefault("last_at", None)
+    return found
+
+
 @router.get("/accounts/{account_id}/exams/all")
 async def exams_all(
     account_id: int,
@@ -117,6 +158,7 @@ async def exams_all(
 
     today_iso = date.today().isoformat()
     section, _kl, _src = resolve_section(account_id)
+    practice = practice_by_subject(account_id)
 
     upcoming, past = [], []
     for e in data["exams"]:
@@ -129,6 +171,8 @@ async def exams_all(
             "grade_points": gp,
             "grade_label": display_label(gp, section),
         }
+        if e["date"] >= today_iso:
+            e["practice"] = practice.get(_norm(e.get("subject_name") or ""))
         (upcoming if e["date"] >= today_iso else past).append(e)
 
     cutoff = archive_before(account_id)

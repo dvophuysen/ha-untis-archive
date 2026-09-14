@@ -603,3 +603,33 @@ def test_deleting_one_session_keeps_another_sessions_skill_and_evidence(setup):
         assert c.execute('SELECT 1 FROM mentor_skills WHERE id=?',(skill,)).fetchone()
         assert c.execute('SELECT COUNT(*) FROM mentor_evidence WHERE skill_id=?',(skill,)).fetchone()[0]==1
     assert any(p['id']==skill for p in client.get(B).json()['progress'])
+
+
+def test_homework_chat_stays_open_until_the_task_is_ticked(setup):
+    client,state,patch=setup;child(state)
+    with closing(db.webapp_conn()) as c:
+        tid=c.execute("INSERT INTO tasks(account_id,title,subject_name,source,created_at,updated_at) VALUES(1,'Latein Nr. 3','Latein','manual','now','now')").lastrowid
+    s=client.post(B+'/sessions',json={'subject':'Latein','homework_task_id':tid}).json()
+    # Neither "done for today" nor the mentor's own finish may close it.
+    r=send(client,s,kind='finish')
+    assert r.status_code==200,r.text
+    assert r.json()['status']=='active' and r.json()['task_done'] is False
+    mock(patch,[reply(task=None,action='finish')])
+    r=send(client,client.get(B+f"/sessions/{s['id']}").json(),text='Und der Rest?')
+    assert r.status_code==200,r.text
+    assert r.json()['status']=='active'
+    assert [x['id'] for x in client.get(B).json()['sessions']]==[s['id']]
+    # The tick on the homework files it away; removing the tick brings it back.
+    with closing(db.webapp_conn()) as c:c.execute("UPDATE tasks SET status='done' WHERE id=?",(tid,))
+    listed={x['id']:x for x in client.get(B).json()['sessions']}
+    assert listed[s['id']]['task_done'] is True
+    assert client.get(B+f"/sessions/{s['id']}").json()['task_done'] is True
+    with closing(db.webapp_conn()) as c:c.execute("UPDATE tasks SET status='open' WHERE id=?",(tid,))
+    assert client.get(B).json()['sessions'][0]['task_done'] is False
+
+
+def test_a_practice_unit_may_still_be_closed_by_the_mentor(setup):
+    client,state,patch=setup;child(state)
+    mock(patch,[reply(task=None,action='finish')])
+    s=start(client)
+    assert send(client,s).json()['status']=='completed'

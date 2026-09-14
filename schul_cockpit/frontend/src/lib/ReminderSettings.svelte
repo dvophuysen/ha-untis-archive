@@ -20,6 +20,12 @@
    await api.post('/api/push/subscribe',{...subscription.toJSON(),ua_label:'Mein Gerät'});
    device=true;await load();message='Gerät angemeldet. Probiere eine Testnachricht aus.';
  }
+ function niceName(service){return service.replace(/^mobile_app_/,'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());}
+ async function toggleTarget(service,on){
+   const chosen=new Set(data.app_targets||[]);
+   if(on)chosen.add(service);else chosen.delete(service);
+   data=await api.put(`/api/accounts/${accountId}/reminders/targets`,{services:[...chosen]});
+ }
  async function unregister(){const registration=await ready();const subscription=await registration.pushManager.getSubscription();if(subscription){await api.post('/api/push/unsubscribe',{endpoint:subscription.endpoint});await subscription.unsubscribe();}device=false;await load();message='Dieses Gerät ist abgemeldet.';}
 </script>
 <section class="card reminder-settings">
@@ -34,7 +40,17 @@
      <label class="check"><input type="checkbox" bind:checked={enabled} disabled={busy}/> Tägliche Erinnerung einschalten</label>
      <button disabled={busy}>Speichern</button>
     </form>
-    <p class="muted">{data.devices} Kindergeräte angemeldet. Die Anmeldung erfolgt auf dem Gerät mit dem Kinderkonto.</p>
+    <h4>Auf welches Gerät</h4>
+    <p class="muted">Die Erinnerung geht über die Home-Assistant-App. Sie ist eine normale App und lässt sich in der Bildschirmzeit unter „Immer erlaubt" eintragen; eine Web-App vom Startbildschirm wird dort während einer Auszeit gesperrt.</p>
+    {#if data.app_services?.length}
+     {#each data.app_services as service}
+      <label class="check"><input type="checkbox" checked={(data.app_targets||[]).includes(service)} disabled={busy} onchange={e=>act(()=>toggleTarget(service,e.currentTarget.checked))}/> {niceName(service)}</label>
+     {/each}
+     <button disabled={busy||!(data.app_targets||[]).length} onclick={()=>act(async()=>{const r=await api.post(`/api/accounts/${accountId}/reminders/test`);const ok=Object.values(r.sent).filter(Boolean).length;message=ok?`An ${ok} Gerät${ok===1?'':'e'} übergeben. Kurz antippen — es sollte dein Tag aufgehen.`:'Kein Gerät erreicht.';await load();})}>Testnachricht senden</button>
+    {:else}<p class="muted">Home Assistant meldet keine App-Geräte. Die Home-Assistant-App muss auf dem Kindergerät angemeldet sein.</p>{/if}
+    {#if data.last_app_delivery}<p class="muted">Zuletzt an {niceName(data.last_app_delivery.service)}: {data.last_app_delivery.status==='accepted'?'übergeben':'fehlgeschlagen'}</p>{/if}
+    <h4>Älterer Weg über den Browser</h4>
+    <p class="muted">{data.devices} Kindergeräte über Web-Push angemeldet. Dieser Weg wird nicht mehr weiterentwickelt.</p>
     <p class="muted">Höchstens einmal pro Gerät und Tag. Alles erledigt? Dann bleibt es still. Nach längeren Ausfällen wird nachts nichts nachgeschickt.</p>
     {#if data.last_delivery}<p class="muted">Letzter Versand: {data.last_delivery.status==='accepted'?'Vom Push-Dienst angenommen – Empfang nicht bestätigt':data.last_delivery.status==='failed'?'Fehlgeschlagen – bitte Gerät testen':'Ausgang unklar – bitte Gerät testen'}</p>{/if}
    {:else}<p>{data.enabled?`Dein Tagescheck ist um ${data.remind_at} Uhr. Wenn alles erledigt ist, bleibt es still.`:'Automatische Erinnerungen sind noch aus. Deine Eltern können eine Uhrzeit festlegen.'}</p>{/if}
@@ -45,5 +61,5 @@
  {:else}<p>Auf dem iPhone oder iPad: App zum Home-Bildschirm hinzufügen und von dort öffnen.</p>{/if}
 </section>
 <style>
- h3{font-size:1.05rem;margin:0 0 12px}p{line-height:1.45}.check{display:flex;align-items:center;gap:10px}.check input{width:24px;height:24px;min-height:24px}button{margin:6px 6px 0 0}input[type="time"]{max-width:200px}label{margin:12px 0}.muted{font-size:.85rem;color:var(--fg-muted)}
+ h3{font-size:1.05rem;margin:0 0 12px}h4{font-size:.95rem;margin:16px 0 6px}p{line-height:1.45}.check{display:flex;align-items:center;gap:10px}.check input{width:24px;height:24px;min-height:24px}button{margin:6px 6px 0 0}input[type="time"]{max-width:200px}label{margin:12px 0}.muted{font-size:.85rem;color:var(--fg-muted)}
 </style>

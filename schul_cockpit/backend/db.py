@@ -517,6 +517,18 @@ CREATE TABLE IF NOT EXISTS exam_archive (
 );
 """))
 
+# Erinnerungen laufen über die Home-Assistant-App, nicht über Web-Push.
+_MIGRATIONS.append(("reminder_app_targets_001", """
+CREATE TABLE IF NOT EXISTS reminder_app_targets (
+ account_id INTEGER NOT NULL, service TEXT NOT NULL, PRIMARY KEY(account_id,service)
+);
+CREATE TABLE IF NOT EXISTS reminder_app_deliveries (
+ account_id INTEGER NOT NULL, school_day TEXT NOT NULL, service TEXT NOT NULL,
+ status TEXT NOT NULL, created_at TEXT NOT NULL,
+ PRIMARY KEY(account_id,school_day,service)
+);
+"""))
+
 _MIGRATIONS.append(("digital_textbooks_003_pages", """
 CREATE TABLE IF NOT EXISTS digital_textbook_pages (
  account_id INTEGER NOT NULL,

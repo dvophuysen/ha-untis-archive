@@ -96,3 +96,50 @@ def test_account_remap_keeps_settings_packing_and_delivery_with_child(env):
     with closing(db.webapp_conn()) as c:
         for table in ('packing_items','reminder_settings','reminder_deliveries'):
             assert c.execute(f'SELECT account_id FROM {table}').fetchone()[0]==11
+
+
+def test_the_app_reminder_goes_out_once_per_device_and_day(env):
+    client,_,patch=setup(env)
+    from backend import app_notify
+    client.put(URL,json={'enabled':True,'remind_at':'18:00'})
+    patch.setattr(r,'snapshot',lambda *a:dict(homework=1,material=2,feedback=0))
+    patch.setattr(app_notify,'own_panel',lambda:'/e54108c7_schul_cockpit')
+    app_notify.set_targets(1,['mobile_app_kind_iphone'])
+    sent=[]
+    patch.setattr(app_notify,'send',lambda service,title,message,url:(sent.append((service,message,url)) or True))
+    r.run_once(NOW)
+    r.run_once(NOW)
+    assert len(sent)==1
+    service,message,url=sent[0]
+    assert service=='mobile_app_kind_iphone'
+    # Was offen ist, steht in der Nachricht; das Antippen führt in die App.
+    assert 'Hausaufgaben' in message and 'Schultasche' in message
+    assert 'Rückmeldungen' not in message
+    assert url=='/e54108c7_schul_cockpit'
+    assert client.get(URL).json()['last_app_delivery']['status']=='accepted'
+
+
+def test_only_companion_app_services_can_be_chosen(env):
+    client,state,patch=setup(env)
+    from backend import app_notify
+    patch.setattr(app_notify,'services',lambda:['mobile_app_kind_iphone','mobile_app_eltern_iphone'])
+    assert client.put(URL+'/targets',json={'services':['notify.persistent_notification']}).status_code==422
+    ok=client.put(URL+'/targets',json={'services':['mobile_app_kind_iphone']})
+    assert ok.status_code==200 and ok.json()['app_targets']==['mobile_app_kind_iphone']
+    # Ein zusammengesetzter Name darf keinen anderen Dienst treffen.
+    assert app_notify.set_targets(1,['mobile_app_x/../../core'])==[]
+    child(state)
+    assert client.put(URL+'/targets',json={'services':[]}).status_code==403
+
+
+def test_the_day_view_follows_the_reminder_time(env):
+    client,_,patch=setup(env)
+    from backend.routers import today as today_routes
+    # Der Stundenplan spielt hier keine Rolle, nur die Abendgrenze.
+    patch.setattr(today_routes,'lessons_for_date',lambda conn,account,day:[])
+    patch.setattr(today_routes,'upcoming_exams',lambda conn,account,days_ahead=7:[])
+    patch.setattr(today_routes,'hidden_keys',lambda account:set())
+    client.app.include_router(today_routes.router,prefix='/api')
+    assert client.get('/api/accounts/1/today').json()['evening_from']=='18:00'
+    client.put(URL,json={'enabled':True,'remind_at':'17:30'})
+    assert client.get('/api/accounts/1/today').json()['evening_from']=='17:30'

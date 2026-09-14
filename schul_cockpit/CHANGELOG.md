@@ -1,3 +1,11 @@
+## 0.47.0
+
+- Ab 18 Uhr zeigt „Heute" zuerst, was für morgen fehlt: offene Aufgaben und die Packliste für den nächsten Schultag. Die Packliste war abends bisher gar nicht zu sehen, sondern nur vor Schulbeginn — also dann, wenn es zum Holen zu spät ist. Vorschläge zum Vorziehen und zum Üben klappen abends zu und lassen sich weiter öffnen. Die Uhrzeit ist dieselbe wie die der Erinnerung.
+- Erinnerungen laufen jetzt über die Home-Assistant-App statt über Web-Push. Ein Antippen öffnet das Schul-Cockpit. Grund: Die Bildschirmzeit sperrt eine Web-App vom Startbildschirm während einer Auszeit unabhängig von jeder Freigabeliste, und ältere Geräte bekommen die neuere Bildschirmzeit nie. Die Geräte werden in den Einstellungen ausgewählt, eine Testnachricht ist dort möglich.
+- Ein Hausaufgaben-Chat bleibt offen, bis die Hausaufgabe abgehakt ist. Weder der Mentor noch „für heute fertig" beenden ihn; beides pausiert nur. Abgehakte Aufgaben wandern in ein Archiv und kommen zurück, wenn das Häkchen wieder weg ist.
+- Klausurkarten zeigen Datum und Abstand immer gemeinsam, dazu eine Einordnung von „noch Zeit" bis „unmittelbar". Vorher stand bis sieben Tage nur der Abstand und danach nur das Datum.
+- Unter jeder Klausur steht, was tatsächlich geübt wurde: Lerneinheiten, ohne Hilfe gezeigte Themen, geschriebene Übungsarbeiten. Die Selbsteinschätzung bleibt daneben. Ein Knopf führt direkt ins Üben für dieses Fach.
+
 ## 0.46.0
 
 - Zum Schuljahreswechsel lassen sich die Arbeiten des alten Jahres auf einen Knopfdruck ins Archiv legen. Sie verschwinden aus „Arbeiten & Tests" und bleiben dort aufklappbar, mit Note und Lernstand. Gelöscht wird nichts, und das Archiv lässt sich jederzeit wieder einblenden.
