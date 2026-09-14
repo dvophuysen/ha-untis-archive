@@ -1,3 +1,9 @@
+## 0.35.1
+
+- Gespeicherte IServ-Zugänge lassen sich pro Kind direkt prüfen. Die App meldet verständlich, ob Anmeldung und Eduplaces-Einstieg funktionieren.
+- Der Verbindungstest verwendet eine kurzlebige Serversitzung; Passwort, Cookies und Seiteninhalt werden weder zurückgegeben noch protokolliert.
+- Die Elternansicht unterscheidet „gespeichert“ und erfolgreich „verbunden“.
+
 ## 0.35.0
 
 - Eltern können den IServ-/Bildungslogin-Zugang getrennt für jedes Kind in dessen Einstellungen hinterlegen und wieder entfernen. Die Maske zeigt niemals das gespeicherte Passwort an.

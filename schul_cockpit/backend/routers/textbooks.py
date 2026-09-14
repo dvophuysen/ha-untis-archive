@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..db import webapp_conn
-from ..secret_store import encrypt_secret
+from ..iserv_connector import IservLoginError, verify_iserv_login
+from ..secret_store import decrypt_secret, encrypt_secret
 
 router = APIRouter(prefix="/accounts/{account_id}/textbooks", tags=["textbooks"])
 
@@ -123,3 +124,51 @@ def delete_credentials(account_id: int, user: CurrentUser = Depends(get_current_
     finally:
         conn.close()
     return Response(status_code=204)
+
+
+@router.post("/verify")
+async def verify_credentials(
+    account_id: int,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    _require_parent(user, account_id)
+    conn = webapp_conn()
+    try:
+        row = conn.execute(
+            "SELECT portal_url,username,password_ciphertext FROM digital_textbook_credentials WHERE account_id=?",
+            (account_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Noch kein Zugang gespeichert")
+    try:
+        password = decrypt_secret(row["password_ciphertext"])
+        await verify_iserv_login(row["portal_url"], row["username"], password)
+    except IservLoginError as exc:
+        now = datetime.now(timezone.utc).isoformat()
+        conn = webapp_conn()
+        try:
+            conn.execute(
+                "UPDATE digital_textbook_credentials SET verified_at=NULL,verification_status='failed',updated_at=? WHERE account_id=?",
+                (now, account_id),
+            )
+        finally:
+            conn.close()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    finally:
+        password = ""
+    now = datetime.now(timezone.utc).isoformat()
+    conn = webapp_conn()
+    try:
+        conn.execute(
+            "UPDATE digital_textbook_credentials SET verified_at=?,verification_status='connected',updated_at=? WHERE account_id=?",
+            (now, now, account_id),
+        )
+        row = conn.execute(
+            "SELECT portal_url,username,verified_at,verification_status,updated_at FROM digital_textbook_credentials WHERE account_id=?",
+            (account_id,),
+        ).fetchone()
+        return _public(row)
+    finally:
+        conn.close()
