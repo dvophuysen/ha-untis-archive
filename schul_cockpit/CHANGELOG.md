@@ -1,3 +1,8 @@
+## 0.39.10
+
+- Führt der Klick auf „E-Book öffnen" nicht in den Leser, wird er zurückgenommen statt den Abruf auf einer leeren Seite stranden zu lassen.
+- Der Testabruf zeigt, welche Schaltfläche für den Einstieg angeklickt wurde und wohin sie geführt hat.
+
 ## 0.39.9
 
 - Der Einstieg in den Leser klickt nur noch einmal und wählt von mehreren Treffern den kleinsten, also die eigentliche Schaltfläche statt der umgebenden Karte. Ein zweiter Klick hatte den Leser wieder verlassen.

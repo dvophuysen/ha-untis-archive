@@ -446,6 +446,18 @@
           <div class="dim" style="margin-top:0.5rem;">Ganzes Viewer-Fenster mit Bedienleiste:</div>
           <img class="page-preview" src={textbookTest.window_image} alt="Vorschau des ganzen Viewer-Fensters" />
         {/if}
+        {#if textbookTest.entry?.length}
+          <div class="dim" style="margin-top:0.5rem;">Einstieg in den Leser:</div>
+          <ul class="control-list">
+            {#each textbookTest.entry as step}
+              <li>
+                {step.undone
+                  ? `zurückgenommen, jetzt auf ${step.to}`
+                  : `${step.tag} „${step.caption}" von ${step.from}${step.href ? ` nach ${step.href}` : ''}`}
+              </li>
+            {/each}
+          </ul>
+        {/if}
         {#if textbookTest.attempts?.length}
           <div class="dim" style="margin-top:0.5rem;">Blätterversuche:</div>
           <ul class="control-list">
