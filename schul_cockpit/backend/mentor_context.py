@@ -65,6 +65,10 @@ def snapshot(account_id, include_previous=False, include_all_homework=False):
         recent=[dict(r) for r in c.execute('SELECT id,subject,goal,status,summary,updated_at FROM mentor_sessions WHERE account_id=? AND is_test=0 ORDER BY id DESC LIMIT 20',(account_id,))]
         settings=c.execute('SELECT * FROM mentor_settings WHERE account_id=?',(account_id,)).fetchone()
         discovered={r['lesson_id']:dict(r) for r in c.execute('SELECT i.lesson_id,i.fingerprint,t.id,t.subject,t.title,t.objective,d.explanation,d.bridge,d.prerequisites,d.outlook FROM learning_discovery_items i JOIN learning_topics t ON t.id=i.topic_id JOIN learning_discovery_topics d ON d.topic_id=t.id WHERE i.account_id=? AND i.profile_id=?',(account_id,p['id'] if p else -1))}
+        # Die Auswertung stuft Einträge ohne Lerninhalt ausdrücklich als unklar
+        # ein und stellt eine Rückfrage. Dieses Urteil wurde bisher gespeichert
+        # und danach übergangen: Organisatorisches landete als Übungsziel im Plan.
+        unclear={r['lesson_id']:dict(r) for r in c.execute('SELECT lesson_id,fingerprint,note FROM learning_discovery_items WHERE account_id=? AND profile_id=? AND topic_id IS NULL',(account_id,p['id'] if p else -1))}
     try:
         with closing(history_conn()) as c:
             start=school_start(c,account_id,day)
@@ -87,10 +91,16 @@ def snapshot(account_id, include_previous=False, include_all_homework=False):
             r.update(text=text[:1800],text_truncated=len(text)>1800,rating=ratings.get(r['id'],{}).get('rating'),note=(ratings.get(r['id'],{}).get('note') or '')[:500],
                      missed_minutes=n,catch_up_open=bool(r.get('was_absent') and r['id'] not in caught and (n is None or n>=15)),future=r['date']>day.isoformat())
             r.pop('teacher_name',None);r.pop('lstext_manual_override',None);r.pop('lstext',None)
+            stamp=fingerprint([r['date'],r.get('subject_name'),r['text']])
             topic=discovered.get(r['id'])
             # Reuse only a cluster whose underlying lesson still matches.
-            if topic and topic['subject']==r.get('subject_name') and topic['fingerprint']==fingerprint([r['date'],r.get('subject_name'),r['text']]):
+            if topic and topic['subject']==r.get('subject_name') and topic['fingerprint']==stamp:
                 r['topic']={k:topic[k] for k in ('id','title','objective','explanation','bridge','prerequisites','outlook')}
+            else:
+                open_question=unclear.get(r['id'])
+                if open_question and open_question['fingerprint']==stamp:
+                    r['no_topic']=True
+                    r['open_question']=open_question['note'] or ''
             clean.append(r)
         lessons=clean
     except (sqlite3.Error,OSError):
@@ -117,7 +127,8 @@ def candidates(s):
     for r in s['recent']: last.setdefault(r['subject'],r['updated_at'][:10])
     # Archive-wide events may have lesson text but no subject. They cannot
     # anchor a subject-specific learning session; retain them in the archive.
-    pool=[r for r in s['lessons'] if not r['future'] and r['text'].strip() and (r.get('subject_name') or '').strip()]
+    pool=[r for r in s['lessons'] if not r['future'] and r['text'].strip() and (r.get('subject_name') or '').strip()
+          and not r.get('no_topic')]
     pool.sort(key=lambda r:(r['rating'] not in (1,2),not r['catch_up_open'],last.get(r['subject_name'],''),r['date']),reverse=False)
     for r in pool:
         subject=r.get('subject_name') or 'Unterricht'

@@ -1,3 +1,7 @@
+## 0.48.0
+
+- Organisatorische Unterrichtseinträge erscheinen nicht mehr als Übungsaufgabe. Die Auswertung hatte sie längst als „kein Lernthema" eingestuft und eine Rückfrage hinterlegt; der Plan hat dieses Urteil nicht gelesen und stattdessen den rohen Eintragstext als Titel genommen. So standen eine AG-Vorstellung, eine Bücherausgabe und eine Vertretungsstunde als Lerneinheiten in der Liste.
+
 ## 0.47.2
 
 - Die Packliste stand abends zweimal auf der Seite: oben in der neuen Karte für morgen und unten in „Nächster Schultag". Die untere Karte entfällt am Abend, weil ihr Inhalt dann oben steht.
