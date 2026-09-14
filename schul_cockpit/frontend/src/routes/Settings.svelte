@@ -12,12 +12,16 @@
   let textbookBusy = $state(false);
   let textbookMessage = $state(null);
   let textbookCatalog = $state(null);
+  let textbookSubjects = $state([]);
 
   async function loadTextbookAccess() {
     if (!accountId || !['parent', 'admin'].includes(appState.me?.role) && !appState.me?.is_admin) return;
     try {
-      textbookAccess = await api.get(`/api/accounts/${accountId}/textbooks`);
-      textbookCatalog = await api.get(`/api/accounts/${accountId}/textbooks/catalog`);
+      [textbookAccess, textbookCatalog] = await Promise.all([
+        api.get(`/api/accounts/${accountId}/textbooks`),
+        api.get(`/api/accounts/${accountId}/textbooks/catalog`),
+      ]);
+      textbookSubjects = (await api.get(`/api/accounts/${accountId}/subjects`)).subjects ?? [];
       textbookPassword = '';
     } catch (e) {
       textbookMessage = { ok: false, text: e.message };
@@ -83,6 +87,22 @@
     } finally {
       textbookBusy = false;
     }
+  }
+
+  async function setBookSubject(book, subjectName) {
+    try {
+      textbookCatalog = await api.patch(
+        `/api/accounts/${accountId}/textbooks/catalog/${book.id}`,
+        { subject_name: subjectName || null },
+      );
+    } catch (e) {
+      textbookMessage = { ok: false, text: e.message };
+    }
+  }
+
+  function selectedBookSubject(book) {
+    const value = book.subject_name ?? '';
+    return textbookSubjects.find((s) => s.name.toLocaleLowerCase('de-DE') === value.toLocaleLowerCase('de-DE'))?.name ?? '';
   }
 
   async function toggleDemo() {
@@ -324,8 +344,17 @@
       <div class="book-list">
         {#each textbookCatalog.books as book}
           <div class="book-row">
-            <span>📘</span>
-            <div><strong>{book.subject_name ? book.subject_name[0].toUpperCase() + book.subject_name.slice(1) : 'Schulbuch'}</strong><div class="dim">{book.title}</div></div>
+            <div class="book-title"><span>📘</span><strong>{book.title}</strong></div>
+            <select
+              aria-label={`Fach für ${book.title}`}
+              value={selectedBookSubject(book)}
+              onchange={(e) => setBookSubject(book, e.currentTarget.value)}
+            >
+              <option value="">Fach wählen…</option>
+              {#each textbookSubjects as subject}
+                <option value={subject.name}>{subject.name}</option>
+              {/each}
+            </select>
           </div>
         {/each}
       </div>
@@ -555,9 +584,15 @@
   .password-saved { display: block; color: var(--success, #18794e); font-size: 0.8rem; margin-top: 0.15rem; }
   .textbook-actions { margin-top: 0.75rem; flex-wrap: wrap; }
   .book-list { margin-top: 0.75rem; border-top: 1px solid var(--border); }
-  .book-row { display: flex; gap: 0.55rem; padding: 0.55rem 0; border-bottom: 1px solid var(--border); }
+  .book-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(10rem, 15rem); align-items: center; gap: 0.75rem; padding: 0.55rem 0; border-bottom: 1px solid var(--border); }
+  .book-title { display: flex; align-items: flex-start; gap: 0.55rem; min-width: 0; }
+  .book-title strong { overflow-wrap: anywhere; }
+  .book-row select { width: 100%; margin: 0; }
   @media (min-width: 760px) {
     .textbook-grid { grid-template-columns: 1.1fr 1fr 1fr; }
+  }
+  @media (max-width: 560px) {
+    .book-row { grid-template-columns: 1fr; }
   }
   .code-box {
     display: block;

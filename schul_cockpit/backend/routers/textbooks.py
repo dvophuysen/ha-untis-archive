@@ -22,6 +22,10 @@ class CredentialsIn(BaseModel):
     password: str | None = Field(default=None, max_length=500)
 
 
+class CatalogSubjectIn(BaseModel):
+    subject_name: str | None = Field(default=None, max_length=120)
+
+
 def _require_parent(user: CurrentUser, account_id: int) -> None:
     assert_account_access(user, account_id)
     if user.role not in {"parent", "admin"} and not user.is_admin:
@@ -200,4 +204,26 @@ async def scan_catalog(account_id: int, user: CurrentUser = Depends(get_current_
         await scan_account(account_id)
     except TextbookScanError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return get_catalog(account_id, user)
+
+
+@router.patch("/catalog/{book_id}")
+def update_catalog_subject(
+    account_id: int,
+    book_id: int,
+    body: CatalogSubjectIn,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    _require_parent(user, account_id)
+    subject = body.subject_name.strip() if body.subject_name else None
+    conn = webapp_conn()
+    try:
+        changed = conn.execute(
+            "UPDATE digital_textbook_catalog SET subject_name=? WHERE id=? AND account_id=?",
+            (subject or None, book_id, account_id),
+        ).rowcount
+    finally:
+        conn.close()
+    if not changed:
+        raise HTTPException(status_code=404, detail="Schulbuch nicht gefunden")
     return get_catalog(account_id, user)
