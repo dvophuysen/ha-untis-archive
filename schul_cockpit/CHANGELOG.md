@@ -1,3 +1,8 @@
+## 0.45.0
+
+- Klausurtermine lassen sich nicht mehr von Hand eintragen oder ändern. Sie kommen ausschließlich aus dem IServ-Klausurplan und werden nächtlich abgerufen; eine zweite Stelle zum Pflegen läuft nur auseinander.
+- Früher von Hand angelegte Termine bleiben im Verlauf sichtbar, mit Note und Lernstand. In den Einstellungen stehen sie als Altbestand, ohne Bearbeiten.
+
 ## 0.44.5
 
 - „Arbeiten & Tests" lädt wieder. Sobald ein Klausurtermin aus dem Kalender kam, öffnete die Seite für ihn das Bearbeiten-Formular der von Hand angelegten Termine und brach ab. Kalendertermine haben keine solche Kennung, und zwei fehlende Kennungen galten als gleich.

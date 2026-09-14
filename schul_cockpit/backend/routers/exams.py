@@ -1,4 +1,8 @@
-"""Exam calendar linking, subject overrides, manual exams, diagnostics."""
+"""Exam calendar linking, subject overrides, diagnostics.
+
+Exam dates are fetched, never entered by hand: the school keeps them in the
+IServ exam plan, and a second place to maintain them only drifts.
+"""
 
 from __future__ import annotations
 
@@ -291,101 +295,6 @@ def set_override(
     return {"ok": True}
 
 
-class ManualExamIn(BaseModel):
-    exam_date: str  # YYYY-MM-DD
-    subject_name: str
-    subject_untis_id: int | None = None
-    title: str | None = None
-    note: str | None = None
-
-
-class ManualExamPatch(BaseModel):
-    # Alle Felder optional — nur das wird gepatcht, was angegeben ist.
-    exam_date: str | None = None
-    subject_name: str | None = None
-    subject_untis_id: int | None = None
-    title: str | None = None
-    note: str | None = None
-
-
-@router.post("/accounts/{account_id}/manual-exams", status_code=201)
-def add_manual_exam(
-    account_id: int,
-    body: ManualExamIn,
-    user: CurrentUser = Depends(get_current_user),
-) -> dict:
-    assert_account_access(user, account_id)
-    _require_parent(user)
-    conn = webapp_conn()
-    try:
-        cur = conn.execute(
-            "INSERT INTO manual_exams "
-            "(account_id, exam_date, subject_name, subject_untis_id, title, note, "
-            " created_by_user_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (account_id, body.exam_date, body.subject_name, body.subject_untis_id,
-             body.title, body.note, user.id, _now()),
-        )
-        return {"ok": True, "id": cur.lastrowid}
-    finally:
-        conn.close()
-
-
-@router.delete("/accounts/{account_id}/manual-exams/{exam_id}")
-def delete_manual_exam(
-    account_id: int,
-    exam_id: int,
-    user: CurrentUser = Depends(get_current_user),
-) -> dict:
-    assert_account_access(user, account_id)
-    _require_parent(user)
-    conn = webapp_conn()
-    try:
-        conn.execute(
-            "DELETE FROM manual_exams WHERE account_id = ? AND id = ?",
-            (account_id, exam_id),
-        )
-    finally:
-        conn.close()
-    return {"ok": True}
-
-
-@router.patch("/accounts/{account_id}/manual-exams/{exam_id}")
-def update_manual_exam(
-    account_id: int,
-    exam_id: int,
-    body: ManualExamPatch,
-    user: CurrentUser = Depends(get_current_user),
-) -> dict:
-    """Termin verschieben / Felder anpassen. Nur Eltern/Admin."""
-    assert_account_access(user, account_id)
-    _require_parent(user)
-    fields: list[tuple[str, str | int | None]] = []
-    if body.exam_date is not None:
-        fields.append(("exam_date", body.exam_date))
-    if body.subject_name is not None:
-        fields.append(("subject_name", body.subject_name))
-    if body.subject_untis_id is not None or body.subject_name is not None:
-        # subject_untis_id mit dem Subject-Wechsel zusammen ziehen;
-        # explizit None würde sonst die Zuordnung wegräumen.
-        fields.append(("subject_untis_id", body.subject_untis_id))
-    if body.title is not None:
-        fields.append(("title", body.title))
-    if body.note is not None:
-        fields.append(("note", body.note))
-    if not fields:
-        return {"ok": True, "updated": 0}
-    set_clause = ", ".join(f"{c} = ?" for c, _ in fields)
-    params = [v for _, v in fields] + [account_id, exam_id]
-    conn = webapp_conn()
-    try:
-        cur = conn.execute(
-            f"UPDATE manual_exams SET {set_clause} "
-            "WHERE account_id = ? AND id = ?",
-            params,
-        )
-        updated = cur.rowcount
-    finally:
-        conn.close()
-    if updated == 0:
-        raise HTTPException(status_code=404, detail="Termin nicht gefunden")
-    return {"ok": True, "updated": updated}
+# Klausurtermine werden abgerufen, nicht eingetragen. Die Wege, von Hand
+# welche anzulegen oder zu ändern, gibt es deshalb nicht mehr; früher so
+# entstandene Termine bleiben lesbar im Verlauf stehen.
