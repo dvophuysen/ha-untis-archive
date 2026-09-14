@@ -371,9 +371,10 @@ def test_settle_waits_while_the_reader_is_still_blank(monkeypatch):
 def test_generic_open_captions_no_longer_enter_the_reader():
     script = '''
 const assert = require('node:assert/strict');
-function link(text, size) {
-  return {childNodes: [{nodeType: 3, textContent: text}],
-    getAttribute: () => null, getClientRects: () => [{}], querySelectorAll: () => [],
+function link(text, size, href) {
+  return {tagName: 'A', childNodes: [{nodeType: 3, textContent: text}],
+    getAttribute: k => (k === 'href' ? (href === undefined ? '/reader/1' : href) : null),
+    getClientRects: () => [{}], querySelectorAll: () => [],
     getBoundingClientRect: () => ({width: size || 200, height: 40}),
     shadowRoot: null, innerText: text, _text: text};
 }
@@ -390,5 +391,11 @@ assert.equal(run([real]), real);
 // Of a card and the button inside it, the button wins.
 const card = link('E-Book öffnen', 900), button = link('E-Book öffnen', 220);
 assert.equal(run([card, button]), button);
+// A skip link pointing at the site root is never the entry, even though it
+// is the smaller element and matches the caption.
+const skip = link('Zum E-Book', 60, 'https://ebook.example/');
+assert.equal(run([skip]), null);
+const opens = link('E-Book öffnen', 400);
+assert.equal(run([skip, opens]), opens);
 '''
     subprocess.run(['node', '-e', script, browser._ENTER_READER_SCRIPT], check=True)
