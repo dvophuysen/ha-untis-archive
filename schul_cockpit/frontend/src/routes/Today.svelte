@@ -53,6 +53,21 @@
     const start = new Date(`${data.date}T${String(Math.floor(first.start_time / 100)).padStart(2,'0')}:${String(first.start_time % 100).padStart(2,'0')}:00`);
     return now < start;
   });
+  // Abends zählt nur noch, was für morgen fehlt. Vorschläge zum Vorziehen und
+  // zum Üben sind dann nicht hilfreich, sie stehen aufklappbar weiter unten.
+  const evening = $derived.by(() => {
+    const from = data?.evening_from;
+    if (!from || !data) return false;
+    const [h, m] = from.split(':').map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return false;
+    return now.getHours() * 60 + now.getMinutes() >= h * 60 + m;
+  });
+  const nextSchoolDay = $derived(data?.next?.date ?? null);
+  const nextIsTomorrow = $derived.by(() => {
+    if (!nextSchoolDay || !data?.date) return false;
+    const a = new Date(`${data.date}T00:00:00`), b = new Date(`${nextSchoolDay}T00:00:00`);
+    return Math.round((b - a) / 86400000) === 1;
+  });
   function feedbackSaved() { message = 'Rückmeldung gespeichert.'; }
   function taskSaved() { message = 'Aufgabe gespeichert.'; load(); }
 </script>
@@ -61,6 +76,17 @@
 {#if error}<div class="error-box" role="alert">{error} Bitte erneut aktualisieren; angezeigte Daten können veraltet sein.</div>{/if}
 <p class="save-message" role="status">{message}</p>
 {#if loading}<p>Lade deinen Tag …</p>{:else}
+  {#if evening}
+    <section class="day-section evening">
+      <h3>{nextIsTomorrow ? 'Für morgen' : 'Für den nächsten Schultag'}</h3>
+      {#each work.due as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{:else}
+        <p class="all-clear"><span aria-hidden="true">✓</span> Keine Aufgabe mehr offen.</p>
+      {/each}
+      {#if nextSchoolDay}<PackingChecklist {accountId} schoolDay={nextSchoolDay} />{:else}
+        <p class="muted">In den nächsten Tagen steht keine Schule an.</p>
+      {/if}
+    </section>
+  {/if}
   {#if data}
     <section class="day-section school" class:school-done={!lessons.upcoming.length && !lessons.open.length}>
       <div class="section-head"><h3>{activeUpcoming.length ? 'In der Schule' : 'Dein Schultag'}</h3><a href="#/week"><ActionLabel label="Woche ansehen" /></a></div>
@@ -76,21 +102,23 @@
       {/if}
     </section>
   {/if}
-  <section class="day-section obligations">
+  {#if !evening}<section class="day-section obligations">
     <div class="section-head"><h3>Heute erledigen</h3><button class="text-action" onclick={() => creating = true}>Aufgabe ergänzen</button></div>
     {#each work.due as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{:else}{#if error}<p>Aufgabenstand bitte aktualisieren.</p>{:else}<p class="all-clear"><span aria-hidden="true">🎉</span><strong>Für morgen ist nichts mehr offen!</strong></p>{/if}{/each}
   </section>
-  {#if work.ahead.length}<section class="day-section"><h3>Schon vorziehen</h3>{#each work.ahead as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</section>{/if}
-  {#if work.undated.length}<section class="day-section"><h3>Noch ohne Termin</h3>{#each work.undated as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</section>{/if}
-  <section class="day-section practice">
-    <div class="section-head"><h3><a href="#/learning"><ActionLabel label="Üben & vorbereiten" /></a></h3></div>
+  {/if}
+  {#if work.ahead.length}<details class="day-section fold" open={!evening}><summary><h3>Schon vorziehen</h3></summary>{#each work.ahead as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</details>{/if}
+  {#if work.undated.length}<details class="day-section fold" open={!evening}><summary><h3>Noch ohne Termin</h3></summary>{#each work.undated as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</details>{/if}
+  <details class="day-section practice fold" open={!evening}>
+    <summary><h3>Üben &amp; vorbereiten</h3></summary>
+    <a class="exam-link" href="#/learning"><ActionLabel label="Zum Lernbereich" /></a>
     {#if planError}<p role="status">{planError}</p>{/if}
     {#each plan?.errors ?? [] as problem}<p class="muted">{problem}</p>{/each}
     {#each plan?.upcoming_exams ?? [] as exam}<a class="exam-link" href="#/klausuren">{exam.subject_name || exam.subject || exam.title || 'Arbeit'} · {formatShortDate(exam.date)} <ActionLabel /></a>{/each}
     {#each plan?.today?.actions ?? [] as item (item.key)}
       <LearningGoal goal={item}/>
     {:else}{#if !planError}<p class="muted">Heute ist keine zusätzliche Übung eingeplant.</p>{/if}{/each}
-  </section>
+  </details>
   {#if data?.next}<section class="day-section tomorrow">
     <h3>Nächster Schultag · {formatShortDate(data.next.date)}</h3>
     <PackingChecklist {accountId} schoolDay={data.next.date} />
@@ -105,6 +133,12 @@
   .day-title,.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
   .day-title h2{margin:0;font-size:1.6rem}.eyebrow{color:var(--fg-muted);margin:0 0 8px;font-size:.9rem}
   .day-section{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:12px;margin:0 0 8px}
+  .evening{border-color:var(--accent);background:var(--accent-soft)}
+  .evening h3{margin-top:0}
+  .fold>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;list-style:none}
+  .fold>summary::-webkit-details-marker{display:none}
+  .fold>summary h3{margin:0}
+  .fold:not([open])>summary h3{opacity:.75;font-weight:600}
   h3{font-size:1.1rem;margin:0 0 8px}h4{margin:16px 0 8px}.section-head h3{margin:0}.section-head{margin-bottom:8px}
   .section-head>a,.text-action{font-size:.9rem}.section-head h3 a{font:inherit;color:var(--fg)}.text-action{padding:8px 0;background:transparent;border:0;color:var(--accent);text-align:left}
   .next-lesson{padding:10px 0;border-bottom:1px solid var(--border)}.save-message{min-height:1.3em;color:var(--accent);font-size:.9rem;margin:6px 0}

@@ -67,19 +67,37 @@
     { v: 3, label: 'sicher', emoji: '😀' },
   ];
 
+  // Datum und Abstand stehen immer zusammen. Vorher zeigte die Karte bis sieben
+  // Tage nur den Abstand und danach nur das Datum; beides war nie vergleichbar.
   function whenLabel(dateIso) {
     const d = daysBetween(today, dateIso);
     if (d === 0) return 'heute';
     if (d === 1) return 'morgen';
     if (d === 2) return 'übermorgen';
-    if (d <= 7) return `in ${d} Tagen`;
-    return formatShortDate(dateIso);
+    if (d < 0) return `vor ${Math.abs(d)} Tagen`;
+    if (d % 7 === 0 && d >= 14) return `in ${d / 7} Wochen`;
+    return `in ${d} Tagen`;
   }
   function urgencyClass(dateIso) {
     const d = daysBetween(today, dateIso);
-    if (d <= 2) return 'soon';
-    if (d <= 7) return 'mid';
-    return '';
+    if (d <= 2) return 'now';
+    if (d <= 7) return 'soon';
+    if (d <= 21) return 'mid';
+    return 'far';
+  }
+  const URGENCY = { now: 'unmittelbar', soon: 'diese Woche', mid: 'in Vorbereitung', far: 'noch Zeit' };
+
+  function practiceLabel(p) {
+    if (!p || (!p.units && !p.independent && !p.papers)) return 'Für dieses Fach ist noch nichts geübt.';
+    const parts = [];
+    if (p.units) parts.push(`${p.units} ${p.units === 1 ? 'Lerneinheit' : 'Lerneinheiten'}`);
+    if (p.independent) parts.push(`${p.independent} ${p.independent === 1 ? 'Thema' : 'Themen'} ohne Hilfe gezeigt`);
+    if (p.papers) parts.push(`${p.papers} ${p.papers === 1 ? 'Übungsarbeit' : 'Übungsarbeiten'} geschrieben`);
+    return parts.join(' · ');
+  }
+  function practiceUrl(e) {
+    const q = new URLSearchParams({ subject: e.subject_name ?? '', topic: e.title ?? '', mode: 'exam' });
+    return `#/lernen?${q.toString()}`;
   }
 </script>
 
@@ -121,13 +139,19 @@
               <div class="dim">{e.title}</div>
             {/if}
             <div class="dim">
-              {formatShortDate(e.date)}{#if e.source === 'manual'} · selbst eingetragen{/if}
+              {formatShortDate(e.date)} · {whenLabel(e.date)}{#if e.source === 'manual'} · selbst eingetragen{/if}
             </div>
           </div>
-          <span class="badge when {urgencyClass(e.date)}">{whenLabel(e.date)}</span>
+          <span class="badge when {urgencyClass(e.date)}">{URGENCY[urgencyClass(e.date)]}</span>
         </div>
 
-        <div class="muted" style="margin-top:0.5rem;">Lernstand:</div>
+        <div class="measured">{practiceLabel(e.practice)}</div>
+        {#if e.practice?.last_at}<div class="dim measured-when">zuletzt geübt {formatShortDate(e.practice.last_at.slice(0, 10))}</div>{/if}
+        {#if e.subject_name}
+          <a class="practice-link" href={practiceUrl(e)}>Für diese Arbeit üben</a>
+        {/if}
+
+        <div class="muted" style="margin-top:0.5rem;">Wie sicher fühlst du dich?</div>
         <div class="learn-row">
           {#each LEARN as l}
             <button
@@ -223,8 +247,14 @@
   .learn .ll { font-size: 0.6rem; color: var(--fg-muted); }
   .learn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .learn.active .ll { color: #fff; }
-  .when.soon { background: var(--rating-1); color: #fff; border-color: transparent; }
-  .when.mid { background: var(--rating-2); color: #fff; border-color: transparent; }
+  .when { white-space: nowrap; }
+  .when.now { background: var(--rating-1); color: #fff; border-color: transparent; }
+  .when.soon { background: var(--rating-2); color: #fff; border-color: transparent; }
+  .when.mid { background: var(--bg); }
+  .when.far { background: transparent; opacity: .75; }
+  .measured { margin-top: 0.5rem; font-size: 0.85rem; }
+  .measured-when { font-size: 0.78rem; }
+  .practice-link { display: inline-block; margin-top: 0.5rem; font-weight: 600; }
   .grade-box { flex-shrink: 0; }
   .grade-input { width: 110px; text-align: center; font-weight: 600; min-height: 40px; }
   .edit-form { margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px dashed var(--border); }

@@ -11,6 +11,21 @@ from ..queries import lessons_for_date, upcoming_exams
 
 router = APIRouter()
 
+# Ab dieser Uhrzeit zählt nur noch, was für morgen fehlt. Dieselbe Zeit steuert
+# die abendliche Erinnerung, damit Nachricht und Ansicht nicht auseinanderlaufen.
+DEFAULT_EVENING = "18:00"
+
+
+def evening_from(account_id: int) -> str:
+    conn = webapp_conn()
+    try:
+        row = conn.execute(
+            "SELECT remind_at FROM reminder_settings WHERE account_id = ?", (account_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    return (row["remind_at"] if row and row["remind_at"] else DEFAULT_EVENING)
+
 
 @router.get("/accounts/{account_id}/today")
 def today(
@@ -90,4 +105,5 @@ def today(
         },
         "upcoming_exams": exams,
         "next": next_block,
+        "evening_from": evening_from(account_id),
     }
