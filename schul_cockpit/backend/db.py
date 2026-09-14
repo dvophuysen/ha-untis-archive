@@ -382,6 +382,20 @@ CREATE TABLE IF NOT EXISTS digital_textbook_credentials (
 );
 """))
 
+_MIGRATIONS.append(("digital_textbooks_002_catalog", """
+CREATE TABLE IF NOT EXISTS digital_textbook_catalog (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ account_id INTEGER NOT NULL,
+ title TEXT NOT NULL,
+ provider TEXT,
+ launch_url TEXT,
+ subject_name TEXT,
+ discovered_at TEXT NOT NULL,
+ UNIQUE(account_id,title)
+);
+CREATE INDEX IF NOT EXISTS idx_textbook_catalog_account ON digital_textbook_catalog(account_id,title);
+"""))
+
 def history_conn() -> sqlite3.Connection:
     """Read-only connection to the UNTIS Archive's history.db."""
     uri = f"file:{SETTINGS.history_db_path}?mode=ro"

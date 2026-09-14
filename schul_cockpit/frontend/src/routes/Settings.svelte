@@ -11,11 +11,13 @@
   let textbookPassword = $state('');
   let textbookBusy = $state(false);
   let textbookMessage = $state(null);
+  let textbookCatalog = $state(null);
 
   async function loadTextbookAccess() {
     if (!accountId || !['parent', 'admin'].includes(appState.me?.role) && !appState.me?.is_admin) return;
     try {
       textbookAccess = await api.get(`/api/accounts/${accountId}/textbooks`);
+      textbookCatalog = await api.get(`/api/accounts/${accountId}/textbooks/catalog`);
       textbookPassword = '';
     } catch (e) {
       textbookMessage = { ok: false, text: e.message };
@@ -62,6 +64,20 @@
     try {
       textbookAccess = await api.post(`/api/accounts/${accountId}/textbooks/verify`);
       textbookMessage = { ok: true, text: `✓ Verbindung für ${activeName} funktioniert.` };
+    } catch (e) {
+      textbookMessage = { ok: false, text: e.message };
+    } finally {
+      textbookBusy = false;
+    }
+  }
+
+  async function scanTextbooks() {
+    textbookBusy = true;
+    textbookMessage = { ok: true, text: 'Medienregal wird gelesen…' };
+    try {
+      textbookCatalog = await api.post(`/api/accounts/${accountId}/textbooks/catalog/scan`);
+      textbookAccess = await api.get(`/api/accounts/${accountId}/textbooks`);
+      textbookMessage = { ok: true, text: `${textbookCatalog.books.length} Schulbücher erkannt.` };
     } catch (e) {
       textbookMessage = { ok: false, text: e.message };
     } finally {
@@ -260,7 +276,7 @@
         <div class="dim">Damit der Lernmentor genannte Buchseiten einsehen kann.</div>
       </div>
       <span class:textbook-ok={textbookAccess.configured} class="textbook-status">
-        {textbookAccess.verification_status === 'connected' ? '✓ verbunden' : textbookAccess.configured ? 'gespeichert' : 'noch offen'}
+        {['connected', 'catalog_ready'].includes(textbookAccess.verification_status) ? '✓ verbunden' : textbookAccess.configured ? 'gespeichert' : 'noch offen'}
       </span>
     </div>
     <div class="textbook-grid">
@@ -292,6 +308,9 @@
       {#if textbookAccess.configured}
         <button disabled={textbookBusy} onclick={verifyTextbookAccess}>Verbindung prüfen</button>
       {/if}
+      {#if textbookAccess.verification_status === 'connected' || textbookAccess.verification_status === 'catalog_ready' || textbookAccess.verification_status === 'scan_failed'}
+        <button disabled={textbookBusy} onclick={scanTextbooks}>📚 Bücher erkennen</button>
+      {/if}
       {#if textbookAccess.configured}
         <button disabled={textbookBusy} onclick={removeTextbookAccess}>Entfernen</button>
       {/if}
@@ -299,6 +318,16 @@
     {#if textbookMessage}
       <div class={textbookMessage.ok ? 'banner' : 'error-box'} style="margin-top:0.6rem;">
         {textbookMessage.text}
+      </div>
+    {/if}
+    {#if textbookCatalog?.books?.length}
+      <div class="book-list">
+        {#each textbookCatalog.books as book}
+          <div class="book-row">
+            <span>📘</span>
+            <div><strong>{book.subject_name ? book.subject_name[0].toUpperCase() + book.subject_name.slice(1) : 'Schulbuch'}</strong><div class="dim">{book.title}</div></div>
+          </div>
+        {/each}
       </div>
     {/if}
   </div>
@@ -525,6 +554,8 @@
   .textbook-grid input { width: 100%; margin-top: 0.2rem; }
   .password-saved { display: block; color: var(--success, #18794e); font-size: 0.8rem; margin-top: 0.15rem; }
   .textbook-actions { margin-top: 0.75rem; flex-wrap: wrap; }
+  .book-list { margin-top: 0.75rem; border-top: 1px solid var(--border); }
+  .book-row { display: flex; gap: 0.55rem; padding: 0.55rem 0; border-bottom: 1px solid var(--border); }
   @media (min-width: 760px) {
     .textbook-grid { grid-template-columns: 1.1fr 1fr 1fr; }
   }

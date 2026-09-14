@@ -80,6 +80,8 @@ async def lifespan(app: FastAPI):
 
     _BG_TASK = asyncio.create_task(background_sync_loop())
     mentor_task = asyncio.create_task(mentor_loop())
+    from .textbook_catalog import scan_connected_accounts
+    textbook_scan_task = asyncio.create_task(scan_connected_accounts())
     from .reminders import loop as reminder_loop
     reminder_task = asyncio.create_task(reminder_loop())
     # A process restart cannot leave a grading lease permanently stuck.
@@ -90,6 +92,11 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        textbook_scan_task.cancel()
+        try:
+            await textbook_scan_task
+        except asyncio.CancelledError:
+            pass
         reminder_task.cancel()
         try:
             await reminder_task
