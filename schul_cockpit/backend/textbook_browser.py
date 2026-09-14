@@ -199,17 +199,38 @@ async def scan_shelf(portal_url: str, username: str, password: str) -> list[Shel
     return await asyncio.to_thread(_scan_shelf_sync, portal_url, username, password)
 
 
+_BOOK_TARGET_SCRIPT = r"""
+const normalize = s => (s || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLocaleLowerCase('de');
+const wanted = normalize(arguments[0]);
+const matches = [];
+function walk(root) {
+  for (const e of root.querySelectorAll('*')) {
+    const own = [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join(' ');
+    const labels = [own, e.getAttribute('aria-label'), e.getAttribute('title'), e.getAttribute('alt')];
+    if (labels.some(s => normalize(s) === wanted) && e.getClientRects().length) matches.push(e);
+    if (e.shadowRoot) walk(e.shadowRoot);
+  }
+}
+walk(document);
+for (const e of matches) {
+  let p = e;
+  while (p) {
+    if (p.matches('a,button,[role="link"],[role="button"],[tabindex="0"]')) return p;
+    p = p.parentElement || p.getRootNode().host;
+  }
+  // Product cards often use a click listener on a plain div. A real click
+  // on the exact title bubbles to that listener without guessing a link.
+  return e;
+}
+return null;
+"""
+
+
 def _find_and_click_in_frames(driver, title: str, depth: int = 0) -> bool:
-    folded = _clean(title).casefold()
-    for element in driver.find_elements(By.CSS_SELECTOR, "a,button,[role='link'],[role='button'],img"):
-        try:
-            values = (element.text, element.get_attribute("aria-label"), element.get_attribute("title"), element.get_attribute("alt"))
-            if any(folded in _clean(value or "").casefold() for value in values):
-                target = element if element.tag_name != "img" else element.find_element(By.XPATH, "./ancestor::*[self::a or self::button or @role='link' or @role='button'][1]")
-                driver.execute_script("arguments[0].click()", target)
-                return True
-        except Exception:
-            continue
+    target = driver.execute_script(_BOOK_TARGET_SCRIPT, title)
+    if target is not None:
+        target.click()
+        return True
     if depth < 3:
         for frame in driver.find_elements(By.CSS_SELECTOR, "iframe,frame"):
             switched = False
@@ -224,6 +245,16 @@ def _find_and_click_in_frames(driver, title: str, depth: int = 0) -> bool:
                 if switched:
                     driver.switch_to.parent_frame()
     return False
+
+
+def _open_book(driver, title: str):
+    def ready(d):
+        d.switch_to.default_content()
+        return _find_and_click_in_frames(d, title)
+    try:
+        WebDriverWait(driver, 25).until(ready)
+    except TimeoutException as exc:
+        raise TextbookScanError("Das zugeordnete Schulbuch wurde im Regal nicht gefunden") from exc
 
 
 def _page_control(driver, depth: int = 0):
@@ -276,8 +307,7 @@ def _capture_pages_sync(portal_url: str, username: str, password: str, title: st
         WebDriverWait(driver, 20).until(lambda d: d.execute_script("return document.readyState") == "complete")
         stage = "Buch öffnen"
         before = set(driver.window_handles); old_url = driver.current_url
-        if not _find_and_click_in_frames(driver, title):
-            raise TextbookScanError("Das zugeordnete Schulbuch wurde im Regal nicht gefunden")
+        _open_book(driver, title)
         def viewer_started(d):
             if len(d.window_handles) > len(before) or d.current_url != old_url:
                 return True
