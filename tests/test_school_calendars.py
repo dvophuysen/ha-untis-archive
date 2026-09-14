@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from tests.test_learning import env  # noqa: F401  (fixture)
+from test_mentor import setup as mentor_setup  # noqa: F401  (fixture)
 from backend import db, iserv_calendar as ical, school_calendars as store
 from backend.auth import get_current_user
 from backend.routers import calendars as routes
@@ -384,3 +385,61 @@ def test_practice_is_counted_only_within_the_window(env):
     # Was nur weit vor dem Fenster liegt, taucht gar nicht erst auf.
     assert 'musik' not in found
     assert found['physik']['days'] == 60
+
+
+def test_the_scope_of_an_exam_starts_after_the_previous_one(env):
+    from datetime import date as _d
+    from backend.routers.exams import scope_start
+
+    entries = [
+        {"subject_name": "MATHEMATIK", "date": "2026-09-30"},
+        {"subject_name": "MATHEMATIK", "date": "2026-11-20"},
+        {"subject_name": "DEUTSCH", "date": "2026-10-10"},
+    ]
+    # Die zweite Arbeit beginnt bei der ersten desselben Fachs.
+    assert scope_start("MATHEMATIK", "2026-11-20", entries) == "2026-09-30"
+    # Die erste beginnt beim Schuljahr, nicht bei einer Arbeit eines anderen Fachs.
+    assert scope_start("MATHEMATIK", "2026-09-30", entries) == "2026-08-01"
+    assert scope_start("DEUTSCH", "2026-10-10", entries) == "2026-08-01"
+    # Eine Arbeit im Frühjahr zählt weiterhin ab dem vorigen August.
+    assert scope_start("KUNST", "2027-03-05", entries) == "2026-08-01"
+
+
+def test_a_taught_topic_counts_as_scope_until_it_is_shown(mentor_setup):
+    from contextlib import closing as _closing
+    import sqlite3 as _sq
+    from backend.routers import exams as exam_routes
+
+    with _sq.connect(db.SETTINGS.history_db_path) as hist:
+        hist.executescript(
+            "CREATE TABLE IF NOT EXISTS lessons(id INTEGER PRIMARY KEY,account_id INTEGER,date TEXT,"
+            "subject_name TEXT,subject_untis_id INTEGER,lstext TEXT,was_absent INTEGER);")
+        hist.execute("INSERT INTO lessons(id,account_id,date,subject_name,lstext,was_absent) "
+                     "VALUES(901,1,'2026-09-02','PHYSIK','Reihenschaltung',0)")
+        hist.execute("INSERT INTO lessons(id,account_id,date,subject_name,lstext,was_absent) "
+                     "VALUES(902,1,'2026-09-09','PHYSIK','Parallelschaltung',0)")
+        # Vor dem Zeitraum unterrichtet, gehört also nicht zu dieser Arbeit.
+        hist.execute("INSERT INTO lessons(id,account_id,date,subject_name,lstext,was_absent) "
+                     "VALUES(903,1,'2026-06-02','PHYSIK','Ladungen',0)")
+    with _closing(db.webapp_conn()) as c, c:
+        pid = c.execute("SELECT id FROM learning_profiles WHERE account_id=1 AND active=1").fetchone()[0]
+        ids = {}
+        for lesson, title in ((901, "Reihenschaltung"), (902, "Parallelschaltung"), (903, "Ladungen")):
+            tid = c.execute(
+                "INSERT INTO learning_topics(profile_id,subject,title,objective,method,status,priority,"
+                "source_note,created_at,updated_at) VALUES(?,'PHYSIK',?,'Ich kann das','explain','active',1,'','now','now')",
+                (pid, title)).lastrowid
+            ids[title] = tid
+            c.execute("INSERT INTO learning_discovery_items(account_id,profile_id,lesson_id,fingerprint,topic_id,note) "
+                      "VALUES(1,?,?,'x',?,'')", (pid, lesson, tid))
+        skill = c.execute("INSERT INTO mentor_skills(account_id,subject,title,objective,created_at,updated_at) "
+                          "VALUES(1,'PHYSIK','Reihenschaltung','Ich kann das','now','now')").lastrowid
+        c.execute("INSERT INTO learning_plan_links VALUES(1,?,?)", ('discovered:' + str(ids['Reihenschaltung']), skill))
+        c.execute("INSERT INTO mentor_evidence(account_id,skill_id,task_json,answer,result,rationale,"
+                  "help_used,variant_hash,created_at) VALUES(1,?,'{}','richtig','correct','passend',0,'h','now')", (skill,))
+
+    scope = exam_routes.exam_scope(1, 'PHYSIK', '2026-08-01', '2026-09-14')
+    titles = {t['title']: t['shown'] for t in scope['topics']}
+    assert titles == {'Reihenschaltung': True, 'Parallelschaltung': False}
+    assert scope['parts'] == 2 and scope['shown'] == 1
+    assert scope['verified'] is False

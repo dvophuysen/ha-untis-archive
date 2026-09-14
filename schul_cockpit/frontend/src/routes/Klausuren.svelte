@@ -98,6 +98,19 @@
     if (p.papers) parts.push(`${p.papers} ${p.papers === 1 ? 'Übungsarbeit' : 'Übungsarbeiten'} geschrieben`);
     return `${parts.join(' · ')}${weeks ? ` · letzte ${weeks} Wochen` : ''}`;
   }
+  // Angenommen wird, dass alles seit der letzten Arbeit des Fachs zum Stoff
+  // gehört. Eine Eingrenzung durch die Lehrkraft gibt es vorher nicht.
+  function scopeLabel(s) {
+    if (!s) return '';
+    if (!s.parts) return 'Aus diesem Zeitraum ist noch kein Thema erfasst.';
+    return `${s.shown} von ${s.parts} ${s.parts === 1 ? 'Thema sitzt' : 'Themen sitzen'}`;
+  }
+  function sinceLabel(s) {
+    if (!s?.since) return '';
+    const start = new Date(`${s.since}T00:00:00`);
+    const august = start.getMonth() === 7 && start.getDate() === 1;
+    return august ? 'seit Schuljahresbeginn' : `seit der letzten Arbeit am ${formatShortDate(s.since)}`;
+  }
   function practiceUrl(e) {
     const q = new URLSearchParams({ subject: e.subject_name ?? '', topic: e.title ?? '', mode: 'exam' });
     return `#/lernen?${q.toString()}`;
@@ -148,8 +161,25 @@
           <span class="badge when {urgencyClass(e.date)}">{URGENCY[urgencyClass(e.date)]}</span>
         </div>
 
-        <div class="measured">{practiceLabel(e.practice)}</div>
-        {#if e.practice?.last_at}<div class="dim measured-when">zuletzt geübt {formatShortDate(e.practice.last_at.slice(0, 10))}</div>{/if}
+        {#if e.scope}
+          <div class="measured"><strong>{scopeLabel(e.scope)}</strong></div>
+          <div class="dim measured-when">
+            Angenommener Stoff {sinceLabel(e.scope)}. Bis die Lehrkraft eingrenzt, zählt alles,
+            was im Unterricht behandelt wurde.
+          </div>
+          {#if e.scope.topics.length}
+            <details class="scope"><summary>Themen ansehen ({e.scope.topics.length})</summary>
+              {#each e.scope.topics as topic (topic.id)}
+                <div class="scope-row" class:done={topic.shown}>
+                  <span aria-hidden="true">{topic.shown ? '✓' : '·'}</span>
+                  <span>{topic.title}{#if topic.field}<small> · {topic.field}</small>{/if}</span>
+                </div>
+              {/each}
+            </details>
+          {/if}
+        {:else}
+          <div class="measured">{practiceLabel(e.practice)}</div>
+        {/if}
         {#if e.subject_name}
           <a class="practice-link" href={practiceUrl(e)}>Für diese Arbeit üben</a>
         {/if}
@@ -258,6 +288,10 @@
   .measured { margin-top: 0.5rem; font-size: 0.85rem; }
   .measured-when { font-size: 0.78rem; }
   .practice-link { display: inline-block; margin-top: 0.5rem; font-weight: 600; }
+  .scope > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: 0.85rem; }
+  .scope-row { display: flex; gap: 0.5rem; padding: 0.25rem 0; font-size: 0.85rem; }
+  .scope-row.done { opacity: 0.65; }
+  .scope-row small { color: var(--fg-muted); }
   .grade-box { flex-shrink: 0; }
   .grade-input { width: 110px; text-align: center; font-weight: 600; min-height: 40px; }
   .edit-form { margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px dashed var(--border); }
