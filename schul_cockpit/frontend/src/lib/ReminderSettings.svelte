@@ -2,9 +2,9 @@
  import {onMount} from 'svelte';
  import {api} from './api.js';
  let {accountId}=$props();
- let data=$state(null),time=$state(''),enabled=$state(false),busy=$state(false),error=$state(''),message=$state(''),device=$state(false),supported=$state(false);
+ let data=$state(null),time=$state(''),enabled=$state(false),morning=$state(''),morningOn=$state(true),busy=$state(false),error=$state(''),message=$state(''),device=$state(false),supported=$state(false);
  let request=0;
- async function load(){const id=accountId,ticket=++request;data=null;try{const result=await api.get(`/api/accounts/${id}/reminders`);if(ticket!==request)return;data=result;time=result.remind_at||'';enabled=result.enabled;}catch(e){if(ticket===request)error=e.message;}}
+ async function load(){const id=accountId,ticket=++request;data=null;try{const result=await api.get(`/api/accounts/${id}/reminders`);if(ticket!==request)return;data=result;time=result.remind_at||'';enabled=result.enabled;morning=result.morning_at||'';morningOn=result.morning_enabled;}catch(e){if(ticket===request)error=e.message;}}
  $effect(()=>{void accountId;load();});
  onMount(()=>{supported='serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;if(supported)navigator.serviceWorker.ready.then(r=>r.pushManager.getSubscription()).then(s=>device=!!s).catch(()=>{});return()=>request++;});
  async function act(fn){if(busy)return;busy=true;error='';message='';try{await fn();}catch(e){error=e.message;}finally{busy=false;}}
@@ -35,9 +35,13 @@
  {#if data}
    {#if data.can_manage}
     <p>Ein Tagescheck, wenn Hausaufgaben, Fachmaterial für morgen oder Stundenrückmeldungen offen sind.</p>
-    <form onsubmit={e=>{e.preventDefault();act(async()=>{await api.put(`/api/accounts/${accountId}/reminders`,{enabled,remind_at:time||null});await load();message='Erinnerungszeit gespeichert.';});}}>
+    <form onsubmit={e=>{e.preventDefault();act(async()=>{await api.put(`/api/accounts/${accountId}/reminders`,{enabled,remind_at:time||null,morning_enabled:morningOn,morning_at:morning||null});await load();message='Erinnerungszeit gespeichert.';});}}>
      <label>Uhrzeit (Deutschland)<input type="time" min="14:00" max="21:00" bind:value={time} required={enabled} disabled={busy}/></label>
      <label class="check"><input type="checkbox" bind:checked={enabled} disabled={busy}/> Tägliche Erinnerung einschalten</label>
+     <h4>Wenn der Abend nicht abgeschlossen wurde</h4>
+     <p class="muted">Eine zweite, kürzere Mitteilung am Morgen — nur an den, der am Abend nicht abgeschlossen hat, und nur wenn wirklich etwas offen ist. Wer abschließt, bleibt unbehelligt.</p>
+     <label>Morgens um<input type="time" min="05:00" max="09:00" bind:value={morning} disabled={busy||!morningOn}/></label>
+     <label class="check"><input type="checkbox" bind:checked={morningOn} disabled={busy}/> Morgenmitteilung einschalten</label>
      <button disabled={busy}>Speichern</button>
     </form>
     <h4>Auf welches Gerät</h4>
@@ -53,7 +57,8 @@
     <p class="muted">{data.devices} Kindergeräte über Web-Push angemeldet. Dieser Weg wird nicht mehr weiterentwickelt.</p>
     <p class="muted">Höchstens einmal pro Gerät und Tag. Alles erledigt? Dann bleibt es still. Nach längeren Ausfällen wird nachts nichts nachgeschickt.</p>
     {#if data.last_delivery}<p class="muted">Letzter Versand: {data.last_delivery.status==='accepted'?'Vom Push-Dienst angenommen – Empfang nicht bestätigt':data.last_delivery.status==='failed'?'Fehlgeschlagen – bitte Gerät testen':'Ausgang unklar – bitte Gerät testen'}</p>{/if}
-   {:else}<p>{data.enabled?`Dein Tagescheck ist um ${data.remind_at} Uhr. Wenn alles erledigt ist, bleibt es still.`:'Automatische Erinnerungen sind noch aus. Deine Eltern können eine Uhrzeit festlegen.'}</p>{/if}
+   {:else}<p>{data.enabled?`Dein Tagescheck ist um ${data.remind_at} Uhr. Wenn alles erledigt ist, bleibt es still.`:'Automatische Erinnerungen sind noch aus. Deine Eltern können eine Uhrzeit festlegen.'}</p>
+    {#if data.enabled&&data.morning_enabled}<p class="muted">Schließt du den Abend ab, kommt am Morgen nichts mehr.</p>{/if}{/if}
  {/if}
  {#if supported}
   <button disabled={busy} onclick={()=>act(register)}>{device?'Gerät für dieses Konto anmelden':'Dieses Gerät anmelden'}</button>

@@ -47,6 +47,12 @@ _ACCOUNT_TABLES = (
     "caught_up",
     "tasks",
     "audit_log",
+    # Ohne diese verlöre ein Kontowechsel die gewählten Telefone und damit
+    # stillschweigend die Erinnerung.
+    "reminder_app_targets",
+    "reminder_app_deliveries",
+    "day_closures",
+    "morning_app_deliveries",
 )
 
 # Tables carrying (account_id, lesson_id, untis_period_id) lesson references.

@@ -1,3 +1,10 @@
+## 0.51.0
+
+- Der Tag lässt sich abschließen. Unter der Abendkarte steht ein Knopf; festgehalten wird, wann, von wem und ob die Erinnerung da schon draußen war. Abschließen geht auch mit offenen Punkten — sie werden so vermerkt, wie sie sind.
+- Wer am Abend nicht abgeschlossen hat, bekommt am Morgen vor dem Aufbruch eine zweite, kürzere Mitteilung. Wer abgeschlossen hat, bekommt nichts. Uhrzeit und Abschaltung stehen in den Eltern-Einstellungen.
+- Die Abendkarte zeigt, an wie vielen Abenden dieser Woche selbst abgeschlossen wurde — gezählt werden nur Abende vor einem Schultag und nur Abschlüsse ohne vorherige Erinnerung.
+- Ein Kontowechsel verlor bisher die für Mitteilungen gewählten Telefone. Sie werden jetzt mit umgezogen.
+
 ## 0.50.1
 
 - Der Stoff einer Arbeit beginnt nie vor dem Schuljahr. Eine Arbeit desselben Fachs aus dem vorigen Schuljahr öffnete bisher ein Fenster über die Sommerferien hinweg und zog den Stoff des alten Jahrgangs mit hinein.

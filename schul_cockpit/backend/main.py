@@ -26,6 +26,7 @@ from .routers import (
     checkins,
     courses as courses_router,
     dashboard as dashboard_router,
+    day_close as day_close_router,
     exams,
     health,
     learning,
@@ -174,6 +175,7 @@ app.include_router(auth_router.router, prefix=API)
 app.include_router(me.router, prefix=API)
 app.include_router(setup.router, prefix=API)
 app.include_router(today.router, prefix=API)
+app.include_router(day_close_router.router, prefix=API)
 app.include_router(week.router, prefix=API)
 app.include_router(subjects.router, prefix=API)
 app.include_router(search.router, prefix=API)

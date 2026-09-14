@@ -4,6 +4,7 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends
 
+from .. import day_close
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..courses import hidden_keys, lesson_is_hidden
 from ..db import history_conn, webapp_conn
@@ -106,4 +107,10 @@ def today(
         "upcoming_exams": exams,
         "next": next_block,
         "evening_from": evening_from(account_id),
+        # Ob der Tag schon durchgegangen wurde — davon hängt die Abendkarte ab
+        # und am nächsten Morgen die zweite Mitteilung.
+        "day_close": {
+            "closed": day_close.closure(account_id, today_iso),
+            "reliability": day_close.reliability(account_id, today_date),
+        },
     }
