@@ -6,6 +6,7 @@
   import Overview from './routes/Overview.svelte';
   import Plan from './routes/Plan.svelte';
   import Learning from './routes/Learning.svelte';
+  import Materialien from './routes/Materialien.svelte';
   import Week from './routes/Week.svelte';
   import Subjects from './routes/Subjects.svelte';
   import SubjectDetail from './routes/SubjectDetail.svelte';
@@ -222,7 +223,7 @@
     {:else if route.name === 'more'}
       <h2>Übersichten</h2>
       <div class="overview-links">
-        {#each [['week','Stundenplan','🗓️'],['subjects','Fächer','📚'],['klausuren','Arbeiten','📝'],['absences','Nachholen','🧩'],['plan','Aufgaben und Wochenplanung','✅']] as [target,label,icon]}
+        {#each [['materialien','Materialien','📎'],['week','Stundenplan','🗓️'],['subjects','Fächer','📚'],['klausuren','Arbeiten','📝'],['absences','Nachholen','🧩'],['plan','Aufgaben und Wochenplanung','✅']] as [target,label,icon]}
           <button onclick={() => navigate(target)}><span aria-hidden="true">{icon}</span> {label} <ActionLabel /></button>
         {/each}
       </div>
@@ -232,6 +233,12 @@
       <Plan accountId={appState.activeAccountId} />
     {:else if route.name === 'week'}
       <Week accountId={appState.activeAccountId} />
+    {:else if route.name === 'materialien'}
+      {#key `${appState.activeAccountId}:${(route.args ?? []).join('/')}`}
+        <Materialien accountId={appState.activeAccountId}
+                     initialSubject={decodeURIComponent(route.args?.[0] ?? '')}
+                     taskId={Number(route.args?.[1]) || null} />
+      {/key}
     {:else if route.name === 'learning'}
       {#key appState.activeAccountId}
         <Learning accountId={appState.activeAccountId} />

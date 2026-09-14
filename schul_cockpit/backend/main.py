@@ -28,6 +28,7 @@ from .routers import (
     exams,
     health,
     learning,
+    materials as materials_router,
     mentor,
     mentor_exams,
     discovery,
@@ -52,6 +53,7 @@ from .routers import (
 )
 from .sync_worker import background_sync_loop
 from .mentor_worker import background_loop as mentor_loop
+from .materials_worker import background_loop as materials_loop
 
 logging.basicConfig(level=getattr(logging, SETTINGS.log_level.upper(), logging.INFO))
 _LOGGER = logging.getLogger("schul_cockpit")
@@ -80,6 +82,7 @@ async def lifespan(app: FastAPI):
 
     _BG_TASK = asyncio.create_task(background_sync_loop())
     mentor_task = asyncio.create_task(mentor_loop())
+    materials_task = asyncio.create_task(materials_loop())
     from .textbook_catalog import scan_connected_accounts
     textbook_scan_task = asyncio.create_task(scan_connected_accounts())
     from .reminders import loop as reminder_loop
@@ -105,6 +108,11 @@ async def lifespan(app: FastAPI):
         mentor_task.cancel()
         try:
             await mentor_task
+        except asyncio.CancelledError:
+            pass
+        materials_task.cancel()
+        try:
+            await materials_task
         except asyncio.CancelledError:
             pass
         if _BG_TASK:
@@ -155,6 +163,7 @@ API = "/api"
 app.include_router(health.router, prefix=API)
 app.include_router(learning.router, prefix=API)
 app.include_router(mentor.router, prefix=API)
+app.include_router(materials_router.router, prefix=API)
 app.include_router(mentor_exams.router, prefix=API)
 app.include_router(discovery.router, prefix=API)
 
