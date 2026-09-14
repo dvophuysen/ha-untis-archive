@@ -9,14 +9,15 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from pydantic import Field, ValidationError
 
 from . import ai_gateway as ai
 from . import materials as store
-from .db import webapp_conn
+from .db import history_conn, webapp_conn
 from .learning import InputModel
 from .subject_names import SubjectCatalog, key as subject_key
 
@@ -24,7 +25,7 @@ _LOGGER = logging.getLogger("schul_cockpit.materials")
 
 # Raise this when the instruction or the extracted fields change, so the night
 # run picks up everything that was filed under the older rules.
-ANALYSIS_VERSION = 1
+ANALYSIS_VERSION = 2
 
 
 class Insight(InputModel):
@@ -57,15 +58,49 @@ INSTRUCTION = (
     "sonst leer lassen. Verwende dann genau eine Schreibweise aus bekannte_faecher.\n"
     "topics: höchstens sechs Stichworte zum Inhalt. Passt ein Eintrag aus bekannte_themen, übernimm "
     "dessen Titel unverändert; erfinde keine Themen, die nicht zum Material passen.\n"
-    "document_date ist der Tag, zu dem das Material inhaltlich gehört, als JJJJ-MM-TT, etwa ein "
-    "aufgedrucktes Datum, ein Stundendatum oder eine Abgabefrist. Ohne Beleg leer lassen; das "
-    "Aufnahmedatum allein ist kein Beleg.\n"
+    "document_date ist der Tag, an dem das Material ausgegeben oder behandelt wurde, als JJJJ-MM-TT. "
+    "Ein aufgedrucktes Datum oder ein Stundendatum ist der beste Beleg. Gehört das Material zu einer "
+    "Hausaufgabe, nimm hinweise.gehoert_zu_hausaufgabe.gestellt_am: Arbeitsblätter werden mit der "
+    "Aufgabenstellung ausgegeben, nicht zur Abgabe. faellig_am ist nur Zusammenhang und niemals das "
+    "document_date. Ohne Beleg leer lassen; das Aufnahmedatum allein ist kein Beleg.\n"
     "references: genannte Seiten und Aufgaben, etwa \"S. 34\" oder \"Aufgabe 1\".\n"
     "contains_solutions true, wenn Lösungen, Musterlösungen oder korrigierte Ergebnisse zu sehen sind.\n"
     "title ist kurz und konkret, ohne Fachnamen am Anfang. summary sind ein bis drei Sätze dazu, "
     "worum es geht und wofür man es brauchen kann. confidence schätzt deine Sicherheit von 0 bis 1.\n"
     "JSON-Schema: "
 )
+
+
+_GIVEN = re.compile(r"Gegeben am:?\s*(?:[A-Za-zÄÖÜäöü]{2,4}\.?\s*)?(\d{1,2})\.(\d{1,2})\.(\d{2,4})?")
+
+
+def task_given_date(task) -> str | None:
+    """The day a homework was set. Material comes with the task, not with its
+    deadline, so the due date is the wrong anchor for a worksheet."""
+    if task["lesson_id"]:
+        try:
+            with closing(history_conn()) as conn:
+                row = conn.execute("SELECT date FROM lessons WHERE id=?", (task["lesson_id"],)).fetchone()
+            if row and row["date"]:
+                return str(row["date"])[:10]
+        except Exception:
+            pass
+    match = _GIVEN.search(task["notes"] or "")
+    if match:
+        day, month, year = match.group(1), match.group(2), match.group(3)
+        basis = (task["due_date"] or task["created_at"] or "")[:10]
+        if not year and len(basis) == 10:
+            year = basis[:4]
+            # A task set in December and due in January belongs to the old year.
+            if int(month) > int(basis[5:7]):
+                year = str(int(year) - 1)
+        if year:
+            year = year if len(year) == 4 else f"20{year}"
+            try:
+                return date(int(year), int(month), int(day)).isoformat()
+            except ValueError:
+                return None
+    return (task["created_at"] or "")[:10] or None
 
 
 def _context(conn, account_id: int, row) -> dict:
@@ -80,11 +115,13 @@ def _context(conn, account_id: int, row) -> dict:
         hints["aufgenommen_am"] = row["captured_at"][:10]
     for link in store.links(conn, row["id"]):
         if link["kind"] == "task":
-            task = conn.execute("SELECT title,subject_name,due_date FROM tasks WHERE id=? AND account_id=?",
-                                (link["target_id"], account_id)).fetchone()
+            task = conn.execute(
+                "SELECT title,subject_name,due_date,lesson_id,notes,created_at FROM tasks "
+                "WHERE id=? AND account_id=?", (link["target_id"], account_id)).fetchone()
             if task:
                 hints["gehoert_zu_hausaufgabe"] = {
-                    "titel": task["title"], "fach": task["subject_name"], "faellig": task["due_date"]}
+                    "titel": task["title"], "fach": task["subject_name"],
+                    "gestellt_am": task_given_date(task), "faellig_am": task["due_date"]}
         if link["kind"] == "topic":
             topic = conn.execute("SELECT subject,title FROM learning_topics WHERE id=?",
                                  (link["target_id"],)).fetchone()

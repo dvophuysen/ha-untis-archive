@@ -23,6 +23,7 @@ DAV = "DAV:"
 CAL = "urn:ietf:params:xml:ns:caldav"
 APPLE = "http://apple.com/ns/ical/"
 MAX_BYTES = 8 * 1024 * 1024
+MAX_HOMES = 30
 BERLIN = "Europe/Berlin"
 
 
@@ -66,9 +67,31 @@ def _text(node, path: str) -> str:
     return (found.text or "").strip() if found is not None and found.text else ""
 
 
+def _name(response, path: str, owner: str) -> str:
+    """A readable calendar name.
+
+    IServ names a group calendar "<Gruppe> Calendar" and does not always
+    update it when the group is renamed, so the group itself is the better
+    label; only a calendar named differently keeps its own name.
+    """
+    own = _text(response, f".//{{{DAV}}}displayname")
+    fallback = path.rstrip("/").rsplit("/", 1)[-1] if path else "Kalender"
+    if owner and (not own or own.casefold() in (f"{owner} calendar".casefold(), "calendar", "kalender")):
+        return owner
+    if owner and own.casefold().endswith(" calendar"):
+        return owner
+    return own or owner or fallback
+
+
 async def discover(portal_url: str, username: str, password: str) -> list[dict]:
-    """Every calendar this account can see, freshly looked up each time."""
+    """Every calendar this account can see, freshly looked up each time.
+
+    IServ answers the home-set with one principal per shared group, and each
+    principal keeps its calendar one level below. Following only the first
+    one finds the child's own calendar and none of the class calendars.
+    """
     root = _root(portal_url)
+    found: list[dict] = []
     async with _client(username, password) as client:
         principal = await _propfind(client, root, (
             '<d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>'
@@ -76,32 +99,39 @@ async def discover(portal_url: str, username: str, password: str) -> list[dict]:
         href = _text(principal, f".//{{{DAV}}}current-user-principal/{{{DAV}}}href") or root
         home_doc = await _propfind(client, urljoin(root, href), (
             '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
-            "<d:prop><c:calendar-home-set/></d:prop></d:propfind>"
+            "<d:prop><c:calendar-home-set/><d:group-membership/></d:prop></d:propfind>"
         ), "0")
-        home = _text(home_doc, f".//{{{CAL}}}calendar-home-set/{{{DAV}}}href") or href
-        listing = await _propfind(client, urljoin(root, home), (
-            '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" '
-            'xmlns:a="http://apple.com/ns/ical/"><d:prop>'
-            "<d:resourcetype/><d:displayname/><a:calendar-color/>"
-            "<c:supported-calendar-component-set/></d:prop></d:propfind>"
-        ), "1")
-
-    found: list[dict] = []
-    for response in listing.findall(f"{{{DAV}}}response"):
-        resource = response.find(f".//{{{DAV}}}resourcetype")
-        if resource is None or resource.find(f"{{{CAL}}}calendar") is None:
-            continue
-        components = {c.get("name") for c in response.findall(f".//{{{CAL}}}comp")}
-        if components and "VEVENT" not in components:
-            continue
-        path = _text(response, f"{{{DAV}}}href")
-        if not path:
-            continue
-        found.append({
-            "url": urljoin(root, path),
-            "name": _text(response, f".//{{{DAV}}}displayname") or path.rstrip("/").rsplit("/", 1)[-1],
-            "color": (_text(response, f".//{{{APPLE}}}calendar-color") or "")[:9],
-        })
+        homes = list(dict.fromkeys(
+            [node.text for node in home_doc.iter(f"{{{DAV}}}href") if node.text] or [href]))
+        seen: set[str] = set()
+        for home in homes[:MAX_HOMES]:
+            try:
+                listing = await _propfind(client, urljoin(root, home), (
+                    '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" '
+                    'xmlns:a="http://apple.com/ns/ical/"><d:prop>'
+                    "<d:resourcetype/><d:displayname/><a:calendar-color/>"
+                    "<c:supported-calendar-component-set/></d:prop></d:propfind>"
+                ), "1")
+            except IservCalendarError:
+                continue
+            owner = ""
+            for response in listing.findall(f"{{{DAV}}}response"):
+                if _text(response, f"{{{DAV}}}href").rstrip("/") == home.rstrip("/"):
+                    owner = _text(response, f".//{{{DAV}}}displayname")
+            for response in listing.findall(f"{{{DAV}}}response"):
+                resource = response.find(f".//{{{DAV}}}resourcetype")
+                if resource is None or resource.find(f"{{{CAL}}}calendar") is None:
+                    continue
+                components = {c.get("name") for c in response.findall(f".//{{{CAL}}}comp")}
+                if components and "VEVENT" not in components:
+                    continue
+                path = _text(response, f"{{{DAV}}}href")
+                url = urljoin(root, path) if path else ""
+                if not url or url in seen:
+                    continue
+                seen.add(url)
+                found.append({"url": url, "name": _name(response, path, owner),
+                              "color": (_text(response, f".//{{{APPLE}}}calendar-color") or "")[:9]})
     if not found:
         raise IservCalendarError("Es wurden keine Kalender gefunden")
     return sorted(found, key=lambda c: c["name"].casefold())
