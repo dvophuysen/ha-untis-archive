@@ -1,3 +1,7 @@
+## 0.47.2
+
+- Die Packliste stand abends zweimal auf der Seite: oben in der neuen Karte für morgen und unten in „Nächster Schultag". Die untere Karte entfällt am Abend, weil ihr Inhalt dann oben steht.
+
 ## 0.47.1
 
 - Die Übungsmessung auf der Klausurkarte zählt nur die letzten Wochen und nennt den Zeitraum. Vorher hätte eine Lerneinheit aus dem letzten Schuljahr wie frische Vorbereitung ausgesehen.
