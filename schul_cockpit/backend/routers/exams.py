@@ -6,7 +6,7 @@ IServ exam plan, and a second place to maintain them only drifts.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -66,6 +66,40 @@ def _progress_map(account_id: int) -> dict:
     return {r["exam_key"]: dict(r) for r in rows}
 
 
+def school_year_start(day: date | None = None) -> date:
+    """The 1st of August. German school years start there, and the summer
+    holidays straddle the turn of the month either way."""
+    day = day or date.today()
+    return date(day.year if day.month >= 8 else day.year - 1, 8, 1)
+
+
+def archive_before(account_id: int) -> str | None:
+    """Everything before this day counts as a closed school year."""
+    conn = webapp_conn()
+    try:
+        row = conn.execute(
+            "SELECT before_date FROM exam_archive WHERE account_id = ?", (account_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    return row["before_date"] if row else None
+
+
+def _set_archive_before(account_id: int, value: str | None) -> None:
+    conn = webapp_conn()
+    try:
+        with conn:
+            if value is None:
+                conn.execute("DELETE FROM exam_archive WHERE account_id = ?", (account_id,))
+            else:
+                conn.execute(
+                    "INSERT INTO exam_archive(account_id, before_date, updated_at) VALUES(?,?,?) "
+                    "ON CONFLICT(account_id) DO UPDATE SET before_date=excluded.before_date,"
+                    "updated_at=excluded.updated_at", (account_id, value, _now()))
+    finally:
+        conn.close()
+
+
 @router.get("/accounts/{account_id}/exams/all")
 async def exams_all(
     account_id: int,
@@ -78,12 +112,10 @@ async def exams_all(
     assert_account_access(user, account_id)
     data = await resolve_exams(account_id, days_ahead=days_ahead, past_days=past_days)
     prog = _progress_map(account_id)
-    from datetime import date as _d
-
     from ..erlass import resolve_section
     from ..grades import display_label, options as grade_options
 
-    today_iso = _d.today().isoformat()
+    today_iso = date.today().isoformat()
     section, _kl, _src = resolve_section(account_id)
 
     upcoming, past = [], []
@@ -99,6 +131,10 @@ async def exams_all(
         }
         (upcoming if e["date"] >= today_iso else past).append(e)
 
+    cutoff = archive_before(account_id)
+    archived = [e for e in past if cutoff and e["date"] < cutoff]
+    past = [e for e in past if not (cutoff and e["date"] < cutoff)]
+
     upcoming.sort(key=lambda e: e["date"])              # soonest first
     past.sort(key=lambda e: e["date"], reverse=True)    # most recent first
     return {
@@ -108,7 +144,65 @@ async def exams_all(
         "grade_options": grade_options(section),
         "upcoming": upcoming,
         "past": past,
+        "archive_before": cutoff,
+        "archived_count": len(archived),
+        "school_year_start": school_year_start().isoformat(),
     }
+
+
+class ArchiveIn(BaseModel):
+    # Ohne Datum wird zum Beginn des laufenden Schuljahres abgeschlossen.
+    before: str | None = None
+    clear: bool = False
+
+
+@router.get("/accounts/{account_id}/exams/archive")
+async def exams_archive(
+    account_id: int,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Closed school years: still readable, out of the way."""
+    assert_account_access(user, account_id)
+    cutoff = archive_before(account_id)
+    if not cutoff:
+        return {"archive_before": None, "exams": []}
+    from ..erlass import resolve_section
+    from ..grades import display_label
+
+    section, _kl, _src = resolve_section(account_id)
+    data = await resolve_exams(account_id, days_ahead=0, past_days=6 * 365)
+    prog = _progress_map(account_id)
+    exams = []
+    for e in data["exams"]:
+        if e["date"] >= cutoff:
+            continue
+        p = prog.get(e.get("exam_key"), {})
+        exams.append({**e, "learn_state": p.get("learn_state"),
+                      "grade_points": p.get("grade_points"),
+                      "grade_label": display_label(p.get("grade_points"), section)})
+    exams.sort(key=lambda e: e["date"], reverse=True)
+    return {"archive_before": cutoff, "exams": exams}
+
+
+@router.post("/accounts/{account_id}/exams/archive")
+def set_archive(
+    account_id: int,
+    body: ArchiveIn,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Close the school year, or open the archive again."""
+    assert_account_access(user, account_id)
+    _require_parent(user)
+    if body.clear:
+        _set_archive_before(account_id, None)
+        return {"archive_before": None}
+    before = body.before or school_year_start().isoformat()
+    try:
+        date.fromisoformat(before)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Datum nicht lesbar") from None
+    _set_archive_before(account_id, before)
+    return {"archive_before": before}
 
 
 class ProgressIn(BaseModel):
@@ -170,6 +264,8 @@ async def exams_diagnostic(
     _require_parent(user)
     data = await resolve_exams(account_id, days_ahead=days_ahead, diagnostic=True)
     data["subjects"] = account_subjects(account_id)
+    data["archive_before"] = archive_before(account_id)
+    data["school_year_start"] = school_year_start().isoformat()
     return data
 
 

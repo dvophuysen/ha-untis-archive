@@ -306,3 +306,54 @@ def test_a_date_already_in_the_exam_plan_cannot_be_entered_by_hand(env, monkeypa
         other = client.post("/api/accounts/1/manual-exams", json={
             "exam_date": "2026-12-19", "subject_name": "PHYSIK", "title": "Nachschreibtermin"})
         assert other.status_code == 201, other.text
+
+
+def test_closing_a_school_year_hides_it_without_losing_it(env, monkeypatch):
+    from datetime import date as _date
+    from backend.routers import exams as exam_routes
+
+    client_env, state, _ = env
+    app = FastAPI()
+    app.include_router(exam_routes.router, prefix="/api")
+    app.dependency_overrides[get_current_user] = lambda: state.user
+
+    entries = [
+        {"source": "manual", "exam_key": "manual:1", "date": "2026-06-17",
+         "subject_name": "MATHEMATIK", "title": "MATHEMATIK", "status": "manual"},
+        {"source": "manual", "exam_key": "manual:2", "date": "2026-09-02",
+         "subject_name": "DEUTSCH", "title": "DEUTSCH", "status": "manual"},
+    ]
+
+    async def stub(account_id, **kwargs):
+        return {"exams": list(entries), "calendar_error": None, "entity_id": None}
+
+    monkeypatch.setattr(exam_routes, "resolve_exams", stub)
+    # The exam stage only decides how a grade is spelled; not what is tested here.
+    from backend import erlass
+    monkeypatch.setattr(erlass, "resolve_section", lambda account: ("sek1", "8D", "test"))
+    with TestClient(app) as client:
+        before = client.get("/api/accounts/1/exams/all").json()
+        assert {e["date"] for e in before["past"]} == {"2026-06-17", "2026-09-02"}
+        assert before["archived_count"] == 0
+        # The school year starts on 1 August, so only June is closed.
+        assert before["school_year_start"] == exam_routes.school_year_start(_date.today()).isoformat()
+        done = client.post("/api/accounts/1/exams/archive", json={})
+        assert done.status_code == 200, done.text
+        assert done.json()["archive_before"] == before["school_year_start"]
+        after = client.get("/api/accounts/1/exams/all").json()
+        assert {e["date"] for e in after["past"]} == {"2026-09-02"}
+        assert after["archived_count"] == 1
+        # Nothing is gone, it only moved out of the way.
+        archived = client.get("/api/accounts/1/exams/archive").json()
+        assert [e["date"] for e in archived["exams"]] == ["2026-06-17"]
+        client.post("/api/accounts/1/exams/archive", json={"clear": True})
+        assert client.get("/api/accounts/1/exams/all").json()["archived_count"] == 0
+
+
+def test_the_school_year_starts_in_august():
+    from datetime import date as _date
+    from backend.routers.exams import school_year_start
+
+    assert school_year_start(_date(2026, 9, 14)) == _date(2026, 8, 1)
+    assert school_year_start(_date(2026, 7, 31)) == _date(2025, 8, 1)
+    assert school_year_start(_date(2027, 1, 5)) == _date(2026, 8, 1)
