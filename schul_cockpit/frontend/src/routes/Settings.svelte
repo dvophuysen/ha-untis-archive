@@ -110,6 +110,15 @@
     viewer_error: 'Es kam keine Seite an.',
   };
 
+  function controlLine(c) {
+    const what = [c.tag, c.type, c.role && `role=${c.role}`].filter(Boolean).join(' ');
+    const named = [c.label, c.title, c.text, c.placeholder, c.name].filter(Boolean).join(' · ');
+    const marks = [c.id && `#${c.id}`, c.cls && `.${c.cls}`, c.value && `= ${c.value}`]
+      .filter(Boolean)
+      .join(' ');
+    return `${c.frame ? `[Rahmen ${c.frame}] ` : ''}${what}${named ? ` — ${named}` : ''}${marks ? ` ${marks}` : ''}${c.visible ? '' : ' (unsichtbar)'}`;
+  }
+
   function fetchSummary(f) {
     if (!f) return null;
     const when = new Date(f.created_at).toLocaleString('de-DE');
@@ -433,6 +442,28 @@
         {#if textbookTest.image}
           <img class="page-preview" src={textbookTest.image} alt="Vorschau der abgerufenen Buchseite" />
         {/if}
+        {#if textbookTest.window_image}
+          <div class="dim" style="margin-top:0.5rem;">Ganzes Viewer-Fenster mit Bedienleiste:</div>
+          <img class="page-preview" src={textbookTest.window_image} alt="Vorschau des ganzen Viewer-Fensters" />
+        {/if}
+        {#if textbookTest.documents?.length}
+          <div class="dim" style="margin-top:0.5rem;">Geöffnete Ansichten:</div>
+          <ul class="control-list">
+            {#each textbookTest.documents as doc}
+              <li>{doc.frame ? `[Rahmen ${doc.frame}] ` : ''}{doc.title || '–'} · {doc.url || '–'}</li>
+            {/each}
+          </ul>
+        {/if}
+        {#if textbookTest.controls?.length}
+          <details style="margin-top:0.5rem;">
+            <summary>Bedienelemente des Viewers ({textbookTest.controls.length})</summary>
+            <ul class="control-list">
+              {#each textbookTest.controls as control}
+                <li>{controlLine(control)}</li>
+              {/each}
+            </ul>
+          </details>
+        {/if}
       </div>
     {/if}
   </div>
@@ -668,6 +699,8 @@
   .book-test input { width: 5.5rem; margin: 0; }
   .fetch-note { margin-top: 0.7rem; font-size: 0.88rem; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.65rem; }
   .page-preview { display: block; max-width: 100%; margin-top: 0.5rem; border: 1px solid var(--border); border-radius: 6px; }
+  .control-list { margin: 0.3rem 0 0; padding-left: 1.1rem; max-height: 18rem; overflow-y: auto; font-size: 0.82rem; }
+  .control-list li { overflow-wrap: anywhere; }
   @media (min-width: 760px) {
     .textbook-grid { grid-template-columns: 1.1fr 1fr 1fr; }
   }
