@@ -118,6 +118,8 @@ Vorhandene `learning_materials` werden mit ihrem Themenbezug als Verknüpfung ü
 
 ## Vorgeschlagene Reihenfolge
 
+Stufen 1, 2 und 4 sind mit 0.40.0 umgesetzt; Belege im [Umsetzungsstand](UMSETZUNGSSTAND.md).
+
 1. Datenmodell, Migration, Ablage und Liste ohne KI. Manuelles Fach und manueller Titel möglich, Material ist sofort auffindbar.
 2. Auswertung für Bilder, sofort im Hintergrund, Übernahme der Chatanhänge, Prüfliste für Eltern.
 3. PDF-Verarbeitung, Text und Scan.

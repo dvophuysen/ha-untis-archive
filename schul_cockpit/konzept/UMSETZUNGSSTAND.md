@@ -183,6 +183,16 @@ Stand: 13.09.2026. Codebasis: Release 0.28.1, GitHub-Commit 16a7c44c2c2fb41ad5ea
 
 Geschichts-Demo: neun erfundene Stunden und drei Hausaufgaben ergeben drei auswählbare Themenbereiche. Klausurentwurf wurde erzeugt; sechs Aufgaben erschienen für 15 Minuten zu umfangreich. Nicht freigegeben. Zeitkalibrierung und kompletter Druck-/Foto-/Bewertungsdurchlauf bleiben offen. Tests ersetzen keine pädagogische Wirksamkeitsmessung.
 
+# Zentrale Materialablage 0.40.0
+
+Umgesetzt: Stufe 1 und 2 aus [Materialablage](MATERIALIEN.md), zusätzlich die Nutzung durch Mentor und Übungsklausur, damit Abgelegtes sofort wirkt. Commit 5d6babf.
+
+Eine Tabelle `materials` je Kind mit Verknüpfungen zu Thema, Hausaufgabe, Stunde und Arbeit; getrennte Datumsangaben für Upload, Aufnahme und inhaltliche Zugehörigkeit; `locked_fields` schützt jede menschliche Korrektur vor späteren Auswertungen. Upload als Foto oder PDF bis 12 MB aus der Materialliste, aus jeder Hausaufgabenzeile und aus dem Lernbereich, auch mehrseitig. Auswertung startet sofort im Hintergrund; ein nächtlicher Lauf holt offene, fehlgeschlagene und veraltete Einträge nach, höchstens 40 je Nacht über das bestehende Hintergrundbudget. Text-PDFs werden ohne Modell gelesen, gescannte Seiten über `pdftoppm` dem bildfähigen Modell vorgelegt. Bestehende `learning_materials` wandern mit Themenbezug und Prüfstatus in die neue Ablage.
+
+Geprüft: 162 automatisierte Tests und Frontend-Produktionsbuild bestanden, davon 12 neue für Ablage, Rechte, gesperrte Felder, Themenverknüpfung, Kontextauswahl und nächtliche Auswahl. Live auf der laufenden Instanz: ein fotografiertes Physik-Arbeitsblatt wurde ohne weitere Eingabe als Fach PHYSIK, Art Arbeitsblatt, mit Titel, Kurzbeschreibung und Datum eingeordnet, automatisch mit dem passenden Thema verknüpft, und die Schaltpläne wurden in beschreibenden Text übersetzt. Der Lernmentor beantwortete anschließend eine Frage zu einer Aufgabe dieses Blattes inhaltlich richtig.
+
+Offen: Übernahme vorhandener Chatanhänge in die Ablage, Suche über größere Bestände, Obergrenzen für Seiten je PDF in der Praxis, und die in MATERIALIEN.md notierten Fragen zu Aufbewahrungsdauer und Benachrichtigung. Ein gescanntes Mehrseiten-PDF wurde noch nicht live geprüft.
+
 ## Durch Codeprüfung belegte Lücken
 
 1. `routers/dashboard.py`: Mitlernen wertet 21 Tage alte Check-ins aus, ab drei Rückmeldungen und 30 Prozent gelb/rot; spätere Mentorfortschritte fehlen in dieser Berechnung. „Alles im grünen Bereich“ ist daher zu weitgehend.
