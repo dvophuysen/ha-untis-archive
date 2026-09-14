@@ -261,27 +261,37 @@ def _capture_pages_sync(portal_url: str, username: str, password: str, title: st
     for arg in ("--headless", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--window-size=1440,1100"):
         options.add_argument(arg)
     driver = webdriver.Chrome(options=options); driver.set_page_load_timeout(30)
+    stage = "IServ-Anmeldung"
     try:
         driver.get(portal_url.rstrip("/") + "/iserv/")
         driver.find_element(By.NAME, "_username").send_keys(username)
         driver.find_element(By.NAME, "_password").send_keys(password)
         driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
         WebDriverWait(driver, 15).until(lambda d: "/auth/login" not in d.current_url)
+        stage = "Eduplaces öffnen"
         driver.get(portal_url.rstrip("/") + "/iserv/eduplacesconnector/")
         WebDriverWait(driver, 15).until(lambda d: d.execute_script("return document.readyState") == "complete")
         if not _click(driver, re.compile("Bildungslogin.*Medienregal|Medienregal", re.I)):
             raise TextbookScanError("Das Medienregal wurde nicht gefunden")
         WebDriverWait(driver, 20).until(lambda d: d.execute_script("return document.readyState") == "complete")
+        stage = "Buch öffnen"
         before = set(driver.window_handles); old_url = driver.current_url
         if not _find_and_click_in_frames(driver, title):
             raise TextbookScanError("Das zugeordnete Schulbuch wurde im Regal nicht gefunden")
-        WebDriverWait(driver, 15).until(lambda d: len(d.window_handles) > len(before) or d.current_url != old_url)
+        def viewer_started(d):
+            if len(d.window_handles) > len(before) or d.current_url != old_url:
+                return True
+            d.switch_to.default_content()
+            return bool(_page_control(d))
+        WebDriverWait(driver, 30).until(viewer_started)
         new_handles = [h for h in driver.window_handles if h not in before]
         if new_handles: driver.switch_to.window(new_handles[-1])
+        stage = "Seitennavigation finden"
         result = []
         for page in pages:
             driver.switch_to.default_content()
             control = WebDriverWait(driver, 20).until(_page_control)
+            stage = f"Seite {page} öffnen"
             control.click(); control.send_keys(Keys.CONTROL, "a"); control.send_keys(str(page), Keys.ENTER)
             WebDriverWait(driver, 12).until(lambda d: str(page) in ((control.get_attribute("value") or control.text or "")))
             result.append((page, driver.get_screenshot_as_png()))
@@ -289,7 +299,7 @@ def _capture_pages_sync(portal_url: str, username: str, password: str, title: st
     except TextbookScanError:
         raise
     except Exception as exc:
-        raise TextbookScanError("Die angegebenen Buchseiten konnten nicht geöffnet werden") from exc
+        raise TextbookScanError(f"Die angegebenen Buchseiten konnten nicht geöffnet werden ({stage})") from exc
     finally:
         driver.quit()
 
