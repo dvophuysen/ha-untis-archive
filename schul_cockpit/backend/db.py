@@ -505,6 +505,9 @@ SELECT n.id,'topic',m.topic_id,'mensch',n.created_at
 FROM materials n JOIN learning_materials m ON m.id=n.legacy_material_id;
 """))
 
+# Parents may write in a child's verlauf, so a message has to say who wrote it.
+_MIGRATIONS.append(("mentor_message_author", "ALTER TABLE mentor_messages ADD COLUMN author TEXT"))
+
 _MIGRATIONS.append(("digital_textbooks_003_pages", """
 CREATE TABLE IF NOT EXISTS digital_textbook_pages (
  account_id INTEGER NOT NULL,
