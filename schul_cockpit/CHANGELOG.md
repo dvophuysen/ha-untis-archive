@@ -1,3 +1,9 @@
+## 0.38.2
+
+- Buchstart sucht Originaltitel auch in Shadow-DOM und einfachen Produktkarten, nicht nur in klassischen Links und Bildern.
+- Wartet auf dynamisch nachgeladene Buchkarten; gezielte Tests für Karten, Frames, exakte Titel und verzögertes Laden.
+- Die vollständige Seitenauslieferung im echten Verlagsviewer bleibt separat zu verifizieren.
+
 ## 0.38.1
 
 - Der Buchstart akzeptiert jetzt auch Verlagsviewer, die innerhalb der bestehenden Medienregal-Seite statt in einem neuen Fenster öffnen.
