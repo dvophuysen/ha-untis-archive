@@ -7,6 +7,7 @@
   import { splitLessons, splitTasks } from '../lib/dayDashboard.js';
   import LessonCard from '../lib/LessonCard.svelte';
   import PackingChecklist from '../lib/PackingChecklist.svelte';
+  import DayClose from '../lib/DayClose.svelte';
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskEditor from '../lib/TaskEditor.svelte';
 
@@ -15,18 +16,19 @@
   let loading = $state(true), error = $state(''), planError = $state('');
   let editing = $state(null), creating = $state(false), now = $state(new Date());
   let showHistory = $state(false), showDone = $state(false), message = $state('');
+  let dayClose = $state(null);
   let request = 0;
   async function load(reset = false) {
     if (!accountId) return;
     const id = accountId, ticket = ++request;
-    if (reset) { data = null; tasks = []; plan = null; editing = null; showHistory = false; showDone = false; message = ''; loading = true; }
+    if (reset) { data = null; tasks = []; plan = null; dayClose = null; editing = null; showHistory = false; showDone = false; message = ''; loading = true; }
     error = ''; planError = '';
     const results = await Promise.allSettled([
       api.get(`/api/accounts/${id}/today`), api.get(`/api/accounts/${id}/tasks`), api.get(`/api/accounts/${id}/plan`),
     ]);
     if (ticket !== request || id !== accountId) return;
     const [day, work, learning] = results;
-    if (day.status === 'fulfilled') data = { ...day.value, lessons: day.value.lessons.map(l => ({ ...l, date: l.date || day.value.date })) };
+    if (day.status === 'fulfilled') { data = { ...day.value, lessons: day.value.lessons.map(l => ({ ...l, date: l.date || day.value.date })) }; dayClose = day.value.day_close ?? null; }
     else error = 'Dein Stundenplan konnte nicht aktualisiert werden.';
     if (work.status === 'fulfilled') tasks = work.value.tasks;
     else error += ' Deine Aufgaben konnten nicht aktualisiert werden.';
@@ -69,6 +71,7 @@
     return Math.round((b - a) / 86400000) === 1;
   });
   function feedbackSaved() { message = 'Rückmeldung gespeichert.'; }
+  function closeSaved(next) { dayClose = next; message = 'Tag abgeschlossen.'; }
   function taskSaved() { message = 'Aufgabe gespeichert.'; load(); }
 </script>
 
@@ -85,6 +88,7 @@
       {#if nextSchoolDay}<PackingChecklist {accountId} schoolDay={nextSchoolDay} />{:else}
         <p class="muted">In den nächsten Tagen steht keine Schule an.</p>
       {/if}
+      <DayClose {accountId} state={dayClose} openCount={work.due.length} onclosed={closeSaved} />
     </section>
   {/if}
   {#if data}

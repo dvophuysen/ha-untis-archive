@@ -574,6 +574,31 @@ CREATE TABLE IF NOT EXISTS digital_textbook_fetches (
 );
 """))
 
+# Die App wusste bisher nur, ob gerade etwas offen ist, nicht ob ein Tag
+# abgeschlossen wurde. Ohne diese Angabe trifft die Morgenmitteilung auch den,
+# der alles erledigt hat, und die eigene Verlässlichkeit bleibt unzählbar.
+_MIGRATIONS.append(("day_close_001", """
+CREATE TABLE IF NOT EXISTS day_closures (
+ account_id INTEGER NOT NULL, school_day TEXT NOT NULL,
+ closed_at TEXT NOT NULL, closed_by TEXT NOT NULL,
+ after_reminder INTEGER NOT NULL DEFAULT 0,
+ open_homework INTEGER NOT NULL DEFAULT 0,
+ open_material INTEGER NOT NULL DEFAULT 0,
+ open_feedback INTEGER NOT NULL DEFAULT 0,
+ PRIMARY KEY(account_id,school_day)
+);
+CREATE TABLE IF NOT EXISTS morning_app_deliveries (
+ account_id INTEGER NOT NULL, school_day TEXT NOT NULL, service TEXT NOT NULL,
+ status TEXT NOT NULL, created_at TEXT NOT NULL,
+ PRIMARY KEY(account_id,school_day,service)
+);
+"""))
+
+_MIGRATIONS.append(("reminders_morning_at", "ALTER TABLE reminder_settings ADD COLUMN morning_at TEXT"))
+_MIGRATIONS.append(("reminders_morning_enabled",
+                    "ALTER TABLE reminder_settings ADD COLUMN morning_enabled INTEGER NOT NULL DEFAULT 1"))
+
+
 def history_conn() -> sqlite3.Connection:
     """Read-only connection to the UNTIS Archive's history.db."""
     uri = f"file:{SETTINGS.history_db_path}?mode=ro"

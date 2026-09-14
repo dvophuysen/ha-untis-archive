@@ -8,13 +8,14 @@ import logging
 from contextlib import closing
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from . import app_notify
+from . import app_notify, day_close
 from .db import webapp_conn
 from .packing import packing_plan, view
 from .webpush_setup import send_push
 
 LOG = logging.getLogger('schul_cockpit.reminders')
 ZONE = ZoneInfo('Europe/Berlin')
+DEFAULT_MORNING = '06:45'
 
 
 def snapshot(account, now):
@@ -74,15 +75,66 @@ def send_to_app(account, counts, day, now):
     return sent
 
 
+def morning_wording(counts):
+    """Kurz vor dem Aufbruch zählt nur, was noch ins Haus oder in die Tasche geht."""
+    parts = []
+    if counts['homework']: parts.append('Hausaufgaben')
+    if counts['material']: parts.append('Schultasche')
+    return ' · '.join(parts)
+
+
+def morning_fallback(setting, now):
+    """Die zweite Mitteilung trifft nur den, der gestern Abend nicht abgeschlossen hat.
+
+    Ohne diese Bedingung wäre sie nach drei Tagen nur noch Lärm — auch für den,
+    der alles erledigt hat. Rückmeldungen zu Stunden bleiben außen vor; sie
+    ändern morgens nichts mehr.
+    """
+    account = setting['account_id']
+    if not setting.get('morning_enabled', 1):
+        return 0
+    if not due(setting.get('morning_at') or DEFAULT_MORNING, now):
+        return 0
+    today = now.date()
+    if not packing_plan(account, today)[2]:
+        return 0
+    yesterday = (today - timedelta(days=1)).isoformat()
+    if day_close.closure(account, yesterday):
+        return 0
+    counts = snapshot(account, now)
+    if not (counts['homework'] or counts['material']):
+        return 0
+    sent, url = 0, app_notify.own_panel()
+    for service in app_notify.targets(account):
+        with closing(webapp_conn()) as c, c:
+            c.execute('BEGIN IMMEDIATE')
+            claimed = c.execute(
+                "INSERT OR IGNORE INTO morning_app_deliveries(account_id,school_day,service,status,created_at) "
+                "VALUES(?,?,?,'claimed',?)", (account, today.isoformat(), service, now.isoformat())).rowcount
+        if not claimed:
+            continue
+        ok = app_notify.send(service, 'Vor dem Aufbruch',
+                             f'Noch offen: {morning_wording(counts)}', url)
+        with closing(webapp_conn()) as c, c:
+            c.execute('UPDATE morning_app_deliveries SET status=? WHERE account_id=? AND school_day=? AND service=?',
+                      ('accepted' if ok else 'failed', account, today.isoformat(), service))
+        sent += int(ok)
+    return sent
+
+
 def run_once(now=None):
     fixed_clock = now
     now = (now or datetime.now(ZONE)).astimezone(ZONE)
     with closing(webapp_conn()) as c:
         settings = [dict(r) for r in c.execute('SELECT * FROM reminder_settings WHERE enabled=1')]
     for setting in settings:
+        account = setting['account_id']
+        try:
+            morning_fallback(setting, now)
+        except Exception:
+            LOG.warning('Morgenmitteilung nicht möglich für Konto %s', account, exc_info=True)
         if not due(setting['remind_at'], now):
             continue
-        account = setting['account_id']
         try:
             counts = snapshot(account, now)
             if not any(counts.values()):

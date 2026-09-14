@@ -202,32 +202,41 @@ zurückgenommen: erst die zweite Mitteilung am Morgen, dann die abendliche, zule
 feste Zeit zugunsten eines eigenen Plans. Jede Stufe wird beantragt, und ein
 Rückschritt ist verabredet, nicht beschämend. Gerechnet wird in Monaten.
 
-## Nächstes Paket: der Nachmittag und der Morgen
+## Stand: was gebaut ist
 
-Stufe 0 und 1 sind gebaut. Was jetzt fehlt, hängt an einer einzigen fehlenden
-Angabe: Die App weiß nicht, ob ein Tag abgeschlossen wurde. Sie weiß nur, ob
-gerade etwas offen ist. Daran scheitern drei Dinge gleichzeitig.
+Stufe 0 und Stufe 1 stehen, einschließlich des Tagesabschlusses.
 
-Zuerst also ein Tagesabschluss, der festgehalten wird: wann, von wem, und ob er
-vor oder nach der Erinnerung kam. Das ist eine kleine Tabelle und ein Knopf unter
-der Abendkarte. Darauf bauen die folgenden drei Punkte auf.
+Der Tagesabschluss war die fehlende Angabe. Die App wusste bisher nur, ob
+gerade etwas offen ist, nicht ob ein Tag durchgegangen wurde. Unter der
+Abendkarte steht jetzt ein Knopf; festgehalten wird, wann, von wem und ob die
+Erinnerung zu dem Zeitpunkt schon draußen war. Abschließen ist auch mit offenen
+Punkten erlaubt und wird ehrlich vermerkt: Die App hält fest, sie verhängt
+nichts. Ein zweiter Druck ändert den Eintrag nicht mehr — wer abends um acht mit
+zwei offenen Aufgaben abgeschlossen hat, hat genau das getan.
 
-Der Morgen-Rückfall. Wer abends nicht abgeschlossen hat, bekommt vor dem Aufbruch
-eine kurze Mitteilung mit dem, was fehlt. Wer abgeschlossen hat, bekommt nichts.
-Ohne die Abschlussangabe würde die Mitteilung auch den treffen, der alles erledigt
-hat, und wäre nach drei Tagen nur noch Lärm.
+Darauf steht der Morgen-Rückfall. Wer am Abend nicht abgeschlossen hat, bekommt
+vor dem Aufbruch eine zweite, kürzere Mitteilung mit dem, was fehlt.
+Rückmeldungen zu Stunden bleiben darin außen vor; sie ändern morgens nichts
+mehr. Wer abgeschlossen hat, bekommt nichts — ohne diese Bedingung wäre die
+Mitteilung nach drei Tagen nur noch Lärm, gerade für den, der alles erledigt
+hat.
+
+Und die eigene Verlässlichkeit ist damit zählbar: an wie vielen Abenden vor
+einem Schultag das Kind selbst abgeschlossen hat, ohne vorherige Erinnerung.
+Nur das zählt als selbstständig. Ein Sonntagabend gehört dabei zur Woche des
+Montags, den er vorbereitet. Auf der Abendkarte steht eine Zeile dazu, ohne
+Serie und ohne Nullpunkt: Ein schlechter Abend kostet nichts, er fehlt nur in
+der Zählung dieser Woche.
+
+## Nächstes Paket: der Nachmittag
 
 Der Nachmittag. Die Aufgabe wird oft gar nicht erst notiert, und dann kann auch
 niemand sie abends erledigen. Nach der letzten Stunde eine Mitteilung mit einer
 Frage: Fehlt eine Aufgabe? Ein Tippen öffnet eine Seite mit zwei Möglichkeiten,
 Kamera oder „nichts Neues". Die Materialablage wertet das Foto bereits aus und
-ordnet es Fach und Aufgabe zu; der Weg dorthin fehlt nur noch.
-
-Die eigene Verlässlichkeit. Mit der Abschlussangabe lässt sich endlich zählen,
-worauf es ankommt: an wie vielen Schultagen der Woche das Kind selbst
-abgeschlossen hat, ohne Erinnerung und ohne Nachfrage. Das ist das Maß, das die
-Vision unter Selbstständigkeit versteht, und es ist das Maß, an dem später die
-Rücknahme der Unterstützung hängt.
+ordnet es Fach und Aufgabe zu; der Weg dorthin fehlt nur noch. Der
+Tagesabschluss zeigt, wie das aussehen kann: ein Knopf, ein Eintrag, kein
+Formular.
 
 Daneben zwei kleinere Korrekturen, die beim Bauen aufgefallen sind. Die
 Übungsmessung auf der Klausurkarte betrachtet ein Zeitfenster; ob sechzig Tage
