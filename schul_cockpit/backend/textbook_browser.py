@@ -610,7 +610,7 @@ def _settle_reader(driver, timeout: float = 30.0) -> None:
     driver.switch_to.default_content()
 
 
-def _enter_reader(driver, rounds: int = 1) -> bool:
+def _enter_reader(driver, rounds: int = 1, note: list | None = None) -> bool:
     """Follow a start page into the reader.
 
     Cornelsen keeps the reader in the document while still showing its
@@ -621,10 +621,18 @@ def _enter_reader(driver, rounds: int = 1) -> bool:
     entered = False
     for _ in range(rounds):
         driver.switch_to.default_content()
+        before = driver.current_url
         try:
             action = _in_frames(driver, _ENTER_READER_SCRIPT)
             if action is None:
                 break
+            if note is not None:
+                note.append({
+                    "tag": action.tag_name,
+                    "caption": _clean(action.text or action.get_attribute("aria-label") or "")[:60],
+                    "href": _OPAQUE.sub("…", (action.get_attribute("href") or "").split("?")[0])[:120],
+                    "from": _OPAQUE.sub("…", before.split("?")[0]),
+                })
             action.click()
         except Exception:
             break
@@ -635,6 +643,21 @@ def _enter_reader(driver, rounds: int = 1) -> bool:
         except TimeoutException:
             pass
         _dismiss_overlays(driver)
+        _settle_reader(driver, timeout=20)
+        driver.switch_to.default_content()
+        readable = bool(_page_control(driver) or _shown_pages(driver))
+        driver.switch_to.default_content()
+        if not readable and driver.current_url != before:
+            # The click led somewhere unusable. Go back rather than leave the
+            # capture stranded on an empty route.
+            try:
+                driver.back()
+                _settle_reader(driver, timeout=20)
+            except Exception:
+                pass
+            if note is not None:
+                note.append({"undone": True, "to": _OPAQUE.sub("…", driver.current_url.split("?")[0])})
+            break
         entered = True
     driver.switch_to.default_content()
     return entered
@@ -872,6 +895,7 @@ class CaptureResult:
     controls: list[dict] = field(default_factory=list)
     documents: list[dict] = field(default_factory=list)
     attempts: list[dict] = field(default_factory=list)
+    entry: list[dict] = field(default_factory=list)
     window_image: bytes | None = None
 
 
@@ -918,8 +942,8 @@ def _capture_pages_sync(
         _dismiss_overlays(driver)
         _settle_reader(driver)
         _dismiss_overlays(driver)
-        if _enter_reader(driver):
-            _settle_reader(driver)
+        entry: list[dict] = []
+        _enter_reader(driver, note=entry)
         stage = "Seitennavigation finden"
         shots: list[PageShot] = []
         note = ""
@@ -940,7 +964,7 @@ def _capture_pages_sync(
             shots.append(PageShot(None, _stable_shot(driver)))
         elif len(shots) < len(pages) and not note:
             note = "Nicht alle Seiten erreichbar"
-        result = CaptureResult(shots=shots, note=note, attempts=trace or [])
+        result = CaptureResult(shots=shots, note=note, attempts=trace or [], entry=entry)
         if survey:
             seen = _survey(driver)
             result.controls = seen["controls"]

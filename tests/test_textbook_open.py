@@ -274,30 +274,57 @@ assert.equal(new Function(process.argv[1])(), '18');
     subprocess.run(['node', '-e', script, browser._SHOWN_PAGE_SCRIPT], check=True)
 
 
+def entering(monkeypatch, action, readable):
+    action.tag_name = 'a'
+    action.text = 'E-Book öffnen'
+    action.get_attribute.return_value = 'https://viewer.example/reader'
+    monkeypatch.setattr(browser, '_in_frames', Mock(return_value=action))
+    monkeypatch.setattr(browser, '_dismiss_overlays', lambda d, **k: None)
+    monkeypatch.setattr(browser, '_settle_reader', lambda d, **k: None)
+    monkeypatch.setattr(browser, '_page_control', Mock(return_value=readable))
+    monkeypatch.setattr(browser, '_shown_pages', Mock(return_value=[]))
+    monkeypatch.setattr(browser, 'WebDriverWait', Mock(return_value=Mock()))
+
+
 def test_start_page_is_followed_into_the_reader(monkeypatch):
     action = Mock()
-    monkeypatch.setattr(browser, '_in_frames', Mock(side_effect=[action, None]))
-    monkeypatch.setattr(browser, '_dismiss_overlays', lambda d, **k: None)
-    monkeypatch.setattr(browser, 'WebDriverWait', Mock(return_value=Mock()))
-    assert browser._enter_reader(Mock()) is True
+    entering(monkeypatch, action, readable=Mock())
+    driver = Mock()
+    driver.current_url = 'https://viewer.example/start'
+    note = []
+    assert browser._enter_reader(driver, note=note) is True
     action.click.assert_called_once()
+    assert note and note[0]['caption']
 
 
 def test_reader_entry_happens_even_when_a_page_field_exists(monkeypatch):
     # Cornelsen keeps the reader in the document behind its welcome page, so
     # a findable page field must not suppress the entry click.
     action = Mock()
-    monkeypatch.setattr(browser, '_page_control', Mock(return_value=Mock()))
-    monkeypatch.setattr(browser, '_in_frames', Mock(side_effect=[action, None]))
-    monkeypatch.setattr(browser, '_dismiss_overlays', lambda d, **k: None)
-    monkeypatch.setattr(browser, 'WebDriverWait', Mock(return_value=Mock()))
-    assert browser._enter_reader(Mock()) is True
+    entering(monkeypatch, action, readable=Mock())
+    driver = Mock()
+    driver.current_url = 'https://viewer.example/start'
+    assert browser._enter_reader(driver) is True
     action.click.assert_called_once()
+
+
+def test_an_entry_click_that_leads_nowhere_is_undone(monkeypatch):
+    action = Mock()
+    entering(monkeypatch, action, readable=None)
+    driver = Mock()
+    type(driver).current_url = property(lambda self: urls.pop(0))
+    urls = ['https://viewer.example/start', 'https://viewer.example/', 'https://viewer.example/', 'https://viewer.example/start']
+    note = []
+    assert browser._enter_reader(driver, note=note) is False
+    driver.back.assert_called_once()
+    assert note[-1]['undone'] is True
 
 
 def test_reader_entry_stops_when_no_entry_action_is_present(monkeypatch):
     monkeypatch.setattr(browser, '_in_frames', Mock(return_value=None))
-    assert browser._enter_reader(Mock()) is False
+    driver = Mock()
+    driver.current_url = 'https://viewer.example/start'
+    assert browser._enter_reader(driver) is False
 
 
 def test_blocked_click_falls_back_to_driving_the_field(monkeypatch):
