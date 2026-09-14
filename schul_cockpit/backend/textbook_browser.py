@@ -377,7 +377,7 @@ function look(root){
     if(!d.getClientRects().length) continue;
     for(const b of d.querySelectorAll('button,a,[role="button"]')){
       const own=[...b.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ');
-      const names=[b.getAttribute('aria-label'),b.getAttribute('title'),own];
+      const names=[b.getAttribute('aria-label'),b.getAttribute('title'),own,(b.innerText||'').slice(0,40)];
       if(names.some(s=>CLOSE.test((s||'').replace(/\s+/g,' ').trim()))&&b.getClientRects().length) return b;
     }
   }
@@ -405,7 +405,7 @@ const ENTER=/^(zum e-?\s?book|zum buch|buch (ö|oe)ffnen|e-?\s?book (ö|oe)ffnen
 function look(root){
   for(const e of root.querySelectorAll('a,button,[role="button"],[role="link"]')){
     const own=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ');
-    const names=[e.getAttribute('aria-label'),e.getAttribute('title'),own];
+    const names=[e.getAttribute('aria-label'),e.getAttribute('title'),own,(e.innerText||'').slice(0,40)];
     if(names.some(s=>ENTER.test((s||'').replace(/\s+/g,' ').trim()))&&e.getClientRects().length) return e;
   }
   for(const e of root.querySelectorAll('*')) if(e.shadowRoot){const x=look(e.shadowRoot);if(x)return x;}
@@ -629,15 +629,28 @@ def _enter_reader(driver, rounds: int = 2) -> bool:
     return entered
 
 
+_SET_PAGE_SCRIPT = """
+const el=arguments[0], value=String(arguments[1]);
+const proto=el.tagName==='INPUT'?window.HTMLInputElement.prototype:window.HTMLTextAreaElement.prototype;
+const setter=Object.getOwnPropertyDescriptor(proto,'value');
+if(setter&&setter.set) setter.set.call(el,value); else el.value=value;
+el.dispatchEvent(new Event('input',{bubbles:true}));
+el.dispatchEvent(new Event('change',{bubbles:true}));
+for(const type of ['keydown','keypress','keyup'])
+  el.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));
+"""
+
+
 def _type_page(driver, control, page: int) -> bool:
     try:
         control.click()
+        control.send_keys(Keys.CONTROL, "a")
+        control.send_keys(str(page), Keys.ENTER)
     except Exception:
-        # An overlay caught the click. Clear it and try the field once more.
+        # A dialog caught the click. Clear what we can, then drive the field
+        # directly — the overlay cannot swallow that.
         _dismiss_overlays(driver)
-        control.click()
-    control.send_keys(Keys.CONTROL, "a")
-    control.send_keys(str(page), Keys.ENTER)
+        driver.execute_script(_SET_PAGE_SCRIPT, control, page)
     return _wait_for_page(driver, page)
 
 
@@ -774,7 +787,7 @@ function look(root){
       label:cut(e.getAttribute('aria-label'),60), title:cut(e.getAttribute('title'),60),
       placeholder:cut(e.getAttribute('placeholder'),40), name:cut(e.getAttribute('name'),40),
       id:cut(e.id,40), cls:cut(typeof e.className==='string'?e.className:'',60),
-      text:(TEXTY.has(e.tagName)||ROLES.includes(role))?cut(own,40):'',
+      text:(TEXTY.has(e.tagName)||ROLES.includes(role))?(cut(own,40)||cut(e.innerText,40)):'',
       value:(e.tagName==='INPUT'||e.tagName==='SELECT')?cut(e.value,20):'',
       visible:r.width>0&&r.height>0
     });

@@ -1,3 +1,8 @@
+## 0.39.7
+
+- Fängt ein Dialog den Klick auf das Seitenfeld ab, setzt der Abruf die Seitenzahl direkt im Feld und löst die Eingabe aus. Das lässt sich von keiner Überlagerung verschlucken.
+- Beschriftungen von Dialog- und Einstiegsschaltflächen werden auch gelesen, wenn sie in einem verschachtelten Element stehen. Genau daran scheiterte das Schließen des Cornelsen-Dialogs.
+
 ## 0.39.6
 
 - Der Abruf wartet, bis der Verlagsviewer fertig geladen hat, bevor er irgendetwas anklickt. Vorher konnte er mitten im Ladevorgang zugreifen und landete bei BiBox sogar wieder auf der Anmeldeseite.
