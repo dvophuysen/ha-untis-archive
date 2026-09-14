@@ -97,12 +97,18 @@ async def discover(portal_url: str, username: str, password: str) -> list[dict]:
             '<d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>'
         ), "0")
         href = _text(principal, f".//{{{DAV}}}current-user-principal/{{{DAV}}}href") or root
+        # The school's public calendar is not a group the child belongs to; it
+        # arrives as a proxy-read principal and was missing without these.
         home_doc = await _propfind(client, urljoin(root, href), (
-            '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
-            "<d:prop><c:calendar-home-set/><d:group-membership/></d:prop></d:propfind>"
+            '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" '
+            'xmlns:cs="http://calendarserver.org/ns/"><d:prop><c:calendar-home-set/>'
+            "<d:group-membership/><cs:calendar-proxy-read-for/>"
+            "<cs:calendar-proxy-write-for/></d:prop></d:propfind>"
         ), "0")
+        homes = [node.text for node in home_doc.iter(f"{{{DAV}}}href") if node.text]
+        # A proxy collection is a permission marker, not a place with calendars.
         homes = list(dict.fromkeys(
-            [node.text for node in home_doc.iter(f"{{{DAV}}}href") if node.text] or [href]))
+            h for h in homes if "/calendar-proxy-" not in h) or [href])
         seen: set[str] = set()
         for home in homes[:MAX_HOMES]:
             try:
