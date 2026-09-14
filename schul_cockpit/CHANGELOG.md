@@ -1,3 +1,10 @@
+## 0.35.0
+
+- Eltern können den IServ-/Bildungslogin-Zugang getrennt für jedes Kind in dessen Einstellungen hinterlegen und wieder entfernen. Die Maske zeigt niemals das gespeicherte Passwort an.
+- Zugangsdaten sind nur für Eltern/Admins erreichbar. Passwörter liegen verschlüsselt in der App-Datenbank; der getrennte Schlüssel erhält restriktive Dateirechte im Add-on-Datenverzeichnis.
+- Sichere Portalvalidierung, schreibgeschützter API-Rückkanal und stabile Zuordnung bei einer erneuten Einrichtung des UNTIS-Kontos.
+- Grundlage für die automatische Buchauswahl und das Nachladen genannter Buchseiten in Hausaufgabenhilfe, Lernmentor und Klausurvorbereitung.
+
 ## 0.34.1
 
 - Gelöschte Lerngespräche hinterlassen keine leeren Fortschrittskarten mehr. „Was schon klappt“ setzt mindestens einen gültigen Lernnachweis voraus; bereits bestehende leere Reste werden ebenfalls nicht mehr angezeigt oder als Wiederholung eingeplant.
