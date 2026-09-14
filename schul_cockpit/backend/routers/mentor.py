@@ -99,15 +99,26 @@ def view(c,s):
     result={k:v for k,v in s.items() if k not in ('current_task','source_json','pending_key','pending_since','user_id')}
     source=json.loads(s.get('source_json') or '{}')
     result['mode']=source.get('mode','practice');result['task_id']=source.get('task_id')
+    result['untimed']=result['mode']=='homework_help'
     result['goal_key']=json.loads(s.get('source_json') or '{}').get('goal_key');result['task']=public_task(s['current_task']);result['elapsed_seconds']=elapsed(s)
-    result['messages']=[{**dict(r),'payload':json.loads(r['payload'])} for r in c.execute('SELECT id,role,text,payload,created_at FROM mentor_messages WHERE session_id=? ORDER BY id',(s['id'],))]
+    result['messages']=[{**dict(r),'payload':json.loads(r['payload'])} for r in c.execute('SELECT id,role,text,payload,author,created_at FROM mentor_messages WHERE session_id=? ORDER BY id',(s['id'],))]
     result['attachments']=[dict(r) for r in c.execute('SELECT id,mime_type,transcript FROM mentor_attachments WHERE session_id=? ORDER BY id',(s['id'],))]
     result['processing']=bool(s['pending_key']);return result
 
 
-def add_message(c,sid,account,key,role,text,payload=None):
-    return c.execute('INSERT OR IGNORE INTO mentor_messages(account_id,session_id,request_key,role,text,payload,created_at) VALUES(?,?,?,?,?,?,?)',
-                     (account,sid,key,role,text,json.dumps(payload or {},ensure_ascii=False),now_iso())).lastrowid
+def is_parent(user):
+    return bool(user.is_admin or user.role=='parent')
+
+
+def author_of(user):
+    """Who wrote a message. Parents may sit next to the child, so the verlauf
+    has to say whose words these were."""
+    return 'eltern' if is_parent(user) else 'kind'
+
+
+def add_message(c,sid,account,key,role,text,payload=None,author=None):
+    return c.execute('INSERT OR IGNORE INTO mentor_messages(account_id,session_id,request_key,role,text,payload,author,created_at) VALUES(?,?,?,?,?,?,?,?)',
+                     (account,sid,key,role,text,json.dumps(payload or {},ensure_ascii=False),author,now_iso())).lastrowid
 
 
 @router.get('')
@@ -125,12 +136,12 @@ async def dashboard(account_id:int,demo:bool=False,user:CurrentUser=Depends(get_
     s=mc.snapshot(account_id)
     with closing(webapp_conn()) as c:
         sessions=[dict(r) for r in c.execute('SELECT id,subject,goal,status,phase,summary,updated_at,is_test,is_demo FROM mentor_sessions WHERE account_id=? AND is_test=0 ORDER BY updated_at DESC LIMIT 30',(account_id,))]
-        legacy=[dict(r) for r in c.execute('SELECT id,subject,goal,status,updated_at,is_test,is_demo FROM mentor_sessions WHERE account_id=? AND is_test=1 AND is_demo=0 ORDER BY updated_at DESC LIMIT 30',(account_id,))] if user.is_admin or user.role=='parent' else []
+        legacy=[dict(r) for r in c.execute('SELECT id,subject,goal,status,updated_at,is_test,is_demo FROM mentor_sessions WHERE account_id=? AND is_test=1 AND is_demo=0 ORDER BY updated_at DESC LIMIT 30',(account_id,))] if is_parent(user) else []
         progress=[dict(r) for r in c.execute("SELECT s.id,s.subject,s.title,s.objective,r.due_date,COUNT(e.id) attempts, SUM(CASE WHEN e.result='correct' AND e.help_used=0 THEN 1 ELSE 0 END) independent,COUNT(DISTINCT CASE WHEN e.result='correct' AND e.help_used=0 THEN e.variant_hash END) variants,MIN(CASE WHEN e.result='correct' AND e.help_used=0 THEN e.created_at END) first_success, MAX(CASE WHEN e.result='correct' AND e.help_used=0 THEN e.created_at END) last_success FROM mentor_skills s JOIN mentor_evidence e ON e.skill_id=s.id AND e.account_id=s.account_id AND e.invalidated=0 AND NOT EXISTS (SELECT 1 FROM mentor_sessions ms WHERE ms.id=e.session_id AND ms.is_test=1) AND NOT EXISTS (SELECT 1 FROM mentor_exam_attempts ma WHERE ma.id=e.exam_attempt_id AND ma.is_test=1) LEFT JOIN mentor_reviews r ON r.skill_id=s.id WHERE s.account_id=? GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 100",(account_id,))]
     for r in progress:
         delayed=bool(r['variants']>=2 and r['first_success'] and r['last_success'] and (datetime.fromisoformat(r['last_success'])-datetime.fromisoformat(r['first_success'])).days>=7)
         r['label']='Mit Abstand selbstständig gezeigt' if delayed else 'Selbstständig gezeigt · später prüfen' if r['independent'] else 'Noch in Arbeit'
-    parent=bool(user.is_admin or user.role=='parent')
+    parent=is_parent(user)
     planning=await learning_overview(account_id,user)
     shared=planning['shared_plan']
     progress=[{**r,"label":next((x["label"] for g in shared["goals"] for x in g.get("skill_states",[]) if x["id"]==r["id"]),r["label"])} for r in progress]
@@ -177,7 +188,9 @@ async def start(account_id:int,body:StartIn,user:CurrentUser=Depends(get_current
             return view(c,get_session(c,account_id,sid))
     s=mc.snapshot(account_id);p=s['profile']
     if not p or not p['ai_enabled'] or not s['enabled']:raise HTTPException(403,'Bitte den Lernrahmen und die KI für dieses Schuljahr aktivieren.')
-    test_mode=bool(user.is_admin or user.role=='parent')
+    # Parents work together with the child, on the child's own verlauf. Only
+    # the demo switch produces something the child must not see.
+    parent=is_parent(user)
     if body.homework_task_id:
         if body.lesson_id or body.skill_id or body.goal_key:raise HTTPException(422,'Hausaufgabenhilfe braucht keine zusätzliche Übung.')
         with closing(webapp_conn()) as c,c:
@@ -185,13 +198,18 @@ async def start(account_id:int,body:StartIn,user:CurrentUser=Depends(get_current
             task=c.execute('SELECT * FROM tasks WHERE id=? AND account_id=?',(body.homework_task_id,account_id)).fetchone()
             if not task:raise HTTPException(404,'Aufgabe nicht gefunden.')
             source={'mode':'homework_help','task_id':task['id']}
-            existing=c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND user_id=? AND status='active' AND json_extract(source_json,'$.mode')='homework_help' AND json_extract(source_json,'$.task_id')=? ORDER BY id DESC LIMIT 1",(account_id,user.id,task['id'])).fetchone()
-            if existing:return view(c,dict(existing))
+            # One verlauf per homework, whoever opens it and whenever. A break
+            # must not cost the conversation so far.
+            existing=c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND is_demo=0 AND json_extract(source_json,'$.mode')='homework_help' AND json_extract(source_json,'$.task_id')=? ORDER BY id DESC LIMIT 1",(account_id,task['id'])).fetchone()
+            if existing:
+                if existing['status']!='active':
+                    c.execute("UPDATE mentor_sessions SET status='active',phase='clarify',version=version+1,active_since=?,updated_at=? WHERE id=?",(now_iso(),now_iso(),existing['id']))
+                return view(c,get_session(c,account_id,existing['id']))
             from ..subject_names import SubjectCatalog
             task=SubjectCatalog(account_id).task(task)
             subject=task['subject_name'] or task['title'] or 'Hausaufgabe'
-            sid=c.execute('INSERT INTO mentor_sessions(account_id,user_id,subject,goal,max_minutes,active_since,source_json,created_at,updated_at,is_test) VALUES(?,?,?,?,?,?,?,?,?,?)',
-                (account_id,user.id,subject,'Hilfe: '+task['title'][:240],body.minutes,now_iso(),json.dumps(source),now_iso(),now_iso(),int(test_mode))).lastrowid
+            sid=c.execute('INSERT INTO mentor_sessions(account_id,user_id,subject,goal,max_minutes,active_since,source_json,created_at,updated_at,is_test) VALUES(?,?,?,?,?,?,?,?,?,0)',
+                (account_id,user.id,subject,'Hilfe: '+task['title'][:240],body.minutes,now_iso(),json.dumps(source),now_iso(),now_iso())).lastrowid
             add_message(c,sid,account_id,'welcome','assistant','Wir schauen uns deine Hausaufgabe und die genannten Buchseiten gemeinsam an. Wobei hängst du gerade?',{'choices':['Ich verstehe die Aufgabenstellung nicht','Mir fehlt das Grundwissen','Ich komme bei einem Schritt nicht weiter']})
             return view(c,get_session(c,account_id,sid))
     from ..subject_names import SubjectCatalog
@@ -225,7 +243,7 @@ async def start(account_id:int,body:StartIn,user:CurrentUser=Depends(get_current
     remaining=t['remaining_minutes']+sum(g['minutes'] for g in t['actions'])
     with closing(webapp_conn()) as c,c:
         c.execute('BEGIN IMMEDIATE')
-        existing=c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND subject=? AND status='active' AND is_test=? AND is_demo=0 ORDER BY id DESC LIMIT 1",(account_id,body.subject,int(test_mode))).fetchone()
+        existing=c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND subject=? AND status='active' AND is_test=0 AND is_demo=0 ORDER BY id DESC LIMIT 1",(account_id,body.subject)).fetchone()
         if existing:
             old_source=json.loads(existing['source_json'] or '{}')
             same_goal=(old_source.get('goal_key')==body.goal_key) if body.goal_key else existing['goal']==goal
@@ -238,14 +256,13 @@ async def start(account_id:int,body:StartIn,user:CurrentUser=Depends(get_current
             c.execute('UPDATE mentor_sessions SET elapsed_seconds=?,active_since=NULL WHERE id=?',(elapsed(dict(existing)),existing['id']))
         used=lp.usage(c,account_id,today_local())
         remaining=min(remaining,t['budget_minutes']-t['homework_minutes']-used['homework']-used['learning'])
-        if not test_mode and not body.voluntary and (not t['study_day'] or remaining<3 or used['slots']>=p['max_sessions']+(1 if t['day_load']=='room' else 0)):
+        if not parent and not body.voluntary and (not t['study_day'] or remaining<3 or used['slots']>=p['max_sessions']+(1 if t['day_load']=='room' else 0)):
             raise HTTPException(409,'Der heutige Vorschlag ist ausgeschöpft. Du kannst im Plan Mehr Luft wählen oder bewusst eine freiwillige Einheit beginnen.')
-        minutes=body.minutes if test_mode or body.voluntary else min(body.minutes,int(remaining))
-        sid=c.execute('INSERT INTO mentor_sessions(account_id,user_id,skill_id,subject,goal,max_minutes,active_since,source_json,created_at,updated_at,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
-                      (account_id,user.id,skill,body.subject,goal,minutes,now_iso(),json.dumps(source,ensure_ascii=False),now_iso(),now_iso(),int(test_mode))).lastrowid
-        if not test_mode:
-            c.execute('INSERT INTO learning_plan_blocks VALUES(?,?,?,?,?)',(account_id,today_local().isoformat(),sid,source.get('goal_key','session:'+str(sid)),minutes))
-            lp.link_session(c,account_id,get_session(c,account_id,sid),skill)
+        minutes=body.minutes if parent or body.voluntary else min(body.minutes,int(remaining))
+        sid=c.execute('INSERT INTO mentor_sessions(account_id,user_id,skill_id,subject,goal,max_minutes,active_since,source_json,created_at,updated_at,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,0)',
+                      (account_id,user.id,skill,body.subject,goal,minutes,now_iso(),json.dumps(source,ensure_ascii=False),now_iso(),now_iso())).lastrowid
+        c.execute('INSERT INTO learning_plan_blocks VALUES(?,?,?,?,?)',(account_id,today_local().isoformat(),sid,source.get('goal_key','session:'+str(sid)),minutes))
+        lp.link_session(c,account_id,get_session(c,account_id,sid),skill)
         add_message(c,sid,account_id,'welcome','assistant',f'Wir nehmen uns etwa {minutes} Minuten für {body.subject}. Was möchtest du zuerst?',
                     {'choices':['Zeig mir ein Beispiel','Kurz ausprobieren','Ich möchte erst erzählen']})
         return view(c,get_session(c,account_id,sid))
@@ -256,7 +273,7 @@ def get(account_id:int,sid:int,user:CurrentUser=Depends(get_current_user)):
     access(user,account_id)
     with closing(webapp_conn()) as c:
         s=get_session(c,account_id,sid)
-        if s['is_test'] and not (user.is_admin or user.role=='parent'):raise HTTPException(404,'Lerneinheit nicht gefunden.')
+        if s['is_test'] and not is_parent(user):raise HTTPException(404,'Lerneinheit nicht gefunden.')
         return view(c,s)
 
 
@@ -265,10 +282,50 @@ def pause(account_id:int,sid:int,body:PauseIn,user:CurrentUser=Depends(get_curre
     access(user,account_id,write=True)
     with closing(webapp_conn()) as c,c:
         c.execute('BEGIN IMMEDIATE');s=get_session(c,account_id,sid)
-        if s['is_test'] and not (user.is_admin or user.role=='parent'):raise HTTPException(404,'Lerneinheit nicht gefunden.')
-        if not s['is_test'] and (user.is_admin or user.role=='parent'):raise HTTPException(403,'Kinderverläufe sind für Eltern nur lesbar.')
+        if s['is_test'] and not is_parent(user):raise HTTPException(404,'Lerneinheit nicht gefunden.')
         if not body.paused and s['status']=='active':lp.reserve_resume(c,account_id,s,today_local())
         c.execute('UPDATE mentor_sessions SET elapsed_seconds=?,active_since=? WHERE id=?',(elapsed(s),None if body.paused or s['status']!='active' else now_iso(),sid))
+        return view(c,get_session(c,account_id,sid))
+
+
+class CountsIn(InputModel):
+    counts:bool
+
+
+@router.post('/sessions/{sid}/resume')
+def resume(account_id:int,sid:int,user:CurrentUser=Depends(get_current_user)):
+    """Pick up a finished verlauf. A break must not cost the conversation."""
+    access(user,account_id,write=True)
+    with closing(webapp_conn()) as c,c:
+        c.execute('BEGIN IMMEDIATE');s=get_session(c,account_id,sid)
+        if s['is_test'] and not is_parent(user):raise HTTPException(404,'Lerneinheit nicht gefunden.')
+        if s['status']=='active':return view(c,s)
+        homework=json.loads(s.get('source_json') or '{}').get('mode')=='homework_help'
+        # Practice still answers to the daily plan; homework never does.
+        if not homework:lp.reserve_resume(c,account_id,s,today_local())
+        c.execute("UPDATE mentor_sessions SET status='active',phase=?,version=version+1,active_since=?,updated_at=? WHERE id=?",
+                  ('clarify' if homework else 'orient',now_iso(),now_iso(),sid))
+        return view(c,get_session(c,account_id,sid))
+
+
+@router.put('/sessions/{sid}/counts')
+def counts(account_id:int,sid:int,body:CountsIn,user:CurrentUser=Depends(get_current_user)):
+    """Parents decide afterwards whether a verlauf belongs to the child's record.
+
+    Working together counts; a pure tryout does not. Nobody has to choose that
+    before the first sentence."""
+    access(user,account_id,write=True,parent=True)
+    with closing(webapp_conn()) as c,c:
+        c.execute('BEGIN IMMEDIATE');s=get_session(c,account_id,sid)
+        if s['is_demo']:raise HTTPException(422,'Demo-Gespräche bleiben immer außerhalb des Lernstands.')
+        c.execute('UPDATE mentor_sessions SET is_test=?,version=version+1,updated_at=? WHERE id=?',(0 if body.counts else 1,now_iso(),sid))
+        if body.counts:
+            # A single answer a parent took back by hand stays taken back.
+            c.execute("UPDATE mentor_evidence SET invalidated=0 WHERE session_id=? AND account_id=? AND rationale NOT LIKE 'Zurückgenommen:%'",(sid,account_id))
+        else:
+            c.execute('UPDATE mentor_evidence SET invalidated=1 WHERE session_id=? AND account_id=?',(sid,account_id))
+        for row in c.execute('SELECT DISTINCT skill_id FROM mentor_evidence WHERE session_id=? AND account_id=?',(sid,account_id)).fetchall():
+            lp.refresh_skill(c,account_id,row[0])
         return view(c,get_session(c,account_id,sid))
 
 
@@ -276,8 +333,7 @@ def pause(account_id:int,sid:int,body:PauseIn,user:CurrentUser=Depends(get_curre
 async def photo(account_id:int,sid:int,file:UploadFile=File(...),user:CurrentUser=Depends(get_current_user)):
     access(user,account_id,write=True)
     with closing(webapp_conn()) as c:s=get_session(c,account_id,sid)
-    if s['is_test'] and not (user.is_admin or user.role=='parent'):raise HTTPException(404,'Lerneinheit nicht gefunden.')
-    if not s['is_test'] and (user.is_admin or user.role=='parent'):raise HTTPException(403,'Kinderverläufe sind für Eltern nur lesbar.')
+    if s['is_test'] and not is_parent(user):raise HTTPException(404,'Lerneinheit nicht gefunden.')
     if s['status']!='active':raise HTTPException(409,'Diese Einheit ist abgeschlossen.')
     blob=await file.read(5*1024*1024+1)
     if len(blob)>5*1024*1024:raise HTTPException(413,'Bitte ein kleineres Bild verwenden.')
@@ -303,7 +359,7 @@ async def photo(account_id:int,sid:int,file:UploadFile=File(...),user:CurrentUse
 def photo_read(account_id:int,aid:int,user:CurrentUser=Depends(get_current_user)):
     access(user,account_id)
     with closing(webapp_conn()) as c:r=c.execute('SELECT a.mime_type,a.file_bytes,s.is_test FROM mentor_attachments a JOIN mentor_sessions s ON s.id=a.session_id WHERE a.id=? AND a.account_id=?',(aid,account_id)).fetchone()
-    if not r or (r['is_test'] and not (user.is_admin or user.role=='parent')):raise HTTPException(404,'Bild nicht gefunden.')
+    if not r or (r['is_test'] and not is_parent(user)):raise HTTPException(404,'Bild nicht gefunden.')
     return Response(r['file_bytes'],media_type=r['mime_type'],headers={'Cache-Control':'private, no-store'})
 
 
@@ -319,8 +375,7 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
     access(user,account_id,write=True)
     with closing(webapp_conn()) as c,c:
         c.execute('BEGIN IMMEDIATE');s=get_session(c,account_id,sid)
-        if s['is_test'] and not (user.is_admin or user.role=='parent'):raise HTTPException(404,'Lerneinheit nicht gefunden.')
-        if not s['is_test'] and (user.is_admin or user.role=='parent'):raise HTTPException(403,'Dieser Kinderverlauf ist für Eltern lesbar. Bitte zum Ausprobieren einen eigenen Testlauf starten.')
+        if s['is_test'] and not is_parent(user):raise HTTPException(404,'Lerneinheit nicht gefunden.')
         done=c.execute("SELECT 1 FROM mentor_messages WHERE session_id=? AND request_key=? AND role='assistant'",(sid,body.request_key)).fetchone()
         if done:return view(c,s)
         if c.execute("SELECT 1 FROM mentor_messages WHERE session_id=? AND request_key=? AND role='user'",(sid,body.request_key)).fetchone():
@@ -333,9 +388,12 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
         text=body.text.strip()
         if not text and not body.attachment_id and body.kind not in ('finish','hint','example'):raise HTTPException(422,'Bitte etwas eingeben oder ein Foto auswählen.')
         seconds=elapsed(s)
-        finish=body.kind=='finish' or s['turns']>=12 or seconds>=s['max_minutes']*60
+        # Homework help has no clock and no turn cap. It ends when the homework
+        # is understood, never because a practice slot would have run out.
+        homework=json.loads(s.get('source_json') or '{}').get('mode')=='homework_help'
+        finish=body.kind=='finish' or (not homework and (s['turns']>=12 or seconds>=s['max_minutes']*60))
         if finish:
-            add_message(c,sid,account_id,body.request_key,'user',text or 'Für heute fertig')
+            add_message(c,sid,account_id,body.request_key,'user',text or 'Für heute fertig',author=author_of(user))
             end='Für heute schließen wir ab. '+(s['summary'] or 'Dein bisheriger Stand ist gespeichert. Beim nächsten Mal können wir hier anknüpfen.')
             add_message(c,sid,account_id,body.request_key,'assistant',end,{'choices':[]})
             c.execute("UPDATE mentor_sessions SET status='completed',phase='finished',version=version+1,elapsed_seconds=?,active_since=NULL,updated_at=? WHERE id=?",(seconds,now_iso(),sid))
@@ -382,7 +440,7 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
         with closing(webapp_conn()) as c,c:
             c.execute('BEGIN IMMEDIATE');live=get_session(c,account_id,sid)
             if live['version']!=s['version'] or live['pending_key']!=body.request_key:raise HTTPException(409,'Die Einheit wurde inzwischen geändert.')
-            uid=add_message(c,sid,account_id,body.request_key,'user',text or ('Foto ansehen' if body.attachment_id else 'Bitte helfen'),{'attachment_id':body.attachment_id} if body.attachment_id else {})
+            uid=add_message(c,sid,account_id,body.request_key,'user',text or ('Foto ansehen' if body.attachment_id else 'Bitte helfen'),{'attachment_id':body.attachment_id} if body.attachment_id else {},author=author_of(user))
             if body.attachment_id and reply.transcription:
                 c.execute('UPDATE mentor_attachments SET transcript=? WHERE id=?',(reply.transcription,body.attachment_id))
             evidence=None;skill=s['skill_id'];help_now=kind in ('hint','example') or reply.action=='explain'

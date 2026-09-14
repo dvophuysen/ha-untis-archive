@@ -196,18 +196,59 @@ def test_exam_fixed_version_secret_answers_and_resume(setup):
     assert client.post(base+f"/attempts/{a['id']}/grade-next").status_code==200
 
 
-def test_parent_test_run_does_not_create_child_evidence(setup):
-    client,state,patch=setup
+def test_parent_session_belongs_to_the_child_until_marked_as_test(setup):
+    client,state,patch=setup;parent=state.user
     mock(patch,[reply(),reply(task=None,action='finish',assessment={'result':'correct','rationale':'Passend.'})])
-    s=start(client);assert s['is_test']==1
+    s=start(client);assert s['is_test']==0
     s=send(client,s).json();r=send(client,s,kind='answer',text='Nominalisiert.')
     assert r.status_code==200,r.text
     with closing(db.webapp_conn()) as c:
-        assert c.execute('SELECT COUNT(*) FROM mentor_evidence').fetchone()[0]==0
-        assert c.execute('SELECT COUNT(*) FROM mentor_skills').fetchone()[0]==0
+        assert c.execute('SELECT COUNT(*) FROM mentor_evidence WHERE invalidated=0').fetchone()[0]==1
+    # The child finds the shared verlauf on its own device, and sees who wrote.
+    child(state)
+    seen=client.get(B+f"/sessions/{s['id']}")
+    assert seen.status_code==200,seen.text
+    assert {x['author'] for x in seen.json()['messages'] if x['role']=='user'}=={'eltern'}
+    assert [x['id'] for x in client.get(B).json()['sessions']]==[s['id']]
+    # A pure tryout is taken out afterwards, never declared in advance.
+    state.user=parent
+    assert client.put(B+f"/sessions/{s['id']}/counts",json={'counts':False}).json()['is_test']==1
+    with closing(db.webapp_conn()) as c:
+        assert c.execute('SELECT COUNT(*) FROM mentor_evidence WHERE invalidated=0').fetchone()[0]==0
     child(state)
     assert client.get(B+f"/sessions/{s['id']}").status_code==404
     assert client.get(B).json()['sessions']==[]
+
+
+def test_homework_help_has_no_clock_and_survives_a_break(setup):
+    client,state,patch=setup;child(state)
+    with closing(db.webapp_conn()) as c:
+        tid=c.execute("INSERT INTO tasks(account_id,title,subject_name,notes,source,created_at,updated_at) VALUES(1,'Lerne für den Test','Physik','Aufgabe 3','manual','now','now')").lastrowid
+    s=client.post(B+'/sessions',json={'subject':'Physik','homework_task_id':tid}).json()
+    # Neither the practice clock nor the turn cap may end an unfinished homework.
+    with closing(db.webapp_conn()) as c:
+        c.execute('UPDATE mentor_sessions SET turns=20,elapsed_seconds=?,active_since=NULL WHERE id=?',(s['max_minutes']*60+200,s['id']))
+    mock(patch,[reply(task=None,action='clarify')])
+    r=send(client,client.get(B+f"/sessions/{s['id']}").json(),text='Und wie geht I3?')
+    assert r.status_code==200,r.text
+    assert r.json()['status']=='active'
+    # An interrupted homework is picked up again, never started from scratch.
+    with closing(db.webapp_conn()) as c:c.execute("UPDATE mentor_sessions SET status='completed',phase='finished' WHERE id=?",(s['id'],))
+    again=client.post(B+'/sessions',json={'subject':'Physik','homework_task_id':tid}).json()
+    assert again['id']==s['id'] and again['status']=='active'
+    assert len(again['messages'])>=3
+
+
+def test_finished_practice_session_can_be_picked_up_again(setup):
+    client,state,patch=setup;child(state)
+    s=start(client)
+    with closing(db.webapp_conn()) as c:c.execute("UPDATE mentor_sessions SET status='completed',phase='finished' WHERE id=?",(s['id'],))
+    assert send(client,client.get(B+f"/sessions/{s['id']}").json()).status_code==409
+    back=client.post(B+f"/sessions/{s['id']}/resume")
+    assert back.status_code==200,back.text
+    assert back.json()['status']=='active'
+    mock(patch,[reply()])
+    assert send(client,back.json()).status_code==200
 
 
 def test_photo_scope_and_unreadable_upload(setup):
@@ -261,25 +302,31 @@ def test_demo_is_synthetic_persistent_and_excluded_from_live_learning(setup):
             assert c.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]==0
 
 
-def test_real_history_and_parent_read_are_not_test_history(setup):
+def test_parents_write_along_while_demo_stays_out_of_the_child_view(setup):
     client,state,patch=setup;parent=state.user
-    legacy=start(client)
+    shared=start(client)
     demo=client.post(B+'/sessions',json={'subject':'Deutsch','demo':True}).json()
-    child(state);real=start(client)
+    child(state)
     assert client.get(B+f"/sessions/{demo['id']}").status_code==404
     assert client.get(B+'?demo=true').status_code==403
     assert client.post(B+'/sessions',json={'subject':'Deutsch','demo':True}).status_code==403
-    assert [s['id'] for s in client.get(B).json()['sessions']]==[real['id']]
+    # Same subject and goal: the child continues where the parent began.
+    assert start(client)['id']==shared['id']
+    assert [s['id'] for s in client.get(B).json()['sessions']]==[shared['id']]
     state.user=parent
-    live=client.get(B).json()
-    assert [s['id'] for s in live['sessions']]==[real['id']]
-    assert [s['id'] for s in live['legacy_sessions']]==[legacy['id']]
-    with closing(db.webapp_conn()) as c:before=dict(c.execute('SELECT * FROM mentor_sessions WHERE id=?',(real['id'],)).fetchone())
-    assert client.get(B+f"/sessions/{real['id']}").status_code==200
-    assert client.post(B+f"/sessions/{real['id']}/pause",json={'paused':False}).status_code==403
-    assert client.post(B+f"/sessions/{real['id']}/photos",files={'file':('test.png',b'not-image','image/png')}).status_code==403
-    assert send(client,real).status_code==403
-    with closing(db.webapp_conn()) as c:assert dict(c.execute('SELECT * FROM mentor_sessions WHERE id=?',(real['id'],)).fetchone())==before
+    mock(patch,[reply()])
+    live=client.get(B+f"/sessions/{shared['id']}").json()
+    assert send(client,live,text='Schau mal hier.').status_code==200
+    assert client.post(B+f"/sessions/{shared['id']}/pause",json={'paused':False}).status_code==200
+    # Marked as a test it leaves the child's view, and it can be taken back.
+    assert client.put(B+f"/sessions/{shared['id']}/counts",json={'counts':False}).status_code==200
+    out=client.get(B).json()
+    assert out['sessions']==[] and [s['id'] for s in out['legacy_sessions']]==[shared['id']]
+    assert client.put(B+f"/sessions/{shared['id']}/counts",json={'counts':True}).status_code==200
+    assert [s['id'] for s in client.get(B).json()['sessions']]==[shared['id']]
+    assert client.put(B+f"/sessions/{demo['id']}/counts",json={'counts':True}).status_code==422
+    child(state)
+    assert client.put(B+f"/sessions/{shared['id']}/counts",json={'counts':False}).status_code==403
 
 
 def test_demo_exam_never_publishes_to_child_and_parent_reads_real_attempt(setup):

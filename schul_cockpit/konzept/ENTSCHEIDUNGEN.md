@@ -43,6 +43,12 @@ D22 · 14.09.2026 · Beschlossen: Schultermine werden direkt aus IServ gelesen, 
 
 D23 · 14.09.2026 · Beschlossen: Ein Zugang je Kind für IServ, gemeinsam für Schulbücher und Kalender, benannt als „IServ-Zugang" statt „Schulbuch-Zugang". Mehrere Kalender je Kind sind der Normalfall; ihre Rolle (Klausuren, Unterrichtstermine, Sonstiges) wird je Kalender festgelegt und überlebt den jährlichen Neuaufbau, weil nicht auf eine Kennung, sondern auf die wiedererkannte Sammlung abgestellt wird. Herkunft: Produktabstimmung.
 
+## Gemeinsam lernen
+
+D24 · 14.09.2026 · Beschlossen: Ein von den Eltern begonnenes Gespräch über echte Aufgaben ist ein Gespräch des Kindes. Es erscheint auf seinem Gerät und lässt sich dort fortsetzen; Eltern dürfen in laufenden Kinderverläufen mitschreiben. Getrennt gehalten wird allein der Demo-Modus mit erfundenen Beispieldaten. Wer nur ausprobiert hat, kennzeichnet das Gespräch danach als Testlauf; dann verlässt es Lernstand und Kinderansicht. Jede Nachricht hält fest, ob Kind oder Eltern sie geschrieben haben. Ergänzt D04: „Tests sind keine Kinderleistungen" gilt weiter, „von Eltern gestartet" begründet aber keinen Test mehr. Begründung des Nutzers: gemeinsames Arbeiten an einem Gerät und Weiterreichen des Geräts sind der Normalfall. Herkunft: Produktabstimmung.
+
+D25 · 14.09.2026 · Beschlossen: Hausaufgabenhilfe kennt weder Zeit- noch Zugfenster. Sie endet, wenn die Aufgabe verstanden ist, nie weil ein Übungsfenster abgelaufen wäre. Je Aufgabe existiert genau ein Verlauf, den jede Unterbrechung überdauert und den Kind wie Eltern wieder öffnen. Auch abgeschlossene Übungsgespräche lassen sich fortsetzen; für sie gilt der Tagesrahmen weiter. Begründung des Nutzers: eine Hausaufgabe ist keine Tages-Check-Aufgabe. Herkunft: Fehlermeldung aus dem Betrieb.
+
 ## Veröffentlichung
 
 D15 · 13.09.2026 · Beschlossen: Allgemein formulierte Produktkonzepte dürfen im Projekt-Repository dauerhaft gespeichert werden. Persönliche Lernbefunde, Namen, Familienangaben und Betriebsgeheimnisse bleiben außerhalb dieser Fassung.

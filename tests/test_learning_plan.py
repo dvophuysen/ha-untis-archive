@@ -62,12 +62,14 @@ def test_source_link_roundtrip_help_invalidation_and_parent_isolation(setup):
     with sqlite3.connect(db.SETTINGS.history_db_path) as c:c.execute("UPDATE lessons SET date='2026-09-08'")
     p=client.get('/api/accounts/1/plan').json();g=next(g for g in p['goals'] if g['kind']=='lesson')
     parent=state.user
-    # Parent tests cannot create actual reservations or evidence.
-    s=client.post(B+'/sessions',json=dict(subject=g['subject'],lesson_id=1,goal_key=g['key'])).json()
-    with closing(db.webapp_conn()) as c:assert not c.execute('SELECT * FROM learning_plan_blocks').fetchall()
+    # A parent works in the child's verlauf: the reservation is real and the
+    # child picks the very same session up on its own device.
+    opened=client.post(B+'/sessions',json=dict(subject=g['subject'],lesson_id=1,goal_key=g['key'])).json()
+    with closing(db.webapp_conn()) as c:assert len(c.execute('SELECT * FROM learning_plan_blocks').fetchall())==1
     child(state)
     mock(patch,[reply(),reply(task=None,action='finish',assessment=dict(result='correct',rationale='Regel passend erklärt.'))])
     s=client.post(B+'/sessions',json=dict(subject=g['subject'],lesson_id=1,goal_key=g['key'])).json()
+    assert s['id']==opened['id']
     s=send(client,s).json();s=send(client,s,kind='answer',text='Nach etwas wird das Adjektiv nominalisiert.').json()
     p=client.get('/api/accounts/1/plan').json();g2=next(x for x in p['goals'] if x['key']==g['key'])
     assert g2['skill_ids'] and g2['session_id']==s['id'] and 'Selbstständig' in g2['state']

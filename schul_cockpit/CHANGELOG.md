@@ -1,3 +1,12 @@
+## 0.42.0
+
+- Hausaufgabenhilfe wird nicht mehr nach zehn Minuten oder zwölf Zügen beendet. Sie läuft, bis die Aufgabe verstanden ist; nur „Für heute fertig" schließt sie ab. Vorher brach das Gespräch mitten in einer Rechnung ab.
+- Je Hausaufgabe gibt es genau einen Verlauf. Wer die Hilfe erneut öffnet, landet im bisherigen Gespräch — auch wenn es zwischendurch abgeschlossen wurde und unabhängig davon, wer es begonnen hat.
+- Abgeschlossene Übungsgespräche lassen sich mit „Hier weitermachen" fortsetzen. Für sie gilt der Tagesrahmen weiterhin, für Hausaufgabenhilfe nie.
+- Von Eltern begonnene Gespräche über echte Aufgaben sind jetzt Gespräche des Kindes: auf seinem Gerät sichtbar und fortsetzbar, samt Fotos und Material. Getrennt bleibt allein der Demo-Modus.
+- Eltern dürfen in laufenden Kinderverläufen mitschreiben. Jede Nachricht zeigt, ob sie vom Kind oder von den Eltern stammt.
+- War ein Gespräch doch nur ein Versuch, kennzeichnen Eltern es danach als Testlauf. Es verschwindet dann aus Lernstand und Kinderansicht und lässt sich ebenso wieder übernehmen. Einzeln zurückgenommene Bewertungen bleiben zurückgenommen.
+
 ## 0.41.2
 
 - Material zu einer Hausaufgabe bekommt jetzt den Tag, an dem die Aufgabe gestellt wurde, nicht das Abgabedatum. Arbeitsblätter werden mit der Aufgabenstellung ausgegeben oder nachgereicht, nie zur Abgabe. Der Tag kommt aus der verknüpften Unterrichtsstunde, sonst aus „Gegeben am" im Aufgabentext.
