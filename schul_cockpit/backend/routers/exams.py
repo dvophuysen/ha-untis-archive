@@ -115,11 +115,12 @@ def scope_start(subject: str | None, exam_date: str, entries: list[dict]) -> str
     unterrichtet wurde, sonst seit Schuljahresbeginn. Eine Eingrenzung durch die
     Lehrkraft gibt es vorher nicht, und ohne Annahme lässt sich nicht vorbereiten.
     """
+    year = school_year_start(date.fromisoformat(exam_date)).isoformat()
     previous = [e.get("date") for e in entries
                 if e.get("subject_name") == subject and e.get("date") and e["date"] < exam_date]
-    if previous:
-        return max(previous)
-    return school_year_start(date.fromisoformat(exam_date)).isoformat()
+    # Eine Arbeit des vorigen Schuljahres beginnt kein Fenster: Über die Ferien
+    # hinweg wäre der Stoff des alten Jahrgangs mitgezählt worden.
+    return max([year, *previous]) if previous else year
 
 
 def _shown_topics(conn, account_id: int, topic_ids: set[int]) -> set[int]:

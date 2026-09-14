@@ -1,3 +1,7 @@
+## 0.50.1
+
+- Der Stoff einer Arbeit beginnt nie vor dem Schuljahr. Eine Arbeit desselben Fachs aus dem vorigen Schuljahr öffnete bisher ein Fenster über die Sommerferien hinweg und zog den Stoff des alten Jahrgangs mit hinein.
+
 ## 0.50.0
 
 - Jede anstehende Arbeit zeigt ihren angenommenen Stoff: alle Themen des Fachs seit der letzten Arbeit desselben Fachs, sonst seit Schuljahresbeginn. Dazu, wie viele davon schon selbstständig gezeigt wurden, und die Themen einzeln zum Aufklappen mit Haken.
