@@ -478,7 +478,9 @@ def test_remove_session_deletes_evidence_and_time_but_preserves_other_work_and_c
             assert c.execute(f'SELECT COUNT(*) FROM {table} WHERE session_id=?',(sid,)).fetchone()[0]==0
         assert c.execute('SELECT COUNT(*) FROM mentor_sessions WHERE id=?',(other,)).fetchone()[0]==1
         assert c.execute('SELECT COUNT(*) FROM mentor_reviews WHERE skill_id=?',(skill,)).fetchone()[0]==0
-        assert c.execute('SELECT level FROM learning_skill_state WHERE skill_id=?',(skill,)).fetchone()[0]==0
+        assert c.execute('SELECT 1 FROM learning_skill_state WHERE skill_id=?',(skill,)).fetchone() is None
+        assert c.execute('SELECT 1 FROM mentor_skills WHERE id=?',(skill,)).fetchone() is None
+        assert c.execute('SELECT 1 FROM learning_plan_links WHERE skill_id=?',(skill,)).fetchone() is None
     assert client.request('DELETE',endpoint,json={'version':s['version']}).status_code==404
 
 
@@ -525,3 +527,28 @@ def test_homework_help_is_scoped_current_and_not_a_practice_or_completion(setup)
     r=send(client,r.json(),text='Hilf mir beim ersten Schritt')
     assert r.status_code==200,r.text
     assert captured[-1]['source']['task']['notes']=='Neuer Arbeitsauftrag'
+
+
+def test_old_empty_skills_do_not_appear_as_progress_or_review(setup):
+    client,state,patch=setup;child(state)
+    with closing(db.webapp_conn()) as c:
+        skill=c.execute("INSERT INTO mentor_skills(account_id,subject,title,objective,source_json,created_at,updated_at) VALUES(1,'Deutsch','Alter Test','Test','{}','2026-09-01','2026-09-01')").lastrowid
+    response=client.get(B)
+    assert response.status_code==200,response.text
+    assert not any(p['id']==skill for p in response.json()['progress'])
+    assert not any(skill in g.get('skill_ids',[]) for g in response.json()['shared_plan']['goals'])
+
+
+def test_deleting_one_session_keeps_another_sessions_skill_and_evidence(setup):
+    client,state,patch=setup;parent=state.user;child(state)
+    mock(patch,[reply(),reply(task=None,action='finish',assessment={'result':'correct','rationale':'Begründet.'})])
+    s=start(client);s=send(client,s).json();s=send(client,s,kind='answer',text='Die Regel passt.').json()
+    with closing(db.webapp_conn()) as c:
+        skill=c.execute('SELECT skill_id FROM mentor_evidence WHERE session_id=?',(s['id'],)).fetchone()[0]
+        other=c.execute("INSERT INTO mentor_sessions(account_id,user_id,skill_id,subject,goal,created_at,updated_at) VALUES(1,2,?,'Deutsch','Weitere Übung','2026-09-11','2026-09-11')",(skill,)).lastrowid
+    state.user=parent
+    assert client.request('DELETE',B+f'/sessions/{other}',json={'version':0}).status_code==200
+    with closing(db.webapp_conn()) as c:
+        assert c.execute('SELECT 1 FROM mentor_skills WHERE id=?',(skill,)).fetchone()
+        assert c.execute('SELECT COUNT(*) FROM mentor_evidence WHERE skill_id=?',(skill,)).fetchone()[0]==1
+    assert any(p['id']==skill for p in client.get(B).json()['progress'])
