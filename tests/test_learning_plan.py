@@ -198,3 +198,31 @@ def test_chosen_practice_can_resume_on_a_later_nonstudy_day(setup):
         lp.reserve_resume(c,1,session,date(2026,9,14))
         lp.reserve_resume(c,1,session,date(2026,9,14))
         assert c.execute("SELECT COUNT(*) FROM learning_plan_blocks WHERE session_id=? AND day='2026-09-14'",(sid,)).fetchone()[0]==1
+
+
+def test_an_entry_without_learning_content_is_no_practice_goal(setup):
+    """Die Auswertung markiert Organisatorisches als unklar. Vorher wurde daraus
+    trotzdem ein Lernziel mit dem rohen Eintragstext als Titel."""
+    client,state,patch=setup;install(client)
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:
+        c.execute("INSERT INTO lessons(account_id,date,subject_name,subject_untis_id,lstext,was_absent) "
+                  "VALUES(1,'2026-09-10','Englisch',3,'Klassengeschäfte, Organisatorisches',0)")
+    plan=client.get('/api/accounts/1/plan').json()
+    assert any('Klassengeschäfte' in (g['title'] or '') for g in plan['goals'])
+
+    from backend import mentor_context as ctx
+    real=ctx.snapshot
+
+    def without_topic(account_id,**kwargs):
+        s=real(account_id,**kwargs)
+        for lesson in s['lessons']:
+            if 'Klassengeschäfte' in (lesson.get('text') or ''):
+                lesson['no_topic']=True
+                lesson['open_question']='Wurde ein fachlicher Englischinhalt behandelt?'
+        return s
+
+    patch.setattr(ctx,'snapshot',without_topic)
+    plan=client.get('/api/accounts/1/plan').json()
+    assert not any('Klassengeschäfte' in (g['title'] or '') for g in plan['goals'])
+    # Der Rest des Plans bleibt bestehen.
+    assert plan['goals']

@@ -28,6 +28,15 @@ Gamification bleibt offen. Kandidaten: sichtbare fachliche Fortschritte, dauerha
 
 Erinnerungszeitpunkt und Häufigkeit mit den Nutzenden erproben; keine pauschal festgelegte Pushquote. Eine erledigte Handlung darf nicht erneut angemahnt werden. Bestehende HA-Automationen vor Ergänzungen prüfen.
 
+## Zuschnitt der Lerneinheiten
+
+Prüfbericht und Entwurf: [Zuschnitt und Reihenfolge der Lerneinheiten](LERNEINHEITEN.md).
+Enthält die Durchsicht von 81 tatsächlich entstandenen Themen, sechs belegte Schwächen
+und Vorschläge zu Gruppierung nach Fach, Reihenfolge ältestes offenes Thema zuerst,
+nächtlicher Konsolidierung, Schuljahresgrenze und Doppelstunden. Der schwerwiegendste
+Punkt ist behoben: Einträge, welche die Auswertung als organisatorisch eingestuft hatte,
+erschienen trotzdem als Übungsaufgabe.
+
 ## Evaluation
 
 Vorgeschlagen: begrenzter Pilot mit Ausgangslage, verständlichen Beobachtungskriterien und gemeinsamer Rückschau. Dauer und Fächer offen. Interesse, Organisationszuverlässigkeit, selbstständige Leistung und Belastung getrennt betrachten. Kein automatischer Wirkungsnachweis und keine automatische Nachhilfeentscheidung.

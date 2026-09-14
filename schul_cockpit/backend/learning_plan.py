@@ -79,6 +79,10 @@ def catalogue(account, snapshot=None):
         if r.get('future'):
             next_lesson[subject]=min(next_lesson.get(subject,'9999'),r['date']);continue
         if not r['text'].strip() or r.get('rating')==4:continue
+        # Was die Auswertung als organisatorisch oder unklar eingestuft hat, ist
+        # kein Lernziel. Ohne diese Zeile wurde der rohe Eintragstext zum Titel,
+        # und „AG-Vorstellung in der Aula" stand als Übungsaufgabe im Plan.
+        if r.get('no_topic'):continue
         if any(x in subject.casefold() for x in ('sport','schwimm','pause','klassenrat')):continue
         key=goal_key(r);lesson_keys[r['id']]=key;aliases[legacy_goal_key(r)]=key
         g=groups.setdefault(key,dict(key=key,kind='lesson',subject=subject,subject_id=r.get('subject_untis_id'),topic_id=r.get('topic',{}).get('id'),title=r.get('topic',{}).get('title') or r['text'][:150],lesson_id=r['id'],sources=[],rating=r.get('rating'),catch_up_open=False,date=r['date'],skill_ids=[],sessions=[],state='Noch nicht geprüft',due_date=None,last_day=None,reason='',minutes=8))
