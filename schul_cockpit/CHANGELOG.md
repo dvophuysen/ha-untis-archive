@@ -1,3 +1,7 @@
+## 0.51.1
+
+- Die Morgenmitteilung ist ab Werk aus. Sie ist eine Verabredung, keine Auslieferung: Wer sie will, schaltet sie in den Eltern-Einstellungen ein, die Uhrzeit steht auf 06:45 vor.
+
 ## 0.51.0
 
 - Der Tag lässt sich abschließen. Unter der Abendkarte steht ein Knopf; festgehalten wird, wann, von wem und ob die Erinnerung da schon draußen war. Abschließen geht auch mit offenen Punkten — sie werden so vermerkt, wie sie sind.

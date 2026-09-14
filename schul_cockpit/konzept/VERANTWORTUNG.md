@@ -215,7 +215,9 @@ nichts. Ein zweiter Druck ändert den Eintrag nicht mehr — wer abends um acht 
 zwei offenen Aufgaben abgeschlossen hat, hat genau das getan.
 
 Darauf steht der Morgen-Rückfall. Wer am Abend nicht abgeschlossen hat, bekommt
-vor dem Aufbruch eine zweite, kürzere Mitteilung mit dem, was fehlt.
+vor dem Aufbruch eine zweite, kürzere Mitteilung mit dem, was fehlt. Sie ist ab
+Werk aus und wird in den Eltern-Einstellungen eingeschaltet: Eine Mitteilung um
+Viertel vor sieben gehört verabredet, nicht ausgeliefert.
 Rückmeldungen zu Stunden bleiben darin außen vor; sie ändern morgens nichts
 mehr. Wer abgeschlossen hat, bekommt nichts — ohne diese Bedingung wäre die
 Mitteilung nach drei Tagen nur noch Lärm, gerade für den, der alles erledigt
