@@ -1,3 +1,7 @@
+## 0.42.3
+
+- Der öffentliche Schulkalender wird mitgefunden. Er gehört keiner Gruppe des Kindes, sondern kommt als freigegebener Bereich, und blieb deshalb bisher außen vor.
+
 ## 0.42.2
 
 - Die Elternansicht kann einen einzelnen Kalender befragen, wenn er leer bleibt: angenommene Abfrage, gelieferte Einträge, davon gelesene. Leer und abgelehnt sahen vorher gleich aus.
