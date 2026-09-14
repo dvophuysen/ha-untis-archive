@@ -67,7 +67,11 @@ async def scan_connected_accounts() -> None:
     conn = webapp_conn()
     try:
         ids = [r[0] for r in conn.execute(
-            "SELECT account_id FROM digital_textbook_credentials WHERE verification_status IN ('connected','scan_failed')"
+            "SELECT c.account_id FROM digital_textbook_credentials c "
+            "WHERE c.verification_status IN ('connected','scan_failed') "
+            "OR EXISTS (SELECT 1 FROM digital_textbook_catalog b WHERE b.account_id=c.account_id "
+            "AND (b.title='Mathematik und Naturwissenschaften' "
+            "OR b.title LIKE 'BiBox%digital%Unterrichtssystem%'))"
         ).fetchall()]
     finally:
         conn.close()
