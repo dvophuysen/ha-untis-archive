@@ -377,9 +377,34 @@ function look(root){
     if(!d.getClientRects().length) continue;
     for(const b of d.querySelectorAll('button,a,[role="button"]')){
       const own=[...b.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ');
-      const name=((b.getAttribute('aria-label')||'')+' '+(b.getAttribute('title')||'')+' '+own).replace(/\s+/g,' ').trim();
-      if(CLOSE.test(name)&&b.getClientRects().length) return b;
+      const names=[b.getAttribute('aria-label'),b.getAttribute('title'),own];
+      if(names.some(s=>CLOSE.test((s||'').replace(/\s+/g,' ').trim()))&&b.getClientRects().length) return b;
     }
+  }
+  for(const e of root.querySelectorAll('*')) if(e.shadowRoot){const x=look(e.shadowRoot);if(x)return x;}
+  return null;
+}
+return look(document);
+"""
+
+_OPEN_DIALOG_SCRIPT = """
+function look(root){
+  for(const d of root.querySelectorAll('[role="dialog"],[role="alertdialog"],.modal,cdk-dialog-container,mat-dialog-container')){
+    if(d.getClientRects().length) return true;
+  }
+  for(const e of root.querySelectorAll('*')) if(e.shadowRoot){if(look(e.shadowRoot))return true;}
+  return false;
+} return look(document);
+"""
+
+_ENTER_READER_SCRIPT = r"""
+// Cornelsen lands on a start page; the reader is one click further in.
+const ENTER=/^(zum e-?book|zum buch|buch (ö|oe)ffnen|jetzt lesen|weiterlesen|lesen starten|lesen|(ö|oe)ffnen|starten)$/i;
+function look(root){
+  for(const e of root.querySelectorAll('a,button,[role="button"],[role="link"]')){
+    const own=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ');
+    const names=[e.getAttribute('aria-label'),e.getAttribute('title'),own];
+    if(names.some(s=>ENTER.test((s||'').replace(/\s+/g,' ').trim()))&&e.getClientRects().length) return e;
   }
   for(const e of root.querySelectorAll('*')) if(e.shadowRoot){const x=look(e.shadowRoot);if(x)return x;}
   return null;
@@ -427,10 +452,15 @@ function look(root){
   for(const e of root.querySelectorAll('*')){
     const own=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ').trim();
     if(own && /^(S\.?|Seite|Page)?\s*\d{1,4}\s*(\/|von|of|-|–)\s*\d{1,4}$/i.test(own)) out.push(own);
-    // Rendered page areas carry their number as a label, one per open page.
-    const marked=((e.getAttribute('aria-label')||'')+' '+(e.getAttribute('title')||'')).trim();
-    const page=marked.match(/(?:Seite|Page)\s+(\d{1,4})/i);
-    if(page) out.push(page[1]);
+    // Rendered page areas carry their number as a label. A thumbnail strip
+    // labels every page of the book, so only large, on-screen areas count.
+    for(const marked of [e.getAttribute('aria-label'),e.getAttribute('title')]){
+      const page=(marked||'').match(/(?:Seite|Page)\s+(\d{1,4})/i);
+      if(!page) continue;
+      const r=e.getBoundingClientRect();
+      if(r.width>=innerWidth*0.15&&r.height>=innerHeight*0.3&&r.bottom>0&&r.top<innerHeight) out.push(page[1]);
+      break;
+    }
     if(e.shadowRoot) look(e.shadowRoot);
   }
 }
@@ -530,16 +560,57 @@ def _dismiss_overlays(driver, rounds: int = 3) -> None:
         try:
             button = _in_frames(driver, _DISMISS_SCRIPT)
             if button is None:
-                return
+                break
             button.click()
             time.sleep(0.4)
         except Exception:
-            return
+            break
+    driver.switch_to.default_content()
+    # Not every dialog offers a caption we can recognise. Escape closes the
+    # well-behaved ones and costs nothing when no dialog is open.
+    try:
+        if _in_frames(driver, _OPEN_DIALOG_SCRIPT):
+            driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
+            time.sleep(0.4)
+    except Exception:
+        pass
     driver.switch_to.default_content()
 
 
+def _enter_reader(driver, rounds: int = 2) -> bool:
+    """Follow a start page into the reader when no page control exists yet."""
+    entered = False
+    for _ in range(rounds):
+        driver.switch_to.default_content()
+        if _page_control(driver) or _in_frames(driver, _PAGE_NEIGHBOUR_SCRIPT):
+            break
+        driver.switch_to.default_content()
+        try:
+            action = _in_frames(driver, _ENTER_READER_SCRIPT)
+            if action is None:
+                break
+            action.click()
+        except Exception:
+            break
+        try:
+            WebDriverWait(driver, 20).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+        except TimeoutException:
+            pass
+        _dismiss_overlays(driver)
+        entered = True
+    driver.switch_to.default_content()
+    return entered
+
+
 def _type_page(driver, control, page: int) -> bool:
-    control.click()
+    try:
+        control.click()
+    except Exception:
+        # An overlay caught the click. Clear it and try the field once more.
+        _dismiss_overlays(driver)
+        control.click()
     control.send_keys(Keys.CONTROL, "a")
     control.send_keys(str(page), Keys.ENTER)
     return _wait_for_page(driver, page)
@@ -795,6 +866,7 @@ def _capture_pages_sync(
         if new_handles:
             driver.switch_to.window(new_handles[-1])
         _dismiss_overlays(driver)
+        _enter_reader(driver)
         stage = "Seitennavigation finden"
         shots: list[PageShot] = []
         note = ""
