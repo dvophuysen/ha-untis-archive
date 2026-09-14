@@ -1,3 +1,8 @@
+## 0.39.2
+
+- Das Seitenfeld des Verlagsviewers wird auch dann gefunden, wenn es weder Beschriftung noch Platzhalter hat. Id, Klasse und Name zählen jetzt als Hinweis. click & study von C.C.Buchner benennt sein Feld ausschließlich über die Id `selectPage` — genau daran scheiterte das Blättern.
+- Dieselbe Erweiterung gilt für das Ablesen der angezeigten Seite, damit der Sprung auch bestätigt werden kann.
+
 ## 0.39.1
 
 - Der Testabruf in der Elternansicht zeigt zusätzlich das ganze Viewer-Fenster mit Bedienleiste, die geöffneten Ansichten und die Bedienelemente des Verlagsviewers. Damit lässt sich bestimmen, wie ein Viewer blättert, wenn keiner der eingebauten Wege greift.

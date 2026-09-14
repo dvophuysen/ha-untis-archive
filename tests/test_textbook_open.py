@@ -141,3 +141,42 @@ def test_missing_card_without_launch_address_names_the_stage(monkeypatch):
         browser._open_book(Mock(), 'Originaltitel')
     assert error.value.stage == 'Buch öffnen'
     assert 'private' not in str(error.value)
+
+
+def test_page_field_is_found_by_id_when_the_viewer_labels_nothing():
+    # click & study renders <input type="text" id="selectPage"> with no
+    # label, title or placeholder. The search box next to it must not win.
+    script = '''
+const assert = require('node:assert/strict');
+function input(attrs) {
+  return {getAttribute: k => (k in attrs ? attrs[k] : null),
+    placeholder: attrs.placeholder || '', type: attrs.type || 'text',
+    id: attrs.id || '', className: attrs.className || '',
+    querySelectorAll: () => []};
+}
+const search = input({id:'searchInput', className:'form-control', placeholder:'Suchbegriff...'});
+const pageField = input({id:'selectPage', className:'form-control'});
+global.document = {querySelectorAll: sel => (sel.indexOf('input') === 0 ? [search, pageField] : [])};
+const find = new Function(process.argv[1]);
+assert.equal(find(), pageField);
+global.document = {querySelectorAll: sel => (sel.indexOf('input') === 0 ? [search] : [])};
+assert.equal(new Function(process.argv[1])(), null);
+'''
+    subprocess.run(['node', '-e', script, browser._PAGE_FIELD_SCRIPT], check=True)
+
+
+def test_shown_page_reads_a_field_named_only_by_id():
+    script = '''
+const assert = require('node:assert/strict');
+function input(attrs) {
+  return {getAttribute: k => (k in attrs ? attrs[k] : null),
+    placeholder: '', type: 'text', tagName: 'INPUT',
+    id: attrs.id || '', className: '', value: attrs.value || '',
+    childNodes: [], shadowRoot: null,
+    querySelectorAll: () => []};
+}
+const pageField = input({id:'selectPage', value:'34'});
+global.document = {querySelectorAll: sel => (sel.indexOf('input') === 0 ? [pageField] : [])};
+assert.equal(new Function(process.argv[1])(), '34');
+'''
+    subprocess.run(['node', '-e', script, browser._SHOWN_PAGE_SCRIPT], check=True)

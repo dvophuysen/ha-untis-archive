@@ -319,7 +319,10 @@ def _in_frames(driver, script, *args, depth: int = 0):
 _PAGE_FIELD_SCRIPT = """
   function find(root) {
     for (const e of root.querySelectorAll('input,[role="spinbutton"],[contenteditable="true"]')) {
-      const hint=((e.getAttribute('aria-label')||'')+' '+(e.getAttribute('title')||'')+' '+(e.placeholder||'')).toLowerCase();
+      const hint=((e.getAttribute('aria-label')||'')+' '+(e.getAttribute('title')||'')+' '+(e.placeholder||'')
+        +' '+(e.id||'')+' '+(typeof e.className==='string'?e.className:'')+' '+(e.getAttribute('name')||'')).toLowerCase();
+      // click & study names its field only by id (#selectPage): no label, no
+      // placeholder, type="text". Id, class and name therefore count as hints.
       if(hint.includes('seite')||hint.includes('page')||e.type==='number') return e;
     }
     for(const e of root.querySelectorAll('*')) if(e.shadowRoot){const x=find(e.shadowRoot);if(x)return x;}
@@ -357,7 +360,8 @@ _SHOWN_PAGE_SCRIPT = r"""
 const out=[];
 function look(root){
   for(const e of root.querySelectorAll('input,select,[role="spinbutton"],[contenteditable="true"]')){
-    const hint=((e.getAttribute('aria-label')||'')+' '+(e.getAttribute('title')||'')+' '+(e.placeholder||'')).toLowerCase();
+    const hint=((e.getAttribute('aria-label')||'')+' '+(e.getAttribute('title')||'')+' '+(e.placeholder||'')
+      +' '+(e.id||'')+' '+(typeof e.className==='string'?e.className:'')+' '+(e.getAttribute('name')||'')).toLowerCase();
     if(hint.includes('seite')||hint.includes('page')||e.type==='number'||e.tagName==='SELECT')
       out.push((e.value||e.textContent||'').trim());
   }
