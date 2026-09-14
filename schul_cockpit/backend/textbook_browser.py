@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
 import re
+import asyncio
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
-from playwright.async_api import Page, async_playwright
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.support.ui import WebDriverWait
 
 
 class TextbookScanError(RuntimeError):
@@ -45,66 +48,79 @@ def select_book_titles(texts: list[str]) -> list[str]:
     return unique
 
 
-async def _click(page: Page, pattern: re.Pattern, timeout: int = 8_000) -> bool:
-    for role in ("link", "button"):
-        locator = page.get_by_role(role, name=pattern).first
+def _click(driver: webdriver.Chrome, pattern: re.Pattern, timeout: int = 10) -> bool:
+    before = set(driver.window_handles)
+    for element in driver.find_elements(By.CSS_SELECTOR, "a,button,[role='link'],[role='button']"):
         try:
-            if await locator.count() and await locator.is_visible():
-                before = len(page.context.pages)
-                await locator.click(timeout=timeout)
-                await asyncio.sleep(1)
-                target = page.context.pages[-1] if len(page.context.pages) > before else page
-                await target.wait_for_load_state("domcontentloaded", timeout=timeout)
+            if element.is_displayed() and pattern.search(_clean(element.text or "")):
+                driver.execute_script("arguments[0].click()", element)
+                WebDriverWait(driver, timeout).until(
+                    lambda d: d.execute_script("return document.readyState") in ("interactive", "complete")
+                )
+                new_handles = [handle for handle in driver.window_handles if handle not in before]
+                if new_handles:
+                    driver.switch_to.window(new_handles[-1])
                 return True
         except Exception:
             continue
     return False
 
 
-async def scan_shelf(portal_url: str, username: str, password: str) -> list[ShelfBook]:
-    async with async_playwright() as pw:
-        browser = await pw.chromium.launch(
-            executable_path="/usr/bin/chromium",
-            headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
-        )
-        context = await browser.new_context(locale="de-DE")
+def _scan_shelf_sync(portal_url: str, username: str, password: str) -> list[ShelfBook]:
+    options = webdriver.ChromeOptions()
+    options.binary_location = "/usr/bin/chromium-browser"
+    for arg in ("--headless", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"):
+        options.add_argument(arg)
+    options.add_argument("--lang=de-DE")
+    driver = webdriver.Chrome(options=options)
+    driver.set_page_load_timeout(30)
+    try:
+        driver.get(portal_url.rstrip("/") + "/iserv/")
+        driver.find_element(By.NAME, "_username").send_keys(username)
+        driver.find_element(By.NAME, "_password").send_keys(password)
+        driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
         try:
-            page = await context.new_page()
-            await page.goto(portal_url.rstrip("/") + "/iserv/", wait_until="domcontentloaded", timeout=30_000)
-            await page.locator('input[name="_username"]').fill(username)
-            await page.locator('input[name="_password"]').fill(password)
-            await page.locator('button[type="submit"]').click()
-            await page.wait_for_load_state("domcontentloaded")
-            if "/auth/login" in page.url:
+            WebDriverWait(driver, 15).until(lambda d: "/auth/login" not in d.current_url)
+        except TimeoutException:
+            if "/auth/login" in driver.current_url:
                 raise TextbookScanError("IServ-Anmeldung fehlgeschlagen")
 
-            await page.goto(portal_url.rstrip("/") + "/iserv/eduplacesconnector/", wait_until="domcontentloaded", timeout=30_000)
-            await asyncio.sleep(1)
-            await _click(page, re.compile("Eduplaces", re.I))
-            await asyncio.sleep(2)
-            page = context.pages[-1]
-            await _click(page, re.compile("Bildungslogin.*Medienregal|Medienregal", re.I))
-            await asyncio.sleep(3)
-            page = context.pages[-1]
+        driver.get(portal_url.rstrip("/") + "/iserv/eduplacesconnector/")
+        WebDriverWait(driver, 10).until(lambda d: d.execute_script("return document.readyState") == "complete")
+        if not _click(driver, re.compile("Eduplaces", re.I)):
+            raise TextbookScanError("Eduplaces wurde nicht gefunden")
+        WebDriverWait(driver, 10).until(lambda d: len(d.find_elements(By.CSS_SELECTOR, "a,button")) > 0)
+        if not _click(driver, re.compile("Bildungslogin.*Medienregal|Medienregal", re.I)):
+            raise TextbookScanError("Das Bildungslogin-Medienregal wurde nicht gefunden")
+        WebDriverWait(driver, 15).until(lambda d: d.execute_script("return document.readyState") == "complete")
 
-            records = await page.locator("a,button,[role=link],[role=button],article").evaluate_all(
-                "els => els.map(e => ({text:(e.innerText||e.textContent||'').trim(), href:e.href||null}))"
+        def read_records(d):
+            return d.execute_script(
+                "return [...document.querySelectorAll('a,button,[role=link],[role=button],article')]"
+                ".map(e => ({text:(e.innerText||e.textContent||'').trim(), href:e.href||null}))"
             )
-            titles = select_book_titles([r.get("text") or "" for r in records])
-            books: list[ShelfBook] = []
-            for title in titles:
-                match = next((r for r in records if _clean(r.get("text") or "") == title), None)
-                href = match.get("href") if match else None
-                provider = urlsplit(href).hostname if href else None
-                books.append(ShelfBook(title=title, provider=provider, launch_url=href))
-            if not books:
-                raise TextbookScanError("Das Medienregal wurde geöffnet, aber keine Bücher wurden erkannt")
-            return books
-        except TextbookScanError:
-            raise
-        except Exception as exc:
-            raise TextbookScanError("Das Medienregal konnte nicht automatisch gelesen werden") from exc
-        finally:
-            await context.close()
-            await browser.close()
+
+        WebDriverWait(driver, 15).until(
+            lambda d: bool(select_book_titles([r.get("text") or "" for r in read_records(d)]))
+        )
+        records = read_records(driver)
+        titles = select_book_titles([r.get("text") or "" for r in records])
+        books: list[ShelfBook] = []
+        for title in titles:
+            match = next((r for r in records if _clean(r.get("text") or "") == title), None)
+            href = match.get("href") if match else None
+            provider = urlsplit(href).hostname if href else None
+            books.append(ShelfBook(title=title, provider=provider, launch_url=href))
+        if not books:
+            raise TextbookScanError("Das Medienregal wurde geöffnet, aber keine Bücher wurden erkannt")
+        return books
+    except TextbookScanError:
+        raise
+    except Exception as exc:
+        raise TextbookScanError("Das Medienregal konnte nicht automatisch gelesen werden") from exc
+    finally:
+        driver.quit()
+
+
+async def scan_shelf(portal_url: str, username: str, password: str) -> list[ShelfBook]:
+    return await asyncio.to_thread(_scan_shelf_sync, portal_url, username, password)
