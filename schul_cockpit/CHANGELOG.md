@@ -1,3 +1,8 @@
+## 0.35.2
+
+- Verbindungstest erkennt das aktuelle IServ-Anmeldeformular auch dann korrekt, wenn es ohne `action` an dieselbe URL sendet.
+- Ein leeres Passwortfeld wird nicht mehr als verlorener Zugang missverstanden: Die Elternseite zeigt bei vorhandener verschlüsselter Hinterlegung ausdrücklich „Passwort sicher gespeichert“.
+
 ## 0.35.1
 
 - Gespeicherte IServ-Zugänge lassen sich pro Kind direkt prüfen. Die App meldet verständlich, ob Anmeldung und Eduplaces-Einstieg funktionieren.
