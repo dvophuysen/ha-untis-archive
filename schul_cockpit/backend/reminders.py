@@ -133,6 +133,13 @@ def run_once(now=None):
             morning_fallback(setting, now)
         except Exception:
             LOG.warning('Morgenmitteilung nicht möglich für Konto %s', account, exc_info=True)
+        try:
+            # Der Abend gilt als erledigt, sobald nichts mehr offen ist — ohne
+            # dass jemand etwas bestätigen muss. Deshalb wird jede Runde
+            # nachgesehen, nicht nur zur Erinnerungszeit.
+            day_close.record_if_clear(account, now.date().isoformat(), snapshot(account, now), now)
+        except Exception:
+            LOG.warning('Tagesstand nicht lesbar für Konto %s', account, exc_info=True)
         if not due(setting['remind_at'], now):
             continue
         try:

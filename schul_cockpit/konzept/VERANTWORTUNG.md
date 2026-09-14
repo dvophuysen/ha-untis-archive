@@ -204,31 +204,38 @@ Rückschritt ist verabredet, nicht beschämend. Gerechnet wird in Monaten.
 
 ## Stand: was gebaut ist
 
-Stufe 0 und Stufe 1 stehen, einschließlich des Tagesabschlusses.
+Stufe 0 und Stufe 1 stehen.
 
-Der Tagesabschluss war die fehlende Angabe. Die App wusste bisher nur, ob
-gerade etwas offen ist, nicht ob ein Tag durchgegangen wurde. Unter der
-Abendkarte steht jetzt ein Knopf; festgehalten wird, wann, von wem und ob die
-Erinnerung zu dem Zeitpunkt schon draußen war. Abschließen ist auch mit offenen
-Punkten erlaubt und wird ehrlich vermerkt: Die App hält fest, sie verhängt
-nichts. Ein zweiter Druck ändert den Eintrag nicht mehr — wer abends um acht mit
-zwei offenen Aufgaben abgeschlossen hat, hat genau das getan.
+Die App brauchte eine Unterscheidung, die ihr fehlte: „für morgen ist nichts
+mehr offen" gegen „niemand hat draufgeschaut". Ohne sie träfe die
+Morgenmitteilung auch den, der fertig ist. Der erste Versuch war ein Knopf zum
+Tagesabschluss unter der Abendkarte — ein Ritual, das es in dieser Familie nicht
+gibt. Kinder schließen keinen Tag ab; sie lassen Dinge offen oder erledigen sie.
+Ein Knopf, den niemand drückt, liefert kein Signal, einer, den man gedankenlos
+drückt, ein falsches. Er ist wieder entfernt worden, bevor ihn jemand zu sehen
+bekam.
 
-Darauf steht der Morgen-Rückfall. Wer am Abend nicht abgeschlossen hat, bekommt
-vor dem Aufbruch eine zweite, kürzere Mitteilung mit dem, was fehlt. Sie ist ab
-Werk aus und wird in den Eltern-Einstellungen eingeschaltet: Eine Mitteilung um
+Stattdessen wird abgeleitet, was ohnehin geschieht: Keine Aufgabe mehr fällig,
+die Tasche für morgen bestätigt, die Stunden zurückgemeldet — dieselben drei
+Zahlen, über die abends auch die Erinnerung entscheidet. Fallen sie auf null,
+ist der Abend erledigt, und der Zeitpunkt wird festgehalten. Läuft später noch
+etwas nach, bleibt der Moment stehen, in dem es fertig war.
+
+Darauf steht der Morgen-Rückfall. Wer am Abend nicht fertig war, bekommt vor dem
+Aufbruch eine zweite, kürzere Mitteilung mit dem, was fehlt. Rückmeldungen zu
+Stunden bleiben darin außen vor; sie ändern morgens nichts mehr. Sie ist ab Werk
+aus und wird in den Eltern-Einstellungen eingeschaltet: Eine Mitteilung um
 Viertel vor sieben gehört verabredet, nicht ausgeliefert.
-Rückmeldungen zu Stunden bleiben darin außen vor; sie ändern morgens nichts
-mehr. Wer abgeschlossen hat, bekommt nichts — ohne diese Bedingung wäre die
-Mitteilung nach drei Tagen nur noch Lärm, gerade für den, der alles erledigt
-hat.
 
 Und die eigene Verlässlichkeit ist damit zählbar: an wie vielen Abenden vor
-einem Schultag das Kind selbst abgeschlossen hat, ohne vorherige Erinnerung.
-Nur das zählt als selbstständig. Ein Sonntagabend gehört dabei zur Woche des
-Montags, den er vorbereitet. Auf der Abendkarte steht eine Zeile dazu, ohne
-Serie und ohne Nullpunkt: Ein schlechter Abend kostet nichts, er fehlt nur in
-der Zählung dieser Woche.
+einem Schultag schon vor der Erinnerung alles erledigt war. Genau das meint
+Selbstständigkeit. Ein Sonntagabend gehört dabei zur Woche des Montags, den er
+vorbereitet. Angezeigt wird die Zahl noch nirgends — wie und ob sie sichtbar
+wird, ist offen und wird verabredet, nicht gebaut.
+
+Eine Einschränkung gehört dazu: Ein Abend ohne Aufgaben und mit schon
+bestätigter Tasche zählt als erledigt, auch wenn niemand die App geöffnet hat.
+Gemessen wird „nichts blieb offen", nicht „das Kind hat nachgesehen".
 
 ## Nächstes Paket: der Nachmittag
 

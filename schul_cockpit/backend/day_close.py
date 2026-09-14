@@ -1,16 +1,14 @@
-"""Der Tagesabschluss: die Angabe, die der App bisher gefehlt hat.
+"""Wann ein Abend erledigt war — abgeleitet, nicht abgefragt.
 
-Bisher wusste die App nur, ob gerade etwas offen ist. Ob ein Kind seinen Tag
-selbst durchgegangen ist, war nicht unterscheidbar von einem Tag, an dem
-ohnehin nichts anlag. Daran scheiterten die Morgenmitteilung (sie hätte auch
-den getroffen, der fertig war) und jedes Maß für die eigene Verlässlichkeit.
+Die App braucht die Unterscheidung zwischen „für morgen ist nichts mehr offen"
+und „niemand hat draufgeschaut", sonst trifft die Morgenmitteilung auch den, der
+fertig ist. Ein eigener Knopf dafür wäre ein Ritual, das die Kinder nicht haben:
+Sie lassen Dinge offen oder sie erledigen sie. Also zählt genau das.
 
-Festgehalten wird deshalb nicht nur *dass* abgeschlossen wurde, sondern auch
-von wem und ob die Erinnerung schon draußen war. Nur „vom Kind selbst, ohne
-Erinnerung" ist das, was die Vision unter Selbstständigkeit versteht.
-
-Ein Abschluss bei noch offenen Punkten ist erlaubt und wird ehrlich vermerkt.
-Die App verhängt nichts; sie hält fest.
+Erledigt heißt: keine Aufgabe mehr fällig, die Tasche für morgen bestätigt, die
+Stunden zurückgemeldet. Dieselben drei Zahlen, die abends über die Erinnerung
+entscheiden. Festgehalten wird der Zeitpunkt, an dem das Letzte davon wegfiel,
+und ob die Erinnerung da schon draußen war.
 """
 
 from __future__ import annotations
@@ -21,8 +19,8 @@ from datetime import date, datetime, timedelta
 from .db import history_conn, webapp_conn
 from .queries import lessons_in_range
 
-BY_CHILD = "kind"
-BY_PARENT = "eltern"
+# Kein Knopfdruck, sondern der Stand der Dinge.
+BY_WORK = "erledigt"
 
 
 def reminded(conn, account_id: int, day: str) -> bool:
@@ -44,12 +42,15 @@ def closure(account_id: int, day: str) -> dict | None:
     return dict(row) if row else None
 
 
-def close(account_id: int, day: str, by: str, counts: dict, now: datetime) -> dict:
-    """Der erste Abschluss eines Tages zählt.
+def record_if_clear(account_id: int, day: str, counts: dict, now: datetime) -> dict | None:
+    """Der erste Moment des Tages, in dem nichts mehr offen ist, zählt.
 
-    Ein zweiter Druck auf den Knopf darf das Bild nicht schönen: Wer abends um
-    acht mit zwei offenen Aufgaben abgeschlossen hat, hat genau das getan.
+    Später am Abend kann wieder etwas auflaufen — eine nachgetragene Aufgabe,
+    eine neue Stunde. Das macht den Moment nicht ungeschehen, in dem das Kind
+    fertig war.
     """
+    if any(counts.values()):
+        return None
     with closing(webapp_conn()) as conn, conn:
         conn.execute("BEGIN IMMEDIATE")
         already = conn.execute(
@@ -60,10 +61,8 @@ def close(account_id: int, day: str, by: str, counts: dict, now: datetime) -> di
             return dict(already)
         conn.execute(
             "INSERT INTO day_closures(account_id,school_day,closed_at,closed_by,after_reminder,"
-            "open_homework,open_material,open_feedback) VALUES(?,?,?,?,?,?,?,?)",
-            (account_id, day, now.isoformat(), by, int(reminded(conn, account_id, day)),
-             int(counts.get("homework", 0)), int(counts.get("material", 0)),
-             int(counts.get("feedback", 0))),
+            "open_homework,open_material,open_feedback) VALUES(?,?,?,?,?,0,0,0)",
+            (account_id, day, now.isoformat(), BY_WORK, int(reminded(conn, account_id, day))),
         )
         row = conn.execute(
             "SELECT * FROM day_closures WHERE account_id=? AND school_day=?",
@@ -113,7 +112,8 @@ def reliability(account_id: int, today: date, weeks: int = 4) -> dict:
         if not row:
             continue
         bucket["closed"] += 1
-        if row["closed_by"] == BY_CHILD and not row["after_reminder"]:
+        # Selbstständig heißt: ohne dass vorher erinnert werden musste.
+        if not row["after_reminder"]:
             bucket["own"] += 1
     ordered = [buckets[k] for k in sorted(buckets)]
     current = next((b for b in ordered if b["week"] == _week_start(today).isoformat()), None)
