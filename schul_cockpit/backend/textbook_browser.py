@@ -2,20 +2,44 @@
 
 from __future__ import annotations
 
+import os
 import re
+import time
 import asyncio
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import Select, WebDriverWait
 
 
 class TextbookScanError(RuntimeError):
-    pass
+    def __init__(self, message: str, stage: str | None = None):
+        super().__init__(message)
+        self.stage = stage
+
+
+_CHROMIUM = "/usr/bin/chromium-browser"
+_CHROMEDRIVER = "/usr/bin/chromedriver"
+
+
+def _driver(*extra_args: str) -> webdriver.Chrome:
+    """Headless Chromium on the driver shipped in the image. Without the
+    explicit service, Selenium Manager first tries to download one and fails
+    on aarch64 before falling back."""
+    options = webdriver.ChromeOptions()
+    options.binary_location = _CHROMIUM
+    for arg in ("--headless", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", *extra_args):
+        options.add_argument(arg)
+    options.add_argument("--lang=de-DE")
+    service = Service(executable_path=_CHROMEDRIVER) if os.path.exists(_CHROMEDRIVER) else None
+    driver = webdriver.Chrome(options=options, service=service) if service else webdriver.Chrome(options=options)
+    driver.set_page_load_timeout(30)
+    return driver
 
 
 @dataclass(frozen=True)
@@ -85,13 +109,7 @@ def _click(driver: webdriver.Chrome, pattern: re.Pattern, timeout: int = 10) -> 
 
 
 def _scan_shelf_sync(portal_url: str, username: str, password: str) -> list[ShelfBook]:
-    options = webdriver.ChromeOptions()
-    options.binary_location = "/usr/bin/chromium-browser"
-    for arg in ("--headless", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"):
-        options.add_argument(arg)
-    options.add_argument("--lang=de-DE")
-    driver = webdriver.Chrome(options=options)
-    driver.set_page_load_timeout(30)
+    driver = _driver()
     try:
         driver.get(portal_url.rstrip("/") + "/iserv/")
         driver.find_element(By.NAME, "_username").send_keys(username)
@@ -202,17 +220,27 @@ async def scan_shelf(portal_url: str, username: str, password: str) -> list[Shel
 _BOOK_TARGET_SCRIPT = r"""
 const normalize = s => (s || '').normalize('NFKC').replace(/\s+/g, ' ').trim().toLocaleLowerCase('de');
 const wanted = normalize(arguments[0]);
-const matches = [];
+// A shelf entry may carry a suffix ("… – BiBox") or drop one, so allow a
+// contained match, but only for titles long enough to be unambiguous.
+const loose = wanted.length >= 12;
+const exact = [];
+const partial = [];
 function walk(root) {
   for (const e of root.querySelectorAll('*')) {
     const own = [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join(' ');
     const labels = [own, e.getAttribute('aria-label'), e.getAttribute('title'), e.getAttribute('alt')];
-    if (labels.some(s => normalize(s) === wanted) && e.getClientRects().length) matches.push(e);
+    if (e.getClientRects().length) {
+      if (labels.some(s => normalize(s) === wanted)) exact.push(e);
+      else if (loose && labels.some(s => {
+        const v = normalize(s);
+        return v.length >= 12 && (v.startsWith(wanted) || wanted.startsWith(v));
+      })) partial.push(e);
+    }
     if (e.shadowRoot) walk(e.shadowRoot);
   }
 }
 walk(document);
-for (const e of matches) {
+for (const e of exact.concat(partial)) {
   let p = e;
   while (p) {
     if (p.matches('a,button,[role="link"],[role="button"],[tabindex="0"]')) return p;
@@ -247,51 +275,292 @@ def _find_and_click_in_frames(driver, title: str, depth: int = 0) -> bool:
     return False
 
 
-def _open_book(driver, title: str):
+def _open_book(driver, title: str, launch_url: str | None = None):
     def ready(d):
         d.switch_to.default_content()
         return _find_and_click_in_frames(d, title)
     try:
         WebDriverWait(driver, 25).until(ready)
     except TimeoutException as exc:
-        raise TextbookScanError("Das zugeordnete Schulbuch wurde im Regal nicht gefunden") from exc
+        # The stored launch address is the shelf's own link for this book and
+        # stays usable when the cover itself is not clickable any more.
+        if launch_url and launch_url.startswith("https://"):
+            driver.get(launch_url)
+            WebDriverWait(driver, 20).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            return
+        raise TextbookScanError(
+            "Das zugeordnete Schulbuch wurde im Regal nicht gefunden", "Buch öffnen"
+        ) from exc
 
 
-def _page_control(driver, depth: int = 0):
-    control = driver.execute_script("""
-      function find(root) {
-        for (const e of root.querySelectorAll('input,[role="spinbutton"],[contenteditable="true"]')) {
-          const hint=((e.getAttribute('aria-label')||'')+' '+(e.getAttribute('title')||'')+' '+(e.placeholder||'')).toLowerCase();
-          if(hint.includes('seite')||hint.includes('page')||e.type==='number') return e;
-        }
-        for(const e of root.querySelectorAll('*')) if(e.shadowRoot){const x=find(e.shadowRoot);if(x)return x;}
-        return null;
-      } return find(document);
-    """)
-    if control or depth >= 3:
-        return control
+def _in_frames(driver, script, *args, depth: int = 0):
+    """First hit of a locator script, leaving the driver in the frame that has it."""
+    found = driver.execute_script(script, *args)
+    if found or depth >= 3:
+        return found
     for frame in driver.find_elements(By.CSS_SELECTOR, "iframe,frame"):
         switched = False
         try:
             driver.switch_to.frame(frame)
             switched = True
-            control = _page_control(driver, depth + 1)
-            if control:
-                return control
+            found = _in_frames(driver, script, *args, depth=depth + 1)
+            if found:
+                return found
         except Exception:
-            pass
+            found = None
         finally:
-            if switched and not control:
+            if switched and not found:
                 driver.switch_to.parent_frame()
     return None
 
 
-def _capture_pages_sync(portal_url: str, username: str, password: str, title: str, pages: list[int]):
-    options = webdriver.ChromeOptions()
-    options.binary_location = "/usr/bin/chromium-browser"
-    for arg in ("--headless", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--window-size=1440,1100"):
-        options.add_argument(arg)
-    driver = webdriver.Chrome(options=options); driver.set_page_load_timeout(30)
+_PAGE_FIELD_SCRIPT = """
+  function find(root) {
+    for (const e of root.querySelectorAll('input,[role="spinbutton"],[contenteditable="true"]')) {
+      const hint=((e.getAttribute('aria-label')||'')+' '+(e.getAttribute('title')||'')+' '+(e.placeholder||'')).toLowerCase();
+      if(hint.includes('seite')||hint.includes('page')||e.type==='number') return e;
+    }
+    for(const e of root.querySelectorAll('*')) if(e.shadowRoot){const x=find(e.shadowRoot);if(x)return x;}
+    return null;
+  } return find(document);
+"""
+
+_PAGE_SELECT_SCRIPT = r"""
+const wanted=String(arguments[0]);
+const strip=s=>(s||'').replace(/\s+/g,' ').trim().replace(/^(S\.?|Seite|Page)\s*/i,'');
+function find(root){
+  for(const e of root.querySelectorAll('select')){
+    for(const o of e.options) if(strip(o.textContent)===wanted) return e;
+  }
+  for(const e of root.querySelectorAll('*')) if(e.shadowRoot){const x=find(e.shadowRoot);if(x)return x;}
+  return null;
+} return find(document);
+"""
+
+_PAGE_BUTTON_SCRIPT = r"""
+const wanted=String(arguments[0]);
+const strip=s=>(s||'').replace(/\s+/g,' ').trim().replace(/^(S\.?|Seite|Page)\s*/i,'');
+function find(root){
+  for(const e of root.querySelectorAll('a,button,[role="link"],[role="button"],li,td')){
+    const own=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ');
+    const labels=[own,e.getAttribute('aria-label'),e.getAttribute('title')];
+    if(labels.some(s=>strip(s)===wanted) && e.getClientRects().length) return e;
+  }
+  for(const e of root.querySelectorAll('*')) if(e.shadowRoot){const x=find(e.shadowRoot);if(x)return x;}
+  return null;
+} return find(document);
+"""
+
+_SHOWN_PAGE_SCRIPT = r"""
+const out=[];
+function look(root){
+  for(const e of root.querySelectorAll('input,select,[role="spinbutton"],[contenteditable="true"]')){
+    const hint=((e.getAttribute('aria-label')||'')+' '+(e.getAttribute('title')||'')+' '+(e.placeholder||'')).toLowerCase();
+    if(hint.includes('seite')||hint.includes('page')||e.type==='number'||e.tagName==='SELECT')
+      out.push((e.value||e.textContent||'').trim());
+  }
+  for(const e of root.querySelectorAll('*')){
+    const own=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ').trim();
+    if(own && /^(S\.?|Seite|Page)?\s*\d{1,4}\s*(\/|von|of|-|–)\s*\d{1,4}$/i.test(own)) out.push(own);
+    if(e.shadowRoot) look(e.shadowRoot);
+  }
+}
+look(document); return out.join('|');
+"""
+
+_VIEWER_AREA_SCRIPT = """
+let best=null, area=0;
+function look(root){
+  for(const e of root.querySelectorAll('canvas,img,svg,object,embed,[class*="page"],[class*="seite"],[class*="spread"],[class*="viewer"],[class*="reader"]')){
+    const r=e.getBoundingClientRect();
+    const a=r.width*r.height;
+    if(a>area && r.width>=innerWidth*0.35 && r.height>=innerHeight*0.35){best=e;area=a;}
+  }
+  for(const e of root.querySelectorAll('*')) if(e.shadowRoot) look(e.shadowRoot);
+}
+look(document); return best;
+"""
+
+_PAGE_IN_URL = re.compile(r"(?i)((?:seite|page|pg|p)[/=_-])(\d{1,4})")
+# "30 / 210" names the current page and the total; "30-31" is one spread.
+_SPREAD = re.compile(r"(\d{1,4})\s*[-–]\s*(\d{1,4})")
+
+
+def shown_page_numbers(text: str, url: str = "") -> list[int]:
+    """Page numbers a viewer currently claims to display."""
+    numbers: list[int] = []
+    for chunk in (text or "").split("|"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        spread = _SPREAD.search(chunk)
+        if spread:
+            numbers.extend(int(x) for x in spread.groups())
+            continue
+        found = re.findall(r"\d{1,4}", chunk)
+        if found:
+            numbers.append(int(found[0]))
+    match = _PAGE_IN_URL.search(url or "")
+    if match:
+        numbers.append(int(match.group(2)))
+    return numbers
+
+
+def _shown_pages(driver) -> list[int]:
+    parts: list[str] = []
+
+    def collect(depth: int = 0) -> None:
+        try:
+            parts.append(driver.execute_script(_SHOWN_PAGE_SCRIPT) or "")
+        except Exception:
+            return
+        if depth >= 3:
+            return
+        for frame in driver.find_elements(By.CSS_SELECTOR, "iframe,frame"):
+            switched = False
+            try:
+                driver.switch_to.frame(frame)
+                switched = True
+                collect(depth + 1)
+            except Exception:
+                pass
+            finally:
+                if switched:
+                    driver.switch_to.parent_frame()
+
+    driver.switch_to.default_content()
+    collect()
+    url = driver.current_url
+    driver.switch_to.default_content()
+    return shown_page_numbers("|".join(parts), url)
+
+
+def _wait_for_page(driver, page: int, timeout: float = 12.0) -> bool:
+    """Poll the viewer's own page display. Elements are re-read every time,
+    because a page change re-renders and invalidates the previous handles."""
+    end = time.monotonic() + timeout
+    while True:
+        try:
+            if page in _shown_pages(driver):
+                return True
+        except Exception:
+            pass
+        if time.monotonic() >= end:
+            return False
+        time.sleep(0.5)
+
+
+def _page_control(driver):
+    return _in_frames(driver, _PAGE_FIELD_SCRIPT)
+
+
+def _field_goto(driver, page: int) -> bool:
+    control = _page_control(driver)
+    if control is None:
+        return False
+    control.click()
+    control.send_keys(Keys.CONTROL, "a")
+    control.send_keys(str(page), Keys.ENTER)
+    return _wait_for_page(driver, page)
+
+
+def _select_goto(driver, page: int) -> bool:
+    control = _in_frames(driver, _PAGE_SELECT_SCRIPT, str(page))
+    if control is None:
+        return False
+    for option in Select(control).options:
+        if re.sub(r"^(S\.?|Seite|Page)\s*", "", (option.text or "").strip(), flags=re.I) == str(page):
+            option.click()
+            return _wait_for_page(driver, page)
+    return False
+
+
+def _button_goto(driver, page: int) -> bool:
+    control = _in_frames(driver, _PAGE_BUTTON_SCRIPT, str(page))
+    if control is None:
+        return False
+    control.click()
+    # Only count it when the viewer confirms the page; a bare click could just
+    # as well have opened a chapter, and a wrong page is worse than none.
+    return _wait_for_page(driver, page)
+
+
+def _url_goto(driver, page: int) -> bool:
+    driver.switch_to.default_content()
+    url = driver.current_url
+    target = _PAGE_IN_URL.sub(lambda m: m.group(1) + str(page), url, count=1)
+    if target == url:
+        return False
+    driver.get(target)
+    try:
+        WebDriverWait(driver, 15).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
+    except TimeoutException:
+        return False
+    return _wait_for_page(driver, page)
+
+
+def _go_to_page(driver, page: int) -> bool:
+    driver.switch_to.default_content()
+    if page in _shown_pages(driver):
+        return True
+    for strategy in (_field_goto, _select_goto, _button_goto, _url_goto):
+        driver.switch_to.default_content()
+        try:
+            if strategy(driver, page):
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _viewer_shot(driver) -> bytes:
+    """The book area alone if the viewer exposes one, otherwise the window."""
+    driver.switch_to.default_content()
+    try:
+        area = _in_frames(driver, _VIEWER_AREA_SCRIPT)
+        if area is not None:
+            shot = area.screenshot_as_png
+            if shot:
+                return shot
+    except Exception:
+        pass
+    driver.switch_to.default_content()
+    return driver.get_screenshot_as_png()
+
+
+def _stable_shot(driver, tries: int = 4, pause: float = 0.7) -> bytes:
+    """Canvas viewers keep drawing after the page number changes."""
+    shot = _viewer_shot(driver)
+    for _ in range(tries):
+        time.sleep(pause)
+        again = _viewer_shot(driver)
+        if again == shot:
+            return again
+        shot = again
+    return shot
+
+
+@dataclass(frozen=True)
+class PageShot:
+    page: int | None  # None: the book is open, but this page was not reachable
+    image: bytes
+
+
+def _capture_pages_sync(
+    portal_url: str,
+    username: str,
+    password: str,
+    title: str,
+    pages: list[int],
+    launch_url: str | None = None,
+    budget: float = 240.0,
+) -> tuple[list[PageShot], str]:
+    driver = _driver("--window-size=1440,1100")
+    deadline = time.monotonic() + budget
     stage = "IServ-Anmeldung"
     try:
         driver.get(portal_url.rstrip("/") + "/iserv/")
@@ -303,36 +572,61 @@ def _capture_pages_sync(portal_url: str, username: str, password: str, title: st
         driver.get(portal_url.rstrip("/") + "/iserv/eduplacesconnector/")
         WebDriverWait(driver, 15).until(lambda d: d.execute_script("return document.readyState") == "complete")
         if not _click(driver, re.compile("Bildungslogin.*Medienregal|Medienregal", re.I)):
-            raise TextbookScanError("Das Medienregal wurde nicht gefunden")
+            raise TextbookScanError("Das Medienregal wurde nicht gefunden", stage)
         WebDriverWait(driver, 20).until(lambda d: d.execute_script("return document.readyState") == "complete")
         stage = "Buch öffnen"
-        before = set(driver.window_handles); old_url = driver.current_url
-        _open_book(driver, title)
+        before = set(driver.window_handles)
+        old_url = driver.current_url
+        _open_book(driver, title, launch_url)
+
         def viewer_started(d):
             if len(d.window_handles) > len(before) or d.current_url != old_url:
                 return True
             d.switch_to.default_content()
             return bool(_page_control(d))
+
         WebDriverWait(driver, 30).until(viewer_started)
         new_handles = [h for h in driver.window_handles if h not in before]
-        if new_handles: driver.switch_to.window(new_handles[-1])
+        if new_handles:
+            driver.switch_to.window(new_handles[-1])
         stage = "Seitennavigation finden"
-        result = []
+        shots: list[PageShot] = []
+        note = ""
         for page in pages:
+            if time.monotonic() > deadline:
+                note = "Zeitbudget erreicht"
+                break
+            if not _go_to_page(driver, page):
+                continue
+            stage = f"Seite {page} lesen"
+            shots.append(PageShot(page, _stable_shot(driver)))
+        if not shots:
+            # The book is open. Hand over what it shows rather than nothing;
+            # the mentor is told that the page could not be confirmed.
+            note = note or "Seitennavigation nicht gefunden"
             driver.switch_to.default_content()
-            control = WebDriverWait(driver, 20).until(_page_control)
-            stage = f"Seite {page} öffnen"
-            control.click(); control.send_keys(Keys.CONTROL, "a"); control.send_keys(str(page), Keys.ENTER)
-            WebDriverWait(driver, 12).until(lambda d: str(page) in ((control.get_attribute("value") or control.text or "")))
-            result.append((page, driver.get_screenshot_as_png()))
-        return result
+            shots.append(PageShot(None, _stable_shot(driver)))
+        elif len(shots) < len(pages) and not note:
+            note = "Nicht alle Seiten erreichbar"
+        return shots, note
     except TextbookScanError:
         raise
     except Exception as exc:
-        raise TextbookScanError(f"Die angegebenen Buchseiten konnten nicht geöffnet werden ({stage})") from exc
+        raise TextbookScanError(
+            f"Die angegebenen Buchseiten konnten nicht geöffnet werden ({stage})", stage
+        ) from exc
     finally:
         driver.quit()
 
 
-async def capture_pages(portal_url: str, username: str, password: str, title: str, pages: list[int]):
-    return await asyncio.to_thread(_capture_pages_sync, portal_url, username, password, title, pages)
+async def capture_pages(
+    portal_url: str,
+    username: str,
+    password: str,
+    title: str,
+    pages: list[int],
+    launch_url: str | None = None,
+) -> tuple[list[PageShot], str]:
+    return await asyncio.to_thread(
+        _capture_pages_sync, portal_url, username, password, title, pages, launch_url
+    )

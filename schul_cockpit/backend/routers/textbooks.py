@@ -12,6 +12,7 @@ from ..iserv_connector import IservLoginError, verify_iserv_login
 from ..secret_store import decrypt_secret, encrypt_secret
 from ..textbook_browser import TextbookScanError
 from ..textbook_catalog import scan_account
+from ..textbook_context import last_fetch, test_page
 
 router = APIRouter(prefix="/accounts/{account_id}/textbooks", tags=["textbooks"])
 
@@ -24,6 +25,10 @@ class CredentialsIn(BaseModel):
 
 class CatalogSubjectIn(BaseModel):
     subject_name: str | None = Field(default=None, max_length=120)
+
+
+class PageTestIn(BaseModel):
+    page: int = Field(ge=1, le=2000)
 
 
 def _require_parent(user: CurrentUser, account_id: int) -> None:
@@ -192,7 +197,11 @@ def get_catalog(account_id: int, user: CurrentUser = Depends(get_current_user)) 
         status = conn.execute(
             "SELECT verification_status FROM digital_textbook_credentials WHERE account_id=?", (account_id,)
         ).fetchone()
-        return {"status": status[0] if status else None, "books": [dict(r) for r in rows]}
+        return {
+            "status": status[0] if status else None,
+            "books": [dict(r) for r in rows],
+            "last_fetch": last_fetch(account_id),
+        }
     finally:
         conn.close()
 
@@ -227,3 +236,20 @@ def update_catalog_subject(
     if not changed:
         raise HTTPException(status_code=404, detail="Schulbuch nicht gefunden")
     return get_catalog(account_id, user)
+
+
+@router.post("/catalog/{book_id}/page-test")
+async def page_test(
+    account_id: int,
+    book_id: int,
+    body: PageTestIn,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Run one real page fetch and report the stage it reached."""
+    _require_parent(user, account_id)
+    result = await test_page(account_id, book_id, body.page)
+    if result["status"] == "unknown_book":
+        raise HTTPException(status_code=404, detail="Schulbuch nicht gefunden")
+    if result["status"] == "not_configured":
+        raise HTTPException(status_code=422, detail="Noch kein Zugang gespeichert")
+    return result

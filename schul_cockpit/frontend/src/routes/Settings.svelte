@@ -13,6 +13,9 @@
   let textbookMessage = $state(null);
   let textbookCatalog = $state(null);
   let textbookSubjects = $state([]);
+  let textbookTestPages = $state({});
+  let textbookTestBusy = $state(null);
+  let textbookTest = $state(null);
 
   async function loadTextbookAccess() {
     if (!accountId || !['parent', 'admin'].includes(appState.me?.role) && !appState.me?.is_admin) return;
@@ -97,6 +100,42 @@
       );
     } catch (e) {
       textbookMessage = { ok: false, text: e.message };
+    }
+  }
+
+  const FETCH_STATUS = {
+    loaded: 'Alle genannten Seiten wurden geliefert.',
+    partial: 'Nur ein Teil der Seiten wurde geliefert.',
+    open_page: 'Das Buch war offen, die genannte Seite war aber nicht anzusteuern.',
+    viewer_error: 'Es kam keine Seite an.',
+  };
+
+  function fetchSummary(f) {
+    if (!f) return null;
+    const when = new Date(f.created_at).toLocaleString('de-DE');
+    const pages = (f.pages ?? []).join(', ');
+    const stage = f.stage ? ` Abbruch in Stufe „${f.stage}".` : '';
+    return `${when} · ${f.book_title ?? 'Buch unbekannt'} · S. ${pages}: ${FETCH_STATUS[f.status] ?? f.status}${stage}`;
+  }
+
+  async function testBookPage(book) {
+    const page = Number(textbookTestPages[book.id]);
+    if (!Number.isInteger(page) || page < 1) {
+      textbookTest = { book: book.title, status: 'input', detail: 'Bitte eine Seitenzahl eingeben.' };
+      return;
+    }
+    textbookTestBusy = book.id;
+    textbookTest = null;
+    try {
+      textbookTest = await api.post(
+        `/api/accounts/${accountId}/textbooks/catalog/${book.id}/page-test`,
+        { page },
+      );
+      textbookCatalog = await api.get(`/api/accounts/${accountId}/textbooks/catalog`);
+    } catch (e) {
+      textbookTest = { book: book.title, status: 'request_failed', detail: e.message };
+    } finally {
+      textbookTestBusy = null;
     }
   }
 
@@ -350,6 +389,9 @@
         {textbookMessage.text}
       </div>
     {/if}
+    {#if textbookCatalog?.last_fetch}
+      <div class="fetch-note">Letzter Seitenabruf: {fetchSummary(textbookCatalog.last_fetch)}</div>
+    {/if}
     {#if textbookCatalog?.books?.length}
       <div class="book-list">
         {#each textbookCatalog.books as book}
@@ -365,8 +407,32 @@
                 <option value={subject}>{subject}</option>
               {/each}
             </select>
+            <div class="book-test">
+              <input
+                type="number"
+                min="1"
+                max="2000"
+                placeholder="Seite"
+                aria-label={`Testseite für ${book.title}`}
+                bind:value={textbookTestPages[book.id]}
+              />
+              <button disabled={textbookTestBusy !== null} onclick={() => testBookPage(book)}>
+                {textbookTestBusy === book.id ? 'Prüfe…' : 'Seitenabruf testen'}
+              </button>
+            </div>
           </div>
         {/each}
+      </div>
+    {/if}
+    {#if textbookTest}
+      <div class="fetch-note">
+        <strong>Testabruf {textbookTest.book ?? ''}{textbookTest.page ? ` · Seite ${textbookTest.page}` : ''}</strong>
+        <div>{FETCH_STATUS[textbookTest.status] ?? textbookTest.detail ?? textbookTest.status}</div>
+        {#if textbookTest.stage}<div>Abbruch in Stufe „{textbookTest.stage}".</div>{/if}
+        {#if textbookTest.detail && FETCH_STATUS[textbookTest.status]}<div class="dim">{textbookTest.detail}</div>{/if}
+        {#if textbookTest.image}
+          <img class="page-preview" src={textbookTest.image} alt="Vorschau der abgerufenen Buchseite" />
+        {/if}
       </div>
     {/if}
   </div>
@@ -594,10 +660,14 @@
   .password-saved { display: block; color: var(--success, #18794e); font-size: 0.8rem; margin-top: 0.15rem; }
   .textbook-actions { margin-top: 0.75rem; flex-wrap: wrap; }
   .book-list { margin-top: 0.75rem; border-top: 1px solid var(--border); }
-  .book-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(10rem, 15rem); align-items: center; gap: 0.75rem; padding: 0.55rem 0; border-bottom: 1px solid var(--border); }
+  .book-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(9rem, 13rem) auto; align-items: center; gap: 0.75rem; padding: 0.55rem 0; border-bottom: 1px solid var(--border); }
   .book-title { display: flex; align-items: flex-start; gap: 0.55rem; min-width: 0; }
   .book-title strong { overflow-wrap: anywhere; }
   .book-row select { width: 100%; margin: 0; }
+  .book-test { display: flex; gap: 0.4rem; align-items: center; }
+  .book-test input { width: 5.5rem; margin: 0; }
+  .fetch-note { margin-top: 0.7rem; font-size: 0.88rem; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.65rem; }
+  .page-preview { display: block; max-width: 100%; margin-top: 0.5rem; border: 1px solid var(--border); border-radius: 6px; }
   @media (min-width: 760px) {
     .textbook-grid { grid-template-columns: 1.1fr 1fr 1fr; }
   }
