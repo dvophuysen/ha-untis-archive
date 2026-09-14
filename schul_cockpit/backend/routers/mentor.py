@@ -200,7 +200,9 @@ async def start(account_id:int,body:StartIn,user:CurrentUser=Depends(get_current
             source={'mode':'homework_help','task_id':task['id']}
             # One verlauf per homework, whoever opens it and whenever. A break
             # must not cost the conversation so far.
-            existing=c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND is_demo=0 AND json_extract(source_json,'$.mode')='homework_help' AND json_extract(source_json,'$.task_id')=? ORDER BY id DESC LIMIT 1",(account_id,task['id'])).fetchone()
+            # The richest verlauf wins, not the newest: an empty duplicate from
+            # an earlier break must not swallow the conversation that has it all.
+            existing=c.execute("SELECT s.* FROM mentor_sessions s WHERE s.account_id=? AND s.is_demo=0 AND json_extract(s.source_json,'$.mode')='homework_help' AND json_extract(s.source_json,'$.task_id')=? ORDER BY (SELECT COUNT(*) FROM mentor_messages m WHERE m.session_id=s.id) DESC, s.id DESC LIMIT 1",(account_id,task['id'])).fetchone()
             if existing:
                 if existing['status']!='active':
                     c.execute("UPDATE mentor_sessions SET status='active',phase='clarify',version=version+1,active_since=?,updated_at=? WHERE id=?",(now_iso(),now_iso(),existing['id']))

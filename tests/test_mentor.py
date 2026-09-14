@@ -237,6 +237,10 @@ def test_homework_help_has_no_clock_and_survives_a_break(setup):
     again=client.post(B+'/sessions',json={'subject':'Physik','homework_task_id':tid}).json()
     assert again['id']==s['id'] and again['status']=='active'
     assert len(again['messages'])>=3
+    # An empty duplicate from an earlier break must not swallow the real one.
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO mentor_sessions(account_id,user_id,subject,goal,max_minutes,source_json,created_at,updated_at,is_test) SELECT account_id,user_id,subject,goal,max_minutes,source_json,created_at,updated_at,0 FROM mentor_sessions WHERE id=?",(s['id'],))
+    assert client.post(B+'/sessions',json={'subject':'Physik','homework_task_id':tid}).json()['id']==s['id']
 
 
 def test_finished_practice_session_can_be_picked_up_again(setup):
