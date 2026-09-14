@@ -10,6 +10,19 @@
   let loading = $state(true);
   let error = $state(null);
   let busyKey = $state(null);
+  // Abgeschlossene Schuljahre — erst auf Wunsch geladen.
+  let archive = $state(null);
+  let archiveOpen = $state(false);
+
+  async function openArchive() {
+    archiveOpen = !archiveOpen;
+    if (!archiveOpen || archive) return;
+    try {
+      archive = (await api.get(`/api/accounts/${accountId}/exams/archive`)).exams;
+    } catch (e) {
+      error = e.message;
+    }
+  }
   const canManage = $derived(
     !!(appState.me && (appState.me.is_admin || appState.me.role === 'parent'))
   );
@@ -174,6 +187,29 @@
         </div>
       </div>
     {/each}
+  {/if}
+
+  {#if data.archived_count > 0}
+    <button class="ghost" style="width:100%; margin-top:0.8rem;" onclick={openArchive}>
+      {archiveOpen ? '▾' : '▸'} Archiv abgeschlossener Schuljahre ({data.archived_count})
+    </button>
+    {#if archiveOpen}
+      {#if archive === null}
+        <div class="empty"><span class="spinner"></span></div>
+      {:else}
+        {#each archive as e (e.exam_key)}
+          <div class="card compact">
+            <div class="row between" style="align-items:flex-start;">
+              <div style="min-width:0;">
+                <strong>{e.subject_name ?? e.title}</strong>
+                <div class="dim">{formatShortDate(e.date)}</div>
+              </div>
+              {#if e.grade_label}<span class="badge">{e.grade_label}</span>{/if}
+            </div>
+          </div>
+        {/each}
+      {/if}
+    {/if}
   {/if}
 {/if}
 

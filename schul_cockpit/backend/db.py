@@ -508,6 +508,15 @@ FROM materials n JOIN learning_materials m ON m.id=n.legacy_material_id;
 # Parents may write in a child's verlauf, so a message has to say who wrote it.
 _MIGRATIONS.append(("mentor_message_author", "ALTER TABLE mentor_messages ADD COLUMN author TEXT"))
 
+# Abgeschlossene Schuljahre verschwinden aus der Übersicht, bleiben aber lesbar.
+_MIGRATIONS.append(("exam_archive_001", """
+CREATE TABLE IF NOT EXISTS exam_archive (
+ account_id INTEGER PRIMARY KEY,
+ before_date TEXT NOT NULL,
+ updated_at TEXT NOT NULL
+);
+"""))
+
 _MIGRATIONS.append(("digital_textbooks_003_pages", """
 CREATE TABLE IF NOT EXISTS digital_textbook_pages (
  account_id INTEGER NOT NULL,

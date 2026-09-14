@@ -1,3 +1,8 @@
+## 0.46.0
+
+- Zum Schuljahreswechsel lassen sich die Arbeiten des alten Jahres auf einen Knopfdruck ins Archiv legen. Sie verschwinden aus „Arbeiten & Tests" und bleiben dort aufklappbar, mit Note und Lernstand. Gelöscht wird nichts, und das Archiv lässt sich jederzeit wieder einblenden.
+- Der Stichtag ist der 1. August, weil dort das Schuljahr beginnt und die Sommerferien den Monatswechsel überspannen.
+
 ## 0.45.1
 
 - Zusätzliche Termine lassen sich wieder von Hand eintragen, aber nur für Arbeiten, die der IServ-Klausurplan nicht führt — etwa einen mündlich genannten Nachschreibtermin. Steht der Termin schon im Plan, wird das Eintragen mit Verweis auf den vorhandenen Eintrag abgelehnt.

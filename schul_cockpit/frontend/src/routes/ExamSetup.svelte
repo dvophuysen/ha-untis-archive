@@ -102,6 +102,35 @@
     }
   }
 
+  let archiving = $state(false);
+
+  async function closeSchoolYear() {
+    const day = diag?.school_year_start;
+    if (!confirm(`Alle Arbeiten vor dem ${formatShortDate(day)} ins Archiv legen? `
+      + 'Sie bleiben mit Note und Lernstand lesbar, verschwinden aber aus der Übersicht.')) return;
+    archiving = true;
+    try {
+      await api.post(`/api/accounts/${appState.activeAccountId}/exams/archive`, {});
+      await load();
+    } catch (e) {
+      error = e.message;
+    } finally {
+      archiving = false;
+    }
+  }
+
+  async function reopenArchive() {
+    archiving = true;
+    try {
+      await api.post(`/api/accounts/${appState.activeAccountId}/exams/archive`, { clear: true });
+      await load();
+    } catch (e) {
+      error = e.message;
+    } finally {
+      archiving = false;
+    }
+  }
+
   async function delManual(id) {
     if (!confirm('Termin löschen?')) return;
     await api.delete(`/api/accounts/${appState.activeAccountId}/manual-exams/${id}`);
@@ -224,7 +253,27 @@
     {/each}
   {/if}
 
-  <!-- 4. Termine, die nicht im Klausurplan stehen -->
+  <!-- 4. Schuljahr abschließen -->
+  <div class="section-title">Schuljahreswechsel</div>
+  <div class="card">
+    {#if diag.archive_before}
+      <p style="margin:0 0 0.5rem;">
+        Arbeiten vor dem {formatShortDate(diag.archive_before)} liegen im Archiv. Sie sind
+        unter „Arbeiten &amp; Tests" aufklappbar und behalten Note und Lernstand.
+      </p>
+      <button class="ghost" disabled={archiving} onclick={reopenArchive}>Archiv wieder einblenden</button>
+    {:else}
+      <p style="margin:0 0 0.5rem;">
+        Zum Schuljahreswechsel die Arbeiten des alten Jahres ins Archiv legen. Sie verschwinden
+        aus der Übersicht, bleiben aber mit Note und Lernstand lesbar. Gelöscht wird nichts.
+      </p>
+      <button class="primary" style="width:100%;" disabled={archiving} onclick={closeSchoolYear}>
+        {archiving ? 'Einen Moment…' : `Alles vor dem ${formatShortDate(diag.school_year_start)} archivieren`}
+      </button>
+    {/if}
+  </div>
+
+  <!-- 5. Termine, die nicht im Klausurplan stehen -->
   <div class="section-title">Zusätzliche Termine</div>
   <p class="dim" style="margin:0 0 0.5rem;">
     Nur für Arbeiten, die der IServ-Klausurplan nicht führt — etwa ein mündlich genannter
