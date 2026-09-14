@@ -180,3 +180,70 @@ global.document = {querySelectorAll: sel => (sel.indexOf('input') === 0 ? [pageF
 assert.equal(new Function(process.argv[1])(), '34');
 '''
     subprocess.run(['node', '-e', script, browser._SHOWN_PAGE_SCRIPT], check=True)
+
+
+def test_page_field_found_next_to_labelled_blättern_buttons():
+    # Cornelsen names the field with a generated React id and hashed classes,
+    # so only the neighbouring buttons identify it.
+    script = '''
+const assert = require('node:assert/strict');
+function make(tag, attrs, children) {
+  const e = {tagName: tag, getAttribute: k => (k in attrs ? attrs[k] : null),
+    id: attrs.id || '', className: attrs.className || '', placeholder: attrs.placeholder || '',
+    getClientRects: () => [{}], parentElement: null, shadowRoot: null, childNodes: [],
+    _children: children || []};
+  e.querySelectorAll = sel => e._children.filter(c =>
+    sel.indexOf('input') >= 0 ? c.tagName === 'input' : true);
+  (children || []).forEach(c => { c.parentElement = e; });
+  return e;
+}
+const search = make('input', {id: 'searchBox', type: 'text', placeholder: 'Suche'});
+const pageField = make('input', {id: 'react-aria1:r3d:', type: 'text'});
+const next = make('div', {role: 'button', 'aria-label': 'Nächste Seite'});
+const toolbar = make('div', {}, [search, pageField, next]);
+next.parentElement = toolbar;
+global.document = {querySelectorAll: sel =>
+  (sel.indexOf('input') === 0 ? [] : [toolbar, search, pageField, next])};
+const found = new Function(process.argv[1])();
+assert.equal(found, pageField);
+'''
+    subprocess.run(['node', '-e', script, browser._PAGE_NEIGHBOUR_SCRIPT], check=True)
+
+
+def test_shown_page_reads_the_label_of_a_rendered_page():
+    script = '''
+const assert = require('node:assert/strict');
+function marked(label) {
+  return {tagName: 'SECTION', getAttribute: k => (k === 'aria-label' ? label : null),
+    id: '', className: '', childNodes: [], shadowRoot: null, value: '',
+    querySelectorAll: () => []};
+}
+const left = marked('Seite 12'), right = marked('Seite 13');
+global.document = {querySelectorAll: sel =>
+  (sel === '*' ? [left, right] : [])};
+const shown = new Function(process.argv[1])();
+assert.equal(shown, '12|13');
+'''
+    subprocess.run(['node', '-e', script, browser._SHOWN_PAGE_SCRIPT], check=True)
+
+
+def test_advertising_dialog_is_closed_before_navigating(monkeypatch):
+    closed = Mock()
+    found = [closed, None]
+    monkeypatch.setattr(browser, '_in_frames', Mock(side_effect=lambda d, s, *a: found.pop(0)))
+    monkeypatch.setattr(browser.time, 'sleep', lambda _s: None)
+    browser._dismiss_overlays(Mock())
+    closed.click.assert_called_once()
+
+
+def test_navigation_tries_the_neighbour_field_after_the_named_one(monkeypatch):
+    monkeypatch.setattr(browser, '_shown_pages', lambda d: [])
+    monkeypatch.setattr(browser, '_dismiss_overlays', lambda d, **k: None)
+    monkeypatch.setattr(browser, '_field_goto', Mock(return_value=False))
+    neighbour = Mock(return_value=True)
+    monkeypatch.setattr(browser, '_neighbour_goto', neighbour)
+    select = Mock(return_value=True)
+    monkeypatch.setattr(browser, '_select_goto', select)
+    assert browser._go_to_page(Mock(), 18) is True
+    neighbour.assert_called_once()
+    select.assert_not_called()
