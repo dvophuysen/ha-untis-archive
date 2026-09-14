@@ -60,7 +60,9 @@ async def verify_iserv_login(portal_url: str, username: str, password: str) -> N
 
         parser = _LoginForm()
         parser.feed(landing.text)
-        if not parser.action or "_password" not in parser.fields:
+        # Current IServ posts the form back to the same URL and therefore
+        # legitimately omits the action attribute (represented as "").
+        if parser.action is None or "_password" not in parser.fields:
             raise IservLoginError("Die IServ-Anmeldeseite wurde nicht erkannt")
 
         data = dict(parser.fields)
