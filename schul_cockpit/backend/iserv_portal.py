@@ -177,7 +177,11 @@ async def read_feed(portal_url: str, username: str, password: str, url: str) -> 
 
 
 _COLLECT_SCRIPT = r"""
-const out = {links: [], fields: [], text: (document.body ? document.body.innerText : '').slice(0, 4000)};
+const out = {links: [], fields: [], text: (document.body ? document.body.innerText : '').slice(0, 4000),
+             abrufe: performance.getEntriesByType('resource')
+               .map(e => e.name)
+               .filter(n => /(api|json|event|termin|feed|ics)/i.test(n) && !/\.(css|js|png|jpg|svg|woff2?)(\?|$)/i.test(n))
+               .slice(0, 40)};
 const seen = new Set();
 for (const a of document.querySelectorAll('a[href]')) {
   const href = a.href || '';
@@ -239,6 +243,7 @@ def _browse_sync(portal_url: str, username: str, password: str, paths: tuple[str
                     treffer.append(entry)
             pages.append({"url": url, "titel": driver.title[:120],
                           "adresse": driver.current_url[:200],
+                          "abrufe": data.get("abrufe", []),
                           "text": data["text"][:900],
                           "links_gesamt": len(data["links"]),
                           "treffer": treffer[:30]})

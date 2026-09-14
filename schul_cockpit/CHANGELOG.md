@@ -1,3 +1,7 @@
+## 0.43.3
+
+- Die Portalsuche meldet mit, welche Datenadressen eine Modulseite im Hintergrund abruft. Damit lässt sich die Terminquelle finden, auch wenn sie nirgends verlinkt ist.
+
 ## 0.43.2
 
 - Die Portalsuche kann einen echten Browser verwenden. IServ liefert beim reinen Abruf nur ein Gerüst; erst die ausgeführte Seite zeigt die Module und ihre Abo-Adressen.
