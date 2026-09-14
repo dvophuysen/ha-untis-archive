@@ -22,6 +22,7 @@ from .routers import (
     audit,
     auth_router,
     backup as backup_router,
+    calendars as calendars_router,
     checkins,
     courses as courses_router,
     dashboard as dashboard_router,
@@ -164,6 +165,7 @@ app.include_router(health.router, prefix=API)
 app.include_router(learning.router, prefix=API)
 app.include_router(mentor.router, prefix=API)
 app.include_router(materials_router.router, prefix=API)
+app.include_router(calendars_router.router, prefix=API)
 app.include_router(mentor_exams.router, prefix=API)
 app.include_router(discovery.router, prefix=API)
 

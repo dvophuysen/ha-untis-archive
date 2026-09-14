@@ -13,6 +13,9 @@
   let textbookMessage = $state(null);
   let textbookCatalog = $state(null);
   let textbookSubjects = $state([]);
+  let calendars = $state(null);
+  let calendarBusy = $state(false);
+  let calendarMessage = $state(null);
   let textbookTestPages = $state({});
   let textbookTestBusy = $state(null);
   let textbookTest = $state(null);
@@ -25,6 +28,7 @@
         api.get(`/api/accounts/${accountId}/textbooks/catalog`),
       ]);
       textbookSubjects = (await api.get(`/api/accounts/${accountId}/subjects`)).subjects ?? [];
+      calendars = await api.get(`/api/accounts/${accountId}/calendars`);
       textbookPassword = '';
     } catch (e) {
       textbookMessage = { ok: false, text: e.message };
@@ -52,7 +56,7 @@
   }
 
   async function removeTextbookAccess() {
-    if (!confirm(`Schulbuch-Zugang für ${activeName} entfernen?`)) return;
+    if (!confirm(`IServ-Zugang für ${activeName} entfernen? Schulbücher und Kalender sind danach nicht mehr erreichbar.`)) return;
     textbookBusy = true;
     try {
       await api.delete(`/api/accounts/${accountId}/textbooks`);
@@ -100,6 +104,41 @@
       );
     } catch (e) {
       textbookMessage = { ok: false, text: e.message };
+    }
+  }
+
+  const ROLE_NAMES = {
+    exam: 'Klausuren und Arbeiten',
+    lessons: 'Unterrichtstermine',
+    other: 'Sonstige Schultermine',
+    unused: 'nicht verwenden',
+  };
+
+  async function syncCalendars() {
+    calendarBusy = true;
+    calendarMessage = { ok: true, text: 'IServ wird abgefragt …' };
+    try {
+      calendars = await api.post(`/api/accounts/${accountId}/calendars/sync`, {});
+      calendarMessage = {
+        ok: true,
+        text: `${calendars.sync.calendars} Kalender gefunden, ${calendars.sync.events} Termine gelesen.`,
+      };
+    } catch (e) {
+      calendarMessage = { ok: false, text: e.message };
+    } finally {
+      calendarBusy = false;
+    }
+  }
+
+  async function setRole(cal, role) {
+    calendarBusy = true;
+    try {
+      calendars = await api.put(`/api/accounts/${accountId}/calendars/${cal.id}/role`, { role });
+      calendarMessage = { ok: true, text: 'Rolle gespeichert. Beim nächsten Abgleich werden die Termine geholt.' };
+    } catch (e) {
+      calendarMessage = { ok: false, text: e.message };
+    } finally {
+      calendarBusy = false;
     }
   }
 
@@ -346,12 +385,12 @@
 {#if accountId}{#key accountId}<ReminderSettings {accountId}/>{/key}{/if}
 
 {#if textbookAccess && (['parent', 'admin'].includes(appState.me?.role) || appState.me?.is_admin)}
-  <div class="section-title">📚 Digitale Schulbücher · {activeName}</div>
+  <div class="section-title">🔑 IServ-Zugang · {activeName}</div>
   <div class="card textbook-card">
     <div class="row between textbook-heading">
       <div>
-        <strong>IServ & Bildungslogin</strong>
-        <div class="dim">Damit der Lernmentor genannte Buchseiten einsehen kann.</div>
+        <strong>Ein Zugang für Schulbücher und Kalender</strong>
+        <div class="dim">Damit der Lernmentor Buchseiten einsehen kann und die Schultermine direkt aus IServ kommen.</div>
       </div>
       <span class:textbook-ok={textbookAccess.configured} class="textbook-status">
         {['connected', 'catalog_ready'].includes(textbookAccess.verification_status) ? '✓ verbunden' : textbookAccess.configured ? 'gespeichert' : 'noch offen'}
@@ -433,6 +472,48 @@
         {/each}
       </div>
     {/if}
+    {#if calendars}
+      <div class="section-title" style="margin-top:1rem;">🗓️ Schulkalender aus IServ</div>
+      <p class="dim">Die Schule erzeugt die Kalender jedes Jahr neu und verteilt Klausuren oft auf mehrere. Deshalb wird bei jedem Abgleich neu gesucht; eine einmal gesetzte Rolle bleibt am Kalendernamen hängen.</p>
+      <div class="row gap-sm">
+        <button disabled={calendarBusy || !textbookAccess.configured} onclick={syncCalendars}>
+          {calendarBusy ? 'Frage IServ …' : 'Kalender abgleichen'}
+        </button>
+        {#if calendars.sync?.synced_at}
+          <span class="dim">zuletzt {new Date(calendars.sync.synced_at).toLocaleString('de-DE')}</span>
+        {/if}
+      </div>
+      {#if !textbookAccess.configured}
+        <div class="banner" style="margin-top:0.5rem;">Dafür oben zuerst den IServ-Zugang speichern.</div>
+      {/if}
+      {#if calendars.sync?.status === 'failed' && calendars.sync?.error}
+        <div class="error-box" style="margin-top:0.5rem;">{calendars.sync.error}</div>
+      {/if}
+      {#if calendarMessage}
+        <div class={calendarMessage.ok ? 'banner' : 'error-box'} style="margin-top:0.5rem;">{calendarMessage.text}</div>
+      {/if}
+      {#if calendars.calendars?.length}
+        <div class="book-list">
+          {#each calendars.calendars as cal}
+            <div class="book-row">
+              <div class="book-title">
+                <span>🗓️</span>
+                <strong>{cal.name}</strong>
+                {#if cal.missing_since}<span class="tag">in IServ nicht mehr vorhanden</span>{/if}
+                {#if cal.events}<small class="dim">{cal.events} Termine</small>{/if}
+              </div>
+              <select aria-label={`Rolle für ${cal.name}`} value={cal.role}
+                      onchange={(e) => setRole(cal, e.currentTarget.value)}>
+                {#each calendars.roles as r}<option value={r}>{ROLE_NAMES[r] ?? r}</option>{/each}
+              </select>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p class="empty">Noch keine Kalender gelesen. „Kalender abgleichen" holt sie aus IServ.</p>
+      {/if}
+    {/if}
+
     {#if textbookTest}
       <div class="fetch-note">
         <strong>Testabruf {textbookTest.book ?? ''}{textbookTest.page ? ` · Seite ${textbookTest.page}` : ''}</strong>
