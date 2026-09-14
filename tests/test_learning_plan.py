@@ -269,3 +269,53 @@ def test_subjects_without_practice_are_named_in_one_place():
     assert not practice_subject('VERFÜGUNGSSTUNDE')
     assert not practice_subject('Verfuegungsstunde')
     assert not practice_subject('')
+
+
+def test_a_field_orders_the_parts_and_never_merges_them(setup):
+    """Die Klausur dreht sich um das Feld, geschrieben wird sie über die Teile.
+    Deshalb bleiben die Teile einzeln übbar und einzeln nachgewiesen."""
+    from contextlib import closing as _closing
+    import asyncio
+    from backend import learning_fields as lf
+    client, state, patch = setup
+    with _closing(db.webapp_conn()) as c, c:
+        profile=c.execute('SELECT id FROM learning_profiles WHERE account_id=1 AND active=1').fetchone()[0]
+        ids=[]
+        for title in ('Reihenschaltung','Parallelschaltung','Gemischte Schaltung','Knotenregel'):
+            ids.append(c.execute(
+                "INSERT INTO learning_topics(profile_id,subject,title,objective,method,status,priority,"
+                "source_note,created_at,updated_at) VALUES(?,?,?,?,'explain','active',1,'',?,?)",
+                (profile,'PHYSIK',title,'Ich kann '+title,lf.now_iso(),lf.now_iso())).lastrowid)
+
+    async def answer(account,purpose,instruction,context,*a,**kw):
+        assert [t['titel'] for t in context['teilthemen']][0]=='Reihenschaltung'
+        return json.dumps({'fields':[{'title':'Elektrische Stromkreise',
+                                      'topic_ids':[ids[1],ids[0],ids[3]]}],'einzeln':[ids[2]]}),{},'fake'
+
+    patch.setattr(lf.ai_gateway,'complete',answer)
+    result=asyncio.run(lf.consolidate(1,'PHYSIK'))
+    assert result['fields']==1 and result['einzeln']==1
+
+    mapping=lf.fields_of(1)
+    # Die Reihenfolge kommt aus dem fachlichen Aufbau, nicht aus dem Datum.
+    assert [mapping[i]['field_rank'] for i in (ids[1],ids[0],ids[3])]==[1,2,3]
+    assert mapping[ids[1]]['title']=='Elektrische Stromkreise'
+    # Jedes Teilthema besteht weiter für sich; nichts wurde zusammengelegt.
+    with _closing(db.webapp_conn()) as c:
+        assert c.execute('SELECT COUNT(*) FROM learning_topics WHERE profile_id=?',(profile,)).fetchone()[0]>=4
+    assert ids[2] not in mapping
+
+
+def test_goals_are_ordered_by_subject_then_field_then_build_order():
+    from backend.learning_plan import order_key
+
+    goals=[dict(subject='PHYSIK',field='Stromkreise',field_rank=2,date='2026-09-01'),
+           dict(subject='MATHEMATIK',field=None,field_rank=0,date='2026-09-05'),
+           dict(subject='PHYSIK',field='Stromkreise',field_rank=1,date='2026-09-09'),
+           dict(subject='PHYSIK',field=None,field_rank=0,date='2026-08-01')]
+    ordered=sorted(goals,key=order_key)
+    assert [g['subject'] for g in ordered]==['MATHEMATIK','PHYSIK','PHYSIK','PHYSIK']
+    # Innerhalb des Feldes zählt der Aufbau, nicht das jüngste Datum.
+    assert [g['field_rank'] for g in ordered[1:3]]==[1,2]
+    # Was zu keinem Feld gehört, steht hinter den Feldern.
+    assert ordered[3]['field'] is None

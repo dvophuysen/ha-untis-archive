@@ -12,6 +12,7 @@ import logging
 from contextlib import closing
 from datetime import datetime, timedelta
 
+from . import learning_fields
 from . import material_analysis as analysis
 from . import school_calendars
 from .db import webapp_conn
@@ -24,6 +25,7 @@ NIGHT_LIMIT = 40
 RESCUE_LIMIT = 5
 NIGHT_HOUR = 2
 CALENDAR_KEY = "calendars:night"
+FIELDS_KEY = "fields:night"
 
 
 def _stuck(limit: int) -> list[tuple[int, int]]:
@@ -62,6 +64,28 @@ async def refresh_calendars(day: str) -> None:
             log.warning("Kalenderabgleich für Konto %s verschoben", account_id)
 
 
+async def order_topics(day: str) -> None:
+    """Ein Fach je Kind und Nacht zu Themenfeldern ordnen.
+
+    Gruppiert und sortiert, führt nichts zusammen: Welcher Teil sitzt und
+    welcher nicht, bleibt je Teilthema sichtbar.
+    """
+    if _last_night_run(FIELDS_KEY) == day:
+        return
+    _mark_night_run(day, FIELDS_KEY)
+    with closing(webapp_conn()) as conn:
+        accounts = [r[0] for r in conn.execute(
+            "SELECT s.account_id FROM mentor_settings s JOIN learning_profiles p ON p.account_id=s.account_id "
+            "WHERE s.enabled=1 AND p.active=1 AND p.ai_enabled=1")]
+    for account_id in accounts:
+        try:
+            result = await learning_fields.consolidate(account_id)
+            if result.get("fields"):
+                log.info("Themenfelder geordnet: Konto %s, Fach %s", account_id, result["subject"])
+        except Exception:
+            log.warning("Themenfelder für Konto %s verschoben", account_id)
+
+
 async def cycle() -> int:
     done = 0
     for account_id, material_id in _stuck(RESCUE_LIMIT):
@@ -70,6 +94,7 @@ async def cycle() -> int:
     day = today_local().isoformat()
     if datetime.now().hour >= NIGHT_HOUR:
         await refresh_calendars(day)
+        await order_topics(day)
     if datetime.now().hour >= NIGHT_HOUR and _last_night_run() != day:
         _mark_night_run(day)
         for account_id, material_id in analysis.due(NIGHT_LIMIT):

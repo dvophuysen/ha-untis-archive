@@ -533,6 +533,26 @@ CREATE TABLE IF NOT EXISTS reminder_app_deliveries (
 # oder inhaltlich, aber zu knapp beschrieben. Nur das Erste ist kein Lernziel.
 _MIGRATIONS.append(("discovery_unclear_kind", "ALTER TABLE learning_discovery_items ADD COLUMN unclear_kind TEXT"))
 
+# Ein Feld fasst Teilthemen eines Fachs zusammen, ohne sie zu ersetzen. Geübt
+# und nachgewiesen werden weiter die Teile; das Feld ordnet sie nur.
+_MIGRATIONS.append(("learning_fields_001", """
+CREATE TABLE IF NOT EXISTS learning_fields (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ profile_id INTEGER NOT NULL,
+ subject TEXT NOT NULL,
+ title TEXT NOT NULL,
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL,
+ UNIQUE(profile_id,subject,title)
+);
+CREATE TABLE IF NOT EXISTS learning_field_runs (
+ profile_id INTEGER NOT NULL, subject TEXT NOT NULL, ran_at TEXT NOT NULL,
+ PRIMARY KEY(profile_id,subject)
+);
+"""))
+_MIGRATIONS.append(("learning_fields_002", "ALTER TABLE learning_topics ADD COLUMN field_id INTEGER"))
+_MIGRATIONS.append(("learning_fields_003", "ALTER TABLE learning_topics ADD COLUMN field_rank INTEGER NOT NULL DEFAULT 0"))
+
 _MIGRATIONS.append(("digital_textbooks_003_pages", """
 CREATE TABLE IF NOT EXISTS digital_textbook_pages (
  account_id INTEGER NOT NULL,

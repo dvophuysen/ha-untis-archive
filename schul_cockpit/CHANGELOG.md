@@ -1,3 +1,9 @@
+## 0.49.0
+
+- Die Themenliste ist nach Fächern gruppiert und innerhalb eines Fachs nach Themenfeldern geordnet. Vorher stand sie rein nach Aktualität, wodurch Einheiten desselben Fachs weit auseinanderlagen.
+- Ein Themenfeld ist das, worüber eine Klassenarbeit geschrieben wird, etwa Bruchrechnung oder Elektrische Stromkreise. Es ordnet seine Teilthemen in der Reihenfolge, in der sie aufeinander aufbauen, und zeigt, wie viele davon schon selbstständig gezeigt wurden. Geübt und nachgewiesen werden weiterhin ausschließlich die einzelnen Teilthemen; das Feld trägt keinen eigenen Lernstand und keine eigene Aufgabe.
+- Nachts wird je Kind ein Fach neu geordnet, frühestens eine Woche nach dem letzten Mal. Dabei wird nur gruppiert und sortiert, nie zusammengeführt: Welcher Teil sitzt und welcher nicht, bleibt sichtbar.
+
 ## 0.48.1
 
 - Die Auswertung unterscheidet jetzt zwei Gründe, warum ein Eintrag kein Thema bekommt: ohne Lerninhalt (Klassengeschäfte, Bücherausgabe, Vertretung ohne Thema) oder inhaltlich, aber zu knapp beschrieben (Unit-Titel, Seitenzahlen, Geschichtentitel). Nur der erste Fall verschwindet aus den Übungsaufgaben. Ein knapp beschriebener Fachinhalt bleibt als Stunde bestehen und trägt die offene Rückfrage. Im Zweifel gilt inhaltlich.
