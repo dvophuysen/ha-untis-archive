@@ -19,7 +19,7 @@ ENV LANG=C.UTF-8 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-RUN apk add --no-cache sqlite-libs libffi openssl chromium nss freetype harfbuzz ttf-freefont
+RUN apk add --no-cache sqlite-libs libffi openssl chromium chromium-chromedriver nss freetype harfbuzz ttf-freefont
 
 WORKDIR /app
 
