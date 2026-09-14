@@ -1,3 +1,9 @@
+## 0.36.2
+
+- Der Scanner verwechselt Eduplaces-Kategorien und App-Beschreibungen nicht länger mit Schulbüchern.
+- Nach der Medienregal-Kachel wird nun auch die eigentliche Öffnen-/Starten-Aktion ausgeführt; erst im authentifizierten Regal werden anklickbare Produkt-Cover erfasst.
+- Ein erfolgreicher neuer Scan ersetzt die beiden zuvor falsch erkannten Navigationseinträge automatisch.
+
 ## 0.36.1
 
 - Browsersteuerung auf Selenium und den nativen Alpine-Chromedriver umgestellt, damit der automatische Medienregal-Scan auch auf der aarch64-Home-Assistant-Hardware installierbar ist.

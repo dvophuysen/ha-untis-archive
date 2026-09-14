@@ -17,3 +17,12 @@ def test_subject_inference_for_real_shelf_titles():
     assert infer_subject("Universum Physik Sek I Niedersachsen") == "physik"
     assert infer_subject("Politik & Co. 7/8") == "politik"
     assert infer_subject("Unbekanntes Werk") is None
+
+
+def test_eduplaces_navigation_is_not_a_book():
+    titles = select_book_titles([
+        "Mathematik und Naturwissenschaften",
+        "BiBox Das digitale Unterrichtssystem von Westermann",
+        "BILDUNGSLOGIN Medienregal",
+    ])
+    assert titles == []
