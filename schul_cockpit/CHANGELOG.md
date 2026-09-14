@@ -1,3 +1,7 @@
+## 0.39.12
+
+- Übernimmt ein Verlagsviewer die getippte Seitenzahl nicht, verlässt der Abruf das Feld und setzt den Wert notfalls direkt. Der PSPDFKit-Leser von Cornelsen nimmt die Tasten an, bleibt aber ohne diesen Schritt auf seiner Seite stehen.
+
 ## 0.39.11
 
 - Sprunglinks werden beim Einstieg in den Leser übergangen. Bei Cornelsen heißt der Sprunglink ganz oben ebenfalls „Zum E-Book", zeigt aber auf die Startadresse der Website und warf den Leser weg.
