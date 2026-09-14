@@ -102,7 +102,17 @@
 
   function selectedBookSubject(book) {
     const value = book.subject_name ?? '';
-    return textbookSubjects.find((s) => s.name.toLocaleLowerCase('de-DE') === value.toLocaleLowerCase('de-DE'))?.name ?? '';
+    return textbookSubjects.find((s) => s.name.toLocaleLowerCase('de-DE') === value.toLocaleLowerCase('de-DE'))?.name
+      ?? (value ? value[0].toLocaleUpperCase('de-DE') + value.slice(1) : '');
+  }
+
+  function bookSubjectOptions(book) {
+    const names = textbookSubjects.map((s) => s.name);
+    const detected = selectedBookSubject(book);
+    if (detected && !names.some((name) => name.toLocaleLowerCase('de-DE') === detected.toLocaleLowerCase('de-DE'))) {
+      names.push(detected);
+    }
+    return names.sort((a, b) => a.localeCompare(b, 'de-DE'));
   }
 
   async function toggleDemo() {
@@ -351,8 +361,8 @@
               onchange={(e) => setBookSubject(book, e.currentTarget.value)}
             >
               <option value="">Fach wählen…</option>
-              {#each textbookSubjects as subject}
-                <option value={subject.name}>{subject.name}</option>
+              {#each bookSubjectOptions(book) as subject}
+                <option value={subject}>{subject}</option>
               {/each}
             </select>
           </div>
