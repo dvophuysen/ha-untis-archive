@@ -1,3 +1,11 @@
+## 0.39.5
+
+- BiBox liefert wieder Seiten: nach dem vollständigen Laden greift der Seitenwechsel über die Adresszeile.
+- Öffnet ein Verlag zuerst eine Startseite statt des Lesers, folgt der Abruf jetzt der Schaltfläche „Zum E-Book", „Buch öffnen", „Lesen" oder „Starten".
+- Dialoge ohne erkennbare Beschriftung werden mit Escape geschlossen. Wird ein Klick auf das Seitenfeld doch abgefangen, räumt der Abruf auf und versucht es einmal erneut.
+- Die angezeigte Seite wird nur noch von der wirklich sichtbaren, großen Seitenfläche abgelesen. Miniaturleisten melden jede Seite des Buches und konnten so einen Sprung fälschlich bestätigen.
+- Beschriftungen werden einzeln geprüft statt aneinandergehängt, sonst passt auf eine Schaltfläche mit Titel und Text keine Regel mehr.
+
 ## 0.39.4
 
 - Der Testabruf protokolliert jeden Blätterversuch: welcher Weg probiert wurde, ob ein Bedienelement gefunden wurde, ob der Viewer die Seite bestätigt hat und welche Seite er danach anzeigt. Damit lässt sich ein fehlschlagender Verlagsviewer bestimmen, statt ihn zu erraten.

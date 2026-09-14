@@ -213,9 +213,11 @@ assert.equal(found, pageField);
 def test_shown_page_reads_the_label_of_a_rendered_page():
     script = '''
 const assert = require('node:assert/strict');
+global.innerWidth = 1440; global.innerHeight = 1000;
 function marked(label) {
   return {tagName: 'SECTION', getAttribute: k => (k === 'aria-label' ? label : null),
     id: '', className: '', childNodes: [], shadowRoot: null, value: '',
+    getBoundingClientRect: () => ({width: 600, height: 900, top: 20, bottom: 920}),
     querySelectorAll: () => []};
 }
 const left = marked('Seite 12'), right = marked('Seite 13');
@@ -247,3 +249,53 @@ def test_navigation_tries_the_neighbour_field_after_the_named_one(monkeypatch):
     assert browser._go_to_page(Mock(), 18) is True
     neighbour.assert_called_once()
     select.assert_not_called()
+
+
+def test_thumbnail_strip_does_not_count_as_the_shown_page():
+    # PSPDFKit labels every page, including the small previews. Only the
+    # large page actually on screen may confirm a jump.
+    script = '''
+const assert = require('node:assert/strict');
+global.innerWidth = 1440; global.innerHeight = 1000;
+function area(label, rect) {
+  return {tagName: 'SECTION', getAttribute: k => (k === 'aria-label' ? label : null),
+    id: '', className: '', childNodes: [], shadowRoot: null, value: '',
+    getBoundingClientRect: () => rect, querySelectorAll: () => []};
+}
+const shown = area('Seite 18', {width: 700, height: 900, top: 20, bottom: 920});
+const thumb = area('Seite 4', {width: 90, height: 120, top: 40, bottom: 160});
+const offscreen = area('Seite 99', {width: 700, height: 900, top: 2000, bottom: 2900});
+global.document = {querySelectorAll: sel => (sel === '*' ? [shown, thumb, offscreen] : [])};
+assert.equal(new Function(process.argv[1])(), '18');
+'''
+    subprocess.run(['node', '-e', script, browser._SHOWN_PAGE_SCRIPT], check=True)
+
+
+def test_start_page_is_followed_into_the_reader(monkeypatch):
+    action = Mock()
+    # No page field, no neighbour field, then the "Zum E-Book" link.
+    monkeypatch.setattr(browser, '_page_control', Mock(return_value=None))
+    monkeypatch.setattr(browser, '_in_frames', Mock(side_effect=[None, action, None, Mock()]))
+    monkeypatch.setattr(browser, '_dismiss_overlays', lambda d, **k: None)
+    monkeypatch.setattr(browser, 'WebDriverWait', Mock(return_value=Mock()))
+    assert browser._enter_reader(Mock()) is True
+    action.click.assert_called_once()
+
+
+def test_reader_entry_is_skipped_when_a_page_field_exists(monkeypatch):
+    monkeypatch.setattr(browser, '_page_control', Mock(return_value=Mock()))
+    locate = Mock()
+    monkeypatch.setattr(browser, '_in_frames', locate)
+    assert browser._enter_reader(Mock()) is False
+    locate.assert_not_called()
+
+
+def test_intercepted_click_is_retried_after_clearing_the_overlay(monkeypatch):
+    cleared = Mock()
+    monkeypatch.setattr(browser, '_dismiss_overlays', cleared)
+    monkeypatch.setattr(browser, '_wait_for_page', lambda d, p, **k: True)
+    control = Mock()
+    control.click.side_effect = [browser.TimeoutException('abgefangen'), None]
+    assert browser._type_page(Mock(), control, 18) is True
+    cleared.assert_called_once()
+    assert control.click.call_count == 2
