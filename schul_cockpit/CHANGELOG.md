@@ -1,3 +1,7 @@
+## 0.44.5
+
+- „Arbeiten & Tests" lädt wieder. Sobald ein Klausurtermin aus dem Kalender kam, öffnete die Seite für ihn das Bearbeiten-Formular der von Hand angelegten Termine und brach ab. Kalendertermine haben keine solche Kennung, und zwei fehlende Kennungen galten als gleich.
+
 ## 0.44.4
 
 - Die Schulkalender gleichen sich nachts von selbst ab. Klausurtermine verschieben sich im Schuljahr; dafür soll niemand einen Knopf drücken müssen.

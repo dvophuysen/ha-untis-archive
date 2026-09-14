@@ -155,7 +155,9 @@
           <span class="badge when {urgencyClass(e.date)}">{whenLabel(e.date)}</span>
         </div>
 
-        {#if editing?.manual_id === e.manual_id}
+        <!-- Nur manuelle Termine sind editierbar; bei Kalenderterminen ist
+             manual_id undefined und träfe sonst auf ein leeres editing zu. -->
+        {#if e.source === 'manual' && editing && editing.manual_id === e.manual_id}
           <div class="edit-form">
             <label>Datum</label>
             <input type="date" bind:value={editing.exam_date} />
