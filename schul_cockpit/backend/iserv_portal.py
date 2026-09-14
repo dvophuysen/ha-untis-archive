@@ -12,6 +12,7 @@ captions, never page bodies.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import date, datetime
@@ -350,6 +351,36 @@ async def _json(client: httpx.AsyncClient, url: str):
         raise IservLoginError("Die Terminantwort war nicht lesbar") from None
 
 
+async def portal_json(portal_url: str, username: str, password: str,
+                      paths: tuple[str, ...]) -> dict[str, object]:
+    """JSON from the portal's own addresses, whatever it takes.
+
+    The calendar application answers its own interface only to a session the
+    running page holds; a plain login gets 401 there. So the cheap way is tried
+    first and the browser takes over for whatever is left.
+    """
+    base = portal_url.rstrip("/") + "/"
+    results: dict[str, object] = {}
+    missing: list[str] = []
+    client = await login(portal_url, username, password)
+    try:
+        for path in paths:
+            try:
+                results[path] = await _json(client, urljoin(base, path))
+            except IservLoginError:
+                missing.append(path)
+    finally:
+        await client.aclose()
+    if missing:
+        for entry in await read(portal_url, username, password, tuple(missing)):
+            if entry.get("status") == 200 and entry.get("text"):
+                try:
+                    results[entry["pfad"]] = json.loads(entry["text"])
+                except ValueError:
+                    _LOGGER.warning("Portalantwort nicht lesbar: %s", entry["pfad"])
+    return results
+
+
 async def sources(portal_url: str, username: str, password: str) -> list[dict]:
     """The calendar module's own list of sources, plugins included.
 
@@ -357,11 +388,8 @@ async def sources(portal_url: str, username: str, password: str) -> list[dict]:
     so CalDAV cannot see them at all.
     """
     base = portal_url.rstrip("/") + "/"
-    client = await login(portal_url, username, password)
-    try:
-        data = await _json(client, urljoin(base, "iserv/calendar/api/eventsources"))
-    finally:
-        await client.aclose()
+    path = "iserv/calendar/api/eventsources"
+    data = (await portal_json(portal_url, username, password, (path,))).get(path)
     found = []
     for entry in data if isinstance(data, list) else []:
         url = urljoin(base, str(entry.get("url") or ""))
@@ -380,18 +408,23 @@ def _split(value: str | None) -> tuple[str, str | None]:
     return moment.date().isoformat(), moment.strftime("%H:%M")
 
 
+def _window(url: str, start: date, end: date) -> str:
+    joiner = "&" if "?" in url else "?"
+    return f"{url}{joiner}start={start.isoformat()}&end={end.isoformat()}"
+
+
 async def plugin_events(portal_url: str, username: str, password: str, url: str,
                         start: date, end: date) -> list[dict]:
     """Events of one calendar plugin, in the shape the store expects."""
     if not is_plugin(url) or not _same_host(url, portal_url):
         raise IservLoginError("Diese Adresse gehört nicht zu eurem IServ")
-    joiner = "&" if "?" in url else "?"
-    full = f"{url}{joiner}start={start.isoformat()}&end={end.isoformat()}"
-    client = await login(portal_url, username, password)
-    try:
-        data = await _json(client, full)
-    finally:
-        await client.aclose()
+    full = _window(url, start, end)
+    data = (await portal_json(portal_url, username, password, (full,))).get(full)
+    return parse_plugin(data, start, end)
+
+
+def parse_plugin(data, start: date, end: date) -> list[dict]:
+    """Plugin entries as calendar events."""
     events: list[dict] = []
     for entry in data if isinstance(data, list) else []:
         first, first_time = _split(entry.get("start"))
