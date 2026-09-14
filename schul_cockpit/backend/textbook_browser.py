@@ -402,16 +402,24 @@ _ENTER_READER_SCRIPT = r"""
 // Only unmistakable phrases. A bare "Öffnen", "Lesen" or "Starten" also
 // sits on library tiles and account menus and led out of the book.
 const ENTER=/^(zum e-?\s?book|zum buch|buch (ö|oe)ffnen|e-?\s?book (ö|oe)ffnen|jetzt lesen|weiterlesen|lesen starten)$/i;
+const hits=[];
 function look(root){
   for(const e of root.querySelectorAll('a,button,[role="button"],[role="link"]')){
     const own=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ');
     const names=[e.getAttribute('aria-label'),e.getAttribute('title'),own,(e.innerText||'').slice(0,40)];
-    if(names.some(s=>ENTER.test((s||'').replace(/\s+/g,' ').trim()))&&e.getClientRects().length) return e;
+    if(names.some(s=>ENTER.test((s||'').replace(/\s+/g,' ').trim()))&&e.getClientRects().length) hits.push(e);
   }
-  for(const e of root.querySelectorAll('*')) if(e.shadowRoot){const x=look(e.shadowRoot);if(x)return x;}
-  return null;
+  for(const e of root.querySelectorAll('*')) if(e.shadowRoot) look(e.shadowRoot);
 }
-return look(document);
+look(document);
+// Take the smallest match: the button itself, not a card wrapping it.
+let best=null, area=Infinity;
+for(const e of hits){
+  const r=e.getBoundingClientRect();
+  const a=(r.width||0)*(r.height||0);
+  if(a<area){best=e;area=a;}
+}
+return best;
 """
 
 _PAGE_NEIGHBOUR_SCRIPT = r"""
@@ -602,7 +610,7 @@ def _settle_reader(driver, timeout: float = 30.0) -> None:
     driver.switch_to.default_content()
 
 
-def _enter_reader(driver, rounds: int = 2) -> bool:
+def _enter_reader(driver, rounds: int = 1) -> bool:
     """Follow a start page into the reader.
 
     Cornelsen keeps the reader in the document while still showing its

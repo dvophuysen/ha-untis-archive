@@ -344,10 +344,11 @@ def test_settle_waits_while_the_reader_is_still_blank(monkeypatch):
 def test_generic_open_captions_no_longer_enter_the_reader():
     script = '''
 const assert = require('node:assert/strict');
-function link(text) {
+function link(text, size) {
   return {childNodes: [{nodeType: 3, textContent: text}],
     getAttribute: () => null, getClientRects: () => [{}], querySelectorAll: () => [],
-    shadowRoot: null, _text: text};
+    getBoundingClientRect: () => ({width: size || 200, height: 40}),
+    shadowRoot: null, innerText: text, _text: text};
 }
 function run(items) {
   global.document = {querySelectorAll: sel => (sel === '*' ? [] : items)};
@@ -359,5 +360,8 @@ assert.equal(run([link('Starten')]), null);
 assert.equal(run([link('Lesen')]), null);
 const real = link('Zum E-Book');
 assert.equal(run([real]), real);
+// Of a card and the button inside it, the button wins.
+const card = link('E-Book öffnen', 900), button = link('E-Book öffnen', 220);
+assert.equal(run([card, button]), button);
 '''
     subprocess.run(['node', '-e', script, browser._ENTER_READER_SCRIPT], check=True)

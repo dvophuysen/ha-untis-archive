@@ -1,3 +1,7 @@
+## 0.39.9
+
+- Der Einstieg in den Leser klickt nur noch einmal und wählt von mehreren Treffern den kleinsten, also die eigentliche Schaltfläche statt der umgebenden Karte. Ein zweiter Klick hatte den Leser wieder verlassen.
+
 ## 0.39.8
 
 - Der Einstieg in den Leser wird jetzt immer ausgeführt, wenn eine Schaltfläche wie „E-Book öffnen" sichtbar ist. Cornelsen hält den Leser unsichtbar im Dokument bereit, während noch die Willkommensseite zu sehen ist — der Abruf blätterte dort im verborgenen Leser und fotografierte trotzdem die Startseite.
