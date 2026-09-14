@@ -1,3 +1,7 @@
+## 0.43.2
+
+- Die Portalsuche kann einen echten Browser verwenden. IServ liefert beim reinen Abruf nur ein Gerüst; erst die ausgeführte Seite zeigt die Module und ihre Abo-Adressen.
+
 ## 0.43.1
 
 - Die Portalsuche besucht die Terminmodule namentlich, nicht nur was auf der Startseite verlinkt ist, und meldet je Seite, ob überhaupt eine angemeldete Ansicht kam.
