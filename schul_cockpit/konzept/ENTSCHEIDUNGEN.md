@@ -27,6 +27,14 @@ KI-Kosten müssen konfigurierbar begrenzt und nachvollziehbar sein. Konkrete Gel
 
 Exakte Vier-Tab-Navigation, 0–100-Score, konkrete Tages-/Wochenprämien, Streaks, Sammelwelten, zwei Pushs täglich, feste Pilotdauer und genaue Analysemodelle waren Assistentenvorschläge oder lose Überlegungen. Keine dieser Details ist durch allgemeine Zustimmung zum Gesamtziel automatisch freigegeben.
 
+## Materialien
+
+D18 · 14.09.2026 · Beschlossen: Kinder dürfen jederzeit und unbegrenzt eigene Materialien einsenden. Die Nutzung soll ausdrücklich gefördert werden, weil abgelegte Blätter, Hefte und Scans die Grundlage für belastbare Wissensstände und Zusammenhänge sind. Herkunft: Produktabstimmung.
+
+D19 · 14.09.2026 · Beschlossen: Die KI-Auswertung eines Materials startet sofort nach dem Upload im Hintergrund; niemand wartet darauf. Zusätzlich läuft nachts eine Aktualisierung für noch nicht oder fehlgeschlagen ausgewertete Materialien, für veraltete Auswertungsstände und für inzwischen auflösbare Fach- oder Themenbezüge. Kein vollständiger Neudurchlauf über den Bestand, weil er Kosten ohne Erkenntnisgewinn erzeugt. Herkunft: Produktabstimmung.
+
+D20 · 14.09.2026 · Beschlossen: Die Elternprüfung bleibt erhalten, wechselt aber die Rolle. Sie sperrt den Zugang nicht mehr, sondern dient der Korrektur von Fehlerkennungen und halbfertigen Einträgen der Kinder. Ein neues Material ist sofort Quelle. Herkunft: Produktabstimmung. Ausgestaltung in [Materialablage](MATERIALIEN.md); ob Lösungsblätter und geschriebene Arbeiten davon ausgenommen bleiben, ist noch offen.
+
 ## Veröffentlichung
 
 D15 · 13.09.2026 · Beschlossen: Allgemein formulierte Produktkonzepte dürfen im Projekt-Repository dauerhaft gespeichert werden. Persönliche Lernbefunde, Namen, Familienangaben und Betriebsgeheimnisse bleiben außerhalb dieser Fassung.
