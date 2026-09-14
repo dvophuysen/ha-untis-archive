@@ -45,15 +45,24 @@ Umweg über eine zum Startbildschirm hinzugefügte Web-App mit ausdrücklicher
 Push-Erlaubnis entfällt, ebenso die Unsicherheit, ob Web-Push auf einem älteren iOS
 zuverlässig ankommt.
 
-Benachrichtigungen können Tasten tragen. Bis zu zehn Aktionen pro Nachricht sind
-möglich; ein Tippen löst in Home Assistant ein Ereignis aus, das die App
-zurücklesen kann. Eine Textantwort ist ebenfalls möglich. Damit kann eine Erinnerung
-direkt beantwortet werden, ohne die App zu öffnen: „Alles eingepackt" oder „Fehlt noch
-was" als Taste in der Mitteilung.
+Benachrichtigungen können Tasten tragen, bis zu zehn je Nachricht. Ein Tippen darauf
+löst in Home Assistant ein Ereignis aus, das die App zurücklesen kann.
 
-Daraus folgt: Der bisher geplante Web-Push-Weg wird nicht weiterverfolgt. Die
-Erinnerungen laufen über die Home-Assistant-App, und die Kinder öffnen das
-Schul-Cockpit künftig darin.
+Diese Tasten taugen aber nicht als Hauptweg. Am Testgerät zeigte sich: Die Tasten
+erscheinen erst, wenn man den Finger auf der Mitteilung liegen lässt. Wer wie üblich
+kurz antippt, sieht sie nie. Genau das wird ein Kind tun. Eine Routine, die auf langem
+Drücken beruht, ist damit erledigt, bevor sie beginnt.
+
+Was das Antippen tut, lässt sich dagegen bestimmen. Mit `url` in den Mitteilungsdaten
+öffnet die App eine gewählte Seite statt der Startseite, also den Ingress-Pfad des
+Add-ons `/hassio/ingress/e54108c7_schul_cockpit`. Ein Tippen führt dann direkt ins
+Schul-Cockpit.
+
+Daraus folgen zwei Festlegungen. Der Web-Push-Weg wird nicht weiterverfolgt; die
+Erinnerungen laufen über die Home-Assistant-App. Und die Mitteilung ist eine Tür, kein
+Formular: Bestätigt wird auf einer Seite, die sich beim Antippen öffnet. Tasten in der
+Mitteilung bleiben eine Zugabe für den, der lange drückt, und tragen nichts, worauf die
+Routine angewiesen ist.
 
 ## Was die Forschung zu dieser Ausgangslage sagt
 
@@ -133,12 +142,16 @@ verglichen wird, und von Anfang an verabredet, dass es später ausläuft.
 
 1. Die App erinnert, nicht die Eltern. Das ist der eigentliche Zweck.
 2. Unterstützung im Moment des Vergessens, nicht im Rückblick.
-3. Eine Nachricht, zwei Tasten. Jede zusätzliche Entscheidung kostet in dieser Lage
-   mehr, als sie bringt.
-4. Der Abbau der Unterstützung dauert Monate und wird verabredet, nicht erschlichen.
-5. Kein Vergleich zwischen den Geschwistern, an keiner Stelle.
-6. Rückschläge kosten nichts. Keine Nullpunkte, keine gerissenen Serien.
-7. Die App stellt Daten bereit und verhängt nichts. Strafen bleiben Sache der Familie
+3. Eine Mitteilung, ein Tippen, eine Seite. Was dort steht, muss ohne Navigation
+   erledigt werden können. Jede zusätzliche Entscheidung kostet in dieser Lage mehr,
+   als sie bringt.
+4. Die Einstiegsseite richtet sich nach der Tageszeit: nach dem Unterricht das
+   Notieren, abends das Packen und der Tagesabschluss, morgens das Fehlende. Wer die
+   App öffnet, sieht das Anliegen des Moments, nicht eine Übersicht.
+5. Der Abbau der Unterstützung dauert Monate und wird verabredet, nicht erschlichen.
+6. Kein Vergleich zwischen den Geschwistern, an keiner Stelle.
+7. Rückschläge kosten nichts. Keine Nullpunkte, keine gerissenen Serien.
+8. Die App stellt Daten bereit und verhängt nichts. Strafen bleiben Sache der Familie
    und der Schule.
 
 ## Vorgehen
@@ -158,19 +171,20 @@ zu ersetzen ist der Versandweg.
 
 ### Stufe 1: Der Abend
 
-Eine Mitteilung zu einer festen Zeit am Abend, mit den Punkten für morgen aus der
-vorhandenen Packliste und den fälligen Aufgaben. Zwei Tasten: „Alles dabei" und „Fehlt
-noch was". Die zweite öffnet die Liste.
+Eine Mitteilung zu einer festen Zeit am Abend, die beim Antippen den Tagesabschluss
+öffnet: die Punkte für morgen aus der vorhandenen Packliste und die fälligen Aufgaben,
+je Zeile eine große Taste, sonst nichts auf der Seite.
 
-Wer am Abend nicht geantwortet hat, bekommt am Morgen vor dem Aufbruch eine zweite,
-kürzere Mitteilung. Wer geantwortet hat, bekommt sie nicht.
+Wer am Abend nicht abgeschlossen hat, bekommt am Morgen vor dem Aufbruch eine zweite,
+kürzere Mitteilung. Wer abgeschlossen hat, bekommt sie nicht.
 
 ### Stufe 2: Der Moment nach dem Unterricht
 
 Das wiederkehrende Grundproblem ist nicht nur das Vergessen der Erledigung, sondern
 dass die Aufgabe gar nicht erst festgehalten wird. Nach der letzten Stunde eine
 Mitteilung mit einer einzigen Frage: Gibt es Aufgaben, die noch nicht in der App
-stehen? Ein Tippen führt direkt zur Kamera. Die Materialablage wertet das Foto bereits
+stehen? Ein Tippen öffnet eine Seite mit genau zwei Möglichkeiten, Kamera oder „nichts
+Neues". Die Materialablage wertet das Foto bereits
 heute aus und ordnet es Fach und Aufgabe zu.
 
 ### Stufe 3: Die Schule als Quelle statt als Anrufer
@@ -198,7 +212,8 @@ eine belegte, gemeinsame Routine statt des Vorwurfs, zu Hause geschehe nichts.
 
 ## Offene Entscheidungen
 
-Ob die Web-App auf den Kindergeräten entfernt wird oder als Notweg bestehen bleibt. Zu
+Ob die Web-App auf den Kindergeräten entfernt wird oder als Notweg bestehen bleibt. Ob
+die Einstiegsseite fest nach Tageszeit wechselt oder nur die oberste Karte tauscht. Zu
 welcher Uhrzeit die abendliche Mitteilung kommt und wer sie festlegt. Ob es eine kleine
 Anerkennung für die Routine gibt, welche, und wann sie ausläuft. Ob und mit welcher
 Lehrkraft eine tägliche Rückmeldung versucht wird. Ob eine fachliche Abklärung gesucht
