@@ -446,6 +446,22 @@
           <div class="dim" style="margin-top:0.5rem;">Ganzes Viewer-Fenster mit Bedienleiste:</div>
           <img class="page-preview" src={textbookTest.window_image} alt="Vorschau des ganzen Viewer-Fensters" />
         {/if}
+        {#if textbookTest.attempts?.length}
+          <div class="dim" style="margin-top:0.5rem;">Blätterversuche:</div>
+          <ul class="control-list">
+            {#each textbookTest.attempts as step}
+              <li>
+                S. {step.page} · {step.strategy}: {step.confirmed
+                  ? 'bestätigt'
+                  : step.found
+                    ? 'Bedienelement gefunden, ohne Wirkung'
+                    : 'nichts gefunden'}{step.error ? ` (${step.error})` : ''}{step.shown?.length
+                  ? ` · Viewer zeigt ${step.shown.join(', ')}`
+                  : ''}{step.url ? ` · ${step.url}` : ''}
+              </li>
+            {/each}
+          </ul>
+        {/if}
         {#if textbookTest.documents?.length}
           <div class="dim" style="margin-top:0.5rem;">Geöffnete Ansichten:</div>
           <ul class="control-list">

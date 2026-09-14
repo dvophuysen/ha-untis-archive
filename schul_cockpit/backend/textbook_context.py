@@ -171,6 +171,7 @@ async def test_page(account_id:int,book_id:int,page:int) -> dict:
     if seen is not None:
         result["controls"]=seen.controls
         result["documents"]=seen.documents
+        result["attempts"]=seen.attempts
         if seen.window_image:
             result["window_image"]="data:image/jpeg;base64,"+base64.b64encode(_jpeg(seen.window_image)).decode()
     return result
