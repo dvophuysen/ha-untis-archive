@@ -24,7 +24,11 @@ from .iserv_connector import IservLoginError, _LoginForm, _looks_like_login
 _LOGGER = logging.getLogger("schul_cockpit.calendar")
 
 MAX_BYTES = 4 * 1024 * 1024
-MAX_PAGES = 12
+MAX_PAGES = 24
+# The desktop only links what the user has pinned, so the modules that can
+# carry dates are visited by name as well.
+SEEDS = ("iserv/", "iserv/calendar/", "iserv/exam/", "iserv/exam/schedule/",
+         "iserv/plan/", "iserv/timetable/", "iserv/substitution/", "iserv/booking/")
 # Modules that can hold dates: calendar, exam plan, substitutions, timetable.
 _INTERESTING = re.compile(r"(calendar|kalender|exam|klausur|klausel|termin|plan|ics|ical|subscri|abonn)", re.I)
 
@@ -121,7 +125,7 @@ async def survey(portal_url: str, username: str, password: str) -> dict:
     seen: set[str] = set()
     client = await login(portal_url, username, password)
     try:
-        queue = [urljoin(base, "iserv/")]
+        queue = [urljoin(base, path) for path in SEEDS]
         while queue and len(pages) < MAX_PAGES:
             url = queue.pop(0)
             if url in seen or not _same_host(url, portal_url):
@@ -143,6 +147,9 @@ async def survey(portal_url: str, username: str, password: str) -> dict:
                 elif len(seen) + len(queue) < MAX_PAGES and target not in seen:
                     queue.append(target)
             pages.append({"url": url, "status": status, "titel": parser.title[:120],
+                          "links_gesamt": len(parser.links),
+                          "anmeldeseite": any(l["href"].endswith("/auth/login") for l in parser.links)
+                          or "login" in parser.title.casefold(),
                           "treffer": interesting[:25]})
     finally:
         await client.aclose()
