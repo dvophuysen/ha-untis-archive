@@ -37,6 +37,12 @@ D20 · 14.09.2026 · Beschlossen: Die Elternprüfung bleibt erhalten, wechselt a
 
 D21 · 14.09.2026 · Beschlossen: Keine Freigabehürde für Lösungsblätter, bearbeitete eigene Aufgaben oder zurückgegebene Klassenarbeiten. Begründung des Nutzers: Der Mentor sagt Lösungen nicht vor, sondern führt mit Fragen zum eigenen Nachdenken, und selbst hochgeladene Lösungen kennt das Kind bereits. Das Kennzeichen für enthaltene Lösungen bleibt als Hinweis an den Mentor erhalten, nicht als Sperre. Herkunft: Produktabstimmung, nach Hinweis des Assistenten auf das Risiko.
 
+## Kalender
+
+D22 · 14.09.2026 · Beschlossen: Schultermine werden direkt aus IServ gelesen, nicht über abonnierte Home-Assistant-Kalender. Begründung: IServ liefert in Klausur-Terminen `TZID=+02:00` statt eines Zeitzonennamens, woran HAs `remote_calendar` die gesamte Datei verwirft (`setup_retry`, Entität `unavailable`); die Kalender werden zudem jedes Schuljahr neu erzeugt, und Klausuren verteilen sich auf mehrere Kalender. Eine feste Kalender- oder Entitätskennung ist deshalb keine tragfähige Quelle. Herkunft: Produktabstimmung.
+
+D23 · 14.09.2026 · Beschlossen: Ein Zugang je Kind für IServ, gemeinsam für Schulbücher und Kalender, benannt als „IServ-Zugang" statt „Schulbuch-Zugang". Mehrere Kalender je Kind sind der Normalfall; ihre Rolle (Klausuren, Unterrichtstermine, Sonstiges) wird je Kalender festgelegt und überlebt den jährlichen Neuaufbau, weil nicht auf eine Kennung, sondern auf die wiedererkannte Sammlung abgestellt wird. Herkunft: Produktabstimmung.
+
 ## Veröffentlichung
 
 D15 · 13.09.2026 · Beschlossen: Allgemein formulierte Produktkonzepte dürfen im Projekt-Repository dauerhaft gespeichert werden. Persönliche Lernbefunde, Namen, Familienangaben und Betriebsgeheimnisse bleiben außerhalb dieser Fassung.
