@@ -192,6 +192,59 @@ async def probe(portal_url: str, username: str, password: str) -> dict:
     return {"root": root, "schritte": steps}
 
 
+async def inspect(portal_url: str, username: str, password: str, calendar_url: str,
+                  start: date, end: date) -> dict:
+    """What one collection answers, step by step.
+
+    Says whether the server accepted the query at all, how many entries it
+    sent, and how many survived parsing. Without that, an empty calendar and a
+    rejected query look exactly alike.
+    """
+    report: dict = {"url": calendar_url}
+    entries = 0
+    async with _client(username, password) as client:
+        listing = await client.request("PROPFIND", calendar_url, headers={"Depth": "1"}, content=(
+            '<d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:getcontenttype/>'
+            "</d:prop></d:propfind>").encode())
+        report["propfind_status"] = listing.status_code
+        if listing.status_code < 400:
+            try:
+                doc = ElementTree.fromstring(listing.content)
+                entries = sum(1 for h in doc.iter(f"{{{DAV}}}href") if h.text and not h.text.rstrip("/").endswith(
+                    calendar_url.rstrip("/").rsplit("/", 1)[-1]))
+            except ElementTree.ParseError:
+                entries = -1
+        report["dateien_in_der_sammlung"] = entries
+        for label, body in (("expand", _query(start, end, True)), ("plain", _query(start, end, False))):
+            answer = await client.request("REPORT", calendar_url, content=body.encode(), headers={"Depth": "1"})
+            step: dict = {"status": answer.status_code, "bytes": len(answer.content)}
+            if answer.status_code < 400:
+                try:
+                    doc = ElementTree.fromstring(answer.content)
+                except ElementTree.ParseError:
+                    step["fehler"] = "Antwort nicht lesbar"
+                    report[label] = step
+                    continue
+                texts = [n.text for n in doc.iter(f"{{{CAL}}}calendar-data") if n.text]
+                step["datenknoten"] = len(texts)
+                step["vevents_roh"] = sum(x.count("BEGIN:VEVENT") for x in texts)
+                parsed = []
+                for text in texts:
+                    parsed.extend(parse_events(repair_ics(text), start, end))
+                step["geparst"] = len(parsed)
+                ohne_fenster = []
+                for text in texts:
+                    ohne_fenster.extend(parse_events(repair_ics(text), date(1970, 1, 1), date(2100, 1, 1)))
+                step["geparst_ohne_fenster"] = len(ohne_fenster)
+                step["beispiele"] = [
+                    {k: e[k] for k in ("summary", "start_date", "start_time", "all_day")}
+                    for e in sorted(ohne_fenster, key=lambda e: e["start_date"])[-8:]]
+            else:
+                step["antwort"] = answer.text[:300]
+            report[label] = step
+    return report
+
+
 # IServ writes an offset where the standard demands a named zone. Home
 # Assistant discards the whole file over this; we simply correct it.
 _BAD_TZID = re.compile(r"TZID=([+-]\d{2}:?\d{2})(?=[:;])")
@@ -262,25 +315,22 @@ def parse_events(ics_text: str, start: date, end: date) -> list[dict]:
     return events
 
 
+def _query(start: date, end: date, expand: bool) -> str:
+    """A calendar-query for the window; with expand the server resolves series."""
+    first, last = start.strftime("%Y%m%dT000000Z"), end.strftime("%Y%m%dT235959Z")
+    data = (f'<c:calendar-data><c:expand start="{first}" end="{last}"/></c:calendar-data>'
+            if expand else "<c:calendar-data/>")
+    return ('<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+            f"<d:prop>{data}</d:prop><c:filter><c:comp-filter name=\"VCALENDAR\">"
+            f"<c:comp-filter name=\"VEVENT\"><c:time-range start=\"{first}\" end=\"{last}\"/>"
+            "</c:comp-filter></c:comp-filter></c:filter></c:calendar-query>")
+
+
 async def fetch(portal_url: str, username: str, password: str, calendar_url: str,
                 start: date, end: date) -> list[dict]:
     """Events of one calendar; the server expands repetitions where it can."""
-    window = (
-        f'<c:time-range start="{start.strftime("%Y%m%dT000000Z")}" '
-        f'end="{end.strftime("%Y%m%dT235959Z")}"/>'
-    )
-    query = (
-        '<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop>'
-        f"<c:calendar-data><c:expand start=\"{start.strftime('%Y%m%dT000000Z')}\" "
-        f"end=\"{end.strftime('%Y%m%dT235959Z')}\"/></c:calendar-data></d:prop>"
-        f"<c:filter><c:comp-filter name=\"VCALENDAR\"><c:comp-filter name=\"VEVENT\">{window}"
-        "</c:comp-filter></c:comp-filter></c:filter></c:calendar-query>"
-    )
-    plain = query.replace(
-        f"<c:calendar-data><c:expand start=\"{start.strftime('%Y%m%dT000000Z')}\" "
-        f"end=\"{end.strftime('%Y%m%dT235959Z')}\"/></c:calendar-data>", "<c:calendar-data/>")
     async with _client(username, password) as client:
-        for body in (query, plain):
+        for body in (_query(start, end, True), _query(start, end, False)):
             try:
                 answer = await client.request("REPORT", calendar_url, content=body.encode(),
                                               headers={"Depth": "1"})

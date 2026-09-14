@@ -73,6 +73,30 @@ def events(account_id: int, start: str | None = None, end: str | None = None,
         role=role or None)}
 
 
+@router.get("/{calendar_id}/inspect")
+async def inspect(account_id: int, calendar_id: int,
+                  user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Why a calendar stays empty: accepted query, entries sent, entries kept."""
+    _parent(user, account_id)
+    row = store.credentials(account_id)
+    entry = next((c for c in store.calendars(account_id) if c["id"] == calendar_id), None)
+    if row is None or entry is None:
+        raise HTTPException(404, "Kalender oder Zugang nicht gefunden")
+    from ..secret_store import decrypt_secret
+
+    password = decrypt_secret(row["password_ciphertext"])
+    today = date.today()
+    try:
+        result = await iserv_calendar.inspect(
+            row["portal_url"], row["username"], password, entry["url"],
+            today - timedelta(days=store.PAST_DAYS), today + timedelta(days=store.AHEAD_DAYS))
+    except IservCalendarError as exc:
+        raise HTTPException(422, str(exc)) from None
+    finally:
+        password = ""
+    return {"name": entry["name"], "rolle": entry["role"], **result}
+
+
 @router.get("/probe")
 async def probe(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
     """Structure of the CalDAV account, to see where shared calendars sit."""
