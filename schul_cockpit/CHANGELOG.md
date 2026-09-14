@@ -1,3 +1,8 @@
+## 0.39.6
+
+- Der Abruf wartet, bis der Verlagsviewer fertig geladen hat, bevor er irgendetwas anklickt. Vorher konnte er mitten im Ladevorgang zugreifen und landete bei BiBox sogar wieder auf der Anmeldeseite.
+- Als Einstieg in den Leser gelten nur noch eindeutige Beschriftungen wie „Zum E-Book", „Buch öffnen" oder „Weiterlesen". Ein bloßes „Öffnen", „Lesen" oder „Starten" steht auch auf Regalkacheln und im Kontomenü und führte aus dem Buch heraus.
+
 ## 0.39.5
 
 - BiBox liefert wieder Seiten: nach dem vollständigen Laden greift der Seitenwechsel über die Adresszeile.
