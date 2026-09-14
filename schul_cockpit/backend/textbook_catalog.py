@@ -88,4 +88,8 @@ async def scan_connected_accounts() -> None:
                 )
             finally:
                 conn.close()
-            _LOGGER.warning("digital textbook shelf scan failed for account %s: %s", account_id, type(exc).__name__)
+            _LOGGER.warning(
+                "digital textbook shelf scan failed for account %s: %s",
+                account_id,
+                str(exc) if isinstance(exc, TextbookScanError) else type(exc).__name__,
+            )
