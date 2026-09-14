@@ -1,3 +1,9 @@
+## 0.39.1
+
+- Der Testabruf in der Elternansicht zeigt zusätzlich das ganze Viewer-Fenster mit Bedienleiste, die geöffneten Ansichten und die Bedienelemente des Verlagsviewers. Damit lässt sich bestimmen, wie ein Viewer blättert, wenn keiner der eingebauten Wege greift.
+- Erfasst werden ausschließlich Angaben zur Bedienung: Tag, Rolle, Beschriftung, Titel, Platzhalter, Name, Id- und Klassenhinweis sowie Schaltflächentext auf 40 Zeichen gekürzt. Kein Fließtext aus dem Buch. Aus den Adressen werden lange undurchsichtige Zeichenfolgen entfernt, damit keine Sitzungsschlüssel auftauchen.
+- Die Diagnose läuft nur im Testabruf der Elternansicht, nicht in der Hausaufgabenhilfe. An die KI geht davon nichts.
+
 ## 0.39.0
 
 - Der Seitenabruf meldet die Stufe, an der er scheitert: Anmeldung, Medienregal, Buch öffnen, Seitennavigation oder Seite lesen. Elternansicht und Mentor bekommen dieselbe Angabe statt eines allgemeinen Anzeige-Fehlers.

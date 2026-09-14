@@ -6,7 +6,7 @@ import os
 import re
 import time
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
 from selenium import webdriver
@@ -544,10 +544,96 @@ def _stable_shot(driver, tries: int = 4, pause: float = 0.7) -> bytes:
     return shot
 
 
+_CONTROL_SURVEY_SCRIPT = r"""
+const out=[];
+const cut=(s,n)=>((s||'').replace(/\s+/g,' ').trim().slice(0,n));
+const TEXTY=new Set(['A','BUTTON','SUMMARY','OPTION']);
+const ROLES=['button','link','menuitem','tab','option','spinbutton'];
+function look(root){
+  for(const e of root.querySelectorAll('a,button,input,select,textarea,summary,[role],[contenteditable],[tabindex]')){
+    if(out.length>=150) return;
+    const r=e.getBoundingClientRect();
+    const own=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ');
+    const role=e.getAttribute('role')||'';
+    out.push({
+      tag:e.tagName.toLowerCase(), type:cut(e.getAttribute('type'),20), role:cut(role,20),
+      label:cut(e.getAttribute('aria-label'),60), title:cut(e.getAttribute('title'),60),
+      placeholder:cut(e.getAttribute('placeholder'),40), name:cut(e.getAttribute('name'),40),
+      id:cut(e.id,40), cls:cut(typeof e.className==='string'?e.className:'',60),
+      text:(TEXTY.has(e.tagName)||ROLES.includes(role))?cut(own,40):'',
+      value:(e.tagName==='INPUT'||e.tagName==='SELECT')?cut(e.value,20):'',
+      visible:r.width>0&&r.height>0
+    });
+    if(e.shadowRoot) look(e.shadowRoot);
+  }
+  for(const e of root.querySelectorAll('*')) if(e.shadowRoot) look(e.shadowRoot);
+}
+look(document);
+return {url:location.pathname+location.hash, title:cut(document.title,80), controls:out};
+"""
+
+# Viewer addresses can carry a session token. Long opaque runs are dropped;
+# short, telling parts such as "#/page/12" survive.
+_OPAQUE = re.compile(r"[A-Za-z0-9_-]{24,}")
+_SURVEY_FIELDS = ("label", "title", "placeholder", "name", "text", "id", "cls", "value")
+
+
+def _survey(driver) -> dict:
+    """Control metadata of the open viewer for the parent-facing page test.
+
+    Deliberately no running text from the book: only labels of operating
+    elements, and button captions cut to 40 characters.
+    """
+    controls: list[dict] = []
+    documents: list[dict] = []
+
+    def visit(depth: int = 0) -> None:
+        try:
+            data = driver.execute_script(_CONTROL_SURVEY_SCRIPT) or {}
+        except Exception:
+            return
+        for control in data.get("controls", []):
+            control["frame"] = depth
+            if any(control.get(field) for field in _SURVEY_FIELDS):
+                controls.append(control)
+        documents.append({
+            "frame": depth,
+            "url": _OPAQUE.sub("…", data.get("url") or ""),
+            "title": data.get("title") or "",
+        })
+        if depth >= 3 or len(controls) >= 200:
+            return
+        for frame in driver.find_elements(By.CSS_SELECTOR, "iframe,frame"):
+            switched = False
+            try:
+                driver.switch_to.frame(frame)
+                switched = True
+                visit(depth + 1)
+            except Exception:
+                pass
+            finally:
+                if switched:
+                    driver.switch_to.parent_frame()
+
+    driver.switch_to.default_content()
+    visit()
+    driver.switch_to.default_content()
+    return {"controls": controls[:200], "documents": documents}
+
+
 @dataclass(frozen=True)
 class PageShot:
     page: int | None  # None: the book is open, but this page was not reachable
     image: bytes
+
+
+@dataclass
+class CaptureResult:
+    shots: list[PageShot] = field(default_factory=list)
+    note: str = ""
+    controls: list[dict] = field(default_factory=list)
+    documents: list[dict] = field(default_factory=list)
+    window_image: bytes | None = None
 
 
 def _capture_pages_sync(
@@ -557,8 +643,9 @@ def _capture_pages_sync(
     title: str,
     pages: list[int],
     launch_url: str | None = None,
+    survey: bool = False,
     budget: float = 240.0,
-) -> tuple[list[PageShot], str]:
+) -> CaptureResult:
     driver = _driver("--window-size=1440,1100")
     deadline = time.monotonic() + budget
     stage = "IServ-Anmeldung"
@@ -608,7 +695,14 @@ def _capture_pages_sync(
             shots.append(PageShot(None, _stable_shot(driver)))
         elif len(shots) < len(pages) and not note:
             note = "Nicht alle Seiten erreichbar"
-        return shots, note
+        result = CaptureResult(shots=shots, note=note)
+        if survey:
+            seen = _survey(driver)
+            result.controls = seen["controls"]
+            result.documents = seen["documents"]
+            driver.switch_to.default_content()
+            result.window_image = driver.get_screenshot_as_png()
+        return result
     except TextbookScanError:
         raise
     except Exception as exc:
@@ -626,7 +720,8 @@ async def capture_pages(
     title: str,
     pages: list[int],
     launch_url: str | None = None,
-) -> tuple[list[PageShot], str]:
+    survey: bool = False,
+) -> CaptureResult:
     return await asyncio.to_thread(
-        _capture_pages_sync, portal_url, username, password, title, pages, launch_url
+        _capture_pages_sync, portal_url, username, password, title, pages, launch_url, survey
     )

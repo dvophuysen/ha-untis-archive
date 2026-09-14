@@ -11,7 +11,7 @@ from backend import db, textbook_context as ctx
 from backend.auth import get_current_user
 from backend.routers import textbooks
 from backend.secret_store import encrypt_secret
-from backend.textbook_browser import PageShot, TextbookScanError
+from backend.textbook_browser import CaptureResult, PageShot, TextbookScanError
 
 
 def seed(title="Politik & Co. Niedersachsen 8", subject="Politik"):
@@ -43,9 +43,9 @@ async def test_all_pages_delivered_are_reported_as_loaded(env, monkeypatch):
     seed()
     calls = []
 
-    async def capture(portal, user, password, title, pages, launch_url=None):
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
         calls.append((title, list(pages), launch_url))
-        return [PageShot(page, png(page)) for page in pages], ""
+        return CaptureResult(shots=[PageShot(page, png(page)) for page in pages])
 
     monkeypatch.setattr(ctx, "capture_pages", capture)
     parts, context = await ctx.homework_page_images(1, "Politik", "Buch, S. 30-31 lesen")
@@ -59,9 +59,9 @@ async def test_known_pages_come_from_the_cache_without_a_second_browser_run(env,
     seed()
     runs = []
 
-    async def capture(portal, user, password, title, pages, launch_url=None):
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
         runs.append(list(pages))
-        return [PageShot(page, png(page)) for page in pages], ""
+        return CaptureResult(shots=[PageShot(page, png(page)) for page in pages])
 
     monkeypatch.setattr(ctx, "capture_pages", capture)
     await ctx.homework_page_images(1, "Politik", "Buch, S. 30-31 lesen")
@@ -74,8 +74,8 @@ async def test_known_pages_come_from_the_cache_without_a_second_browser_run(env,
 async def test_unreachable_page_hands_over_the_open_view_instead_of_nothing(env, monkeypatch):
     seed()
 
-    async def capture(portal, user, password, title, pages, launch_url=None):
-        return [PageShot(None, png(7))], "Seitennavigation nicht gefunden"
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+        return CaptureResult(shots=[PageShot(None, png(7))], note="Seitennavigation nicht gefunden")
 
     monkeypatch.setattr(ctx, "capture_pages", capture)
     parts, context = await ctx.homework_page_images(1, "Politik", "Aufgabe 1 auf S. 34")
@@ -88,7 +88,7 @@ async def test_unreachable_page_hands_over_the_open_view_instead_of_nothing(env,
 async def test_viewer_error_keeps_the_stage_for_the_parent_view(env, monkeypatch):
     seed()
 
-    async def capture(portal, user, password, title, pages, launch_url=None):
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
         raise TextbookScanError(
             "Die angegebenen Buchseiten konnten nicht geöffnet werden (Buch öffnen)", "Buch öffnen"
         )
@@ -105,8 +105,8 @@ async def test_viewer_error_keeps_the_stage_for_the_parent_view(env, monkeypatch
 async def test_partial_delivery_names_the_missing_pages(env, monkeypatch):
     seed()
 
-    async def capture(portal, user, password, title, pages, launch_url=None):
-        return [PageShot(30, png(30))], "Nicht alle Seiten erreichbar"
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+        return CaptureResult(shots=[PageShot(30, png(30))], note="Nicht alle Seiten erreichbar")
 
     monkeypatch.setattr(ctx, "capture_pages", capture)
     _, context = await ctx.homework_page_images(1, "Politik", "Buch, S. 30-32")
@@ -129,8 +129,14 @@ def test_parent_page_test_reports_the_stage_and_a_preview(env, monkeypatch):
     client, state, patch = env
     book_id = seed()
 
-    async def capture(portal, user, password, title, pages, launch_url=None):
-        return [PageShot(pages[0], png(34))], ""
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+        assert survey is True, "the parent page test always collects diagnostics"
+        return CaptureResult(
+            shots=[PageShot(pages[0], png(34))],
+            controls=[{"tag": "button", "label": "Nächste Seite", "visible": True, "frame": 1}],
+            documents=[{"frame": 1, "url": "/reader#/page/1", "title": "click & study"}],
+            window_image=png(9),
+        )
 
     monkeypatch.setattr(ctx, "capture_pages", capture)
     app = FastAPI()
@@ -145,6 +151,11 @@ def test_parent_page_test_reports_the_stage_and_a_preview(env, monkeypatch):
         body = answer.json()
         assert body["status"] == "loaded" and body["page"] == 34 and body["shown_page"] == 34
         assert body["image"].startswith("data:image/jpeg;base64,")
+        assert body["window_image"].startswith("data:image/jpeg;base64,")
+        assert body["controls"] == [
+            {"tag": "button", "label": "Nächste Seite", "visible": True, "frame": 1}
+        ]
+        assert body["documents"][0]["url"] == "/reader#/page/1"
         assert "geheim" not in answer.text
         catalog = isolated.get("/api/accounts/1/textbooks/catalog").json()
         assert catalog["last_fetch"]["status"] == "loaded"

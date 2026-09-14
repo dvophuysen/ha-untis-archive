@@ -84,21 +84,23 @@ def book_and_credentials(account_id:int,subject:str|None=None,book_id:int|None=N
     return book,credentials
 
 
-async def fetch_pages(account_id:int,book,credentials,pages:list[int],use_cache:bool=True):
-    """Deliver the requested pages. Returns (shots, status, stage, detail).
+async def fetch_pages(account_id:int,book,credentials,pages:list[int],use_cache:bool=True,survey:bool=False):
+    """Deliver the requested pages.
 
-    status: loaded, partial, open_page (book open, page unconfirmed) or viewer_error.
+    Returns a dict with shots, status, stage, detail and — only when survey is
+    set — the viewer diagnostics for the parent view. status is loaded,
+    partial, open_page (book open, page unconfirmed) or viewer_error.
     """
     cached=_cached_pages(account_id,book["id"],pages) if use_cache else {}
     missing=[p for p in pages if p not in cached]
-    images=dict(cached);fallback=None;stage=None;detail=None
+    images=dict(cached);fallback=None;stage=None;detail=None;seen=None
     if missing:
         fresh=[];password=""
         try:
             password=decrypt_secret(credentials["password_ciphertext"])
-            fresh,note=await capture_pages(credentials["portal_url"],credentials["username"],password,
-                                           book["title"],missing,book["launch_url"])
-            detail=note or None
+            seen=await capture_pages(credentials["portal_url"],credentials["username"],password,
+                                     book["title"],missing,book["launch_url"],survey)
+            fresh=seen.shots;detail=seen.note or None
         except TextbookScanError as exc:
             stage=exc.stage;detail=str(exc)
             _LOGGER.warning("digital textbook page fetch failed for account %s in stage %s: %s",
@@ -122,7 +124,7 @@ async def fetch_pages(account_id:int,book,credentials,pages:list[int],use_cache:
     else: status="viewer_error"
     try: _record(account_id,book["title"],pages,status,stage,detail,len(ordered))
     except Exception: _LOGGER.warning("digital textbook fetch log write failed for account %s",account_id)
-    return ordered,status,stage,detail
+    return {"shots":ordered,"status":status,"stage":stage,"detail":detail,"seen":seen}
 
 
 def _image_parts(shots):
@@ -139,7 +141,8 @@ async def homework_page_images(account_id:int,subject:str,task_text:str):
     if not pages:return [],{"status":"no_pages"}
     book,credentials=book_and_credentials(account_id,subject=subject)
     if not book or not credentials:return [],{"status":"not_configured","pages":pages}
-    shots,status,stage,detail=await fetch_pages(account_id,book,credentials,pages)
+    result=await fetch_pages(account_id,book,credentials,pages)
+    shots=result["shots"];status=result["status"];stage=result["stage"];detail=result["detail"]
     context={"status":status,"book":book["title"],"pages":pages}
     delivered=[p for p,_ in shots if p is not None]
     if delivered:context["delivered_pages"]=delivered
@@ -159,9 +162,15 @@ async def test_page(account_id:int,book_id:int,page:int) -> dict:
     book,credentials=book_and_credentials(account_id,book_id=book_id)
     if not book:return {"status":"unknown_book"}
     if not credentials:return {"status":"not_configured","book":book["title"]}
-    shots,status,stage,detail=await fetch_pages(account_id,book,credentials,[page],use_cache=False)
-    result={"status":status,"book":book["title"],"page":page,"stage":stage,"detail":detail,
-            "shown_page":shots[0][0] if shots else None}
+    delivery=await fetch_pages(account_id,book,credentials,[page],use_cache=False,survey=True)
+    shots=delivery["shots"];seen=delivery["seen"]
+    result={"status":delivery["status"],"book":book["title"],"page":page,"stage":delivery["stage"],
+            "detail":delivery["detail"],"shown_page":shots[0][0] if shots else None}
     if shots:
         result["image"]="data:image/jpeg;base64,"+base64.b64encode(_jpeg(shots[0][1])).decode()
+    if seen is not None:
+        result["controls"]=seen.controls
+        result["documents"]=seen.documents
+        if seen.window_image:
+            result["window_image"]="data:image/jpeg;base64,"+base64.b64encode(_jpeg(seen.window_image)).decode()
     return result
