@@ -1,3 +1,7 @@
+## 0.49.1
+
+- Die Elternansicht kann ein Fach sofort zu Themenfeldern ordnen lassen, statt auf den nächtlichen Lauf zu warten.
+
 ## 0.49.0
 
 - Die Themenliste ist nach Fächern gruppiert und innerhalb eines Fachs nach Themenfeldern geordnet. Vorher stand sie rein nach Aktualität, wodurch Einheiten desselben Fachs weit auseinanderlagen.

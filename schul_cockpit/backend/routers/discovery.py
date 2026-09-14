@@ -118,6 +118,16 @@ def validate_pack(pack, batch):
         raise ValueError('Every supplied lesson must be accounted for exactly once')
 
 
+@router.post("/fields")
+async def fields(account_id:int, subject:str|None=None, user:CurrentUser=Depends(get_current_user)):
+    """Ein Fach zu Themenfeldern ordnen, ohne auf die Nacht zu warten."""
+    access(user,account_id,write=True,parent=True)
+    from .. import learning_fields
+    if _AI_LOCK.locked(): raise HTTPException(429,'Eine KI-Auswertung läuft bereits')
+    async with _AI_LOCK:
+        return await learning_fields.consolidate(account_id, subject)
+
+
 @router.post("/recheck")
 def recheck(account_id:int, user:CurrentUser=Depends(get_current_user)):
     """Einträge ohne Thema noch einmal auswerten lassen.
