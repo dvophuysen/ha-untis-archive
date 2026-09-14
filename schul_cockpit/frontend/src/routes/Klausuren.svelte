@@ -1,5 +1,4 @@
 <script>
-  import ActionLabel from '../lib/ActionLabel.svelte';
   import { api } from '../lib/api.js';
   import { formatShortDate, daysBetween, isoToday } from '../lib/format.js';
   import { appState } from '../lib/store.svelte.js';
@@ -11,9 +10,6 @@
   let loading = $state(true);
   let error = $state(null);
   let busyKey = $state(null);
-  // Manueller Termin in Bearbeitung — { manual_id, exam_date, title }
-  let editing = $state(null);
-
   const canManage = $derived(
     !!(appState.me && (appState.me.is_admin || appState.me.role === 'parent'))
   );
@@ -46,45 +42,6 @@
       data = { ...data };
     } catch (e) {
       error = e.message;
-    } finally {
-      busyKey = null;
-    }
-  }
-
-  function startEdit(e) {
-    editing = {
-      manual_id: e.manual_id,
-      exam_date: e.date,
-      title: e.title ?? '',
-    };
-  }
-
-  async function saveEdit() {
-    if (!editing?.manual_id) return;
-    if (!editing.exam_date) { error = 'Datum fehlt.'; return; }
-    busyKey = `manual:${editing.manual_id}`;
-    try {
-      await api.patch(
-        `/api/accounts/${accountId}/manual-exams/${editing.manual_id}`,
-        { exam_date: editing.exam_date, title: editing.title || null },
-      );
-      editing = null;
-      await load();
-    } catch (e) {
-      error = e.message;
-    } finally {
-      busyKey = null;
-    }
-  }
-
-  async function deleteManual(e) {
-    if (!confirm(`Termin "${e.subject_name ?? e.title}" am ${formatShortDate(e.date)} löschen?`)) return;
-    busyKey = e.exam_key;
-    try {
-      await api.delete(`/api/accounts/${accountId}/manual-exams/${e.manual_id}`);
-      await load();
-    } catch (err) {
-      error = err.message;
     } finally {
       busyKey = null;
     }
@@ -138,8 +95,8 @@
   <div class="section-title">Demnächst</div>
   {#if data.upcoming.length === 0}
     <div class="empty" style="padding:1rem;">
-      Keine Arbeiten eingetragen.
-      {#if canManage}<a href="#/exams">Termin ergänzen <ActionLabel /></a>{/if}
+      Keine Arbeiten eingetragen. Sie kommen aus dem IServ-Klausurplan, sobald die
+      Schule sie dort einträgt.
     </div>
   {:else}
     {#each data.upcoming as e (e.exam_key)}
@@ -150,48 +107,28 @@
             {#if e.subject_name && e.title && e.title !== e.subject_name}
               <div class="dim">{e.title}</div>
             {/if}
-            <div class="dim">{formatShortDate(e.date)}{#if e.source === 'manual'} · manuell{/if}</div>
+            <div class="dim">{formatShortDate(e.date)}</div>
           </div>
           <span class="badge when {urgencyClass(e.date)}">{whenLabel(e.date)}</span>
         </div>
 
-        <!-- Nur manuelle Termine sind editierbar; bei Kalenderterminen ist
-             manual_id undefined und träfe sonst auf ein leeres editing zu. -->
-        {#if e.source === 'manual' && editing && editing.manual_id === e.manual_id}
-          <div class="edit-form">
-            <label>Datum</label>
-            <input type="date" bind:value={editing.exam_date} />
-            <label style="margin-top:0.4rem;">Titel (optional)</label>
-            <input bind:value={editing.title} placeholder="z.B. Nachschreibtermin" />
-            <div class="row gap-sm" style="margin-top:0.5rem;">
-              <button class="primary" onclick={saveEdit} disabled={busyKey === `manual:${e.manual_id}`}>Speichern</button>
-              <button class="ghost" onclick={() => (editing = null)}>Abbrechen</button>
-            </div>
-          </div>
-        {:else}
-          <div class="muted" style="margin-top:0.5rem;">Lernstand:</div>
-          <div class="learn-row">
-            {#each LEARN as l}
-              <button
-                class="learn"
-                class:active={e.learn_state === l.v}
-                disabled={busyKey === e.exam_key}
-                onclick={() => saveProgress(e, { learn_state: l.v })}
-                title={l.label}
-              >{l.emoji}<span class="ll">{l.label}</span></button>
-            {/each}
-          </div>
+        <div class="muted" style="margin-top:0.5rem;">Lernstand:</div>
+        <div class="learn-row">
+          {#each LEARN as l}
+            <button
+              class="learn"
+              class:active={e.learn_state === l.v}
+              disabled={busyKey === e.exam_key}
+              onclick={() => saveProgress(e, { learn_state: l.v })}
+              title={l.label}
+            >{l.emoji}<span class="ll">{l.label}</span></button>
+          {/each}
+        </div>
 
-          {#if canManage && e.source === 'manual'}
-            <div class="row gap-sm" style="margin-top:0.5rem; justify-content:flex-end;">
-              <button class="ghost" onclick={() => startEdit(e)} title="Termin verschieben / bearbeiten">✏️ bearbeiten</button>
-              <button class="ghost danger" onclick={() => deleteManual(e)} title="Termin löschen">✕</button>
-            </div>
-          {:else if canManage && e.source === 'calendar'}
-            <div class="dim" style="margin-top:0.5rem; font-size:0.78rem;">
-              kommt aus dem Kalender — Datum in der Quelle anpassen oder unter <a href="#/exams">Verwalten</a> dismissen und Ersatztermin anlegen.
-            </div>
-          {/if}
+        {#if canManage}
+          <div class="dim" style="margin-top:0.5rem; font-size:0.78rem;">
+            kommt aus dem IServ-Klausurplan — geändert wird er dort.
+          </div>
         {/if}
       </div>
     {/each}
