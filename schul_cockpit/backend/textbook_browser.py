@@ -109,25 +109,32 @@ def _scan_shelf_sync(portal_url: str, username: str, password: str) -> list[Shel
 
         def read_records(d):
             return d.execute_script(
-                "return [...document.querySelectorAll('a,button,[role=link],[role=button],article')]"
+                "return [...document.querySelectorAll("
+                "'a,button,[role=link],[role=button],article,"
+                "[class*=card],[class*=Card],[class*=product],[class*=Product],"
+                "[class*=book],[class*=Book],[class*=media],[class*=Media]')]"
                 ".map(e => ({"
                 "text:(e.innerText||e.textContent||'').trim(),"
                 "label:e.getAttribute('aria-label')||e.getAttribute('title')||'',"
                 "image:[...e.querySelectorAll('img')].map(i=>i.alt||i.title||'').filter(Boolean).join(' '),"
-                "hasImage:!!e.querySelector('img'),href:e.href||null}))"
+                "hasImage:!!e.querySelector('img')||getComputedStyle(e).backgroundImage!=='none',"
+                "isCard:/card|product|book|media/i.test(e.className||''),href:e.href||null}))"
             )
 
         def record_titles(records):
             values = []
             for record in records:
-                if not record.get("hasImage") or not record.get("href"):
-                    continue
                 for key in ("text", "label", "image"):
                     value = _clean(record.get(key) or "")
                     if (
                         5 <= len(value) <= 180
                         and not _GENERIC_LABELS.fullmatch(value)
                         and not _GENERIC_PHRASES.search(value)
+                        and (
+                            _BOOK_WORDS.search(value)
+                            or record.get("hasImage")
+                            or record.get("isCard")
+                        )
                     ):
                         values.append(value)
                         break
