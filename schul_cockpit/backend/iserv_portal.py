@@ -174,3 +174,90 @@ async def read_feed(portal_url: str, username: str, password: str, url: str) -> 
     if "BEGIN:VCALENDAR" not in text:
         raise IservLoginError("Unter dieser Adresse steht kein Kalender")
     return text
+
+
+_COLLECT_SCRIPT = r"""
+const out = {links: [], fields: [], text: (document.body ? document.body.innerText : '').slice(0, 4000)};
+const seen = new Set();
+for (const a of document.querySelectorAll('a[href]')) {
+  const href = a.href || '';
+  if (!href || seen.has(href)) continue;
+  seen.add(href);
+  out.links.push({href, text: (a.innerText || a.getAttribute('title') || '').trim().slice(0, 90)});
+}
+for (const i of document.querySelectorAll('input,textarea')) {
+  const value = (i.value || '').trim();
+  if (value.startsWith('http')) out.fields.push({href: value, text: (i.name || i.id || 'Feld').slice(0, 60)});
+}
+return out;
+"""
+
+
+def _browse_sync(portal_url: str, username: str, password: str, paths: tuple[str, ...]) -> dict:
+    from selenium.common.exceptions import TimeoutException
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+
+    from .textbook_browser import _driver
+
+    base = portal_url.rstrip("/") + "/"
+    pages: list[dict] = []
+    feeds: list[dict] = []
+    driver = _driver()
+    try:
+        driver.get(urljoin(base, "iserv/"))
+        driver.find_element(By.NAME, "_username").send_keys(username)
+        driver.find_element(By.NAME, "_password").send_keys(password)
+        driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
+        try:
+            WebDriverWait(driver, 20).until(lambda d: "/auth/login" not in d.current_url)
+        except TimeoutException:
+            raise IservLoginError("Benutzername oder Passwort stimmen nicht")
+        for path in paths:
+            url = urljoin(base, path)
+            try:
+                driver.get(url)
+                WebDriverWait(driver, 20).until(
+                    lambda d: d.execute_script("return document.readyState") == "complete")
+            except Exception:
+                pages.append({"url": url, "fehler": "nicht geladen"})
+                continue
+            # The portal renders itself; without this pause the body is empty.
+            WebDriverWait(driver, 15).until(
+                lambda d: len(d.execute_script("return document.body ? document.body.innerText : ''")) > 40
+                or d.execute_script("return document.querySelectorAll('a[href]').length") > 6)
+            data = driver.execute_script(_COLLECT_SCRIPT)
+            treffer = []
+            for entry in data["links"] + data["fields"]:
+                if not _same_host(entry["href"], portal_url):
+                    continue
+                label = f"{entry['text']} {entry['href']}"
+                if re.search(r"(\.ics|/ical|webcal|subscri|abonn)", label, re.I):
+                    if entry["href"] not in {f["href"] for f in feeds}:
+                        feeds.append({**entry, "gefunden_auf": url})
+                elif _INTERESTING.search(label):
+                    treffer.append(entry)
+            pages.append({"url": url, "titel": driver.title[:120],
+                          "adresse": driver.current_url[:200],
+                          "text": data["text"][:900],
+                          "links_gesamt": len(data["links"]),
+                          "treffer": treffer[:30]})
+    finally:
+        try:
+            driver.quit()
+        except Exception:
+            pass
+    return {"seiten": pages, "feeds": feeds}
+
+
+async def browse(portal_url: str, username: str, password: str,
+                 paths: tuple[str, ...] = SEEDS) -> dict:
+    """The same survey with a real browser.
+
+    Current IServ ships a rendered application: fetching the HTML returns a
+    skeleton with four links, so the modules only become visible once the page
+    has actually run.
+    """
+    import asyncio
+
+    return await asyncio.to_thread(_browse_sync, portal_url, username, password, paths)

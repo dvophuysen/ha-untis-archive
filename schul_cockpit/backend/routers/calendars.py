@@ -108,11 +108,15 @@ def _credentials(account_id: int):
 
 
 @router.get("/portal")
-async def portal(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
+async def portal(account_id: int, browser: bool = False, paths: str | None = None,
+                 user: CurrentUser = Depends(get_current_user)) -> dict:
     """Which modules of the IServ portal carry dates, and what they offer."""
     _parent(user, account_id)
     row, password = _credentials(account_id)
+    wanted = tuple(p.strip() for p in (paths or "").split(",") if p.strip()) or iserv_portal.SEEDS
     try:
+        if browser:
+            return await iserv_portal.browse(row["portal_url"], row["username"], password, wanted)
         return await iserv_portal.survey(row["portal_url"], row["username"], password)
     except IservLoginError as exc:
         raise HTTPException(422, str(exc)) from None
