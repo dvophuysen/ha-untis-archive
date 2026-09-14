@@ -340,6 +340,25 @@ def test_blocked_click_falls_back_to_driving_the_field(monkeypatch):
     driver.execute_script.assert_called_once_with(browser._SET_PAGE_SCRIPT, control, 18)
 
 
+def test_typing_that_does_not_stick_is_committed_by_other_means(monkeypatch):
+    # PSPDFKit accepts the keys but keeps its page, so leaving the field and
+    # finally setting the value have to follow.
+    answers = [False, False, True]
+    monkeypatch.setattr(browser, '_wait_for_page', lambda d, p, **k: answers.pop(0))
+    driver = Mock()
+    control = Mock()
+    assert browser._type_page(driver, control, 41) is True
+    assert control.send_keys.call_count == 3
+    driver.execute_script.assert_called_once_with(browser._SET_PAGE_SCRIPT, control, 41)
+
+
+def test_typing_that_works_straight_away_needs_nothing_else(monkeypatch):
+    monkeypatch.setattr(browser, '_wait_for_page', lambda d, p, **k: True)
+    driver = Mock()
+    assert browser._type_page(driver, Mock(), 41) is True
+    driver.execute_script.assert_not_called()
+
+
 def test_dialog_caption_inside_a_nested_span_is_recognised():
     script = '''
 const assert = require('node:assert/strict');

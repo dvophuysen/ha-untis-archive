@@ -681,20 +681,35 @@ el.dispatchEvent(new Event('input',{bubbles:true}));
 el.dispatchEvent(new Event('change',{bubbles:true}));
 for(const type of ['keydown','keypress','keyup'])
   el.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));
+// Some readers only commit the number once the field loses focus.
+el.dispatchEvent(new Event('blur',{bubbles:false}));
+el.dispatchEvent(new Event('focusout',{bubbles:true}));
+if(el.blur) el.blur();
 """
 
 
 def _type_page(driver, control, page: int) -> bool:
+    """Put a page number into a viewer's field, whatever it takes to stick."""
     try:
         control.click()
         control.send_keys(Keys.CONTROL, "a")
         control.send_keys(str(page), Keys.ENTER)
+        if _wait_for_page(driver, page):
+            return True
+        # Enter alone is not always the commit; leaving the field can be.
+        control.send_keys(Keys.TAB)
+        if _wait_for_page(driver, page, timeout=6):
+            return True
     except Exception:
-        # A dialog caught the click. Clear what we can, then drive the field
-        # directly — the overlay cannot swallow that.
+        # A dialog caught the click. Clear what we can and carry on below.
         _dismiss_overlays(driver)
+    try:
+        # Setting the value on the field itself reaches readers that ignore
+        # synthetic typing, and no overlay can swallow it.
         driver.execute_script(_SET_PAGE_SCRIPT, control, page)
-    return _wait_for_page(driver, page)
+    except Exception:
+        return False
+    return _wait_for_page(driver, page, timeout=10)
 
 
 def _field_goto(driver, page: int) -> bool | None:
