@@ -1,3 +1,7 @@
+## 0.39.13
+
+- Das Seitenbild wird auf die tatsächlich dargestellten Buchseiten zugeschnitten, statt das ganze Fenster samt Werkzeugleisten und Seitenleiste zu zeigen. Bei einer Doppelseite umfasst der Ausschnitt beide Seiten. Miniaturleisten bleiben außen vor. Damit bekommt der Mentor deutlich besser lesbaren Text.
+
 ## 0.39.12
 
 - Übernimmt ein Verlagsviewer die getippte Seitenzahl nicht, verlässt der Abruf das Feld und setzt den Wert notfalls direkt. Der PSPDFKit-Leser von Cornelsen nimmt die Tasten an, bleibt aber ohne diesen Schritt auf seiner Seite stehen.
