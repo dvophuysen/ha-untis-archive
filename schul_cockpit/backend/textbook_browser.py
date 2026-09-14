@@ -399,7 +399,9 @@ function look(root){
 
 _ENTER_READER_SCRIPT = r"""
 // Cornelsen lands on a start page; the reader is one click further in.
-const ENTER=/^(zum e-?book|zum buch|buch (ö|oe)ffnen|jetzt lesen|weiterlesen|lesen starten|lesen|(ö|oe)ffnen|starten)$/i;
+// Only unmistakable phrases. A bare "Öffnen", "Lesen" or "Starten" also
+// sits on library tiles and account menus and led out of the book.
+const ENTER=/^(zum e-?\s?book|zum buch|buch (ö|oe)ffnen|e-?\s?book (ö|oe)ffnen|jetzt lesen|weiterlesen|lesen starten)$/i;
 function look(root){
   for(const e of root.querySelectorAll('a,button,[role="button"],[role="link"]')){
     const own=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ');
@@ -577,6 +579,29 @@ def _dismiss_overlays(driver, rounds: int = 3) -> None:
     driver.switch_to.default_content()
 
 
+def _settle_reader(driver, timeout: float = 30.0) -> None:
+    """Wait until the reader has booted.
+
+    Acting while a publisher app is still loading clicked whatever happened
+    to be on screen — in one case all the way back to the login page.
+    """
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        driver.switch_to.default_content()
+        try:
+            if not driver.current_url.startswith("about:"):
+                if _page_control(driver) or _in_frames(driver, _PAGE_NEIGHBOUR_SCRIPT):
+                    driver.switch_to.default_content()
+                    return
+                driver.switch_to.default_content()
+                if _shown_pages(driver):
+                    return
+        except Exception:
+            pass
+        time.sleep(1.0)
+    driver.switch_to.default_content()
+
+
 def _enter_reader(driver, rounds: int = 2) -> bool:
     """Follow a start page into the reader when no page control exists yet."""
     entered = False
@@ -675,6 +700,7 @@ def _url_goto(driver, page: int) -> bool | None:
 
 def _go_to_page(driver, page: int, trace: list | None = None) -> bool:
     """Try every known way to reach a page, recording what each one did."""
+    _settle_reader(driver, timeout=20)
     driver.switch_to.default_content()
     shown = _shown_pages(driver)
     if page in shown:
@@ -866,7 +892,10 @@ def _capture_pages_sync(
         if new_handles:
             driver.switch_to.window(new_handles[-1])
         _dismiss_overlays(driver)
-        _enter_reader(driver)
+        _settle_reader(driver)
+        _dismiss_overlays(driver)
+        if _enter_reader(driver):
+            _settle_reader(driver)
         stage = "Seitennavigation finden"
         shots: list[PageShot] = []
         note = ""

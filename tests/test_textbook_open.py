@@ -88,6 +88,7 @@ def test_shown_page_numbers_separate_spread_from_total():
 
 
 def test_page_navigation_tries_the_next_way_when_one_fails(monkeypatch):
+    monkeypatch.setattr(browser, '_settle_reader', lambda d, **k: None)
     monkeypatch.setattr(browser, '_shown_pages', lambda d: [])
     monkeypatch.setattr(browser, '_field_goto', Mock(return_value=False))
     monkeypatch.setattr(browser, '_select_goto', Mock(side_effect=RuntimeError('kaputt')))
@@ -101,6 +102,7 @@ def test_page_navigation_tries_the_next_way_when_one_fails(monkeypatch):
 
 
 def test_page_already_open_needs_no_navigation(monkeypatch):
+    monkeypatch.setattr(browser, '_settle_reader', lambda d, **k: None)
     monkeypatch.setattr(browser, '_shown_pages', lambda d: [30, 31])
     field = Mock(return_value=True)
     monkeypatch.setattr(browser, '_field_goto', field)
@@ -239,6 +241,7 @@ def test_advertising_dialog_is_closed_before_navigating(monkeypatch):
 
 
 def test_navigation_tries_the_neighbour_field_after_the_named_one(monkeypatch):
+    monkeypatch.setattr(browser, '_settle_reader', lambda d, **k: None)
     monkeypatch.setattr(browser, '_shown_pages', lambda d: [])
     monkeypatch.setattr(browser, '_dismiss_overlays', lambda d, **k: None)
     monkeypatch.setattr(browser, '_field_goto', Mock(return_value=False))
@@ -299,3 +302,38 @@ def test_intercepted_click_is_retried_after_clearing_the_overlay(monkeypatch):
     assert browser._type_page(Mock(), control, 18) is True
     cleared.assert_called_once()
     assert control.click.call_count == 2
+
+
+def test_settle_waits_while_the_reader_is_still_blank(monkeypatch):
+    driver = Mock()
+    type(driver).current_url = property(lambda self: urls.pop(0))
+    urls = ['about:blank', 'https://viewer.example/book/1', 'https://viewer.example/book/1']
+    monkeypatch.setattr(browser, '_page_control', Mock(side_effect=[None, Mock()]))
+    monkeypatch.setattr(browser, '_in_frames', Mock(return_value=None))
+    monkeypatch.setattr(browser, '_shown_pages', Mock(return_value=[]))
+    monkeypatch.setattr(browser.time, 'sleep', lambda _s: None)
+    browser._settle_reader(driver, timeout=5)
+    # about:blank is not mistaken for a loaded reader.
+    assert browser._page_control.call_count == 2
+
+
+def test_generic_open_captions_no_longer_enter_the_reader():
+    script = '''
+const assert = require('node:assert/strict');
+function link(text) {
+  return {childNodes: [{nodeType: 3, textContent: text}],
+    getAttribute: () => null, getClientRects: () => [{}], querySelectorAll: () => [],
+    shadowRoot: null, _text: text};
+}
+function run(items) {
+  global.document = {querySelectorAll: sel => (sel === '*' ? [] : items)};
+  return new Function(process.argv[1])();
+}
+// A library tile or account menu entry must not be treated as the reader.
+assert.equal(run([link('Öffnen')]), null);
+assert.equal(run([link('Starten')]), null);
+assert.equal(run([link('Lesen')]), null);
+const real = link('Zum E-Book');
+assert.equal(run([real]), real);
+'''
+    subprocess.run(['node', '-e', script, browser._ENTER_READER_SCRIPT], check=True)
