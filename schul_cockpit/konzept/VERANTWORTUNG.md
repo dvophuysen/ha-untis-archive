@@ -1,266 +1,225 @@
 # Verantwortung übernehmen statt erinnert werden
 
-Stand: 14.09.2026. Entwurf zur Entscheidung, keine beschlossene Funktion und keine
-Umsetzungsmeldung. Anlass: Die tägliche Routine (Rückmeldung zu den Stunden,
-Hausaufgaben, Material) bleibt liegen, bis Eltern nachfragen. Gewünscht ist, dass
-die Kinder diese Verantwortung selbst tragen und die Eltern aufhören können,
-hinterherzugehen. Die Kinder sind in der Sekundarstufe I, also weder Grundschule
-noch erwachsen.
+Stand: 14.09.2026, überarbeitet nach Rückmeldung aus dem Alltag. Entwurf zur
+Entscheidung, keine beschlossene Funktion.
 
-## Was dazu schon festgehalten ist
+Anlass ist kein Komfortproblem. Die tägliche Organisation (Hausaufgaben notieren und
+erledigen, Material mitnehmen, Rückmeldung zu den Stunden) scheitert regelmäßig,
+obwohl die Kinder motiviert sind und es anders machen wollen. Lehrkräfte melden sich
+zu Hause und werfen den Eltern mangelnde Unterstützung vor. Die Eltern reagieren mit
+engmaschiger Kontrolle, die weder das Vergessen behebt noch die Kinder selbstständiger
+macht, und die alle belastet. Im vorigen Schuljahr endete dieselbe Spirale in einer
+psychisch stark belastenden Situation.
 
-Die [Vision](VISION.md) nennt Selbstständigkeit ausdrücklich als Erfolgsmaß: „mehr
-eigene Planung und sinnvolle Hilfenutzung". Sie schließt zugleich aus, App-Öffnungen,
-Tokens, Bildschirmzeit und Übungsmenge zu eigenständigen Zielen zu machen.
+Die erste Fassung dieses Entwurfs setzte auf langsame Übergabe und einen
+Wochenrückblick. Das greift zu kurz. Bei einer Vergesslichkeit dieses Ausmaßes hilft
+kein freundlicher Blick nach einer Woche, sondern nur Unterstützung in dem Moment, in
+dem etwas vergessen wird.
 
-In [Offene Ansätze](IDEEN.md) steht Gamification als offener Punkt. Als Kandidaten
-genannt sind sichtbare fachliche Fortschritte, dauerhafte Gestaltungselemente,
-Wochenmarkierungen und ein verlässlicher Tagesabschluss. Ausdrücklich nicht
-beschlossen sind Punkte, Streaks, Belohnungstausch und Sammelwelt. Nachtfristen,
-Verlustdruck und Bildschirmzeitmaximierung sind als unpassend vermerkt.
+## Technischer Befund
 
-Die [Entscheidungen](ENTSCHEIDUNGEN.md) führen Streaks, konkrete Tages- und
-Wochenprämien sowie Sammelwelten unter „Nicht als beschlossen behandeln". D09 hat
-einen eigenen Eltern-Kind-Kommunikationsworkflow verworfen: Die App verwaltet keine
-Absprachen zwischen Eltern und Kind.
+Am 14.09.2026 an der laufenden Instanz geprüft.
 
-Technisch vorhanden ist mehr, als im Alltag ankommt. Der Erinnerungsdienst berechnet
-bereits genau die drei offenen Dinge eines Tages (fällige Hausaufgaben, unbestätigte
-Packpunkte, fehlende Stundenrückmeldungen) und kann eine gebündelte Push-Nachricht
-verschicken. Laut [Umsetzungsstand](UMSETZUNGSSTAND.md) ist dieser Weg auf den
-Kindergeräten nie abgenommen worden: keine Uhrzeit eingeschaltet, keine echte
-Nachricht versendet. Ein Teil des Problems ist also kein Konzeptproblem, sondern eine
-nicht eingeschaltete Funktion.
+Die App wird auf den Kindergeräten bisher als Web-App vom Startbildschirm genutzt. Für
+iOS ist das der schlechteste verfügbare Weg:
 
-## Was die Forschung hergibt
+Die Bildschirmzeit behandelt eine Web-App wie Webinhalte. Während einer Auszeit werden
+Webinhalte auch dann gesperrt, wenn der Browser unter „Immer erlaubt" steht. Eine
+Ausnahme je Adresse, die eine Auszeit überlebt, gibt es nicht. Das erklärt, warum die
+App täglich von Hand freigegeben werden muss. Solange das so ist, kann ein Kind die App
+nicht eigenständig nutzen, und jede Erinnerungsfunktion ist wertlos.
 
-### Vergessen ist in diesem Alter keine Charakterfrage
+Ein Gerät aus der Baureihe von 2018 bleibt dauerhaft auf iOS 18. Apple hat diese
+Generation mit iOS 26 aus der Unterstützung genommen. Die neuere Bildschirmzeit wird
+dort nie ankommen; Warten ist keine Option.
 
-Sich vorzunehmen, später etwas zu tun, und im richtigen Moment daran zu denken, ist
-prospektives Erinnern. Eine Übersichtsarbeit zur Entwicklung dieser Fähigkeit
-beschreibt, dass sie sich über die Jugend hinweg weiterentwickelt und dabei von
-Arbeitsgedächtnis, Handlungsplanung, Aufmerksamkeit, Metagedächtnis und Motivation
-zugleich abhängt. Ein Jugendlicher, der die Hausaufgabe vergisst, scheitert selten am
-Wollen, sondern an der Erinnerung im richtigen Moment.
+Der Ausweg liegt bereits auf beiden Geräten: Die Home-Assistant-App ist auf beiden
+Kinder-iPhones registriert und aktiv. Damit ändert sich alles Wesentliche.
 
-Das hat eine unbequeme Folge für die Elternrolle: Die elterliche Erinnerung ist genau
-der externe Auslöser, der fehlt. Sie funktioniert deshalb. Und solange sie
-funktioniert, entsteht kein eigener Auslöser.
+Die Home-Assistant-App ist eine echte App. Sie lässt sich in der Bildschirmzeit unter
+„Immer erlaubt" eintragen und ist damit von der Auszeit ausgenommen. Das Schul-Cockpit
+ist darin über den vorhandenen Ingress-Zugang erreichbar, ohne zweite Anmeldung.
 
-### Der stärkste einzelne Hebel sind Wenn-Dann-Pläne
+Ihre Benachrichtigungen laufen über den regulären Apple-Dienst statt über Web-Push. Der
+Umweg über eine zum Startbildschirm hinzugefügte Web-App mit ausdrücklicher
+Push-Erlaubnis entfällt, ebenso die Unsicherheit, ob Web-Push auf einem älteren iOS
+zuverlässig ankommt.
 
-Am besten belegt ist ein sehr schlichtes Mittel: sich vorab festzulegen, wann und wo
-genau man etwas tut. Eine Metaanalyse über 642 Einzelprüfungen berichtet Effekte
-zwischen d = 0,27 und d = 0,66; größer fallen sie aus, wenn der Plan die Wenn-Dann-Form
-hat, die Person das Ziel wirklich will und der Plan wiederholt wird. Die ältere
-Metaanalyse von Gollwitzer und Sheeran über 94 Prüfungen nennt d = 0,65. Jugendliche
-gehören zu den untersuchten Gruppen.
+Benachrichtigungen können Tasten tragen. Bis zu zehn Aktionen pro Nachricht sind
+möglich; ein Tippen löst in Home Assistant ein Ereignis aus, das die App
+zurücklesen kann. Eine Textantwort ist ebenfalls möglich. Damit kann eine Erinnerung
+direkt beantwortet werden, ohne die App zu öffnen: „Alles eingepackt" oder „Fehlt noch
+was" als Taste in der Mitteilung.
 
-Übersetzt heißt das: Nicht „Mathe ist bis Donnerstag fällig", sondern „Wenn ich heute
-vom Sport zurück bin, mache ich am Schreibtisch die Matheaufgaben". Der Unterschied
-ist kein Wortspiel, sondern der Unterschied zwischen einer Absicht und einem Auslöser.
+Daraus folgt: Der bisher geplante Web-Push-Weg wird nicht weiterverfolgt. Die
+Erinnerungen laufen über die Home-Assistant-App, und die Kinder öffnen das
+Schul-Cockpit künftig darin.
 
-### Sich selbst beobachten wirkt, bevor irgendjemand belohnt
+## Was die Forschung zu dieser Ausgangslage sagt
 
-Schon das Mitschreiben des eigenen Verhaltens verändert es. Eine ältere
-Einzelfallstudie mit Jugendlichen zeigte, dass die Zahl erledigter Aufgaben stieg,
-sobald die Schüler selbst festhielten, was sie geschafft hatten; Zielsetzung und eine
-selbst geführte Kurve verstärkten das. Das sind kleine Studien, kein großer
-Wirksamkeitsnachweis, aber die Richtung passt zu den Trainings zum selbstregulierten
-Lernen, für die eine kontrollierte Schulstudie d = 0,25 direkt nach dem Training und
-d = 0,33 in der Nachbefragung berichtet. Bescheiden, aber haltbar.
+### Das Muster ist bekannt und behandelbar
 
-Wichtig ist, wer die Kurve sieht. Sobald die Eltern sie täglich anschauen, ist es
-Kontrolle. Sieht sie das Kind, ist es Selbstbeobachtung.
+Hohe Motivation bei gleichzeitig ausgeprägter Vergesslichkeit, Schwierigkeiten mit
+Material und Planung, Rückmeldungen aus der Schule und eine sich verschärfende
+elterliche Kontrolle sind ein häufig beschriebenes Zusammenspiel. Wenn das dauerhaft
+und in mehreren Lebensbereichen auftritt, ist eine fachliche Abklärung sinnvoll. Diese
+Einschätzung gehört zu Fachleuten, nicht in eine App, und dieses Dokument trifft
+ausdrücklich keine Aussage über einzelne Kinder.
 
-### Wer erinnert, behält die Verantwortung
+Für die Gestaltung ist die Abklärung nicht die Voraussetzung. Was bei
+Organisationsschwierigkeiten hilft, ist unabhängig davon gut untersucht.
 
-Die Befunde zur Elternrolle sind ungewöhnlich eindeutig. Autonomieunterstützendes
-Verhalten (begründen statt anordnen, Wahl innerhalb von Grenzen lassen, die Sicht des
-Kindes anerkennen) hängt mit besserem Zeiteinsatz, mehr Ausdauer bei Hausaufgaben und
-weniger Ablenkung zusammen, vermittelt über die Selbststeuerung des Kindes.
-Psychologische Kontrolle, also Druck, Schuldzuweisung und Autoritätsbehauptung, geht
-in Jugendstudien mit weniger erlebter Autonomie, mehr Trotz und geringerer
-selbstbestimmter Motivation einher.
+### Die passendste Studienlage: Organisationstraining
 
-Häufiges Nachfragen ist keine psychologische Kontrolle, rutscht im Alltag aber leicht
-dorthin, wenn es zur täglichen Konfliktlinie wird. Für das Ziel „wir wollen nicht mehr
-hinterhergehen" ist das die zentrale Stelle: Der Abbau der elterlichen Erinnerung ist
-nicht bloß eine Entlastung der Eltern, er ist die Bedingung dafür, dass die Kinder eine
-eigene Routine ausbilden.
+Das am besten untersuchte Vorgehen für genau dieses Problem heißt Homework,
+Organization and Planning Skills. Es richtet sich an Jugendliche der Sekundarstufe I
+und arbeitet an drei Dingen: Ordnung im Material, Notieren von Aufgaben und Terminen,
+Planen der Erledigung. In einer randomisierten Studie mit 47 Schülern zeigten sich
+gegenüber der Wartegruppe Effekte von d = 0,63 für Materialordnung, d = 0,85 für
+Hausaufgabenerledigung und d = 1,05 für Planung. Eine größere Studie mit 280 Schülern
+prüfte die Umsetzung durch Schulpersonal; die Sitzungen dauerten im Mittel unter zwanzig
+Minuten.
 
-### Was Belohnungen anrichten
+Der Kern ist unspektakulär: eine kurze, immer gleiche Prüfroutine, jeden Tag, an
+derselben Stelle, mit sichtbarem Ergebnis. Genau das kann eine App übernehmen.
 
-Die Metaanalyse von Deci, Koestner und Ryan über 128 Experimente fand, dass greifbare,
-erwartete Belohnungen die freiwillige Beschäftigung mit einer Tätigkeit verringern,
-je nach Art der Kopplung um d = −0,28 bis −0,40. Bei Kindern fiel der Effekt stärker
-aus als bei Studierenden. Lob und informatives Feedback zeigten diesen Effekt nicht.
+Zwei Einzelheiten daraus sind wichtig, weil sie meiner ersten Fassung widersprechen.
+Das Training beginnt mit äußerer Struktur und kleinen, unmittelbaren Verstärkern und
+baut beides erst später ab. Und der Abbau erfolgt langsam, über Monate, nicht nach zwei
+guten Wochen.
 
-Für uns heißt das: Eine Prämie für erledigte Hausaufgaben kauft kurzfristig Verhalten
-und macht langfristig aus einer Selbstverständlichkeit einen bezahlten Dienst. Wenn
-überhaupt belohnt wird, dann die Organisationsroutine und nicht das Lernen, und besser
-in Form von Freiheit als in Form von Waren.
+### Rückmeldung aus der Schule statt Beschwerdeanrufe
 
-### Was Gamification tatsächlich bringt
+Die tägliche Rückmeldekarte ist eine seit Jahrzehnten untersuchte, aufwandsarme
+Maßnahme: Die Lehrkraft bestätigt täglich in wenigen Sekunden drei bis fünf vorher
+vereinbarte Punkte, zu Hause folgt eine kleine, verlässliche Anerkennung. Russell
+Barkley bezeichnet dieses Vorgehen als eine der am besten untersuchten
+niedrigschwelligen Maßnahmen, die Eltern einsetzen können. Als wirksamer Bestandteil
+gilt dabei ausdrücklich die Rückmeldung zu Hause.
 
-Die Metaanalyse in Educational Technology Research and Development berichtet Zugewinne
-bei intrinsischer Motivation sowie erlebter Autonomie und Zugehörigkeit, kaum aber bei
-erlebter Kompetenz. Eine Metaanalyse speziell für K-12 kommt zu dem Schluss, dass
-Gamification vor allem extrinsische Motivation stärkt, weil Punkte, Abzeichen und
-Ranglisten überwiegen. Ranglisten wirken bei den Schwächeren als negative Rückmeldung
-und senken dort die Motivation.
+Für diese Familie ist der Nebeneffekt fast wichtiger als der Haupteffekt: Aus
+unregelmäßigen Beschwerdeanrufen wird eine regelmäßige, sachliche Information. Die
+Eltern erfahren am selben Tag, was fehlte, statt zwei Wochen später am Telefon. Und sie
+haben gegenüber der Schule etwas vorzuweisen.
 
-Bei zwei Brüdern mit zwei Jahren Altersabstand ist jede Rangliste deshalb ein
-absehbarer Fehlgriff: Sie erzeugt genau den Vergleich, den keiner der beiden braucht.
+### Was aus der ersten Fassung bestehen bleibt
 
-### Streaks
+Wenn-Dann-Pläne bleiben der stärkste einzelne Hebel für das Erledigen: eine Metaanalyse
+über 642 Prüfungen berichtet Effekte zwischen d = 0,27 und d = 0,66, die ältere
+Metaanalyse von Gollwitzer und Sheeran d = 0,65. Wer festlegt, wann und wo genau etwas
+passiert, tut es deutlich zuverlässiger.
 
-Für Streaks gibt es viel Produktliteratur und wenig unabhängige Forschung. Die
-belastbare Aussage dahinter ist die Verlustaversion: Verluste wiegen schwerer als
-gleich große Gewinne. Genau daraus entsteht der bekannte Nebeneffekt, dass ein
-gerissener Streak entmutigt und Leute die Anwendung danach eher aufgeben. Zahlen dazu
-kursieren in Design-Blogs; sie sind für unsere Zwecke kein Beleg, sondern ein
-Warnhinweis. Wenn ein Streak, dann mit Pausentagen, ohne Rücksetzung auf null und
-niemals auf das Lernen bezogen.
+Ebenso bleibt der Befund zur Elternrolle: Druck und Kontrolle gehen bei Jugendlichen mit
+weniger erlebter Autonomie, mehr Trotz und geringerer selbstbestimmter Motivation
+einher, autonomieunterstützendes Verhalten mit besserem Zeiteinsatz und mehr Ausdauer.
+Die engmaschige Kontrolle, in die euch die Situation drängt, ist deshalb nicht nur
+anstrengend, sie arbeitet gegen das Ziel. Sie ist aber auch keine Schuld: Sie entsteht,
+weil sonst nichts trägt.
 
-### Konsequenzen
+### Korrektur zu Belohnungen
 
-Zu natürlichen und logischen Konsequenzen findet sich Erziehungsratgeberliteratur, kaum
-kontrollierte Forschung. Der plausible Kern: Die wirksamste Konsequenz einer
-vergessenen Hausaufgabe erzeugt die Schule, nicht die Familie. Damit sie wirkt, muss
-sie das Kind erreichen, und dafür müssen die Eltern aufhören, sie abzufangen.
+In der ersten Fassung habe ich Belohnungen pauschal abgeraten, gestützt auf die
+Metaanalyse von Deci, Koestner und Ryan. Dieser Befund gilt weiterhin, betrifft aber
+das freiwillige Interesse an einer Tätigkeit, die jemand ohnehin gern tut. Hier geht es
+um eine fehlende Fertigkeit, nicht um ein fehlendes Interesse. Die Trainings, die bei
+dieser Ausgangslage wirken, arbeiten anfangs mit kleinen, sofortigen und verlässlichen
+Verstärkern und bauen sie später ab.
 
-Die App kann dazu zweierlei beitragen, ohne selbst zu strafen: dem Kind rechtzeitig
-zeigen, worauf es zuläuft, und den Eltern das schlechte Gewissen nehmen, nicht
-eingegriffen zu haben. Eine von der App verhängte Strafe wäre dagegen ein Rückschritt.
-Sie stellt dieselbe Kontrolle wieder her, nur mit einem anderen Absender.
+Die Unterscheidung ist praktisch: kleine Anerkennung für die Routine (eingepackt,
+notiert, abgegeben), nichts für Verständnis oder Noten, nichts, was mit dem Bruder
+verglichen wird, und von Anfang an verabredet, dass es später ausläuft.
 
-## Leitlinien, die sich daraus ergeben
+## Leitlinien
 
-1. Die App übernimmt das Erinnern, nicht die Eltern. Alles andere hält die Abhängigkeit
-   aufrecht.
-2. Der Zeitpunkt der Erinnerung kommt vom Kind, nicht von den Eltern. Das ist der
-   Unterschied zwischen einem eigenen Plan und einer Kontrolle mit Zeitschaltuhr.
-3. Belohnt wird höchstens Organisation, nie Verständnis oder Note.
-4. Kein Vergleich zwischen den Geschwistern, an keiner Stelle.
-5. Rückschläge kosten nichts. Kein Nullpunkt, keine verlorene Sammlung, keine
-   Nachtfrist.
-6. Die Eltern sehen weiterhin alles, aber sie handeln seltener. Der Ort dafür ist ein
-   fester Rückblick, nicht der Abend.
-7. Jede Stufe der Übergabe ist verabredet und umkehrbar, nicht heimlich.
+1. Die App erinnert, nicht die Eltern. Das ist der eigentliche Zweck.
+2. Unterstützung im Moment des Vergessens, nicht im Rückblick.
+3. Eine Nachricht, zwei Tasten. Jede zusätzliche Entscheidung kostet in dieser Lage
+   mehr, als sie bringt.
+4. Der Abbau der Unterstützung dauert Monate und wird verabredet, nicht erschlichen.
+5. Kein Vergleich zwischen den Geschwistern, an keiner Stelle.
+6. Rückschläge kosten nichts. Keine Nullpunkte, keine gerissenen Serien.
+7. Die App stellt Daten bereit und verhängt nichts. Strafen bleiben Sache der Familie
+   und der Schule.
 
-## Vier Vorschläge
+## Vorgehen
 
-### A. Tagesabschluss mit eigenem Wenn-Dann-Plan
+### Stufe 0: Zugang, diese Woche
 
-Das Kind schließt den Tag in der App ab. Angezeigt werden die drei offenen Punkte, die
-der Erinnerungsdienst heute schon berechnet: Rückmeldungen zu den Stunden, fällige
-Hausaufgaben, Packpunkte. Für jeden offenen Punkt wählt das Kind eine Zeit und einen
-Ort in einem Satz: „Nach dem Abendessen am Schreibtisch." Die App erinnert genau dann
-und nur einmal. Nach dem Abschluss ist der Tag sichtbar zu, auch wenn etwas bewusst
-offen bleibt.
+Die Kinder nutzen das Schul-Cockpit künftig in der Home-Assistant-App statt als
+Web-App vom Startbildschirm. Die Home-Assistant-App wird in der Bildschirmzeit unter
+„Immer erlaubt" eingetragen. Danach ist zu prüfen, ob die App während einer Auszeit
+wirklich erreichbar bleibt; erst diese Prüfung entscheidet, ob der Weg trägt.
 
-Das ist der am besten belegte Teil des Konzepts. Er nutzt die Wenn-Dann-Form, verlegt
-die Erinnerung vom Elternteil in die App und macht aus einer Bringschuld eine eigene
-Festlegung. Der Aufwand ist gering, weil Datenberechnung und Pushweg vorhanden sind.
-Voraussetzung ist die praktische Abnahme des Pushwegs auf den Kindergeräten.
+Anschließend je Gerät eine Testnachricht mit Taste, und zwar zu einer Zeit, die niemanden
+stört. Ohne diesen Nachweis ist jede weitere Stufe Spekulation.
 
-Risiko: Die Kinder legen Zeiten fest und halten sie nicht ein. Dann trägt A allein
-nicht, und B wird nötig.
+Aufwand in der App: gering. Der Erinnerungsdienst berechnet die offenen Punkte bereits;
+zu ersetzen ist der Versandweg.
 
-### B. Eigene Verlässlichkeit sichtbar machen
+### Stufe 1: Der Abend
 
-Statt Punkten führt die App eine schlichte Kurve: An wie vielen Schultagen der Woche
-habe ich selbst abgeschlossen, ohne dass jemand nachgefragt hat? Dafür wird
-unterschieden, ob eine Erledigung nach dem eigenen Plan, nach der App-Erinnerung oder
-nach einer elterlichen Nachfrage kam. Nur der erste Fall zählt als selbstständig.
+Eine Mitteilung zu einer festen Zeit am Abend, mit den Punkten für morgen aus der
+vorhandenen Packliste und den fälligen Aufgaben. Zwei Tasten: „Alles dabei" und „Fehlt
+noch was". Die zweite öffnet die Liste.
 
-Das gibt dem Erfolgsmaß der Vision zum ersten Mal echte Daten und liefert dem Kind das,
-was Selbstbeobachtung wirksam macht: die eigene Kurve, ohne Fremdurteil. Die Eltern
-sehen dieselbe Kurve, aber im Wochenrückblick, nicht täglich.
+Wer am Abend nicht geantwortet hat, bekommt am Morgen vor dem Aufbruch eine zweite,
+kürzere Mitteilung. Wer geantwortet hat, bekommt sie nicht.
 
-Risiko: Die Unterscheidung ist nur so gut wie ihre Erfassung. Eine elterliche Nachfrage
-am Küchentisch sieht die App nur, wenn jemand sie einträgt. Die Vision verlangt
-ausdrücklich, nicht beobachtete elterliche Erinnerungen nicht als messbar auszugeben.
-Ehrlicher wäre daher ein Vermerk der Eltern mit einem Tippen, ohne Begründungspflicht.
+### Stufe 2: Der Moment nach dem Unterricht
 
-### C. Stufen der Übergabe
+Das wiederkehrende Grundproblem ist nicht nur das Vergessen der Erledigung, sondern
+dass die Aufgabe gar nicht erst festgehalten wird. Nach der letzten Stunde eine
+Mitteilung mit einer einzigen Frage: Gibt es Aufgaben, die noch nicht in der App
+stehen? Ein Tippen führt direkt zur Kamera. Die Materialablage wertet das Foto bereits
+heute aus und ordnet es Fach und Aufgabe zu.
 
-Drei verabredete Stufen, die das Kind selbst beantragt:
+### Stufe 3: Die Schule als Quelle statt als Anrufer
 
-Auf Stufe 1 erinnert die App am Nachmittag und noch einmal vor dem Schlafengehen. Auf
-Stufe 2 erinnert sie nur zur selbst gewählten Zeit. Auf Stufe 3 erinnert sie gar nicht
-mehr; das Kind arbeitet nach eigenem Plan und sieht den Stand nur, wenn es die App
-öffnet. Der Aufstieg wird beantragt, wenn die Kurve aus B über einige Wochen trägt. Ein
-Rückschritt passiert nicht automatisch, sondern wird besprochen.
+Eine tägliche Rückmeldung zu wenigen, vorher vereinbarten Punkten, zunächst für ein
+einziges Fach oder eine einzige Lehrkraft, dort wo es am meisten weh tut. Die App hält
+sie fest und zeigt die Woche. Ob das gelingt, hängt an der Schule, nicht an der
+Software; deshalb steht es nach den Stufen, die ihr allein umsetzen könnt.
 
-Das ist die gestufte Übergabe von Verantwortung in ihrer einfachsten Form und zugleich
-autonomieunterstützend, weil das Kind die Wahl hat und der Maßstab vorher feststeht.
-Vor allem macht es den Rückzug der Eltern zu etwas Verabredetem statt zu etwas, das
-sich anfühlt wie Aufgeben.
+### Stufe 4: Übergabe
 
-Risiko: Stufe 3 wird beantragt und scheitert. Das muss vorher als normaler Teil des
-Weges benannt sein, sonst wird der Rückschritt eine Niederlage.
+Erst wenn die Fehlerquote gesunken ist, wird die Unterstützung schrittweise
+zurückgenommen: erst die zweite Mitteilung am Morgen, dann die abendliche, zuletzt die
+feste Zeit zugunsten eines eigenen Plans. Jede Stufe wird beantragt, und ein
+Rückschritt ist verabredet, nicht beschämend. Gerechnet wird in Monaten.
 
-### D. Wochenrückblick statt Nachfragen
+## Was das für die Eltern heißt
 
-Ein fester Termin in der Woche, zehn Minuten. Die App bereitet auf, was lief und was
-nicht; das Kind führt durch den Rückblick, die Eltern hören zu und verabreden bei
-Bedarf eine Änderung. Im Gegenzug fragen die Eltern unter der Woche nicht nach.
+Die tägliche Nachfrage soll nicht aus Prinzip entfallen, sondern weil etwas anderes sie
+ersetzt. Solange Stufe 0 und 1 nicht nachweislich laufen, wäre ein Rückzug fahrlässig.
+Sobald sie laufen, ist der Rückzug die eigentliche Maßnahme.
 
-Das ist der Teil, der das eigentliche Anliegen einlöst. Ohne ihn bleibt die tägliche
-Nachfrage bestehen, und alles andere läuft daneben her. Er kostet in der App fast
-nichts, weil nur eine Zusammenfassung nötig ist, und er berührt D09 nicht, solange die
-App keine Absprachen verwaltet, sondern nur die Daten bereitstellt.
-
-Risiko: Der Termin fällt aus, und die Alltagsnachfrage kommt zurück.
-
-### E. Belohnung oder Konsequenz, falls gewünscht
-
-Eine Möglichkeit, die zu den Befunden passt: Die Belohnung ist die Freiheit selbst. Wer
-Stufe 3 erreicht, entscheidet über die eigene Lernzeit ohne Rückfrage; die Eltern
-fragen nicht mehr. Damit fällt die Belohnung mit dem Ziel zusammen, statt danebenher
-zu laufen, und sie kann nicht abgenutzt werden wie eine Prämie.
-
-Nicht empfohlen sind Punkte gegen Waren, Bildschirmzeit als Währung und jede von der
-App verhängte Strafe. Bei Bildschirmzeit kommt hinzu, dass sie den Lernstoff dauerhaft
-zum Preis für etwas Angenehmeres erklärt.
-
-## Vorgeschlagene Reihenfolge
-
-Zuerst die Push-Abnahme auf den Kindergeräten, ohne die A nicht funktioniert. Dann A
-allein für einige Wochen, weil es den größten belegten Effekt hat und keine
-Familienverabredung braucht. Danach B, weil es ohne A nichts zu messen gäbe. C und D
-gehören zusammen und brauchen ein gemeinsames Gespräch mit den Kindern, kein reines
-Softwarepaket. E erst, wenn A bis D stehen, und nur, wenn dann noch etwas fehlt.
-
-Ein Rückblick nach etwa sechs Wochen sollte drei Dinge getrennt betrachten: ob die
-Kinder selbst abschließen, ob die Eltern tatsächlich seltener nachfragen, und ob die
-Stimmung darüber besser geworden ist. Die Vision verlangt hier ausdrücklich, keinen
-automatischen Wirkungsnachweis zu behaupten.
+Gegenüber der Schule ändert sich die Lage mit Stufe 3 am deutlichsten: Es gibt dann
+eine belegte, gemeinsame Routine statt des Vorwurfs, zu Hause geschehe nichts.
 
 ## Offene Entscheidungen
 
-Ob die Kinder die Erinnerungszeit frei wählen oder aus wenigen Vorschlägen. Ob die
-elterliche Nachfrage überhaupt erfasst wird und wenn ja, von wem. Ob es eine
-Wochenmarkierung geben soll und in welcher Form, nachdem Streaks ausgeschlossen sind.
-Wer den Wochenrückblick einberuft. Ob Stufe 3 eine Probezeit hat.
+Ob die Web-App auf den Kindergeräten entfernt wird oder als Notweg bestehen bleibt. Zu
+welcher Uhrzeit die abendliche Mitteilung kommt und wer sie festlegt. Ob es eine kleine
+Anerkennung für die Routine gibt, welche, und wann sie ausläuft. Ob und mit welcher
+Lehrkraft eine tägliche Rückmeldung versucht wird. Ob eine fachliche Abklärung gesucht
+wird; davon hängt keine der oben genannten Stufen ab.
 
 ## Quellen
 
-Die folgenden Arbeiten stützen einzelne Aussagen oben, nicht das Gesamtkonzept.
+Die folgenden Arbeiten stützen einzelne Aussagen, nicht das Gesamtkonzept.
 
-- [Metaanalyse zu Wenn-Dann-Plänen über 642 Prüfungen](https://www.tandfonline.com/doi/abs/10.1080/10463283.2024.2334563), European Review of Social Psychology 2025.
-- [Gollwitzer und Sheeran zu Implementation Intentions](https://cancercontrol.cancer.gov/sites/default/files/2020-06/goal_intent_attain.pdf) mit d = 0,65 über 94 Prüfungen.
-- [Deci, Koestner und Ryan: Metaanalyse zu Belohnungen und intrinsischer Motivation](https://home.ubalt.edu/tmitch/642/articles%20syllabus/Deci%20Koestner%20Ryan%20meta%20IM%20psy%20bull%2099.pdf), 128 Experimente.
-- [Autonomieunterstützende Elternbegleitung bei Hausaufgaben](https://link.springer.com/article/10.1007/s12310-026-09856-4), School Mental Health.
-- [Reaktionen Jugendlicher auf elterliche Regulation](https://iris.unil.ch/bitstreams/d9d2552e-78aa-43d1-98d6-78e30999266a/download), zu psychologischer Kontrolle und Trotz.
-- [Entwicklung des prospektiven Erinnerns im Jugendalter](https://pmc.ncbi.nlm.nih.gov/articles/PMC11521922/), systematische Übersicht.
-- [Schultraining zum selbstregulierten Lernen](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9134005/) mit d = 0,25 und d = 0,33.
-- [Selbstbeobachtung und Zielsetzung bei Hausaufgaben](https://doi.org/10.1177/002221949402700202), kleine Einzelfallstudie.
-- [Gamification-Metaanalyse](https://link.springer.com/article/10.1007/s11423-023-10337-7), Educational Technology Research and Development.
-- [Gamification-Metaanalyse für K-12](https://onlinelibrary.wiley.com/doi/10.1002/pits.70056), Psychology in the Schools.
-- [EEF-Leitfaden zum selbstregulierten Lernen](https://educationendowmentfoundation.org.uk/education-evidence/guidance-reports/metacognition), bereits in IDEEN.md verlinkt.
+- [HOPS: randomisierte Studie mit Schulpersonal](https://pubmed.ncbi.nlm.nih.gov/25355991/), School Psychology Review.
+- [Größere randomisierte Studie zu zwei kurzen Hausaufgaben- und Organisationsprogrammen](https://pubmed.ncbi.nlm.nih.gov/29172596/).
+- [Anleitung zur täglichen Rückmeldekarte](https://ccf.fiu.edu/research/_assets/how_to_establish_a_school_drc.pdf), Center for Children and Families, Florida International University.
+- [Dieselbe Anleitung im Toolkit der American Academy of Pediatrics](https://publications.aap.org/toolkits/book/337/chapter/5733253/How-to-Establish-a-School-Home-Daily-Report-Card).
+- [Metaanalyse zu Wenn-Dann-Plänen über 642 Prüfungen](https://www.tandfonline.com/doi/abs/10.1080/10463283.2024.2334563).
+- [Gollwitzer und Sheeran zu Implementation Intentions](https://cancercontrol.cancer.gov/sites/default/files/2020-06/goal_intent_attain.pdf).
+- [Deci, Koestner und Ryan zu Belohnungen und intrinsischer Motivation](https://home.ubalt.edu/tmitch/642/articles%20syllabus/Deci%20Koestner%20Ryan%20meta%20IM%20psy%20bull%2099.pdf).
+- [Reaktionen Jugendlicher auf elterliche Regulation](https://iris.unil.ch/bitstreams/d9d2552e-78aa-43d1-98d6-78e30999266a/download).
+- [Autonomieunterstützende Elternbegleitung bei Hausaufgaben](https://link.springer.com/article/10.1007/s12310-026-09856-4).
+- [Entwicklung des prospektiven Erinnerns im Jugendalter](https://pmc.ncbi.nlm.nih.gov/articles/PMC11521922/).
+- [Aktionstasten in Mitteilungen der Home-Assistant-App](https://companion.home-assistant.io/docs/notifications/actionable-notifications/).
+- [Geräte ohne iOS 26](https://www.techradar.com/phones/ios/ios-26-compatibility-does-your-iphone-support-it-heres-the-full-list-of-supported-devices).
 
-Für Streaks und für natürliche Konsequenzen liegen keine vergleichbar belastbaren
-Quellen vor. Beides ist oben entsprechend vorsichtig behandelt.
+Zu Streaks und zu natürlichen Konsequenzen liegen keine vergleichbar belastbaren
+Quellen vor; beides bleibt außen vor.
