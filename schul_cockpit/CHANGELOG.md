@@ -1,3 +1,7 @@
+## 0.51.2
+
+- Der Knopf zum Tagesabschluss ist wieder weg. Er verlangte ein Ritual, das es nicht gibt: Aufgaben bleiben offen oder sind erledigt, niemand schließt einen Tag ab. Ein Abend gilt jetzt als erledigt, sobald nichts mehr offen ist — keine Aufgabe mehr fällig, die Tasche für morgen bestätigt, die Stunden zurückgemeldet. Zu sehen gibt es dazu nichts Neues; daran hängt nur, wer am Morgen noch eine Mitteilung bekommt.
+
 ## 0.51.1
 
 - Die Morgenmitteilung ist ab Werk aus. Sie ist eine Verabredung, keine Auslieferung: Wer sie will, schaltet sie in den Eltern-Einstellungen ein, die Uhrzeit steht auf 06:45 vor.
