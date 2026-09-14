@@ -345,11 +345,23 @@ function find(root){
 _PAGE_BUTTON_SCRIPT = r"""
 const wanted=String(arguments[0]);
 const strip=s=>(s||'').replace(/\s+/g,' ').trim().replace(/^(S\.?|Seite|Page)\s*/i,'');
+const PAGER=/(page|pager|pagination|seite|blaettern|blättern)/i;
+function inPager(e){
+  let up=e;
+  for(let step=0;step<3&&up;step++){
+    const role=up.getAttribute('role')||'';
+    const cls=typeof up.className==='string'?up.className:'';
+    if(['toolbar','navigation','group'].includes(role)||PAGER.test(cls)) return true;
+    up=up.parentElement;
+  }
+  return false;
+}
 function find(root){
   for(const e of root.querySelectorAll('a,button,[role="link"],[role="button"],li,td')){
     const own=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ');
     const labels=[own,e.getAttribute('aria-label'),e.getAttribute('title')];
-    if(labels.some(s=>strip(s)===wanted) && e.getClientRects().length) return e;
+    // A chapter entry reading "18" would jump somewhere else entirely.
+    if(labels.some(s=>strip(s)===wanted) && e.getClientRects().length && inPager(e)) return e;
   }
   for(const e of root.querySelectorAll('*')) if(e.shadowRoot){const x=find(e.shadowRoot);if(x)return x;}
   return null;
@@ -359,7 +371,7 @@ function find(root){
 _DISMISS_SCRIPT = r"""
 // Publishers greet the reader with advertising and cookie dialogs. Their
 // backdrop swallows every click on the page navigation behind it.
-const CLOSE=/(schlie(ß|ss)en|close|ausblenden|nicht mehr anzeigen|verstanden|akzeptieren|zustimmen)/i;
+const CLOSE=/^(schlie(ß|ss)en|close|ok|verstanden|alle akzeptieren|akzeptieren|zustimmen)$/i;
 function look(root){
   for(const d of root.querySelectorAll('[role="dialog"],[role="alertdialog"],.modal,cdk-dialog-container,mat-dialog-container')){
     if(!d.getClientRects().length) continue;
@@ -533,24 +545,24 @@ def _type_page(driver, control, page: int) -> bool:
     return _wait_for_page(driver, page)
 
 
-def _field_goto(driver, page: int) -> bool:
+def _field_goto(driver, page: int) -> bool | None:
     control = _page_control(driver)
     if control is None:
-        return False
+        return None
     return _type_page(driver, control, page)
 
 
-def _neighbour_goto(driver, page: int) -> bool:
+def _neighbour_goto(driver, page: int) -> bool | None:
     control = _in_frames(driver, _PAGE_NEIGHBOUR_SCRIPT)
     if control is None:
-        return False
+        return None
     return _type_page(driver, control, page)
 
 
-def _select_goto(driver, page: int) -> bool:
+def _select_goto(driver, page: int) -> bool | None:
     control = _in_frames(driver, _PAGE_SELECT_SCRIPT, str(page))
     if control is None:
-        return False
+        return None
     for option in Select(control).options:
         if re.sub(r"^(S\.?|Seite|Page)\s*", "", (option.text or "").strip(), flags=re.I) == str(page):
             option.click()
@@ -558,22 +570,22 @@ def _select_goto(driver, page: int) -> bool:
     return False
 
 
-def _button_goto(driver, page: int) -> bool:
+def _button_goto(driver, page: int) -> bool | None:
     control = _in_frames(driver, _PAGE_BUTTON_SCRIPT, str(page))
     if control is None:
-        return False
+        return None
     control.click()
     # Only count it when the viewer confirms the page; a bare click could just
     # as well have opened a chapter, and a wrong page is worse than none.
     return _wait_for_page(driver, page)
 
 
-def _url_goto(driver, page: int) -> bool:
+def _url_goto(driver, page: int) -> bool | None:
     driver.switch_to.default_content()
     url = driver.current_url
     target = _PAGE_IN_URL.sub(lambda m: m.group(1) + str(page), url, count=1)
     if target == url:
-        return False
+        return None
     try:
         driver.get(target)
     except TimeoutException:
@@ -587,21 +599,38 @@ def _url_goto(driver, page: int) -> bool:
     except TimeoutException:
         pass
     _dismiss_overlays(driver)
-    return _wait_for_page(driver, page)
+    return _wait_for_page(driver, page, timeout=30)
 
 
-def _go_to_page(driver, page: int) -> bool:
+def _go_to_page(driver, page: int, trace: list | None = None) -> bool:
+    """Try every known way to reach a page, recording what each one did."""
     driver.switch_to.default_content()
-    if page in _shown_pages(driver):
+    shown = _shown_pages(driver)
+    if page in shown:
+        if trace is not None:
+            trace.append({"page": page, "strategy": "bereits offen", "confirmed": True, "shown": shown})
         return True
     _dismiss_overlays(driver)
     for strategy in (_field_goto, _neighbour_goto, _select_goto, _button_goto, _url_goto):
         driver.switch_to.default_content()
+        name = getattr(strategy, "__name__", "unbekannt")
+        step = {"page": page, "strategy": name.strip("_").replace("_goto", "")}
+        outcome = None
         try:
-            if strategy(driver, page):
-                return True
-        except Exception:
-            continue
+            outcome = strategy(driver, page)
+        except Exception as exc:
+            step["error"] = type(exc).__name__
+        step["found"] = outcome is not None
+        step["confirmed"] = outcome is True
+        if trace is not None:
+            try:
+                step["shown"] = _shown_pages(driver)
+                step["url"] = _OPAQUE.sub("…", driver.current_url.split("?")[0])
+            except Exception:
+                pass
+            trace.append(step)
+        if step["confirmed"]:
+            return True
     return False
 
 
@@ -721,6 +750,7 @@ class CaptureResult:
     note: str = ""
     controls: list[dict] = field(default_factory=list)
     documents: list[dict] = field(default_factory=list)
+    attempts: list[dict] = field(default_factory=list)
     window_image: bytes | None = None
 
 
@@ -768,11 +798,12 @@ def _capture_pages_sync(
         stage = "Seitennavigation finden"
         shots: list[PageShot] = []
         note = ""
+        trace: list[dict] | None = [] if survey else None
         for page in pages:
             if time.monotonic() > deadline:
                 note = "Zeitbudget erreicht"
                 break
-            if not _go_to_page(driver, page):
+            if not _go_to_page(driver, page, trace):
                 continue
             stage = f"Seite {page} lesen"
             shots.append(PageShot(page, _stable_shot(driver)))
@@ -784,7 +815,7 @@ def _capture_pages_sync(
             shots.append(PageShot(None, _stable_shot(driver)))
         elif len(shots) < len(pages) and not note:
             note = "Nicht alle Seiten erreichbar"
-        result = CaptureResult(shots=shots, note=note)
+        result = CaptureResult(shots=shots, note=note, attempts=trace or [])
         if survey:
             seen = _survey(driver)
             result.controls = seen["controls"]

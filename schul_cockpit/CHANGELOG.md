@@ -1,3 +1,10 @@
+## 0.39.4
+
+- Der Testabruf protokolliert jeden Blätterversuch: welcher Weg probiert wurde, ob ein Bedienelement gefunden wurde, ob der Viewer die Seite bestätigt hat und welche Seite er danach anzeigt. Damit lässt sich ein fehlschlagender Verlagsviewer bestimmen, statt ihn zu erraten.
+- Dialoge werden nur noch geschlossen, wenn die Schaltfläche genau „Schließen", „OK", „Verstanden" oder „Akzeptieren" heißt. Vorher konnte „ausblenden" auch eine Seitenleiste oder einen Hinweis im Buch treffen.
+- Eine bloße Zahl gilt nur noch als Seitenschaltfläche, wenn sie in einer Blätterleiste steht. Ein Inhaltsverzeichniseintrag „18" führte sonst in ein ganz anderes Kapitel.
+- Nach einem Seitenwechsel über die Adresszeile bekommt ein neu ladender Verlagsviewer 30 statt 12 Sekunden, bevor der Versuch als gescheitert gilt.
+
 ## 0.39.3
 
 - Werbe- und Cookie-Dialoge der Verlage werden vor dem Blättern geschlossen. Bei BiBox lag ein solcher Dialog über der Seitennavigation und verschluckte jeden Klick.
