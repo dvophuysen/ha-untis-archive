@@ -1,3 +1,7 @@
+## 0.49.2
+
+- Die Deckung eines Themenfeldes zählt über alle seine Teile, nicht nur über die gerade angezeigten. Vorher konnte dort „Schritt 3 von 2" stehen, weil ältere Teile außerhalb des Planfensters lagen. Sind nicht alle Teile in der Liste, steht jetzt dabei, wie viele davon gerade zu sehen sind.
+
 ## 0.49.1
 
 - Die Elternansicht kann ein Fach sofort zu Themenfeldern ordnen lassen, statt auf den nächtlichen Lauf zu warten.

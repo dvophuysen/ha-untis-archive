@@ -98,15 +98,7 @@ def attach_fields(account, goals):
         entry=mapping.get(g.get('topic_id'))
         if not entry:continue
         g['field']=entry['title'];g['field_id']=entry['field_id'];g['field_rank']=entry['field_rank']
-    counts={}
-    for g in goals:
-        if not g.get('field_id'):continue
-        bucket=counts.setdefault(g['field_id'],{'total':0,'shown':0})
-        bucket['total']+=1
-        if 'Selbstständig' in (g.get('state') or ''):bucket['shown']+=1
-    for g in goals:
-        bucket=counts.get(g.get('field_id'))
-        if bucket:g['field_parts'],g['field_shown']=bucket['total'],bucket['shown']
+        g['field_parts'],g['field_shown']=entry['parts'],entry['shown']
 
 
 def catalogue(account, snapshot=None):

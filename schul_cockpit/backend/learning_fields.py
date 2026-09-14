@@ -159,7 +159,12 @@ async def consolidate(account_id: int, subject: str | None = None) -> dict:
 
 
 def fields_of(account_id: int) -> dict[int, dict]:
-    """Feldzuordnung je Thema, für Plan und Anzeige."""
+    """Feldzuordnung je Thema, samt Deckung des Feldes.
+
+    Die Deckung zählt über alle Teile des Feldes, nicht über die gerade
+    angezeigten. Sonst stünde ein dritter Schritt in einem Feld mit zwei
+    sichtbaren Teilen.
+    """
     with closing(webapp_conn()) as conn:
         profile = _profile(conn, account_id)
         if not profile:
@@ -168,4 +173,19 @@ def fields_of(account_id: int) -> dict[int, dict]:
             "SELECT t.id AS topic_id,t.field_rank,f.id AS field_id,f.title,f.subject "
             "FROM learning_topics t JOIN learning_fields f ON f.id=t.field_id WHERE t.profile_id=?",
             (profile["id"],)).fetchall()
-    return {r["topic_id"]: dict(r) for r in rows}
+        coverage = conn.execute(
+            "SELECT t.field_id AS field_id, COUNT(*) AS parts, SUM(CASE WHEN EXISTS("
+            " SELECT 1 FROM learning_plan_links l JOIN mentor_evidence e"
+            "  ON e.skill_id=l.skill_id AND e.account_id=l.account_id"
+            " WHERE l.account_id=? AND l.goal_key='discovered:'||t.id"
+            "  AND e.invalidated=0 AND e.result='correct' AND e.help_used=0"
+            ") THEN 1 ELSE 0 END) AS shown"
+            " FROM learning_topics t WHERE t.profile_id=? AND t.field_id IS NOT NULL"
+            " GROUP BY t.field_id", (account_id, profile["id"])).fetchall()
+    counts = {r["field_id"]: (r["parts"], r["shown"] or 0) for r in coverage}
+    found = {}
+    for r in rows:
+        entry = dict(r)
+        entry["parts"], entry["shown"] = counts.get(r["field_id"], (0, 0))
+        found[r["topic_id"]] = entry
+    return found
