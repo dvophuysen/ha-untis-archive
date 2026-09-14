@@ -529,6 +529,10 @@ CREATE TABLE IF NOT EXISTS reminder_app_deliveries (
 );
 """))
 
+# Ein Eintrag ohne erkennbares Thema ist zweierlei: entweder ohne Lerninhalt
+# oder inhaltlich, aber zu knapp beschrieben. Nur das Erste ist kein Lernziel.
+_MIGRATIONS.append(("discovery_unclear_kind", "ALTER TABLE learning_discovery_items ADD COLUMN unclear_kind TEXT"))
+
 _MIGRATIONS.append(("digital_textbooks_003_pages", """
 CREATE TABLE IF NOT EXISTS digital_textbook_pages (
  account_id INTEGER NOT NULL,
