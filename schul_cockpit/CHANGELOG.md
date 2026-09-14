@@ -1,3 +1,7 @@
+## 0.36.6
+
+- Buchcover im persönlichen Medienregal werden auch als interaktive Karten und CSS-Hintergrundcover erkannt; ein klassischer Link mit verschachteltem Bild ist nicht mehr erforderlich.
+
 ## 0.36.5
 
 - Der IServ-Eduplaces-Connector wird jetzt korrekt als bereits angemeldetes Launchpad behandelt. Der irrtümliche Klick auf das öffentliche Eduplaces-Logo entfällt; die Medienregal-Kachel öffnet direkt das persönliche Bücherregal.
