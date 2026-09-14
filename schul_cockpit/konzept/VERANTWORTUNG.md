@@ -54,9 +54,10 @@ kurz antippt, sieht sie nie. Genau das wird ein Kind tun. Eine Routine, die auf 
 Drücken beruht, ist damit erledigt, bevor sie beginnt.
 
 Was das Antippen tut, lässt sich dagegen bestimmen. Mit `url` in den Mitteilungsdaten
-öffnet die App eine gewählte Seite statt der Startseite, also den Ingress-Pfad des
-Add-ons `/hassio/ingress/e54108c7_schul_cockpit`. Ein Tippen führt dann direkt ins
-Schul-Cockpit.
+öffnet die App eine gewählte Seite statt der Startseite. Maßgeblich ist dabei der Pfad
+des Seitenleisten-Eintrags, nicht der Ingress-Pfad: Das Add-on ist als Panel unter
+`/e54108c7_schul_cockpit` registriert, während `/hassio/ingress/…` mit 404 antwortet.
+Die registrierten Pfade liefert die Websocket-Abfrage `get_panels`.
 
 Daraus folgen zwei Festlegungen. Der Web-Push-Weg wird nicht weiterverfolgt; die
 Erinnerungen laufen über die Home-Assistant-App. Und die Mitteilung ist eine Tür, kein
