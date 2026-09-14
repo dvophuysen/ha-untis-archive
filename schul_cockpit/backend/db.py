@@ -396,6 +396,47 @@ CREATE TABLE IF NOT EXISTS digital_textbook_catalog (
 CREATE INDEX IF NOT EXISTS idx_textbook_catalog_account ON digital_textbook_catalog(account_id,title);
 """))
 
+_MIGRATIONS.append(("iserv_calendars_001", """
+CREATE TABLE IF NOT EXISTS iserv_calendars (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ account_id INTEGER NOT NULL,
+ url TEXT NOT NULL,
+ name TEXT NOT NULL,
+ color TEXT,
+ role TEXT NOT NULL DEFAULT 'unused',
+ last_seen TEXT,
+ missing_since TEXT,
+ created_at TEXT NOT NULL,
+ UNIQUE(account_id,url)
+);
+CREATE INDEX IF NOT EXISTS idx_iserv_calendars_account ON iserv_calendars(account_id,role);
+CREATE TABLE IF NOT EXISTS iserv_calendar_events (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ account_id INTEGER NOT NULL,
+ calendar_id INTEGER NOT NULL REFERENCES iserv_calendars(id) ON DELETE CASCADE,
+ uid TEXT NOT NULL DEFAULT '',
+ summary TEXT NOT NULL DEFAULT '',
+ description TEXT NOT NULL DEFAULT '',
+ location TEXT NOT NULL DEFAULT '',
+ start_date TEXT NOT NULL,
+ end_date TEXT NOT NULL,
+ start_time TEXT,
+ end_time TEXT,
+ all_day INTEGER NOT NULL DEFAULT 0,
+ fetched_at TEXT NOT NULL,
+ UNIQUE(account_id,calendar_id,uid,start_date,start_time)
+);
+CREATE INDEX IF NOT EXISTS idx_iserv_events_window ON iserv_calendar_events(account_id,start_date);
+CREATE TABLE IF NOT EXISTS iserv_calendar_sync (
+ account_id INTEGER PRIMARY KEY,
+ status TEXT NOT NULL DEFAULT 'pending',
+ error TEXT,
+ calendars INTEGER NOT NULL DEFAULT 0,
+ events INTEGER NOT NULL DEFAULT 0,
+ synced_at TEXT
+);
+"""))
+
 _MIGRATIONS.append(("materials_001", """
 CREATE TABLE IF NOT EXISTS materials (
  id INTEGER PRIMARY KEY AUTOINCREMENT,

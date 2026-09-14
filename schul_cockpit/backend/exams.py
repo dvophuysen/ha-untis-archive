@@ -256,55 +256,75 @@ async def resolve_exams(
     diag: list[dict] = []
 
     # --- Calendar source ---
+    # IServ first: its calendars are rebuilt every school year and exams are
+    # spread over several of them, so a single HA entity cannot be the source.
     calendar_error = None
-    if entity_id:
-        sup = get_supervisor()
-        if sup.available:
-            try:
-                events = await sup.get_calendar_events(
-                    entity_id,
-                    datetime.combine(start, datetime.min.time()).isoformat(),
-                    datetime.combine(end, datetime.min.time()).isoformat(),
-                )
-            except SupervisorError as exc:
-                events = []
-                calendar_error = str(exc)
-            for ev in events:
-                d = _event_date(ev)
-                if not d:
-                    continue
-                summary = ev.get("summary") or ev.get("message") or ""
-                key = _source_key(ev)
-                ov = overrides.get(key)
-                entry = {
-                    "source": "calendar",
-                    "source_key": key,
-                    "exam_key": key,
-                    "date": d,
-                    "title": summary,
-                    "subject_name": None,
-                    "subject_untis_id": None,
-                    "status": None,         # auto|assigned|ambiguous|unmatched|excluded|dismissed
-                    "candidates": [],
-                }
-                if ov and ov["decision"] == "dismissed":
-                    entry["status"] = "dismissed"
-                elif ov and ov["decision"] == "assigned":
-                    entry["status"] = "assigned"
-                    entry["subject_name"] = ov["subject_name"]
-                    entry["subject_untis_id"] = ov["subject_untis_id"]
-                elif any(kw in _norm(summary) for kw in excludes):
-                    entry["status"] = "excluded"
-                else:
-                    status, subs = match_subject(summary, amap)
-                    entry["status"] = status
-                    entry["candidates"] = subs
-                    if status == "auto":
-                        entry["subject_name"] = subs[0]["subject_name"]
-                        entry["subject_untis_id"] = subs[0]["subject_untis_id"]
-                if entry["status"] in ("auto", "assigned"):
-                    relevant.append(entry)
-                diag.append(entry)
+    from . import school_calendars
+
+    direct = school_calendars.events(account_id, start_iso, end_iso, role="exam")
+    if direct:
+        events = [{
+            "uid": e["uid"] or None,
+            "summary": e["summary"],
+            "description": e["description"],
+            "location": e["location"],
+            "start": {"date": e["start_date"]} if e["all_day"]
+                     else {"dateTime": f"{e['start_date']}T{e['start_time']}:00"},
+            "calendar": e["calendar_name"],
+        } for e in direct]
+        entity_id = None
+    else:
+        events = []
+        if entity_id:
+            sup = get_supervisor()
+            if sup.available:
+                try:
+                    events = await sup.get_calendar_events(
+                        entity_id,
+                        datetime.combine(start, datetime.min.time()).isoformat(),
+                        datetime.combine(end, datetime.min.time()).isoformat(),
+                    )
+                except SupervisorError as exc:
+                    events = []
+                    calendar_error = str(exc)
+
+    for ev in events:
+        d = _event_date(ev)
+        if not d:
+            continue
+        summary = ev.get("summary") or ev.get("message") or ""
+        key = _source_key(ev)
+        ov = overrides.get(key)
+        entry = {
+            "source": "calendar",
+            "source_key": key,
+            "exam_key": key,
+            "date": d,
+            "title": summary,
+            "calendar": ev.get("calendar"),
+            "subject_name": None,
+            "subject_untis_id": None,
+            "status": None,         # auto|assigned|ambiguous|unmatched|excluded|dismissed
+            "candidates": [],
+        }
+        if ov and ov["decision"] == "dismissed":
+            entry["status"] = "dismissed"
+        elif ov and ov["decision"] == "assigned":
+            entry["status"] = "assigned"
+            entry["subject_name"] = ov["subject_name"]
+            entry["subject_untis_id"] = ov["subject_untis_id"]
+        elif any(kw in _norm(summary) for kw in excludes):
+            entry["status"] = "excluded"
+        else:
+            status, subs = match_subject(summary, amap)
+            entry["status"] = status
+            entry["candidates"] = subs
+            if status == "auto":
+                entry["subject_name"] = subs[0]["subject_name"]
+                entry["subject_untis_id"] = subs[0]["subject_untis_id"]
+        if entry["status"] in ("auto", "assigned"):
+            relevant.append(entry)
+        diag.append(entry)
 
     # --- Manual exams ---
     for m in _manual_exams(account_id, start_iso, end_iso):

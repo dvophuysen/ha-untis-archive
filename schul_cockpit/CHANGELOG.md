@@ -1,3 +1,10 @@
+## 0.41.0
+
+- Schultermine kommen jetzt direkt aus IServ statt über abonnierte Home-Assistant-Kalender. Grund: HA verwirft die Klausur-Kalender vollständig, weil IServ dort `TZID=+02:00` statt eines Zeitzonennamens schreibt. Der eigene Leser korrigiert das und liest die Termine trotzdem.
+- Die Kalender werden bei jedem Abgleich neu gesucht, nicht über eine feste Kennung. Damit überlebt die Anbindung den jährlichen Neuaufbau in IServ. Eine gesetzte Rolle wandert am Kalendernamen mit; verschwundene Kalender werden als solche gekennzeichnet.
+- Je Kalender lässt sich in der Elternansicht festlegen, wofür er zählt: Klausuren und Arbeiten, Unterrichtstermine, sonstige Schultermine oder gar nicht. Klausuren dürfen auf mehrere Kalender verteilt sein; derselbe Termin aus zwei Kalendern erscheint einmal.
+- Der gespeicherte Zugang heißt jetzt „IServ-Zugang" und gilt für Schulbücher und Kalender gemeinsam.
+
 ## 0.40.1
 
 - Der Einstieg zum Ablegen heißt jetzt überall „Material hinzufügen" statt „Blatt".
