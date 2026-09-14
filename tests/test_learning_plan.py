@@ -319,3 +319,25 @@ def test_goals_are_ordered_by_subject_then_field_then_build_order():
     assert [g['field_rank'] for g in ordered[1:3]]==[1,2]
     # Was zu keinem Feld gehört, steht hinter den Feldern.
     assert ordered[3]['field'] is None
+
+
+def test_field_coverage_counts_all_parts_not_only_the_visible_ones(setup):
+    """Ein dritter Schritt in einem Feld mit zwei sichtbaren Teilen ergäbe
+    sonst die Anzeige 3 von 2."""
+    from contextlib import closing as _closing
+    from backend import learning_fields as lf
+    client, state, patch = setup
+    with _closing(db.webapp_conn()) as c, c:
+        profile=c.execute('SELECT id FROM learning_profiles WHERE account_id=1 AND active=1').fetchone()[0]
+        fid=c.execute("INSERT INTO learning_fields(profile_id,subject,title,created_at,updated_at) "
+                      "VALUES(?,'MATHEMATIK','Bruchrechnung',?,?)",(profile,lf.now_iso(),lf.now_iso())).lastrowid
+        for rank,title in enumerate(('Kürzen','Erweitern','Addieren','Subtrahieren','Vergleichen'),start=1):
+            c.execute("INSERT INTO learning_topics(profile_id,subject,title,objective,method,status,priority,"
+                      "source_note,created_at,updated_at,field_id,field_rank) "
+                      "VALUES(?,'MATHEMATIK',?,'Ich kann das','explain','active',1,'',?,?,?,?)",
+                      (profile,title,lf.now_iso(),lf.now_iso(),fid,rank))
+    mapping=lf.fields_of(1)
+    assert mapping and all(e['parts']==5 for e in mapping.values())
+    assert all(e['shown']==0 for e in mapping.values())
+    # Der Rang bleibt die Stelle im Feld und übersteigt die Teilezahl nie.
+    assert max(e['field_rank'] for e in mapping.values())==5

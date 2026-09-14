@@ -19,6 +19,7 @@
    const label=goal.field||null;
    let block=subject.blocks.find(b=>b.field===label);
    if(!block){block={field:label,parts:goal.field_parts||0,shown:goal.field_shown||0,goals:[]};subject.blocks.push(block);}
+   if(label){block.parts=Math.max(block.parts,goal.field_parts||0);block.shown=goal.field_shown||block.shown;}
    block.goals.push(goal);
   }
   return bySubject;
@@ -43,7 +44,7 @@
       {#if block.field}
        <div class="field">
         <strong>{block.field}</strong>
-        {#if block.parts}<span class="coverage">{block.shown} von {block.parts} Teilen selbstständig gezeigt</span>{/if}
+        {#if block.parts}<span class="coverage">{block.shown} von {block.parts} {block.parts===1?'Teil':'Teilen'} selbstständig gezeigt{#if block.goals.length<block.parts} · {block.goals.length} davon hier{/if}</span>{/if}
        </div>
       {/if}
       {#each block.goals as goal (goal.key)}<LearningGoal {goal} {onstart}/>{/each}
