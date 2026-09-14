@@ -1,3 +1,7 @@
+## 0.41.1
+
+- Die Elternansicht kann die Struktur des IServ-Kalenderkontos abfragen, wenn der Abgleich weniger Kalender findet als erwartet. Ausgegeben werden nur Adressen, Anzeigenamen und Sammlungstypen, keine Termininhalte und keine Zugangsdaten.
+
 ## 0.41.0
 
 - Schultermine kommen jetzt direkt aus IServ statt über abonnierte Home-Assistant-Kalender. Grund: HA verwirft die Klausur-Kalender vollständig, weil IServ dort `TZID=+02:00` statt eines Zeitzonennamens schreibt. Der eigene Leser korrigiert das und liest die Termine trotzdem.

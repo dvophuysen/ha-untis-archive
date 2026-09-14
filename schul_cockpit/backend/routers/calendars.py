@@ -9,6 +9,7 @@ from pydantic import Field
 
 from .. import school_calendars as store
 from ..auth import CurrentUser, assert_account_access, get_current_user
+from .. import iserv_calendar
 from ..iserv_calendar import IservCalendarError
 from ..learning import InputModel
 
@@ -70,3 +71,21 @@ def events(account_id: int, start: str | None = None, end: str | None = None,
         start or (today - timedelta(days=7)).isoformat(),
         end or (today + timedelta(days=120)).isoformat(),
         role=role or None)}
+
+
+@router.get("/probe")
+async def probe(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Structure of the CalDAV account, to see where shared calendars sit."""
+    _parent(user, account_id)
+    row = store.credentials(account_id)
+    if row is None:
+        raise HTTPException(404, "Noch kein IServ-Zugang gespeichert")
+    from ..secret_store import decrypt_secret
+
+    password = decrypt_secret(row["password_ciphertext"])
+    try:
+        return await iserv_calendar.probe(row["portal_url"], row["username"], password)
+    except IservCalendarError as exc:
+        raise HTTPException(422, str(exc)) from None
+    finally:
+        password = ""

@@ -107,6 +107,61 @@ async def discover(portal_url: str, username: str, password: str) -> list[dict]:
     return sorted(found, key=lambda c: c["name"].casefold())
 
 
+async def probe(portal_url: str, username: str, password: str) -> dict:
+    """Everything the server reports about the account's collections.
+
+    Only structure: addresses, display names and resource types. No event
+    contents, no credentials. Used to work out where a server keeps shared
+    calendars when discovery comes back thin.
+    """
+    root = _root(portal_url)
+    steps: list[dict] = []
+
+    def describe(document, label: str) -> list[dict]:
+        rows = []
+        for response in document.findall(f"{{{DAV}}}response"):
+            resource = response.find(f".//{{{DAV}}}resourcetype")
+            kinds = sorted(child.tag.split("}")[-1] for child in (resource or [])) if resource is not None else []
+            rows.append({
+                "href": _text(response, f"{{{DAV}}}href"),
+                "name": _text(response, f".//{{{DAV}}}displayname"),
+                "types": kinds,
+            })
+        steps.append({"schritt": label, "eintraege": rows[:60]})
+        return rows
+
+    async with _client(username, password) as client:
+        principal = await _propfind(client, root, (
+            '<d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/>'
+            "<d:displayname/><d:resourcetype/></d:prop></d:propfind>"), "0")
+        href = _text(principal, f".//{{{DAV}}}current-user-principal/{{{DAV}}}href") or root
+        steps.append({"schritt": "principal", "eintraege": [{"href": href}]})
+
+        home_doc = await _propfind(client, urljoin(root, href), (
+            '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" '
+            'xmlns:cs="http://calendarserver.org/ns/"><d:prop><c:calendar-home-set/>'
+            "<cs:calendar-proxy-read-for/><cs:calendar-proxy-write-for/>"
+            "<d:group-membership/></d:prop></d:propfind>"), "0")
+        homes = [h.text for h in home_doc.iter(f"{{{DAV}}}href") if h.text]
+        steps.append({"schritt": "home-set", "eintraege": [{"href": h} for h in homes[:20]]})
+
+        for home in dict.fromkeys(homes or [href]):
+            document = await _propfind(client, urljoin(root, home), (
+                '<d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:displayname/>'
+                "</d:prop></d:propfind>"), "1")
+            rows = describe(document, f"depth1 {home}")
+            # One level further: some servers keep the calendars in folders.
+            for row in rows[:12]:
+                if row["href"] and row["href"].rstrip("/") != home.rstrip("/") and not row["types"]:
+                    continue
+                if row["href"] and "calendar" not in row["types"] and row["href"].rstrip("/") != home.rstrip("/"):
+                    deeper = await _propfind(client, urljoin(root, row["href"]), (
+                        '<d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/><d:displayname/>'
+                        "</d:prop></d:propfind>"), "1")
+                    describe(deeper, f"depth1 {row['href']}")
+    return {"root": root, "schritte": steps}
+
+
 # IServ writes an offset where the standard demands a named zone. Home
 # Assistant discards the whole file over this; we simply correct it.
 _BAD_TZID = re.compile(r"TZID=([+-]\d{2}:?\d{2})(?=[:;])")
