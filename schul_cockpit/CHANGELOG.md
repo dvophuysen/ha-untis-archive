@@ -1,3 +1,7 @@
+## 0.37.1
+
+- Automatisch erkannte Buchfächer bleiben im Dropdown sichtbar, auch wenn das Fach erst in einem späteren Halbjahr im Stundenplan auftaucht (z. B. Geschichte).
+
 ## 0.37.0
 
 - Das persönliche Medienregal wird einschließlich eingebetteter Frames und Shadow-DOM gelesen; Cover-Titel kommen unverändert aus Bildbeschriftung, ARIA-Titel oder Buchkarte.
