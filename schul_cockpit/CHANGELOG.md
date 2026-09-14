@@ -1,3 +1,8 @@
+## 0.36.1
+
+- Browsersteuerung auf Selenium und den nativen Alpine-Chromedriver umgestellt, damit der automatische Medienregal-Scan auch auf der aarch64-Home-Assistant-Hardware installierbar ist.
+- Der Scan meldet den nicht erreichbaren Navigationsschritt gezielt und wartet auf dynamisch geladene Buchtitel.
+
 ## 0.36.0
 
 - Das Add-on verwendet einen echten isolierten Chromium-Browser für IServ → Eduplaces → Bildungslogin. Damit steht derselbe technische Darstellungsweg wie in Safari auch für JavaScript-/Canvas-basierte Verlagsviewer zur Verfügung.
