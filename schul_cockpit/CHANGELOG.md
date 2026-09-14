@@ -1,3 +1,7 @@
+## 0.43.4
+
+- Die Elternansicht kann die Datenadressen des IServ-Kalenders direkt abfragen. Die Anfrage läuft aus der angemeldeten Seite heraus, damit die Sitzung gilt.
+
 ## 0.43.3
 
 - Die Portalsuche meldet mit, welche Datenadressen eine Modulseite im Hintergrund abruft. Damit lässt sich die Terminquelle finden, auch wenn sie nirgends verlinkt ist.
