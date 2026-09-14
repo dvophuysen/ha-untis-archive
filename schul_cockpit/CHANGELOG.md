@@ -1,3 +1,7 @@
+## 0.42.2
+
+- Die Elternansicht kann einen einzelnen Kalender befragen, wenn er leer bleibt: angenommene Abfrage, gelieferte Einträge, davon gelesene. Leer und abgelehnt sahen vorher gleich aus.
+
 ## 0.42.1
 
 - Wird eine Hausaufgabenhilfe geöffnet, gewinnt der Verlauf mit dem meisten Gespräch, nicht der zuletzt angelegte. Leere Doppel, die vor 0.42.0 bei einer Unterbrechung entstanden sind, verdecken das eigentliche Gespräch damit nicht mehr.
