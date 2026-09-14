@@ -360,24 +360,32 @@ async def portal_json(portal_url: str, username: str, password: str,
     first and the browser takes over for whatever is left.
     """
     base = portal_url.rstrip("/") + "/"
+    # The browser resolves against the page it sits on, so it needs the full
+    # address; the caller gets its own spelling back either way.
+    targets = {urljoin(base, path): path for path in paths}
     results: dict[str, object] = {}
     missing: list[str] = []
     client = await login(portal_url, username, password)
     try:
-        for path in paths:
+        for url, path in targets.items():
             try:
-                results[path] = await _json(client, urljoin(base, path))
+                results[path] = await _json(client, url)
             except IservLoginError:
-                missing.append(path)
+                missing.append(url)
     finally:
         await client.aclose()
     if missing:
         for entry in await read(portal_url, username, password, tuple(missing)):
-            if entry.get("status") == 200 and entry.get("text"):
-                try:
-                    results[entry["pfad"]] = json.loads(entry["text"])
-                except ValueError:
-                    _LOGGER.warning("Portalantwort nicht lesbar: %s", entry["pfad"])
+            path = targets.get(entry.get("pfad", ""))
+            if path is None:
+                continue
+            if entry.get("status") != 200 or not entry.get("text"):
+                _LOGGER.warning("Portal antwortet auf %s mit %s", path, entry.get("status"))
+                continue
+            try:
+                results[path] = json.loads(entry["text"])
+            except ValueError:
+                _LOGGER.warning("Portalantwort nicht lesbar: %s", path)
     return results
 
 

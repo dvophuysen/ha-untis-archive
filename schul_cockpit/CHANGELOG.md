@@ -1,3 +1,7 @@
+## 0.44.2
+
+- Der Rückfallweg über den Browser fragte eine falsch zusammengesetzte Adresse ab und kam deshalb leer zurück. Der Klausurplan wird jetzt tatsächlich geholt.
+
 ## 0.44.1
 
 - Der Klausurplan wird auch dann gelesen, wenn IServ die einfache Anmeldung für seine Kalender-Schnittstelle ablehnt. Dann übernimmt der Browser, und zwar für alle Zusätze in einem Durchgang.
