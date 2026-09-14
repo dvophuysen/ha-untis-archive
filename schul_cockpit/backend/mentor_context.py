@@ -68,7 +68,7 @@ def snapshot(account_id, include_previous=False, include_all_homework=False):
         # Die Auswertung stuft Einträge ohne Lerninhalt ausdrücklich als unklar
         # ein und stellt eine Rückfrage. Dieses Urteil wurde bisher gespeichert
         # und danach übergangen: Organisatorisches landete als Übungsziel im Plan.
-        unclear={r['lesson_id']:dict(r) for r in c.execute('SELECT lesson_id,fingerprint,note FROM learning_discovery_items WHERE account_id=? AND profile_id=? AND topic_id IS NULL',(account_id,p['id'] if p else -1))}
+        unclear={r['lesson_id']:dict(r) for r in c.execute('SELECT lesson_id,fingerprint,note,unclear_kind FROM learning_discovery_items WHERE account_id=? AND profile_id=? AND topic_id IS NULL',(account_id,p['id'] if p else -1))}
     try:
         with closing(history_conn()) as c:
             start=school_start(c,account_id,day)
@@ -99,7 +99,10 @@ def snapshot(account_id, include_previous=False, include_all_homework=False):
             else:
                 open_question=unclear.get(r['id'])
                 if open_question and open_question['fingerprint']==stamp:
-                    r['no_topic']=True
+                    # Ohne Lerninhalt ist es kein Lernziel. Ist nur die
+                    # Beschreibung zu knapp, bleibt die Stunde eine Stunde;
+                    # sie trägt dann eine offene Frage statt zu verschwinden.
+                    r['no_topic']=open_question['unclear_kind']=='organisatorisch'
                     r['open_question']=open_question['note'] or ''
             clean.append(r)
         lessons=clean
@@ -116,6 +119,15 @@ def snapshot(account_id, include_previous=False, include_all_homework=False):
                 since=start,lessons=lessons,homework=homework,tasks=tasks,reviews=reviews,recent=recent,errors=errors,truncated=clipped,read_at=now_iso())
 
 
+# Fächer, in denen eine Übungsaufgabe am Handy nichts zu suchen hat: Bewegung
+# lässt sich so nicht nachholen, und die Verfügungsstunde ist kein Lernfach.
+NO_PRACTICE=('sport','schwimm','pause','klassenrat','verfügungs','verfuegungs','klassenlehrer','klassenstunde')
+
+
+def practice_subject(name):
+    return bool((name or '').strip()) and not any(x in (name or '').casefold() for x in NO_PRACTICE)
+
+
 def candidates(s):
     day=today_local(); seen=set();out=[]
     # Skills due for retention come first; cap any one subject so recent doubts
@@ -127,8 +139,8 @@ def candidates(s):
     for r in s['recent']: last.setdefault(r['subject'],r['updated_at'][:10])
     # Archive-wide events may have lesson text but no subject. They cannot
     # anchor a subject-specific learning session; retain them in the archive.
-    pool=[r for r in s['lessons'] if not r['future'] and r['text'].strip() and (r.get('subject_name') or '').strip()
-          and not r.get('no_topic')]
+    pool=[r for r in s['lessons'] if not r['future'] and r['text'].strip()
+          and practice_subject(r.get('subject_name')) and not r.get('no_topic')]
     pool.sort(key=lambda r:(r['rating'] not in (1,2),not r['catch_up_open'],last.get(r['subject_name'],''),r['date']),reverse=False)
     for r in pool:
         subject=r.get('subject_name') or 'Unterricht'

@@ -487,7 +487,7 @@ def test_discovery_cached_mapping_feedback_and_isolation(env):
         async def __aexit__(self,*args): pass
         async def post(self,url,**kwargs):
             calls.append(kwargs)
-            pack={'topics':[{'title':'Nominalisierung','lesson_ids':[1],'objective':'Ich erkenne Nomen.','explanation':'Wörter können als Nomen gebraucht werden.','check':A}], 'unclear':[{'lesson_id':2,'question':'Was steht auf Seite 42?'}]}
+            pack={'topics':[{'title':'Nominalisierung','lesson_ids':[1],'objective':'Ich erkenne Nomen.','explanation':'Wörter können als Nomen gebraucht werden.','check':A}], 'unclear':[{'lesson_id':2,'kind':'inhalt_unklar','question':'Was steht auf Seite 42?'}]}
             return httpx.Response(200,json={'status':'completed','output':[{'type':'message','role':'assistant','content':[{'type':'output_text','text':json.dumps(pack)}]}],'usage':{'input_tokens':100,'output_tokens':200}},request=httpx.Request('POST',url))
     monkeypatch.setattr(d.httpx,'AsyncClient',FakeClient)
     url=path()+'/discovery'

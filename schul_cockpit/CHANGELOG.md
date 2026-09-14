@@ -1,3 +1,9 @@
+## 0.48.1
+
+- Die Auswertung unterscheidet jetzt zwei Gründe, warum ein Eintrag kein Thema bekommt: ohne Lerninhalt (Klassengeschäfte, Bücherausgabe, Vertretung ohne Thema) oder inhaltlich, aber zu knapp beschrieben (Unit-Titel, Seitenzahlen, Geschichtentitel). Nur der erste Fall verschwindet aus den Übungsaufgaben. Ein knapp beschriebener Fachinhalt bleibt als Stunde bestehen und trägt die offene Rückfrage. Im Zweifel gilt inhaltlich.
+- Sport, Schwimmen und Verfügungsstunde erzeugen keine Übungsaufgaben mehr. Bewegung lässt sich am Handy nicht nachholen, und die Verfügungsstunde ist kein Lernfach. Die Regel gilt jetzt in Plan und Tagesvorschlägen gemeinsam statt nur im Plan.
+- Die Elternansicht kann Einträge ohne Thema erneut auswerten lassen, wenn sich die Anweisung an die Auswertung geändert hat. Erkannte Themen und alles daran Geübte bleiben unberührt.
+
 ## 0.48.0
 
 - Organisatorische Unterrichtseinträge erscheinen nicht mehr als Übungsaufgabe. Die Auswertung hatte sie längst als „kein Lernthema" eingestuft und eine Rückfrage hinterlegt; der Plan hat dieses Urteil nicht gelesen und stattdessen den rohen Eintragstext als Titel genommen. So standen eine AG-Vorstellung, eine Bücherausgabe und eine Vertretungsstunde als Lerneinheiten in der Liste.

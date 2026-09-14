@@ -55,7 +55,7 @@ def test_discovered_connections_require_unchanged_lesson(setup):
     with closing(db.webapp_conn()) as c:
         t=c.execute('SELECT id,profile_id FROM learning_topics LIMIT 1').fetchone()
         c.execute('INSERT INTO learning_discovery_topics VALUES(?,?,?,?,?,?)',(t['id'],'Kurze Erklärung','Bildliche Brücke','Grundlage','Möglicher Ausblick','now'))
-        c.execute('INSERT INTO learning_discovery_items VALUES(?,?,?,?,?,?)',(1,t['profile_id'],1,mc.fingerprint(['2026-09-11','Deutsch','Adjektive großschreiben']),t['id'],''))
+        c.execute('INSERT INTO learning_discovery_items(account_id,profile_id,lesson_id,fingerprint,topic_id,note) VALUES(?,?,?,?,?,?)',(1,t['profile_id'],1,mc.fingerprint(['2026-09-11','Deutsch','Adjektive großschreiben']),t['id'],''))
     s=mc.snapshot(1)
     assert mc.candidates(s)[0]['title']=='Argumentieren'
     session=start(client)

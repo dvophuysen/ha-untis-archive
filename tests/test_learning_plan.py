@@ -226,3 +226,46 @@ def test_an_entry_without_learning_content_is_no_practice_goal(setup):
     assert not any('Klassengeschäfte' in (g['title'] or '') for g in plan['goals'])
     # Der Rest des Plans bleibt bestehen.
     assert plan['goals']
+
+
+def test_only_an_entry_without_learning_content_drops_out(setup):
+    """Organisatorisches ist kein Lernziel. Ein knapp beschriebener Fachinhalt,
+    etwa ein Unit-Titel, bleibt dagegen eine Stunde mit offener Frage."""
+    client,state,patch=setup;install(client)
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:
+        c.execute("INSERT INTO lessons(account_id,date,subject_name,subject_untis_id,lstext,was_absent) "
+                  "VALUES(1,'2026-09-10','Englisch',3,'Klassengeschäfte',0)")
+        c.execute("INSERT INTO lessons(account_id,date,subject_name,subject_untis_id,lstext,was_absent) "
+                  "VALUES(1,'2026-09-09','Englisch',3,'Einstieg Unit 1: Ty, the new boy',0)")
+        c.execute("INSERT INTO lessons(account_id,date,subject_name,subject_untis_id,lstext,was_absent) "
+                  "VALUES(1,'2026-09-08','Sport',9,'Weitsprung üben',0)")
+
+    from backend import mentor_context as ctx
+    real=ctx.snapshot
+
+    def judged(account_id,**kwargs):
+        s=real(account_id,**kwargs)
+        for lesson in s['lessons']:
+            text=lesson.get('text') or ''
+            if 'Klassengeschäfte' in text:
+                lesson['no_topic']=True;lesson['open_question']='Fachlicher Inhalt?'
+            elif 'Ty, the new boy' in text:
+                lesson['no_topic']=False;lesson['open_question']='Welche Aufgabe wurde bearbeitet?'
+        return s
+
+    patch.setattr(ctx,'snapshot',judged)
+    titles=[g['title'] or '' for g in client.get('/api/accounts/1/plan').json()['goals']]
+    assert not any('Klassengeschäfte' in x for x in titles)
+    assert any('Ty, the new boy' in x for x in titles)
+    # Sport und Verfügungsstunde sind keine Fächer zum Üben am Handy.
+    assert not any('Weitsprung' in x for x in titles)
+
+
+def test_subjects_without_practice_are_named_in_one_place():
+    from backend.mentor_context import practice_subject
+
+    assert practice_subject('MATHEMATIK')
+    assert not practice_subject('SPORT')
+    assert not practice_subject('VERFÜGUNGSSTUNDE')
+    assert not practice_subject('Verfuegungsstunde')
+    assert not practice_subject('')
