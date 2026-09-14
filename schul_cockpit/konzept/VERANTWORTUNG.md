@@ -202,6 +202,39 @@ zurückgenommen: erst die zweite Mitteilung am Morgen, dann die abendliche, zule
 feste Zeit zugunsten eines eigenen Plans. Jede Stufe wird beantragt, und ein
 Rückschritt ist verabredet, nicht beschämend. Gerechnet wird in Monaten.
 
+## Nächstes Paket: der Nachmittag und der Morgen
+
+Stufe 0 und 1 sind gebaut. Was jetzt fehlt, hängt an einer einzigen fehlenden
+Angabe: Die App weiß nicht, ob ein Tag abgeschlossen wurde. Sie weiß nur, ob
+gerade etwas offen ist. Daran scheitern drei Dinge gleichzeitig.
+
+Zuerst also ein Tagesabschluss, der festgehalten wird: wann, von wem, und ob er
+vor oder nach der Erinnerung kam. Das ist eine kleine Tabelle und ein Knopf unter
+der Abendkarte. Darauf bauen die folgenden drei Punkte auf.
+
+Der Morgen-Rückfall. Wer abends nicht abgeschlossen hat, bekommt vor dem Aufbruch
+eine kurze Mitteilung mit dem, was fehlt. Wer abgeschlossen hat, bekommt nichts.
+Ohne die Abschlussangabe würde die Mitteilung auch den treffen, der alles erledigt
+hat, und wäre nach drei Tagen nur noch Lärm.
+
+Der Nachmittag. Die Aufgabe wird oft gar nicht erst notiert, und dann kann auch
+niemand sie abends erledigen. Nach der letzten Stunde eine Mitteilung mit einer
+Frage: Fehlt eine Aufgabe? Ein Tippen öffnet eine Seite mit zwei Möglichkeiten,
+Kamera oder „nichts Neues". Die Materialablage wertet das Foto bereits aus und
+ordnet es Fach und Aufgabe zu; der Weg dorthin fehlt nur noch.
+
+Die eigene Verlässlichkeit. Mit der Abschlussangabe lässt sich endlich zählen,
+worauf es ankommt: an wie vielen Schultagen der Woche das Kind selbst
+abgeschlossen hat, ohne Erinnerung und ohne Nachfrage. Das ist das Maß, das die
+Vision unter Selbstständigkeit versteht, und es ist das Maß, an dem später die
+Rücknahme der Unterstützung hängt.
+
+Daneben zwei kleinere Korrekturen, die beim Bauen aufgefallen sind. Die
+Übungsmessung auf der Klausurkarte betrachtet ein Zeitfenster; ob sechzig Tage
+richtig sind oder besser der Zeitraum seit Ankündigung der Arbeit, ist offen. Und
+von einer Klausur führt noch kein Weg zur Materialablage, obwohl das Arbeitsblatt
+zur Vorbereitung genau dort liegt.
+
 ## Was das für die Eltern heißt
 
 Die tägliche Nachfrage soll nicht aus Prinzip entfallen, sondern weil etwas anderes sie

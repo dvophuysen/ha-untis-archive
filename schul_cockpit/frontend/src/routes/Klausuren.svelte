@@ -88,12 +88,15 @@
   const URGENCY = { now: 'unmittelbar', soon: 'diese Woche', mid: 'in Vorbereitung', far: 'noch Zeit' };
 
   function practiceLabel(p) {
-    if (!p || (!p.units && !p.independent && !p.papers)) return 'Für dieses Fach ist noch nichts geübt.';
+    const weeks = p?.days ? Math.round(p.days / 7) : 0;
+    if (!p || (!p.units && !p.independent && !p.papers)) {
+      return weeks ? `In den letzten ${weeks} Wochen für dieses Fach nichts geübt.` : 'Noch nichts geübt.';
+    }
     const parts = [];
     if (p.units) parts.push(`${p.units} ${p.units === 1 ? 'Lerneinheit' : 'Lerneinheiten'}`);
     if (p.independent) parts.push(`${p.independent} ${p.independent === 1 ? 'Thema' : 'Themen'} ohne Hilfe gezeigt`);
     if (p.papers) parts.push(`${p.papers} ${p.papers === 1 ? 'Übungsarbeit' : 'Übungsarbeiten'} geschrieben`);
-    return parts.join(' · ');
+    return `${parts.join(' · ')}${weeks ? ` · letzte ${weeks} Wochen` : ''}`;
   }
   function practiceUrl(e) {
     const q = new URLSearchParams({ subject: e.subject_name ?? '', topic: e.title ?? '', mode: 'exam' });
