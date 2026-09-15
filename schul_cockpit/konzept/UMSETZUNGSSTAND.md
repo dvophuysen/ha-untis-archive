@@ -12,9 +12,16 @@ Nennt eine Lehrkraft sonst immer das Arbeitsheft, gilt das für ihre Stellen
 ohne Buchteil. Vor einer Arbeit bittet die Abendkarte um die fehlenden
 Heftseiten, höchstens drei, mit Zitat.
 
-**Zweiter Live-Lauf (0.54.0).** Das Inhaltsverzeichnis des Chemiebuchs wurde
-mit 105 Einträgen gelesen; die Auswertung lief über den neuen Rahmen
-`sources`. Weitere Bücher folgten im selben Lauf.
+**Zweiter und dritter Live-Lauf (0.54.0/0.55.0).** Inhaltsverzeichnisse
+gelesen: Chemie 105 Einträge, Deutschbuch 85, Diercke 105, Mathematik 38;
+Green Line und Geschichte und Geschehen auf den Seiten 2 bis 9 nicht gefunden.
+Der dritte Lauf holte 30 Seiten in 917 Sekunden, 10 davon mit bestätigter
+Seitenzahl, und ordnete 40 Stundentexte ohne Seitenangabe zu (33 Kapitel,
+7 keines). Danach: Mathematik Kapitel 1 „Gleichungen“ vollständig (28 von 28
+Seiten), Deutsch Kapitel 3 vollständig (8 von 8), Erdkunde Kapitel 3 „Städte
+im Wandel“ 3 von 36 unterwegs. Das Add-on aktualisiert sich selbst
+(`auto_update`), sobald der Store eine neue Version sieht; 0.55.0 kam so
+mitten in einen Lauf.
 
 **Buchstruktur und Kapitelregel (0.54.0, D39).** Inhaltsverzeichnis je Buch
 einmal gelesen (`book_chapters`), angeschnittene Kapitel samt Vokabel- und
@@ -63,6 +70,9 @@ die Zustände; Eltern stoßen den Lauf von Hand an.
 
 - Der Regal-Scan des Kontos ohne Regal speichert Dialogschaltflächen als
   Bücher; kein Löschweg.
+- Die Inhaltsverzeichnisse von Green Line 4 und Geschichte und Geschehen 3/4
+  liegen nicht auf den Seiten 2 bis 9; dort greift die Kapitelregel noch
+  nicht. Ein zweiter Versuch an anderer Stelle im Buch steht aus.
 - Ob die App auf dem älteren Kindergerät eine Bildschirmzeit-Auszeit übersteht,
   ist weiterhin nur vom Nutzer prüfbar.
 
@@ -95,6 +105,9 @@ Stand 15.09.2026, auf der laufenden Instanz installiert und geprüft. 210 Python
 - Die inhaltliche Verifikation einer Seite (D30) ist abgestimmt, aber nicht gebaut.
 - Der Regal-Scan speichert die Schaltflächen eines Einwilligungsdialogs als Bücher; drei solche Einträge stehen in einem Konto und lassen sich derzeit nicht löschen.
 - `CACHE_KEEP = 60` begrenzt die zwischengespeicherten Buchseiten je Kind.
+- Die Inhaltsverzeichnisse von Green Line 4 und Geschichte und Geschehen 3/4
+  liegen nicht auf den Seiten 2 bis 9; dort greift die Kapitelregel noch
+  nicht. Ein zweiter Versuch an anderer Stelle im Buch steht aus.
 - Ob die App auf dem älteren Kindergerät eine Bildschirmzeit-Auszeit übersteht, ist weiterhin nur vom Nutzer prüfbar.
 
 ---
