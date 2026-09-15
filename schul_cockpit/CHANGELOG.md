@@ -1,3 +1,7 @@
+## 0.56.7
+
+- Der Altstand wird jetzt eingelesen. Der KI-Tagesrahmen von 5 Euro je Kind gilt nicht mehr für den Quellenbestand; der hat seinen eigenen Monatsrahmen. Der Sammellauf nimmt zuerst die Seiten offener Hausaufgaben, dann die Fächer mit einer Arbeit in den nächsten zwei Wochen, dann den Rest, und liest je Lauf bis zu 40 abgelegte, noch ungelesene Seiten nach.
+
 ## 0.56.6
 
 - „Was mir noch fehlt" ist eine Checkliste: je Seite ein Eintrag mit Kamera und Datei. Antippen, fotografieren, und das Foto gehört genau zu dieser Stelle; sie verschwindet von der Liste, noch bevor die Auswertung die Seitenzahl gelesen hat. Die Zuordnung von Hand hat Vorrang vor jeder Herleitung.

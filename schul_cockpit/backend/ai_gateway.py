@@ -75,7 +75,10 @@ def reserve(account_id, purpose, session_id, input_max, output_max):
         opening=cfg['opening_micro'] if cfg['opening_month']==month else 0
         if effective_sum(c,'month=?',(month,))+opening+upper>cfg['monthly_micro']:
             raise HTTPException(429,'Der KI-Rahmen ist ausgeschöpft. Gespeicherte Übungen und Antworten bleiben verfügbar.')
-        if effective_sum(c,'day=? AND account_id=?',(day,account_id))+upper>5_000_000:
+        # Der Quellenbestand hat seinen eigenen Monatsrahmen; die Tagesgrenze
+        # je Kind schützt Gespräche, nicht das Einlesen des Bestands, das der
+        # Nutzer ausdrücklich sofort vollständig will.
+        if purpose!=SOURCES and effective_sum(c,'day=? AND account_id=?',(day,account_id))+upper>5_000_000:
             raise HTTPException(429,'Für heute ist der KI-Rahmen erreicht. Wir sichern deinen Stand.')
         if session_id is not None and effective_sum(c,'session_id=? AND account_id=?',(session_id,account_id))+upper>2_000_000:
             raise HTTPException(429,'Für diese Einheit ist der KI-Rahmen erreicht. Dein Stand bleibt gespeichert.')
