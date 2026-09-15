@@ -449,3 +449,14 @@ def test_crop_keeps_the_original_when_the_area_is_tiny():
     assert browser._crop(blob, {'left': 0, 'top': 0, 'right': 20, 'bottom': 20, 'ratio': 1}) == blob
     cropped = browser._crop(blob, {'left': 50, 'top': 40, 'right': 350, 'bottom': 260, 'ratio': 1})
     assert Image.open(io.BytesIO(cropped)).size == (300, 220)
+
+
+def test_the_browser_keeps_webgl_available_for_the_bibox_reader():
+    """--disable-gpu switched WebGL off and the BiBox reader drew nothing;
+    software WebGL needs the explicit opt-in since Chromium 126."""
+    from backend.textbook_browser import browser_arguments
+
+    args = browser_arguments("--window-size=1440,1100")
+    assert "--disable-gpu" not in args
+    assert "--enable-unsafe-swiftshader" in args and "--headless" in args
+    assert args[-1] == "--window-size=1440,1100"

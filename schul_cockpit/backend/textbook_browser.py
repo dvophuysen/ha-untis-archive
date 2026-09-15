@@ -28,15 +28,28 @@ _CHROMIUM = "/usr/bin/chromium-browser"
 _CHROMEDRIVER = "/usr/bin/chromedriver"
 
 
+def browser_arguments(*extra_args: str) -> list[str]:
+    """Flags for the headless browser.
+
+    No --disable-gpu: it switches WebGL off entirely, and the BiBox reader
+    draws its pages with WebGL. Measured on the live instance, it then keeps
+    the toolbar and the page counter and shows a white void, reporting
+    "CanvasRenderer is not yet implemented". Without a GPU, Chromium renders
+    WebGL in software (SwiftShader); since Chromium 126 that needs an explicit
+    opt-in, hence --enable-unsafe-swiftshader.
+    """
+    return ["--headless", "--no-sandbox", "--disable-dev-shm-usage",
+            "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--lang=de-DE", *extra_args]
+
+
 def _driver(*extra_args: str) -> webdriver.Chrome:
     """Headless Chromium on the driver shipped in the image. Without the
     explicit service, Selenium Manager first tries to download one and fails
     on aarch64 before falling back."""
     options = webdriver.ChromeOptions()
     options.binary_location = _CHROMIUM
-    for arg in ("--headless", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", *extra_args):
+    for arg in browser_arguments(*extra_args):
         options.add_argument(arg)
-    options.add_argument("--lang=de-DE")
     # Console errors are the only place a reader says why it draws nothing.
     options.set_capability("goog:loggingPrefs", {"browser": "ALL"})
     service = Service(executable_path=_CHROMEDRIVER) if os.path.exists(_CHROMEDRIVER) else None
@@ -1107,6 +1120,40 @@ def _wait_for_content(driver, shot: bytes, timeout: float = 15.0, pause: float =
     return shot, report
 
 
+def _open_shelf(driver, portal_url: str, rounds: int = 3) -> bool:
+    """From the IServ connector page into the Bildungslogin shelf.
+
+    The connector draws its tiles after the document reports complete. Two
+    of three Politik fetches failed here with "Medienregal nicht gefunden"
+    while the next one sailed through, so the tile is given time and the page
+    a second load before giving up.
+    """
+    for attempt in range(rounds):
+        driver.get(portal_url.rstrip("/") + "/iserv/eduplacesconnector/")
+        try:
+            WebDriverWait(driver, 15).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+        except TimeoutException:
+            pass
+        end = time.monotonic() + 8.0
+        while True:
+            if _click(driver, re.compile("Bildungslogin.*Medienregal|Medienregal", re.I)):
+                try:
+                    WebDriverWait(driver, 20).until(
+                        lambda d: d.execute_script("return document.readyState") == "complete"
+                    )
+                except TimeoutException:
+                    pass
+                return True
+            if time.monotonic() >= end:
+                break
+            time.sleep(1.0)
+        if attempt + 1 < rounds:
+            time.sleep(2.0)
+    return False
+
+
 def _attach_survey(exc: TextbookScanError, driver, stage: str) -> None:
     """Even a failed run should show the parents where it stopped."""
     try:
@@ -1141,11 +1188,8 @@ def _capture_pages_sync(
         driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]').click()
         WebDriverWait(driver, 15).until(lambda d: "/auth/login" not in d.current_url)
         stage = "Eduplaces öffnen"
-        driver.get(portal_url.rstrip("/") + "/iserv/eduplacesconnector/")
-        WebDriverWait(driver, 15).until(lambda d: d.execute_script("return document.readyState") == "complete")
-        if not _click(driver, re.compile("Bildungslogin.*Medienregal|Medienregal", re.I)):
+        if not _open_shelf(driver, portal_url):
             raise TextbookScanError("Das Medienregal wurde nicht gefunden", stage)
-        WebDriverWait(driver, 20).until(lambda d: d.execute_script("return document.readyState") == "complete")
         stage = "Buch öffnen"
         before = set(driver.window_handles)
         old_url = driver.current_url
@@ -1169,6 +1213,7 @@ def _capture_pages_sync(
         stage = "Seitennavigation finden"
         shots: list[PageShot] = []
         note = ""
+        content: dict = {}
         trace: list[dict] | None = [] if survey else None
         for page in pages:
             if time.monotonic() > deadline:
@@ -1177,7 +1222,13 @@ def _capture_pages_sync(
             if not _go_to_page(driver, page, trace):
                 continue
             stage = f"Seite {page} lesen"
-            shots.append(PageShot(page, _stable_shot(driver)))
+            image = _stable_shot(driver)
+            if looks_blank(image):
+                # A WebGL reader draws after the page number has changed, and
+                # an empty screen is "stable" at once. Give it time before
+                # believing it, and remember what came of it.
+                image, content = _wait_for_content(driver, image)
+            shots.append(PageShot(page, image))
         if not shots:
             # The book is open. Hand over what it shows rather than nothing;
             # the mentor is told that the page could not be confirmed.
@@ -1188,12 +1239,6 @@ def _capture_pages_sync(
             note = "Nicht alle Seiten erreichbar"
         result = CaptureResult(shots=shots, note=note, attempts=trace or [], entry=entry)
         if survey:
-            # A reader may still be drawing. Wait for content once, and
-            # record whether it ever came.
-            content: dict = {}
-            if shots and shots[0].page is not None:
-                image, content = _wait_for_content(driver, shots[0].image)
-                shots[0] = PageShot(shots[0].page, image)
             seen = _survey(driver)
             result.controls = seen["controls"]
             result.documents = seen["documents"]
