@@ -542,6 +542,26 @@ def annotate_lessons(account_id: int, lessons: list[dict], key: str = "lstext", 
         lesson["source_state"] = state
 
 
+_META_LINE = re.compile(r"^\s*(gegeben\s+am|f(?:ä|ae)llig(?:\s+bis)?)\s*:", re.I)
+
+
+def task_text(task: dict) -> str:
+    """Der Auftrag einer Aufgabe. Aus Untis kommt er in den Notizen, mit
+    Kennung und Datumszeilen; der Titel ist dort nur das Fach."""
+    kept = []
+    for raw in (task.get("notes") or "").splitlines():
+        line = raw.strip()
+        if not line or _META_LINE.match(line) or _TAG.fullmatch(line):
+            continue
+        kept.append(re.sub(r"^\s*#\s?", "", raw).strip())
+    body = "\n".join(kept).strip()
+    return body or (task.get("title") or "").strip()
+
+
+def _plain(text: str) -> str:
+    return " ".join(re.sub(r"(^|\s)#", r"\1", text or "").split()).casefold()
+
+
 def homework_for_task(conn, account_id: int, task: dict) -> int | None:
     """Die Untis-Hausaufgabe hinter einer Aufgabe: über die Kennung in den
     Notizen, sonst über denselben Wortlaut."""
@@ -554,12 +574,12 @@ def homework_for_task(conn, account_id: int, task: dict) -> int | None:
             return row["id"]
     if "text" not in columns:
         return None
-    title = " ".join((task.get("title") or "").split()).casefold()
-    if not title:
+    body = _plain(task_text(task))
+    if not body:
         return None
     for row in conn.execute("SELECT id,text FROM homework WHERE account_id=? ORDER BY assigned_date DESC LIMIT 400",
                             (account_id,)):
-        if " ".join((row["text"] or "").split()).casefold() == title:
+        if _plain(row["text"]) == body:
             return row["id"]
     return None
 
@@ -601,11 +621,14 @@ def annotate_tasks(account_id: int, tasks: list[dict]) -> None:
         by_homework.setdefault(link["entry_id"], []).append(link)
     for task in tasks:
         hw = homework_ids.get(task["id"])
-        segs, state, materials = _decorate(task.get("title") or "", by_homework.get(hw, []) if hw else [], analysis)
+        body = task_text(task)
+        segs, state, materials = _decorate(body, by_homework.get(hw, []) if hw else [], analysis)
         for extra in attached.get(task["id"], []):
             if extra not in materials:
                 materials.append(extra)
-        task["title_segments"] = segs
+        task["text"] = body
+        task["text_segments"] = segs
+        task["title_segments"] = segs if body == (task.get("title") or "").strip() else None
         task["source_state"] = state
         task["homework_id"] = hw
         task["materials"] = [details[m] for m in materials if m in details]

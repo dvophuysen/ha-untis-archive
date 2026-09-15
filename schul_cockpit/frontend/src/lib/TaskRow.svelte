@@ -78,7 +78,7 @@
 
     </div>
     {#if cleanNotes}
-      <div class="notes" class:done={isDone}>{cleanNotes}</div>
+      <div class="notes" class:done={isDone}><SourceText segments={task.title_segments ? null : task.text_segments} text={cleanNotes} subject={task.subject_name} taskId={task.id} /></div>
     {/if}
     {#if task.subitems && task.subitems.length > 0}
       <div class="dim sub">

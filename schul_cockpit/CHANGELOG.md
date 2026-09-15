@@ -1,3 +1,7 @@
+## 0.56.1
+
+- Bei Aufgaben aus Untis steht der Auftrag in den Notizen, der Titel ist nur das Fach. Die Quell-Links und die Zuordnung zur Untis-Hausaufgabe gehen jetzt vom Auftrag aus; in 0.56.0 blieben sie leer.
+
 ## 0.56.0
 
 - Überall, wo der Unterricht eine Buchstelle nennt, ist sie jetzt ein Link in der Farbe ihres Stands: grün liegt vor und ist gelesen, gelb wird gerade geholt oder gelesen, rot fehlt und muss fotografiert werden. In der Aufgabenzeile, der Stundenkarte, dem Stundendetail und dem Fachdetail. Grün und gelb führen zum Material, rot zur Kamera, das Foto hängt dann an der Aufgabe.
