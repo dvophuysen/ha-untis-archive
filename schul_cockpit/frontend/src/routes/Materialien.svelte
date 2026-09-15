@@ -189,7 +189,8 @@
   let claim = $state(null);
 
   function photoFor(subject, need, item, viaCamera) {
-    claim = { subject, label: need.label, page: item.page };
+    // Bei einer Stelle ohne Buchteil bekommt das Foto das vermutete Buch mit.
+    claim = { subject, label: need.guess || need.label, page: item.page };
     (viaCamera ? camera : picker)?.click();
   }
 
@@ -308,6 +309,29 @@
   {#if error}<div class="error-box">{error}</div>{/if}
 </div>
 
+<!-- Lesungen mit Folgen gegenlesen: Ein Zettel bindet Stellen, ein Verzeichnis
+     Kapitel. Bis ein Elternteil bestätigt, steht die Lesung hier zur Kontrolle. -->
+{#if data?.can_manage && (data.materials ?? []).some((m) => m.needs_review)}
+  <div class="card review">
+    <strong>Bitte gegenlesen</strong>
+    <p class="lead">Aus diesen Lesungen leite ich Stellen oder Kapitel ab. Handschrift lese ich nicht sicher; ein Blick genügt.</p>
+    {#each (data.materials ?? []).filter((m) => m.needs_review) as m (m.id)}
+      <div class="review-item">
+        <div><strong>{m.title || 'Ohne Titel'}</strong> <small class="muted">· {KIND_NAMES[m.kind] ?? m.kind}{m.subject_name ? ` · ${subjectStyle(m.subject_name).name}` : ''}{m.source_label ? ` · ${m.source_label}` : ''}</small></div>
+        {#if m.kind === 'toc'}
+          <p class="muted">Verzeichnisseite{m.source_page ? ` S. ${m.source_page}` : ''}. Was daraus gelesen wurde, steht unten bei den Büchern.</p>
+        {:else}
+          <p class="preserve">{m.content_text || m.summary || '(kein Text erkannt)'}</p>
+        {/if}
+        <div class="row gap-sm">
+          <button class="primary" disabled={busy} onclick={() => act(async () => { await api.post(`${base}/${m.id}/verified`, { value: true }); message = 'Danke, so gelesen bleibt es.'; await load(); })}>✓ Stimmt so</button>
+          <button disabled={busy} onclick={() => act(() => show(m))}>Korrigieren</button>
+        </div>
+      </div>
+    {/each}
+  </div>
+{/if}
+
 {#if ledger?.missing_total || ledger?.pending_total}
   <details class="card wanted">
     <summary>
@@ -337,7 +361,7 @@
         {#each subject.missing as need}
           <div class="need">
             <p class="what"><strong>{need.label} {need.pages_label}</strong>
-              <span class="muted">· {REASON_HINT[need.reason] ?? KIND_HINT[need.kind] ?? need.kind}</span></p>
+              <span class="muted">· {need.guess ? `vermutlich ${need.guess}` : REASON_HINT[need.reason] ?? KIND_HINT[need.kind] ?? need.kind}</span></p>
             <!-- Checkliste mit Auto-Bezug: Eintrag antippen, Foto oder Datei
                  wählen, und die Stelle ist belegt. -->
             <ul class="checklist">
@@ -557,6 +581,9 @@
   .wanted{border-left:4px solid var(--accent)}
   .wanted>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;list-style:none}
   .wanted>summary::-webkit-details-marker{display:none}
+  .review{border-left:4px solid var(--warm,#b26a00)}
+  .review-item{border-top:1px solid var(--border);padding:8px 0}
+  .review-item .preserve{white-space:pre-wrap;margin:4px 0 8px}
   .options label{display:grid;gap:2px;font-size:0.85rem;color:var(--fg-muted)}
   .options select,.options input{min-height:40px}
   .options input[type=number]{width:7rem}

@@ -198,7 +198,10 @@
         {#if e.sources}
           <div class="sources">
             <strong class={sourcesClass(e.sources)}>{sourcesLabel(e.sources)}</strong>
-            {#if e.sources.notice}<div class="dim">Die Ankündigung der Lehrkraft, was in der Arbeit vorkommt, liegt vor.</div>{/if}
+            {#if e.sources.notice}
+              <div class="dim">Die Ankündigung der Lehrkraft, was in der Arbeit vorkommt, liegt vor{#if e.sources.notice_verified} und ist gegengelesen.{:else}. <a href={`#/materialien?material=${e.sources.notice_id}`}>Bitte gegenlesen</a>, Handschrift lese ich nicht sicher.{/if}</div>
+              {#if e.sources.notice_text}<details class="scope"><summary>Ankündigung ansehen</summary><p class="preserve dim">{e.sources.notice_text}</p></details>{/if}
+            {/if}
             {#each e.sources.chapters as chapter}
               <div class="dim">{chapter.part_label ? `${chapter.part_label}, ` : ''}Kapitel {chapter.number} {chapter.title} (S. {chapter.start_page}{chapter.end_page ? `–${chapter.end_page}` : ''}):
                 {chapter.pages_stored} von {chapter.pages} Seiten da{#if chapter.inferred}, aus dem Stundenthema erschlossen{/if}</div>
@@ -320,6 +323,7 @@
   .measured { margin-top: 0.5rem; font-size: 0.85rem; }
   .measured-when { font-size: 0.78rem; }
   .practice-link { display: inline-block; margin-top: 0.5rem; font-weight: 600; }
+  .preserve { white-space: pre-wrap; }
   .sources { margin-top: 0.5rem; font-size: 0.88rem; display: grid; gap: 0.15rem; }
   .sources .ready { color: var(--rating-3); }
   .sources .pending { color: var(--warm, #b26a00); }
