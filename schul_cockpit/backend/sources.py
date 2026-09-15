@@ -217,12 +217,12 @@ def _shelf(account_id: int) -> dict[str, dict]:
         for r in conn.execute("SELECT title,subject_name FROM digital_textbook_catalog WHERE account_id=?", (account_id,)):
             if r["subject_name"]:
                 books.setdefault(r["subject_name"].strip().casefold(), {"title": r["title"], "access": None, "attempts": 0})
-        for r in conn.execute("SELECT book_title,status,page,checked_at,detail FROM digital_textbook_access WHERE account_id=?",
+        for r in conn.execute("SELECT book_title,status,page,checked_at,detail,toc_state FROM digital_textbook_access WHERE account_id=?",
                               (account_id,)):
             for book in books.values():
                 if book["title"] == r["book_title"]:
                     book["access"] = {"status": r["status"], "page": r["page"], "checked_at": r["checked_at"],
-                                      "detail": r["detail"]}
+                                      "detail": r["detail"], "toc_state": r["toc_state"]}
     return books
 
 
