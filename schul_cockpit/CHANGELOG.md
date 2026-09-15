@@ -1,3 +1,7 @@
+## 0.56.3
+
+- Deutsch trägt wieder ein Icon (Schreibfeder) statt der Flagge; nur Fremdsprachen haben ihre Landesflagge.
+
 ## 0.56.2
 
 - Steht die Untis-Kennung in derselben Zeile wie ein Datum, blieb diese Zeile Teil des Auftrags. Kennungen werden jetzt überall aus dem Text genommen.
