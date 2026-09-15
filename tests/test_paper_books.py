@@ -174,3 +174,29 @@ def test_uploads_carry_the_timetable_spelling_and_their_book_part(env):
                        data={"source_label": "Heftchen"}).status_code == 422
     catalog = client.get("/api/accounts/1/subjects").json()["subjects"]
     assert [(s["name"], s["untis_name"]) for s in catalog] == [("Latein", "LATEIN")]
+
+
+def test_an_unnumbered_part_heading_is_not_a_chapter(env):
+    # Der Textband beginnt jeden Teil mit zwei Einführungsseiten; „Gefahr im
+    # Circus Maximus" (S. 10–29) überschreibt die Lektionen 1 bis 3. Eine
+    # Nennung der Einführungsseite holt nicht zwanzig Seiten.
+    from backend.book_structure import Chapter, store_chapters, chapter_of, chapters_of
+    title = bs.paper_title("LATEIN", "Textband")
+    store_chapters(1, title, [
+        Chapter(number="", title="Gefahr im Circus Maximus", start_page=10, level=1),
+        Chapter(number="1", title="Incitatus soll ein Star werden!", start_page=12, level=2),
+        Chapter(number="2", title="Nur Augen für Afra?", start_page=18, level=2),
+        Chapter(number="3", title="Ein Fest", start_page=24, level=2),
+        Chapter(number="", title="Götter, Tempel und Feste", start_page=30, level=1),
+        Chapter(number="4", title="Ein Opfer", start_page=32, level=2),
+    ])
+    chapters = chapters_of(1, title)
+    assert chapter_of(chapters, 10) is None
+    assert chapter_of(chapters, 19)["number"] == "2"
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO paper_books(account_id,subject_name,part_label,title,toc_state,updated_at) "
+                  "VALUES(1,'LATEIN','Textband',?,'read','now')", (title,))
+    history(lessons=[(1, "2026-09-11", "LATEIN", LA, "TB S. 10, 11 und S. 19")])
+    latin = sources.ledger(1)["subjects"][0]
+    assert [(c["number"], c["start_page"], c["end_page"]) for c in latin["chapters"]] == [("2", 18, 23)]
+    assert {m["label"]: m["pages"] for m in latin["missing"]} == {"Textband": [10, 11, 18, 19, 20, 21, 22, 23]}

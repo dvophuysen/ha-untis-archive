@@ -339,6 +339,13 @@ als offenen Punkt. Ohne Arbeit: nichts.
 - Stellen ohne Buchteil in einem Fach mit zwei Papierbüchern („Voc. 1.
   Lektion S. 10, 11") landen als „Unbekannte Quelle" auf der Liste und werden
   vom ersten passenden Foto beliebigen Buchteils gestrichen.
+- Handschrift liest das Modell nicht sicher („70, 71" statt „10, 11"). Der
+  Zettel sollte nach dem Ablegen einmal gegengelesen werden; die Korrektur
+  ist gesperrt und überlebt jede weitere Auswertung.
+- Den Buchteil einer Seite errät das Modell aus dem Layout; „Grammatik
+  üben"-Seiten des Textbands hielt es für Arbeitsheft oder Begleitband. Wer
+  die Seite von der Einkaufsliste aus fotografiert, gibt den Buchteil mit,
+  dann rät niemand.
 
 - Der Regal-Scan des Kontos ohne Regal läuft in einen Einwilligungsdialog des
   Verlags und speichert dessen Schaltflächen („Abbrechen", „Weiter zur App",
