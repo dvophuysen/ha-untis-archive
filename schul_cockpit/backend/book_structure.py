@@ -180,7 +180,7 @@ def store_chapters(account_id: int, title: str, chapters: list[Chapter]) -> int:
         ordered = sorted(rows, key=lambda c: (c["start_page"], c["level"]))
         conn.execute("DELETE FROM book_chapters WHERE account_id=? AND book_title=?", (account_id, title))
         for i, row in enumerate(ordered):
-            end = row["end_page"] if row["locked"] or row["end_page"] is not None else _end_of(i, ordered)
+            end = row["end_page"] if (row["locked"] & 2) or (not row["locked"] and row["end_page"] is not None) else _end_of(i, ordered)
             conn.execute(
                 "INSERT INTO book_chapters(account_id,book_title,number,title,kind,level,start_page,end_page,belongs_to,created_at,locked) "
                 "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
@@ -202,15 +202,18 @@ def update_chapter(account_id: int, chapter_id: int, changes: dict) -> dict | No
         fields = {k: changes[k] for k in ("start_page", "end_page", "number", "title") if k in changes}
         if "end_page" in fields and fields["end_page"] is not None and fields["end_page"] < fields.get("start_page", row["start_page"]):
             fields["end_page"] = None
+        # locked: Bit 1 hält Anfang, Nummer und Titel, Bit 2 die Endseite.
+        # Ein Ende, das niemand gesetzt hat, rückt weiter mit den Nachbarn.
+        locked = (row["locked"] or 0) | 1 | (2 if "end_page" in fields else 0)
         assignments = ",".join(f"{k}=?" for k in fields)
-        conn.execute(f"UPDATE book_chapters SET {assignments}{',' if assignments else ''}locked=1 WHERE id=?",
-                     (*fields.values(), chapter_id))
+        conn.execute(f"UPDATE book_chapters SET {assignments}{',' if assignments else ''}locked=? WHERE id=?",
+                     (*fields.values(), locked, chapter_id))
         ordered = [dict(r) for r in conn.execute(
             "SELECT * FROM book_chapters WHERE account_id=? AND book_title=? ORDER BY start_page,level", (account_id, title))]
         for i, unit in enumerate(ordered):
-            if unit["locked"] and unit["id"] != chapter_id:
+            if (unit["locked"] or 0) & 2:
                 continue
-            end = unit["end_page"] if unit["id"] == chapter_id and "end_page" in fields else _end_of(i, ordered)
+            end = _end_of(i, ordered)
             if end != unit["end_page"]:
                 conn.execute("UPDATE book_chapters SET end_page=? WHERE id=?", (end, unit["id"]))
         fixed = dict(conn.execute("SELECT * FROM book_chapters WHERE id=?", (chapter_id,)).fetchone())

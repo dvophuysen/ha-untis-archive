@@ -1,3 +1,7 @@
+## 0.60.1
+
+- Rückt bei einer Kapitelkorrektur der Nachbar, rückt das nicht ausdrücklich gesetzte Ende des berichtigten Kapitels mit. Nur eine von Hand gesetzte Endseite bleibt stehen.
+
 ## 0.60.0
 
 - Fotografierte Inhaltsverzeichnisse gelten auch für digitale Bücher, deren Verzeichnis der Abruf auf den ersten Seiten nicht findet (Spanisch, Englisch, Geschichte). Die Kapitel landen beim digitalen Buch, der Sammellauf holt danach ganze Kapitel und sucht das Verzeichnis nicht weiter.
