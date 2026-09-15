@@ -741,6 +741,9 @@ _MIGRATIONS.append(("book_chapters_locked", "ALTER TABLE book_chapters ADD COLUM
 # Das Modell fürs Abschreiben von Quellen und die Hintergrundauswertung; leer
 # heißt Hauptmodell. Umgestellt wird nur nach Eichung an echten Seiten.
 _MIGRATIONS.append(("ai_config_sources_model", "ALTER TABLE mentor_ai_config ADD COLUMN sources_model TEXT"))
+# Jedes Foto trägt einen Bildabdruck (Duplikate) und ein Schärfemaß.
+_MIGRATIONS.append(("materials_011_phash", "ALTER TABLE materials ADD COLUMN phash TEXT"))
+_MIGRATIONS.append(("materials_012_sharpness", "ALTER TABLE materials ADD COLUMN sharpness REAL"))
 _MIGRATIONS.append(("book_chapters_numbered_units",
                     "UPDATE book_chapters SET kind='chapter' WHERE level=1 AND number!='' AND kind IN ('vocab','grammar')"))
 

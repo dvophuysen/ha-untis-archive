@@ -117,10 +117,18 @@ _GENERIC_LABELS = re.compile(
     r"Medienregal|Startseite|Profil|Abmelden|Menü)$",
     re.I,
 )
+# Der Verlag fragt beim ersten Öffnen nach einer Einwilligung zur
+# Datenübertragung. Seine Schaltflächen sind keine Bücher, und die App
+# stimmt nicht an Stelle der Eltern zu: Der Dialog wird gemeldet, nicht
+# weggeklickt.
+_CONSENT_PHRASES = re.compile(
+    r"^(Abbrechen|Weiter zur App|Welche Daten werden übertragen\??|Zustimmen|Ablehnen|Akzeptieren|"
+    r"Einwilligen|Alle akzeptieren|Nur notwendige|Datenschutzerklärung)$", re.I
+)
 _GENERIC_PHRASES = re.compile(
     r"(digitale(?:s)? Unterrichtssystem|digitale Schulbücher und Lernkurse|"
     r"direkt in alle digitale Bildungsmedien|Eduplaces|"
-    r"ausgeblendete Titel|Medium entfernen|Medienregal aktualisieren)",
+    r"ausgeblendete Titel|Medium entfernen|Medienregal aktualisieren|Weiter zur App|Welche Daten werden übertragen)",
     re.I,
 )
 
@@ -246,11 +254,25 @@ def _scan_shelf_sync(portal_url: str, username: str, password: str) -> list[Shel
                         break
             return select_book_titles(values) or sorted(set(values), key=str.casefold)
 
-        WebDriverWait(driver, 15).until(
-            lambda d: bool(record_titles(read_records(d)))
-        )
+        def consent_dialog(records) -> bool:
+            return any(_CONSENT_PHRASES.fullmatch(_clean(r.get("text") or r.get("label") or "")) for r in records)
+
+        try:
+            WebDriverWait(driver, 15).until(
+                lambda d: bool(record_titles(read_records(d)))
+            )
+        except TimeoutException:
+            if consent_dialog(read_records(driver)):
+                raise TextbookScanError(
+                    "Der Verlag fragt nach einer Einwilligung zur Datenübertragung. Bitte das Medienregal einmal "
+                    "selbst im Browser öffnen und die Frage beantworten; danach den Regal-Scan wiederholen.")
+            raise
         records = read_records(driver)
-        titles = record_titles(records)
+        titles = [t for t in record_titles(records) if not _CONSENT_PHRASES.fullmatch(t)]
+        if not titles and consent_dialog(records):
+            raise TextbookScanError(
+                "Der Verlag fragt nach einer Einwilligung zur Datenübertragung. Bitte das Medienregal einmal "
+                "selbst im Browser öffnen und die Frage beantworten; danach den Regal-Scan wiederholen.")
         books: list[ShelfBook] = []
         for title in titles:
             match = next((

@@ -254,6 +254,28 @@ def update_catalog_subject(
     return get_catalog(account_id, user)
 
 
+@router.delete("/catalog/{book_id}", status_code=204)
+def remove_catalog_entry(account_id: int, book_id: int, user: CurrentUser = Depends(get_current_user)) -> Response:
+    """Einen Eintrag aus dem Regal nehmen, der kein Buch ist (etwa eine
+    Schaltfläche des Einwilligungsdialogs). Ein echtes Buch kommt beim
+    nächsten Scan wieder; gelesene Kapitel und Seiten bleiben."""
+    _require_parent(user, account_id)
+    conn = webapp_conn()
+    try:
+        row = conn.execute("SELECT title FROM digital_textbook_catalog WHERE id=? AND account_id=?",
+                           (book_id, account_id)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Eintrag nicht gefunden")
+        conn.execute("DELETE FROM digital_textbook_catalog WHERE id=? AND account_id=?", (book_id, account_id))
+        conn.execute("DELETE FROM digital_textbook_access WHERE account_id=? AND book_title=? AND NOT EXISTS "
+                     "(SELECT 1 FROM book_chapters c WHERE c.account_id=? AND c.book_title=?)",
+                     (account_id, row["title"], account_id, row["title"]))
+        conn.commit()
+    finally:
+        conn.close()
+    return Response(status_code=204)
+
+
 @router.post("/catalog/{book_id}/page-test", status_code=202)
 async def page_test(
     account_id: int,

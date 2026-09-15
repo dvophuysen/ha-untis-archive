@@ -81,6 +81,13 @@
     message = 'Kapitel berichtigt. Die Stellen sind neu gebunden.';
     await load();
   }
+  // Hinweise zu eben abgelegten Fotos: Duplikat einer vorhandenen Seite oder unscharf.
+  let notices = $state([]);
+  async function dropNotice(notice, deleteIt) {
+    if (deleteIt) await api.delete(`${base}/${notice.id}`);
+    notices = notices.filter((n) => n !== notice);
+    await load();
+  }
   // Was das nächste Foto ist, wenn man es vorher sagen will; sonst erkenne ich es selbst.
   let upload = $state({ subject: '', kind: '', part: '', page: '' });
   let collecting = $state(null);
@@ -238,7 +245,11 @@
       }
       if (taskId) body.append('task_id', String(taskId));
       try {
-        await api.post(base, body);
+        const saved = await api.post(base, body);
+        // Dieselbe Seite schon da oder das Foto unscharf: sofort sagen, nicht
+        // erst nach der Lesung.
+        if (saved?.duplicate_of) notices = [...notices, { id: saved.id, kind: 'duplicate', of: saved.duplicate_of }];
+        else if (saved?.blurry) notices = [...notices, { id: saved.id, kind: 'blurry' }];
       } catch (e) {
         error = e.message;
       }
@@ -327,6 +338,17 @@
   <input bind:this={picker} class="hidden-input" type="file" accept="image/png,image/jpeg,image/webp,application/pdf"
          multiple onchange={(e) => act(() => send(e.currentTarget.files)).then(() => (e.target.value = ''))} />
   {#if uploading > 0}<p role="status">Noch {uploading} wird gespeichert …</p>{/if}
+  {#each notices as notice (notice.id)}
+    <div class="banner notice-row">
+      {#if notice.kind === 'duplicate'}
+        <span>Diese Seite liegt schon vor: „{notice.of.title}“{notice.of.source_label ? ` (${notice.of.source_label}${notice.of.source_page ? ` S. ${notice.of.source_page}` : ''})` : ''}. Das neue Foto wird trotzdem gelesen.</span>
+        <span class="row gap-sm"><button class="quiet" disabled={busy} onclick={() => act(() => dropNotice(notice, true))}>Neues Foto löschen</button><button class="quiet" disabled={busy} onclick={() => act(() => dropNotice(notice, false))}>Beide behalten</button></span>
+      {:else}
+        <span>Das Foto wirkt unscharf. Ich lese es, aber ein neues Foto bei gutem Licht liest sich besser.</span>
+        <span class="row gap-sm"><button class="quiet" disabled={busy} onclick={() => act(() => dropNotice(notice, true))}>Löschen und neu aufnehmen</button><button class="quiet" disabled={busy} onclick={() => act(() => dropNotice(notice, false))}>Behalten</button></span>
+      {/if}
+    </div>
+  {/each}
   {#if message}<div class="banner">{message}</div>{/if}
   {#if error}<div class="error-box">{error}</div>{/if}
 </div>
@@ -478,7 +500,7 @@
     {/if}
     <span class="text">
       <strong>{m.title || 'Ohne Titel'}</strong>
-      <small>{[KIND_NAMES[m.kind] ?? m.kind, dateOf(m)].filter(Boolean).join(' · ')}</small>
+      <small>{[KIND_NAMES[m.kind] ?? m.kind, dateOf(m), m.blurry ? 'unscharf' : ''].filter(Boolean).join(' · ')}</small>
       {#if m.summary}<small class="dim">{m.summary}</small>{/if}
     </span>
     <span class="state" class:warn={m.analysis_state === 'failed' && m.analysis_error !== '429'} class:wait={m.analysis_error === '429'}>
@@ -644,6 +666,7 @@
   .wanted>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;list-style:none}
   .wanted>summary::-webkit-details-marker{display:none}
   .review{border-left:4px solid var(--warm,#b26a00)}
+  .notice-row{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between}
   .books .book{border-top:1px solid var(--border);padding:6px 0}
   .books .book>summary{cursor:pointer;min-height:40px;display:flex;align-items:center;font-size:0.9rem}
   .units{width:100%;border-collapse:collapse;font-size:0.85rem}

@@ -98,8 +98,38 @@ def _taken_at(blob: bytes) -> str | None:
         return None
 
 
-def prepare_image(blob: bytes) -> tuple[bytes, str, str | None]:
-    """Downscale like a chat photo; the original size buys nothing here."""
+# Unter dieser Kantenvarianz (Graustufen, 1000 Pixel, FIND_EDGES) ist ein Foto
+# unscharf: scharfe Buchseiten liegen gemessen bei 1700 bis 4400, dasselbe
+# Foto mit zwei Pixeln Weichzeichnung bei 300.
+BLURRY_BELOW = 800.0
+
+
+def fingerprint(image) -> tuple[str, float]:
+    """Bildabdruck (Mittelwert-Hash 8×8) und Schärfe eines Fotos.
+
+    Zwei Aufnahmen derselben Seite haben denselben Abdruck; leicht anderer
+    Ausschnitt oder Licht ändern höchstens wenige Bits."""
+    from PIL import ImageFilter, ImageStat
+    grey = image.convert("L")
+    small = grey.resize((8, 8))
+    pixels = list(small.getdata())
+    mean = sum(pixels) / len(pixels)
+    bits = "".join("1" if p > mean else "0" for p in pixels)
+    probe = grey.copy()
+    probe.thumbnail((1000, 1000))
+    sharp = ImageStat.Stat(probe.filter(ImageFilter.FIND_EDGES)).var[0]
+    return f"{int(bits, 2):016x}", round(float(sharp), 1)
+
+
+def hash_distance(a: str | None, b: str | None) -> int:
+    if not a or not b:
+        return 64
+    return bin(int(a, 16) ^ int(b, 16)).count("1")
+
+
+def prepare_image(blob: bytes) -> tuple[bytes, str, str | None, dict]:
+    """Downscale like a chat photo; the original size buys nothing here.
+    Returns the bytes, the type, the capture time and the fingerprint."""
     from PIL import Image, ImageOps
 
     captured = _taken_at(blob)
@@ -109,9 +139,13 @@ def prepare_image(blob: bytes) -> tuple[bytes, str, str | None]:
     image.load()
     image = ImageOps.exif_transpose(image).convert("RGB")
     image.thumbnail((1800, 1800))
+    try:
+        phash, sharpness = fingerprint(image)
+    except Exception:
+        phash, sharpness = None, None
     out = io.BytesIO()
     image.save(out, format="JPEG", quality=85)
-    return out.getvalue(), "image/jpeg", captured
+    return out.getvalue(), "image/jpeg", captured, {"phash": phash, "sharpness": sharpness}
 
 
 def pdf_pages(blob: bytes) -> int:
@@ -174,11 +208,12 @@ def create(account_id: int, user_id: int | None, content: bytes, filename: str, 
     captured = None
     page_count = 0
     text = ""
+    print_ = {"phash": None, "sharpness": None}
     if mime == "application/pdf":
         page_count = pdf_pages(content)
         text = pdf_text(content)
     else:
-        content, mime, captured = prepare_image(content)
+        content, mime, captured, print_ = prepare_image(content)
     stamp = now_iso()
     with closing(webapp_conn()) as conn, conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -187,11 +222,12 @@ def create(account_id: int, user_id: int | None, content: bytes, filename: str, 
         material_id = conn.execute(
             "INSERT INTO materials(account_id,kind,subject_name,title,content_text,captured_at,"
             "created_by,filename,mime_type,file_bytes,page_count,analysis_state,created_at,updated_at,"
-            "source_label,source_page) VALUES(?,?,?,?,?,?,?,?,?,?,?,'pending',?,?,?,?)",
+            "source_label,source_page,phash,sharpness) VALUES(?,?,?,?,?,?,?,?,?,?,?,'pending',?,?,?,?,?,?)",
             (account_id, hints.get("kind") or "other", hints.get("subject_name"),
              (hints.get("title") or filename or "Material")[:200], text,
              captured or stamp, user_id, (filename or "Material")[:200], mime, content,
-             page_count, stamp, stamp, hints.get("source_label") or None, hints.get("source_page") or None),
+             page_count, stamp, stamp, hints.get("source_label") or None, hints.get("source_page") or None,
+             print_["phash"], print_["sharpness"]),
         ).lastrowid
         for kind in LINK_KINDS:
             target = hints.get(f"{kind}_id")
@@ -200,6 +236,22 @@ def create(account_id: int, user_id: int | None, content: bytes, filename: str, 
                     "INSERT OR IGNORE INTO material_links(material_id,kind,target_id,origin,created_at) "
                     "VALUES(?,?,?,'mensch',?)", (material_id, kind, int(target), stamp))
     return material_id
+
+
+def duplicate_of(account_id: int, material_id: int, max_distance: int = 3) -> dict | None:
+    """Ein früheres Foto derselben Seite, wenn es eines gibt: gleicher oder
+    fast gleicher Bildabdruck im selben Konto."""
+    with closing(webapp_conn()) as conn:
+        me = conn.execute("SELECT phash FROM materials WHERE id=? AND account_id=?", (material_id, account_id)).fetchone()
+        if not me or not me["phash"]:
+            return None
+        for row in conn.execute(
+                "SELECT id,title,kind,source_label,source_page,phash FROM materials WHERE account_id=? AND id!=? "
+                "AND hidden=0 AND phash IS NOT NULL ORDER BY id DESC LIMIT 500", (account_id, material_id)):
+            if hash_distance(me["phash"], row["phash"]) <= max_distance:
+                return {"id": row["id"], "title": row["title"], "kind": row["kind"],
+                        "source_label": row["source_label"], "source_page": row["source_page"]}
+    return None
 
 
 def links(conn, material_id: int) -> list[dict]:
@@ -232,6 +284,8 @@ def _public(row, with_links=None) -> dict:
     result["has_file"] = bool(row["filename"])
     result["locked_fields"] = json.loads(row["locked_fields"] or "[]")
     result["needs_review"] = needs_review(row)
+    keys = row.keys()
+    result["blurry"] = bool("sharpness" in keys and row["sharpness"] is not None and row["sharpness"] < BLURRY_BELOW)
     if with_links is not None:
         result["links"] = with_links
     return result
