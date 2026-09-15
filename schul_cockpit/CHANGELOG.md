@@ -1,3 +1,11 @@
+## 0.56.0
+
+- Überall, wo der Unterricht eine Buchstelle nennt, ist sie jetzt ein Link in der Farbe ihres Stands: grün liegt vor und ist gelesen, gelb wird gerade geholt oder gelesen, rot fehlt und muss fotografiert werden. In der Aufgabenzeile, der Stundenkarte, dem Stundendetail und dem Fachdetail. Grün und gelb führen zum Material, rot zur Kamera, das Foto hängt dann an der Aufgabe.
+- Die Hausaufgabe ist neu aufgebaut: oben die Fakten (Fach, gestellt am, fällig am, Herkunft, Stand), dann der Auftrag mit seinen Quell-Links, eine Einstiegshilfe in zwei, drei Sätzen, das Material als Vorschaubilder zum Vergrößern und der Weg in den Hilfe-Chat. Typ, Aufwand in Minuten und Teilaufgaben sind aus der Ansicht verschwunden; eigene Aufgaben haben Titel, Fälligkeit und Notiz.
+- Die Einstiegshilfe entsteht im Hintergrund im Sammellauf, sobald die Quellen einer Hausaufgabe da sind, höchstens acht je Lauf aus dem Quellen-Rahmen. Sie sagt, worum es geht und womit man anfängt, keine Lösung.
+- Die Materialseite zeigt alles, Buchseiten eingeschlossen, mit „Mehr laden" statt einer stillen Grenze. Ein Material lässt sich per Link direkt öffnen.
+- Sprachen tragen ihre Flagge: Deutsch, Englisch, Spanisch, Französisch. Englisch und Erdkunde waren beide ein Globus, Spanisch eine Sonne.
+
 ## 0.55.1
 
 - Ein Sammellauf je Kind zugleich; abgelegte, noch ungelesene Seiten werden zuerst gelesen; Buchseiten füllen den Speicher höchstens zu 90 Prozent; die Arbeiten für die Abendkarte werden alle zehn Minuten statt jede Minute bestimmt. Diese vier Punkte standen schon unter 0.55.0, waren aber erst nach dessen automatischer Installation fertig.

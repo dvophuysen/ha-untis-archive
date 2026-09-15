@@ -66,14 +66,23 @@
   }
   const waiting = $derived((data?.materials ?? []).some((m) => m.analysis_state === 'pending'));
 
-  async function load() {
+  let offset = $state(0);
+  const PAGE = 60;
+
+  async function load(more = false) {
     if (!accountId) return;
     const query = new URLSearchParams();
     if (filterSubject) query.set('subject', filterSubject);
     if (filterKind) query.set('kind', filterKind);
     if (search.trim()) query.set('q', search.trim());
+    query.set('limit', String(PAGE));
+    query.set('offset', String(more ? offset + PAGE : 0));
     try {
-      data = await api.get(`${base}?${query}`);
+      const page = await api.get(`${base}?${query}`);
+      // Alles ist sichtbar, Buchseiten eingeschlossen; wer weiter unten sucht,
+      // lädt weiter, statt dass eine Grenze still abschneidet.
+      data = more && data ? { ...page, materials: [...data.materials, ...page.materials] } : page;
+      offset = page.offset;
       error = null;
     } catch (e) {
       error = e.message;
@@ -103,6 +112,14 @@
     void filterSubject;
     void filterKind;
     load();
+  });
+
+  // Ein Link aus einer Aufgabe oder Stunde öffnet sein Material direkt.
+  $effect(() => {
+    void accountId;
+    const q = new URLSearchParams(window.location.hash.split('?')[1] || '');
+    const wanted = Number(q.get('material'));
+    if (wanted && accountId) act(() => show({ id: wanted }));
   });
 
   // While something is still being read, refresh on its own so nobody has to
@@ -286,7 +303,7 @@
         <span class="text">
           <strong>{m.title || 'Ohne Titel'}</strong>
           <small>
-            {[m.subject_name, KIND_NAMES[m.kind] ?? m.kind, dateOf(m)].filter(Boolean).join(' · ')}
+            {[m.subject_name, KIND_NAMES[m.kind] ?? m.kind, m.source_book ? `aus dem Buch` : null, dateOf(m)].filter(Boolean).join(' · ')}
           </small>
           {#if m.summary}<small class="dim">{m.summary}</small>{/if}
         </span>
@@ -300,6 +317,9 @@
       <p class="empty">Noch nichts abgelegt. Das erste Foto genügt.</p>
     {/each}
   </div>
+  {#if data.has_more}
+    <button class="quiet more" disabled={busy} onclick={() => act(() => load(true))}>Mehr laden</button>
+  {/if}
 {/if}
 
 {#if open}
@@ -394,6 +414,7 @@
   .filters label { margin: 0; }
   .grow { flex: 1 1 10rem; }
   .list { margin-top: 0.6rem; display: grid; gap: 0.4rem; }
+  .more { margin: 0.6rem auto; display: block; min-height: 44px; }
   .item {
     display: grid; grid-template-columns: 3.2rem minmax(0, 1fr) auto; gap: 0.7rem;
     align-items: center; text-align: left; width: 100%; padding: 0.5rem 0.6rem;

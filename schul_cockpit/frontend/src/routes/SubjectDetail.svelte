@@ -1,4 +1,5 @@
 <script>
+  import SourceText from '../lib/SourceText.svelte';
   import {subjectStyle} from '../lib/subjectStyle.js';
   import { formatShortDate } from '../lib/format.js';
   import { api } from '../lib/api.js';
@@ -52,7 +53,7 @@
         </div>
         <span title="Verständnis">{ratingEmoji(l.checkin?.rating)}</span>
       </div>
-      {#if l.lstext}<div style="margin-top:0.3rem;">{l.lstext}</div>{/if}
+      {#if l.lstext}<div style="margin-top:0.3rem;"><SourceText segments={l.lstext_segments} text={l.lstext} subject={data.name} /></div>{/if}
       {#if l.checkin?.note}<div class="muted" style="margin-top:0.3rem; font-style:italic;">„{l.checkin.note}"</div>{/if}
     </div>
   {/each}

@@ -3,6 +3,7 @@
   import {subjectStyle} from './subjectStyle.js';
   import { api, ApiError } from './api.js';
   import { isoToday, daysBetween, dueLabel, stripUntisMetadata } from './format.js';
+  import SourceText from './SourceText.svelte';
 
   let { accountId, task, onchange = () => {}, onopen = null } = $props();
 
@@ -71,7 +72,9 @@
     onkeydown={onBodyKey}
   >
     <div class="head">
-      <span class="title" class:done={isDone}>{subjectStyle(task.subject_name || task.title).emoji} {task.title}</span>
+      <span class="title" class:done={isDone}>{subjectStyle(task.subject_name || task.title).emoji}
+        {#if task.source_state}<span class="dot {task.source_state}" title={task.source_state === 'ready' ? 'Material liegt vor' : task.source_state === 'pending' ? 'Material wird geholt' : 'Material fehlt'}></span>{/if}
+        <SourceText segments={task.title_segments} text={task.title} subject={task.subject_name} taskId={task.id} /></span>
 
     </div>
     {#if cleanNotes}
@@ -82,12 +85,11 @@
         ☑ {task.subitems.filter((s) => s.done).length}/{task.subitems.length} Teilaufgaben
       </div>
     {/if}
-    {#if isExam || task.task_type === 'catch_up' || task.task_type === 'practice' || task.estimated_minutes}
+    {#if isExam || task.task_type === 'catch_up' || task.task_type === 'practice'}
       <div class="meta">
         {#if isExam}<span class="pill exam">📝 Klausur</span>{/if}
         {#if task.task_type === 'catch_up'}<span class="pill">↺ nachholen</span>{/if}
         {#if task.task_type === 'practice'}<span class="pill">üben</span>{/if}
-        {#if task.estimated_minutes}<span class="pill">⏱ {task.estimated_minutes} min</span>{/if}
       </div>
     {/if}
     {#if error}<div class="row-error">{error}</div>{/if}
@@ -169,6 +171,10 @@
     color: var(--fg);
   }
   .title.done { text-decoration: line-through; color: var(--fg-dim); }
+  .dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin: 0 2px 1px 0; vertical-align: middle; }
+  .dot.ready { background: var(--rating-3); }
+  .dot.pending { background: var(--warm, #b26a00); }
+  .dot.missing { background: var(--rating-1); }
   .notes {
     font-size: 0.85rem;
     color: var(--fg-muted);

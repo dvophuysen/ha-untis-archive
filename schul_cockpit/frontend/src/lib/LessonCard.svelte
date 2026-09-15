@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
   import { lessonEnded } from './dayDashboard.js';
   import LessonDetail from './LessonDetail.svelte';
+  import SourceText from './SourceText.svelte';
 
   // preview=true wird für die "Morgen"-Vorschau verwendet: nur Anzeige,
   // keine Bewertung, kein Detail-Modal — der Stoff hat noch nicht
@@ -86,7 +87,7 @@
         <div class="lesson-exam">📝 {lesson.exam.name}</div>
       {/if}
       {#if lesson.lstext}
-        <div class="lesson-ls">{lesson.lstext}</div>
+        <div class="lesson-ls"><SourceText segments={lesson.lstext_segments} text={lesson.lstext} subject={lesson.subject_name} /></div>
       {/if}
     </div>
   {:else}
@@ -107,7 +108,7 @@
         <div class="lesson-exam">📝 {lesson.exam.name}</div>
       {/if}
       {#if lesson.lstext}
-        <div class="lesson-ls">{lesson.lstext}</div>
+        <div class="lesson-ls"><SourceText segments={lesson.lstext_segments} text={lesson.lstext} subject={lesson.subject_name} /></div>
       {/if}
     </button>
   {/if}

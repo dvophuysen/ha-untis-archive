@@ -152,6 +152,11 @@ def subject_detail(
             "checkin": ratings.get(r["id"]),
         }
         timeline.append(item)
+    try:
+        from .. import sources
+        sources.annotate_lessons(account_id, timeline, id_key="lesson_id")
+    except Exception:
+        pass
 
     return {
         "subject_id": subject_id,

@@ -1,11 +1,14 @@
 // Shared subject labels and symbols. Unknown names remain intact.
 const subjects = [
- ['Mathematik','📐',['ma','mathe','mathematik']], ['Deutsch','📖',['de','deutsch']],
- ['Englisch','🌍',['en','englisch']], ['Spanisch','☀️',['sn','spanisch']],
+ // Sprachen tragen ihre Flagge; Englisch und Erdkunde waren beide ein Globus,
+ // Spanisch eine Sonne.
+ ['Mathematik','📐',['ma','mathe','mathematik']], ['Deutsch','🇩🇪',['de','deutsch']],
+ ['Englisch','🇬🇧',['en','englisch']], ['Spanisch','🇪🇸',['sn','spanisch']],
+ ['Französisch','🇫🇷',['fr','französisch','franzoesisch']],
  ['Latein','🏛️',['la','latein']], ['Physik','💡',['ph','physik']],
  ['Chemie','🧪',['ch','chemie']], ['Biologie','🌿',['bi','biologie']],
  ['Politik','🗳️',['po','politik']], ['Geschichte','⏳',['ge','geschichte']],
- ['Erdkunde','🌎',['ek','erdkunde']], ['Werte und Normen','🤝',['wn','wun','werte und normen']],
+ ['Erdkunde','🌍',['ek','erdkunde']], ['Werte und Normen','🤝',['wn','wun','werte und normen']],
  ['Sport','🏅',['sp','sport']], ['Musik','🎵',['mu','musik']], ['Kunst','🎨',['ku','kunst']],
 ];
 export function subjectStyle(value) {

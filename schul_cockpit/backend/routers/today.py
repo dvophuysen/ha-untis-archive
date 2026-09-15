@@ -86,6 +86,11 @@ async def today(
         finally:
             wconn.close()
 
+    try:
+        from .. import sources
+        sources.annotate_lessons(account_id, lessons)
+    except Exception:
+        pass
     enriched = []
     unrated = 0
     for lesson in lessons:

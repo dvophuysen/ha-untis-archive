@@ -1,9 +1,17 @@
-# Quellenbestand 0.52.2–0.55.0
+# Quellenbestand 0.52.2–0.56.0
 
-Stand 15.09.2026, abends. 0.52.2 bis 0.54.0 auf der laufenden Instanz
-installiert und mit echten Abrufen geprüft; 0.55.0 folgt in derselben Session.
+Stand 15.09.2026, abends. Bis 0.55.1 auf der laufenden Instanz installiert und
+mit echten Abrufen geprüft; 0.56.0 folgt in derselben Session.
 
 ## Was ausgeliefert ist
+
+**Quellen sichtbar, Hausaufgabe neu (0.56.0, D44).** `sources.segments`
+zerlegt jeden Untis-Text; `annotate_lessons` und `annotate_tasks` hängen Stand
+und Material an (Tag, Woche, Fachdetail, Aufgabenliste). Die Aufgabe findet
+ihre Untis-Hausaufgabe über die Kennung in den Notizen, sonst über den
+Wortlaut. `SourceText` rendert die Links, `TaskDetail` ersetzt das alte
+Formular. `prepare_intros` schreibt im Sammellauf die Einstiegshilfe
+(`tasks.intro`). Materialliste vollständig mit Seitenweise-Laden.
 
 **Einträge ohne Quelle, Fachgewohnheit, Aufforderung (0.55.0, D42/D43).**
 Stundentexte ohne Seitenangabe werden ihrem Kapitel zugeordnet (Regel, sonst

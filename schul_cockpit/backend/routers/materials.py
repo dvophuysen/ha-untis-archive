@@ -96,17 +96,25 @@ def index(
     end: str | None = None,
     q: str | None = None,
     state: str | None = None,
-    books: bool = False,
+    books: bool = True,
+    task_id: int | None = None,
+    offset: int = 0,
     limit: int = 100,
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     access(user, account_id)
     manage = bool(user.is_admin or user.role == "parent")
+    # Eine Zeile mehr als verlangt sagt, ob es weitergeht.
     items = store.listing(account_id, subject=subject, kind=kind, start=start, end=end,
-                          query=q, state=state, include_hidden=manage, include_books=books, limit=limit)
+                          query=q, state=state, include_hidden=manage, include_books=books,
+                          task_id=task_id, offset=offset, limit=min(limit, 300) + 1)
+    has_more = len(items) > min(limit, 300)
+    items = items[:min(limit, 300)]
     pending = sum(1 for m in items if m["analysis_state"] in ("pending", "failed"))
     return {
         "materials": items,
+        "has_more": has_more,
+        "offset": offset,
         "kinds": list(store.KINDS),
         "can_write": True,
         "can_manage": manage,
