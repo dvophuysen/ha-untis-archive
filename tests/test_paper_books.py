@@ -401,6 +401,7 @@ def test_comparing_a_page_with_another_model_stores_nothing(env, monkeypatch):
     got = reply.json()
     assert seen == {"model": "test-model", "purpose": "sources"}
     assert got["pages_match"] and got["part_match"] and got["text_ratio"] > 0.95
+    assert got["word_recall"] == 1.0 and got["word_precision"] == 1.0 and got["missing_words"] == []
     with closing(db.webapp_conn()) as c:
         row = c.execute("SELECT content_text,analysis_model FROM materials WHERE id=?", (material_id,)).fetchone()
     assert row[0].endswith(".") and row[1] is None, "die Eichung speichert nichts"
