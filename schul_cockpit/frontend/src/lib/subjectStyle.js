@@ -1,8 +1,9 @@
 // Shared subject labels and symbols. Unknown names remain intact.
 const subjects = [
- // Sprachen tragen ihre Flagge; Englisch und Erdkunde waren beide ein Globus,
- // Spanisch eine Sonne.
- ['Mathematik','📐',['ma','mathe','mathematik']], ['Deutsch','🇩🇪',['de','deutsch']],
+ // Fremdsprachen tragen ihre Landesflagge; Englisch und Erdkunde waren beide
+ // ein Globus, Spanisch eine Sonne. Deutsch ist keine Fremdsprache und bekommt
+ // ein Icon statt der Flagge.
+ ['Mathematik','📐',['ma','mathe','mathematik']], ['Deutsch','🖋️',['de','deutsch']],
  ['Englisch','🇬🇧',['en','englisch']], ['Spanisch','🇪🇸',['sn','spanisch']],
  ['Französisch','🇫🇷',['fr','französisch','franzoesisch']],
  ['Latein','🏛️',['la','latein']], ['Physik','💡',['ph','physik']],
