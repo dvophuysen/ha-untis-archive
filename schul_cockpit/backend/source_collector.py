@@ -44,6 +44,10 @@ AFTERNOON_KEY = "sources:afternoon"
 NIGHT_KEY = "sources:night"
 
 
+class StorageFull(RuntimeError):
+    pass
+
+
 def to_jpeg(blob: bytes, max_side: int = 1600) -> bytes:
     image = Image.open(io.BytesIO(blob)).convert("RGB")
     image.thumbnail((max_side, max_side))
@@ -109,6 +113,7 @@ def store_page(account_id: int, book, page: int, image: bytes, subject: str,
     zweiter Abruf liefert vielleicht die richtige Seite, wo der erste
     daneben lag.
     """
+    from .materials import MAX_ACCOUNT_FILES, account_usage
     jpeg = to_jpeg(image)
     stamp = now_iso()
     title = f"{short_title(book['title'])} S. {page}"
@@ -117,6 +122,10 @@ def store_page(account_id: int, book, page: int, image: bytes, subject: str,
         existing = conn.execute(
             "SELECT id FROM materials WHERE account_id=? AND origin='book_fetch' AND source_book=? AND source_page=?",
             (account_id, book["title"], page)).fetchone()
+        # Der Speicher je Kind gehört zuerst den Fotos der Kinder. Buchseiten
+        # füllen ihn bis kurz davor, nie darüber.
+        if account_usage(conn, account_id, existing["id"] if existing else None) + len(jpeg) > MAX_ACCOUNT_FILES * 0.9:
+            raise StorageFull(f"Materialspeicher von Konto {account_id} zu 90 % voll")
         if existing:
             conn.execute(
                 "UPDATE materials SET file_bytes=?,mime_type='image/jpeg',analysis_state='pending',analysis_error=NULL,"
@@ -254,7 +263,12 @@ async def collect(account_id: int, budget: int = PAGE_BUDGET) -> dict:
                 summary["blank"] += 1
                 continue
             record_access(account_id, book["title"], "readable", page=page)
-            material_id = store_page(account_id, book, page, image, subject, group["pages"][page])
+            try:
+                material_id = store_page(account_id, book, page, image, subject, group["pages"][page])
+            except StorageFull as exc:
+                log.warning("%s; Sammellauf beendet", exc)
+                summary["skipped"] = "Materialspeicher voll"
+                return _finish(account_id, summary, started)
             summary["stored"] += 1
             row = await analyze_page(account_id, material_id)
             if row and row.get("page_check") == "ok":
@@ -282,6 +296,10 @@ async def collect(account_id: int, budget: int = PAGE_BUDGET) -> dict:
                 record_access(account_id, book["title"], "blank", page=page)
                 _bump(account_id, subject, page, "leere Seite")
                 summary["blank"] += 1
+    return _finish(account_id, summary, started)
+
+
+def _finish(account_id: int, summary: dict, started: datetime) -> dict:
     sources.refresh_status(account_id)
     summary["seconds"] = round((datetime.now() - started).total_seconds())
     log.info("Quellen für Konto %s eingesammelt: %s", account_id, {k: v for k, v in summary.items() if k != "account_id"})
