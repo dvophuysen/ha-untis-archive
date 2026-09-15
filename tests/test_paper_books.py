@@ -124,9 +124,11 @@ def test_a_paper_book_gets_the_chapter_rule_from_its_photographed_contents(env, 
         # Jedes Foto für sich; fünf Verzeichnisseiten passen in einen Aufruf.
         assert "Inhaltsverzeichnis" in instruction and len(images) == 2 and context["buch"] == "Begleitband Latein"
         assert purpose == "sources"
+        # Der Begleitband nennt jede Lektion „Wortschatz"; das Modell hält sie
+        # für Vokabelteile. Nummeriert und oben heißt trotzdem Kapitel.
         return json.dumps({"is_toc": True, "continues": False, "chapters": [
-            {"number": "1", "title": "Wortschatz", "start_page": 10, "level": 1},
-            {"number": "2", "title": "Wortschatz", "start_page": 16, "level": 1},
+            {"number": "1", "title": "Wortschatz", "start_page": 10, "level": 1, "kind": "vocab"},
+            {"number": "2", "title": "Wortschatz", "start_page": 16, "level": 1, "kind": "vocab"},
             {"number": "", "title": "Formentabellen", "start_page": 206, "kind": "appendix"}]}), 0, 0
     monkeypatch.setattr(bs.ai, "complete", complete)
     result = asyncio.run(bs.read_paper_toc(1, "LATEIN", "Begleitband"))
@@ -145,6 +147,7 @@ def test_a_paper_book_gets_the_chapter_rule_from_its_photographed_contents(env, 
     assert {m["label"]: m["pages"] for m in latin["missing"]} == {"Begleitband": [10, 11, 13, 14, 15]}
     books = {b["title"]: b for b in sources.ledger(1)["books"]}
     assert books["Begleitband Latein"]["pages_stored"] == 1 and books["Begleitband Latein"]["access"]["status"] == "paper"
+    assert [(u["number"], u["kind"]) for u in books["Begleitband Latein"]["units"]] == [("1", "chapter"), ("2", "chapter"), ("", "appendix")]
     # Der Klausurstoff kennt das Kapitel des Papierbuchs.
     from backend import exam_scope
     chapters = exam_scope.book_chapters(1, "LATEIN", "2026-09-01", "2026-09-30")

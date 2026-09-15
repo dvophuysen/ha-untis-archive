@@ -361,7 +361,7 @@
     {/each}
     {#if ledger.books?.length}
       <p class="muted foot">Bücher:
-        {#each ledger.books as book, i}{i ? ' · ' : ''}{subjectStyle(book.subject).name}, {book.title}: {book.pages_stored} {book.pages_stored === 1 ? 'Seite' : 'Seiten'} gespeichert{#if book.access} ({ACCESS_NAMES[book.access.status] ?? book.access.status}){/if}{/each}
+        {#each ledger.books as book, i}{i ? ' · ' : ''}{subjectStyle(book.subject).name}, {book.title}: {book.pages_stored} {book.pages_stored === 1 ? 'Seite' : 'Seiten'} gespeichert{#if book.units?.length}, Verzeichnis mit {book.units.filter((u) => u.kind === 'chapter').length} Kapiteln{/if}{#if book.access} ({ACCESS_NAMES[book.access.status] ?? book.access.status}){/if}{/each}
       </p>
     {/if}
     {#if data?.can_manage}
