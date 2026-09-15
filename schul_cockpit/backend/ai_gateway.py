@@ -27,6 +27,8 @@ BACKGROUND = {'discovery', 'background'}
 # seinen eigenen Rahmen, damit er die Auswertung der Kinderfotos nicht
 # verdrängt und umgekehrt. Beides bleibt innerhalb des Monatsrahmens.
 SOURCES = 'sources'
+# Eine Übungseinheit darf bis hierhin kosten; danach wird der Stand gesichert.
+SESSION_MICRO = 4_000_000
 
 
 def init_config(c):
@@ -51,7 +53,7 @@ def status():
         src = effective_sum(c,"month=? AND purpose='sources'",(month,))
         counts = c.execute('SELECT status,COUNT(*) n FROM mentor_ai_calls WHERE month=? GROUP BY status',(month,)).fetchall()
     model = ai_settings()['model']
-    return dict(month=month,used_eur=round(used/1e6,4),limit_eur=cfg['monthly_micro']/1e6,
+    return dict(month=month,used_eur=round(used/1e6,4),limit_eur=cfg['monthly_micro']/1e6,daily_limit_eur=cfg['daily_micro']/1e6,
                 warning_eur=cfg['warning_micro']/1e6,background_eur=round(bg/1e6,4),
                 sources_eur=round(src/1e6,4),sources_limit_eur=cfg['sources_micro']/1e6,
                 warning=used>=cfg['warning_micro'],remaining_eur=max(0,(cfg['monthly_micro']-used)/1e6),
@@ -75,12 +77,15 @@ def reserve(account_id, purpose, session_id, input_max, output_max):
         opening=cfg['opening_micro'] if cfg['opening_month']==month else 0
         if effective_sum(c,'month=?',(month,))+opening+upper>cfg['monthly_micro']:
             raise HTTPException(429,'Der KI-Rahmen ist ausgeschöpft. Gespeicherte Übungen und Antworten bleiben verfügbar.')
-        # Der Quellenbestand hat seinen eigenen Monatsrahmen; die Tagesgrenze
-        # je Kind schützt Gespräche, nicht das Einlesen des Bestands, das der
-        # Nutzer ausdrücklich sofort vollständig will.
-        if purpose!=SOURCES and effective_sum(c,'day=? AND account_id=?',(day,account_id))+upper>5_000_000:
+        # Die Tagesgrenze je Kind schützt das Üben und Fragen des Kindes. Was
+        # die App selbst im Hintergrund tut (Quellen einlesen, Materialien
+        # auswerten, Einstiegshilfen), zählt nicht dagegen: Am 15.09. hatten
+        # 26 Auswertungen Josias Tagesrahmen aufgebraucht, bevor er eine Frage
+        # gestellt hatte. Die Höhe steht in mentor_ai_config.daily_micro.
+        own = purpose!=SOURCES and purpose not in BACKGROUND
+        if own and effective_sum(c,"day=? AND account_id=? AND purpose NOT IN ('sources','background','discovery')",(day,account_id))+upper>cfg['daily_micro']:
             raise HTTPException(429,'Für heute ist der KI-Rahmen erreicht. Wir sichern deinen Stand.')
-        if session_id is not None and effective_sum(c,'session_id=? AND account_id=?',(session_id,account_id))+upper>2_000_000:
+        if session_id is not None and effective_sum(c,'session_id=? AND account_id=?',(session_id,account_id))+upper>SESSION_MICRO:
             raise HTTPException(429,'Für diese Einheit ist der KI-Rahmen erreicht. Dein Stand bleibt gespeichert.')
         if purpose in BACKGROUND and effective_sum(c,"month=? AND purpose IN ('discovery','background')",(month,))+upper>cfg['background_micro']:
             raise HTTPException(429,'Die weitere Hintergrundauswertung wartet auf das nächste Monatsbudget.')

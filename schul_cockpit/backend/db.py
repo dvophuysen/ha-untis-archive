@@ -732,6 +732,10 @@ CREATE TABLE IF NOT EXISTS paper_books (
 );
 """))
 # Eine nummerierte Lektion ist ein Kapitel, auch wenn sie „Wortschatz" heißt.
+# Die Tagesgrenze je Kind: zehn Euro für Üben und Fragen. Hintergrundarbeit
+# der App zählt seit 0.58.1 nicht mehr dagegen.
+_MIGRATIONS.append(("ai_config_daily_ten",
+                    "ALTER TABLE mentor_ai_config ADD COLUMN daily_micro INTEGER NOT NULL DEFAULT 10000000"))
 _MIGRATIONS.append(("book_chapters_numbered_units",
                     "UPDATE book_chapters SET kind='chapter' WHERE level=1 AND number!='' AND kind IN ('vocab','grammar')"))
 
