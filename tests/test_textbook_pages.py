@@ -193,3 +193,79 @@ async def test_an_unexpected_failure_does_not_break_the_conversation(env, monkey
     assert context["stage"] == "Seitenabruf"
     # Only the error class travels on, never the message or any credential.
     assert context["detail"] == "ValueError" and "Treiber" not in str(context)
+
+
+def test_an_empty_viewer_shell_is_recognised_as_blank():
+    """Toolbar and icons alone are not a book page. Calibrated on real
+    captures: an empty BiBox shell has about 1 % foreground, a page 30 %."""
+    from PIL import Image, ImageDraw
+    import io
+    from backend.textbook_browser import looks_blank
+
+    shell = Image.new("RGB", (1400, 930), (245, 245, 245))
+    draw = ImageDraw.Draw(shell)
+    for x in range(20, 1380, 140):  # a row of small toolbar icons
+        draw.rectangle((x, 880, x + 24, 904), fill=(40, 60, 80))
+    out = io.BytesIO(); shell.save(out, "PNG")
+    assert looks_blank(out.getvalue())
+
+    page = shell.copy()
+    draw = ImageDraw.Draw(page)
+    for y in range(80, 820, 22):  # lines of text
+        draw.rectangle((120, y, 1280, y + 9), fill=(30, 30, 30))
+    out = io.BytesIO(); page.save(out, "PNG")
+    assert not looks_blank(out.getvalue())
+    assert looks_blank(b"kein Bild") is False
+
+
+def test_page_test_passes_the_viewer_diagnostics_through(env, monkeypatch):
+    client, state, patch = env
+    book_id = seed()
+
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+        return CaptureResult(
+            shots=[PageShot(pages[0], png(34))],
+            diagnostics={"blank_first": True, "blank_after_wait": True, "waited": 15.2, "webgl": False,
+                         "failed": [{"url": "bibox2.westermann.de/v2/…/image", "status": 0}],
+                         "page_areas": [{"label": "Seite 18", "w": 0, "h": 0}],
+                         "console": [{"level": "SEVERE", "text": "WebGL unavailable"}]},
+        )
+
+    monkeypatch.setattr(ctx, "capture_pages", capture)
+    app = FastAPI()
+    app.include_router(textbooks.router, prefix="/api")
+    app.dependency_overrides[get_current_user] = lambda: state.user
+    patch.setattr(textbooks, "webapp_conn", db.webapp_conn)
+    with TestClient(app) as isolated:
+        body = isolated.post(f"/api/accounts/1/textbooks/catalog/{book_id}/page-test", json={"page": 18}).json()
+    assert body["diagnostics"]["blank_after_wait"] is True
+    assert body["diagnostics"]["page_areas"][0]["label"] == "Seite 18"
+    assert body["diagnostics"]["console"][0]["level"] == "SEVERE"
+
+
+def test_a_failed_run_still_reports_where_it_stopped(env, monkeypatch):
+    """The Politik book fails before any page: the parents should still see
+    the shelf the browser was looking at."""
+    client, state, patch = env
+    book_id = seed()
+
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+        exc = TextbookScanError("Das Medienregal wurde nicht gefunden", "Eduplaces öffnen")
+        exc.survey = CaptureResult(
+            controls=[{"tag": "a", "text": "click & study", "visible": True, "frame": 0}],
+            documents=[{"frame": 0, "url": "/iserv/eduplacesconnector/", "title": "Eduplaces"}],
+            window_image=png(7), diagnostics={"stage": "Eduplaces öffnen", "console": []},
+        )
+        raise exc
+
+    monkeypatch.setattr(ctx, "capture_pages", capture)
+    app = FastAPI()
+    app.include_router(textbooks.router, prefix="/api")
+    app.dependency_overrides[get_current_user] = lambda: state.user
+    patch.setattr(textbooks, "webapp_conn", db.webapp_conn)
+    with TestClient(app) as isolated:
+        body = isolated.post(f"/api/accounts/1/textbooks/catalog/{book_id}/page-test", json={"page": 30}).json()
+    assert body["status"] == "viewer_error" and body["stage"] == "Eduplaces öffnen"
+    assert body["controls"][0]["text"] == "click & study"
+    assert body["window_image"].startswith("data:image/jpeg;base64,")
+    assert body["diagnostics"]["stage"] == "Eduplaces öffnen"

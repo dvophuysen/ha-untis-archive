@@ -102,7 +102,7 @@ async def fetch_pages(account_id:int,book,credentials,pages:list[int],use_cache:
                                      book["title"],missing,book["launch_url"],survey)
             fresh=seen.shots;detail=seen.note or None
         except TextbookScanError as exc:
-            stage=exc.stage;detail=str(exc)
+            stage=exc.stage;detail=str(exc);seen=getattr(exc,"survey",None)
             _LOGGER.warning("digital textbook page fetch failed for account %s in stage %s: %s",
                             account_id,stage or "unbekannt",detail)
         except Exception as exc:
@@ -173,6 +173,7 @@ async def test_page(account_id:int,book_id:int,page:int) -> dict:
         result["documents"]=seen.documents
         result["attempts"]=seen.attempts
         result["entry"]=seen.entry
+        result["diagnostics"]=seen.diagnostics
         if seen.window_image:
             result["window_image"]="data:image/jpeg;base64,"+base64.b64encode(_jpeg(seen.window_image)).decode()
     return result

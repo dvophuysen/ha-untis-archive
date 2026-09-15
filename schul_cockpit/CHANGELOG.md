@@ -1,3 +1,7 @@
+## 0.52.2
+
+- Der Seitentest in den Eltern-Einstellungen sagt jetzt, warum ein Betrachter nichts zeigt. Zwei BiBox-Bücher melden „geladen", liefern aber eine leere Fläche; bisher war nicht zu sehen, ob die Seite nie gezeichnet wurde oder eine Anfrage scheiterte. Der Test wartet bei leerer Seite bis zu 15 Sekunden auf Inhalt und hält fest, was die Seitenbereiche enthalten, welche Anfragen fehlschlugen, was die Konsole meldet und ob WebGL verfügbar ist. Bricht der Abruf früher ab, kommt dieselbe Auskunft von der Stelle, an der er stand.
+
 ## 0.52.1
 
 - Ein Fach stand zweimal auf der Einkaufsliste, einmal unter seinem Namen und einmal unter dem Kürzel der Hausaufgabe („LATEIN" und „LA"). Hausaufgaben führen in Untis keine Fach-ID, nur das Kürzel; es wird jetzt über das echte Untis-Kürzel der Stunde aufgelöst. Ein selbst gepflegter Fach-Alias hat Vorrang.
