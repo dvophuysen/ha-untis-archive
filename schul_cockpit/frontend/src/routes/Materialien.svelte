@@ -38,6 +38,31 @@
 
   const base = $derived(`/api/accounts/${accountId}/materials`);
   const KIND_HINT = { workbook: 'Heftseite', worksheet: 'Blatt', book: 'Buchseite', unknown: 'Quelle unklar' };
+  // Warum eine Stelle fotografiert werden muss, obwohl es ein digitales Buch gibt.
+  const REASON_HINT = {
+    unavailable: 'das digitale Buch liefert diese Seite nicht',
+    passt_nicht: 'die Schulbuchseite passt nicht zum Zitat, vermutlich ein anderes Heft',
+  };
+  const ACCESS_NAMES = { proven: 'Abruf nachgewiesen', readable: 'Seite lesbar', blank: 'liefert leere Seiten', viewer_error: 'nicht erreichbar' };
+  let collecting = $state(null);
+
+  async function collectNow() {
+    // Der Sammellauf dauert Minuten; anstoßen und nachfragen, bis er fertig ist.
+    collecting = { state: 'running', seconds: 0 };
+    const startedAt = Date.now();
+    try {
+      let state = await api.post(`${base}/sources/collect`);
+      while (state.state === 'running' && Date.now() - startedAt < 20 * 60 * 1000) {
+        collecting = { state: 'running', seconds: Math.round((Date.now() - startedAt) / 1000) };
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        state = await api.get(`${base}/sources/collect`);
+      }
+      collecting = state.state === 'done' ? { state: 'done', ...state.result } : { state: 'timeout' };
+      await load();
+    } catch (e) {
+      collecting = { state: 'failed', detail: e.message };
+    }
+  }
   const waiting = $derived((data?.materials ?? []).some((m) => m.analysis_state === 'pending'));
 
   async function load() {
@@ -159,33 +184,59 @@
   {#if error}<div class="error-box">{error}</div>{/if}
 </div>
 
-{#if ledger?.missing_total}
+{#if ledger?.missing_total || ledger?.pending_total}
   <details class="card wanted">
     <summary>
-      <span><strong>Was mir noch fehlt</strong> · {ledger.missing_total} {ledger.missing_total === 1 ? 'Stelle' : 'Stellen'}</span>
+      <span><strong>Was mir noch fehlt</strong>
+        {#if ledger.missing_total} · {ledger.missing_total} {ledger.missing_total === 1 ? 'Stelle' : 'Stellen'} zum Fotografieren{/if}
+        {#if ledger.pending_total} · {ledger.pending_total} {ledger.pending_total === 1 ? 'Buchseite hole' : 'Buchseiten hole'} ich mir selbst{/if}</span>
     </summary>
-    <p class="lead">Diese Stellen nennt der Unterricht seit Schuljahresbeginn, und ich habe sie nicht.
-      Ohne sie übe ich etwas Ähnliches statt genau das, was ihr im Heft hattet. Digitale Bücher hole ich mir selbst,
-      hier steht nur, was fotografiert werden müsste.</p>
-    {#each ledger.subjects.filter((s) => s.missing_count) as subject (subject.subject)}
+    <p class="lead">Diese Stellen nennt der Unterricht seit Schuljahresbeginn. Digitale Buchseiten hole ich mir selbst,
+      nach der Schule und nachts; hier steht, was davon noch unterwegs ist und was fotografiert werden müsste,
+      weil es nur auf Papier existiert.</p>
+    {#each ledger.subjects.filter((s) => s.missing_count || s.pending) as subject (subject.subject)}
       <details class="subject">
         <summary>
           <span class="name">{subject.subject}</span>
-          <span class="count">{subject.missing_count} {subject.missing_count === 1 ? 'Seite' : 'Seiten'}</span>
+          <span class="count">
+            {#if subject.missing_count}{subject.missing_count} {subject.missing_count === 1 ? 'Seite' : 'Seiten'} fehlen{/if}
+            {#if subject.missing_count && subject.pending} · {/if}
+            {#if subject.pending}{subject.pending} unterwegs{/if}
+          </span>
         </summary>
-        {#if subject.digital}<p class="muted">{subject.digital} Buchseiten liegen digital vor, die brauche ich nicht.</p>{/if}
+        {#if subject.digital}<p class="muted">{subject.digital} Buchseiten liegen digital vor.</p>{/if}
+        {#if subject.pending}<p class="muted">Buchseiten, die ich noch hole: {subject.pending_pages.join(', ')}.</p>{/if}
         {#each subject.missing as need}
           <div class="need">
             <p class="what"><strong>{need.label} {need.pages_label}</strong>
-              <span class="muted">· {KIND_HINT[need.kind] ?? need.kind}</span></p>
+              <span class="muted">· {REASON_HINT[need.reason] ?? KIND_HINT[need.kind] ?? need.kind}</span></p>
             <p class="quote">„{need.quote}"</p>
             <p class="muted">zuletzt genannt am {new Date(need.last_date).toLocaleDateString('de-DE')}{#if need.mentions > 1} · {need.mentions}× erwähnt{/if}</p>
           </div>
         {/each}
       </details>
     {/each}
+    {#if ledger.books?.length}
+      <p class="muted foot">Digitale Bücher:
+        {#each ledger.books as book, i}{i ? ' · ' : ''}{book.subject}: {book.pages_stored} {book.pages_stored === 1 ? 'Seite' : 'Seiten'} gespeichert{#if book.access} ({ACCESS_NAMES[book.access.status] ?? book.access.status}){/if}{/each}
+      </p>
+    {/if}
+    {#if data?.can_manage}
+      <p class="foot">
+        <button disabled={collecting?.state === 'running'} onclick={collectNow}>
+          {collecting?.state === 'running' ? `Sammle … ${collecting.seconds} s` : 'Jetzt einsammeln'}
+        </button>
+        {#if collecting?.state === 'done'}
+          <span class="muted">Fertig: {collecting.stored} Seiten abgelegt, {collecting.verified} bestätigt{#if collecting.blank}, {collecting.blank} leer{/if}{#if collecting.failed}, {collecting.failed} nicht geliefert{/if}{#if collecting.skipped}: {collecting.skipped}{/if}.</span>
+        {:else if collecting?.state === 'failed'}
+          <span class="muted">Nicht gestartet: {collecting.detail}</span>
+        {:else if collecting?.state === 'timeout'}
+          <span class="muted">Läuft noch im Hintergrund. Später neu laden.</span>
+        {/if}
+      </p>
+    {/if}
     <p class="muted foot">Die Zuordnung der Kürzel ist eine Annahme aus dem Wortlaut: „TB" als Schulbuch, „AH" und „cda" als Arbeitsheft.
-      Wo im Text kein Buchteil steht, heißt es „Unbekannte Quelle" — dann hilft das Zitat weiter.</p>
+      Wo im Text kein Buchteil steht, nehme ich zuerst das Schulbuch an und prüfe die Seite am Inhalt.</p>
   </details>
 {/if}
 

@@ -1,3 +1,56 @@
+# Quellenbestand 0.52.2–0.53.0
+
+Stand 15.09.2026, abends. 226 Python-Tests grün. 0.52.2 bis 0.52.6 auf der
+laufenden Instanz installiert und mit echten Abrufen geprüft; 0.53.0 folgt in
+derselben Session.
+
+## Was ausgeliefert ist
+
+**Alle neun Bücher des Kontos mit Regal liefern Seiten (0.52.6, D40).** Die
+BiBox-Bücher zeichnen mit WebGL; das Image trägt jetzt Mesa mit Lavapipe.
+Belegt: Mathematik 18/19 „Gleichungen lösen mit systematischem Probieren",
+Erdkunde 20/21 „Die Klimazonen der Erde", gedruckte Seitenzahlen stimmen.
+Politik (click & study) lieferte Seite 30 lesbar; der Regalsprung wartet seit
+0.52.3 auf die Kachel. Der Weg: Diagnose im Seitentest (0.52.2), Browser-Sonde
+(0.52.5), Software-GPU (0.52.6). Details in [Quellen](QUELLEN.md).
+
+**Hintergrundaufträge (0.52.4).** Nabu Casa kappt Anfragen nach 100 Sekunden;
+Seitentest, Browser-Sonde und Sammellauf laufen deshalb als Aufträge, die die
+Seite nachfragt. Ein Browserstart, der scheitert, wird bis zum Neustart nicht
+wiederholt; Start, Abschluss und Ende stehen mit Dauer im Protokoll.
+
+**Quellenbestand (0.53.0, D37/D38).** `source_links` bindet jede genannte
+Stelle an ihren Untis-Eintrag. `source_collector` holt fehlende Schulbuchseiten
+um 14 Uhr und nachts, höchstens 40 je Kind und Lauf, und legt sie als
+Materialien ab (`origin=book_fetch`, Buch, Seite, Stundendatum). Die
+Materialauswertung liest gedruckte Seitenzahl und Passung zum Zitat; daraus
+der Nachweis je Buch (`digital_textbook_access`, D31) und der Stand je Stelle
+(D30). Der Mentor nimmt Seiten aus dem Bestand. Karte und Einstellungen zeigen
+die Zustände; Eltern stoßen den Lauf von Hand an.
+
+## Fehler, die dabei gefunden und behoben wurden
+
+- `--disable-gpu` schaltete WebGL ab; `--ignore-gpu-blocklist` ließ den Browser
+  auf dem Pi zwei Minuten hängen; die Ursache war der fehlende SwiftShader.
+- Der Mentor verstand nur „S." und „Seite"; für Spanisch („p. 50") bekam er nie
+  eine Buchseite. Jetzt derselbe Erkenner wie in der Bilanz.
+- Die Bilanz verbuchte jede Buchseite als vorhanden, sobald das Fach ein Buch
+  im Katalog hatte (D31).
+- `digital_textbook_pages` und `digital_textbook_fetches` fehlten beim
+  Kontowechsel.
+
+## Bekannte Lücken
+
+- Paket 2 (Inhaltsverzeichnis, Kapitel- und Lektionsregel, Klausurstoff) und
+  Paket 3 (Einträge ohne Quelle, Fachgewohnheit, Foto-Aufforderung) sind
+  beschrieben, nicht gebaut.
+- Der Regal-Scan des Kontos ohne Regal speichert Dialogschaltflächen als
+  Bücher; kein Löschweg.
+- Ob die App auf dem älteren Kindergerät eine Bildschirmzeit-Auszeit übersteht,
+  ist weiterhin nur vom Nutzer prüfbar.
+
+---
+
 # Quellenbilanz und abgeleiteter Tagesabschluss 0.51.0–0.52.1
 
 Stand 15.09.2026, auf der laufenden Instanz installiert und geprüft. 210 Python-Tests grün.

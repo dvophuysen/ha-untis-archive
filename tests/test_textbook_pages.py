@@ -31,11 +31,14 @@ def seed(title="Politik & Co. Niedersachsen 8", subject="Politik"):
 
 
 def png(marker):
-    # Smallest thing Pillow accepts, distinguishable per page.
-    from PIL import Image
+    # Small, distinguishable per page, and with something on it: a uniform
+    # image counts as an empty viewer shell and is thrown away.
+    from PIL import Image, ImageDraw
     import io
+    image = Image.new("RGB", (40, 40), (250, 250, 250))
+    ImageDraw.Draw(image).rectangle((4, 4, 24, 24), fill=(marker % 200, 20, 20))
     out = io.BytesIO()
-    Image.new("RGB", (8, 8), (marker, marker, marker)).save(out, "PNG")
+    image.save(out, "PNG")
     return out.getvalue()
 
 
@@ -57,7 +60,7 @@ async def test_all_pages_delivered_are_reported_as_loaded(env, monkeypatch):
     seed()
     calls = []
 
-    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False, budget=240.0):
         calls.append((title, list(pages), launch_url))
         return CaptureResult(shots=[PageShot(page, png(page)) for page in pages])
 
@@ -73,7 +76,7 @@ async def test_known_pages_come_from_the_cache_without_a_second_browser_run(env,
     seed()
     runs = []
 
-    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False, budget=240.0):
         runs.append(list(pages))
         return CaptureResult(shots=[PageShot(page, png(page)) for page in pages])
 
@@ -88,7 +91,7 @@ async def test_known_pages_come_from_the_cache_without_a_second_browser_run(env,
 async def test_unreachable_page_hands_over_the_open_view_instead_of_nothing(env, monkeypatch):
     seed()
 
-    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False, budget=240.0):
         return CaptureResult(shots=[PageShot(None, png(7))], note="Seitennavigation nicht gefunden")
 
     monkeypatch.setattr(ctx, "capture_pages", capture)
@@ -102,7 +105,7 @@ async def test_unreachable_page_hands_over_the_open_view_instead_of_nothing(env,
 async def test_viewer_error_keeps_the_stage_for_the_parent_view(env, monkeypatch):
     seed()
 
-    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False, budget=240.0):
         raise TextbookScanError(
             "Die angegebenen Buchseiten konnten nicht geöffnet werden (Buch öffnen)", "Buch öffnen"
         )
@@ -119,7 +122,7 @@ async def test_viewer_error_keeps_the_stage_for_the_parent_view(env, monkeypatch
 async def test_partial_delivery_names_the_missing_pages(env, monkeypatch):
     seed()
 
-    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False, budget=240.0):
         return CaptureResult(shots=[PageShot(30, png(30))], note="Nicht alle Seiten erreichbar")
 
     monkeypatch.setattr(ctx, "capture_pages", capture)
@@ -143,7 +146,7 @@ def test_parent_page_test_reports_the_stage_and_a_preview(env, monkeypatch):
     client, state, patch = env
     book_id = seed()
 
-    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False, budget=240.0):
         assert survey is True, "the parent page test always collects diagnostics"
         return CaptureResult(
             shots=[PageShot(pages[0], png(34))],
@@ -232,7 +235,7 @@ def test_page_test_passes_the_viewer_diagnostics_through(env, monkeypatch):
     client, state, patch = env
     book_id = seed()
 
-    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False, budget=240.0):
         return CaptureResult(
             shots=[PageShot(pages[0], png(34))],
             diagnostics={"blank_first": True, "blank_after_wait": True, "waited": 15.2, "webgl": False,
@@ -259,7 +262,7 @@ def test_a_failed_run_still_reports_where_it_stopped(env, monkeypatch):
     client, state, patch = env
     book_id = seed()
 
-    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False, budget=240.0):
         exc = TextbookScanError("Das Medienregal wurde nicht gefunden", "Eduplaces öffnen")
         exc.survey = CaptureResult(
             controls=[{"tag": "a", "text": "click & study", "visible": True, "frame": 0}],
@@ -288,7 +291,7 @@ def test_a_second_page_test_waits_for_the_running_one(env, monkeypatch):
     book_id = seed()
     gate = {"release": None}
 
-    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False, budget=240.0):
         while not gate["release"]:
             await asyncio.sleep(0.01)
         return CaptureResult(shots=[PageShot(pages[0], png(12))])

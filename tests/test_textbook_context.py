@@ -5,3 +5,9 @@ def test_page_numbers_expand_ranges_and_keep_later_task_page():
 
 def test_page_numbers_are_bounded():
     assert page_numbers("Seite 10-99") == []
+
+def test_page_numbers_read_every_spelling_but_only_book_pages():
+    # Spanisch schreibt „p.", Latein trennt Textband und Arbeitsheft.
+    assert page_numbers("#libro, p. 50   vocabulario    4 b") == [50]
+    assert page_numbers("Wortschatztraining (TB S. 13 Aufg. C, AH S. 7 Aufg. C und Z)") == [13]
+    assert page_numbers("Arbeitsheft S. 85, Aufg. 5") == []

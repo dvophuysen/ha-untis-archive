@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from PIL import Image
 from .db import webapp_conn
 from .secret_store import decrypt_secret
-from .textbook_browser import TextbookScanError, capture_pages
+from .textbook_browser import TextbookScanError, capture_pages, looks_blank
 
 _LOGGER=logging.getLogger("schul_cockpit.textbooks")
 
@@ -15,10 +15,16 @@ CACHE_DAYS=30
 CACHE_KEEP=60
 
 def page_numbers(text: str) -> list[int]:
+    """Die Schulbuchseiten einer Aufgabe, mit demselben Erkenner wie die
+    Quellenbilanz: „p. 50" zählt wie „S. 50", Arbeitsheftseiten bleiben
+    draußen, eine Spanne über zehn Seiten ist ein Tippfehler."""
+    from .sources import PAGE, part_of
     pages=[]
-    for start,end in re.findall(r"(?:S(?:eite)?\.?)\s*(\d{1,4})(?:\s*[-–]\s*(\d{1,4}))?",text,re.I):
-        a,b=int(start),int(end or start)
-        if a<=b<=a+10: pages.extend(range(a,b+1))
+    for hit in PAGE.finditer(text or ""):
+        first=int(hit.group(1));last=int(hit.group(2)) if hit.group(2) else first
+        if last<first or last-first>10: continue
+        _,kind=part_of(text[:hit.start()])
+        if kind in ("","book"): pages.extend(range(first,last+1))
     return list(dict.fromkeys(pages))[:6]
 
 def _now() -> str:
@@ -84,7 +90,7 @@ def book_and_credentials(account_id:int,subject:str|None=None,book_id:int|None=N
     return book,credentials
 
 
-async def fetch_pages(account_id:int,book,credentials,pages:list[int],use_cache:bool=True,survey:bool=False):
+async def fetch_pages(account_id:int,book,credentials,pages:list[int],use_cache:bool=True,survey:bool=False,budget:float=240.0):
     """Deliver the requested pages.
 
     Returns a dict with shots, status, stage, detail and — only when survey is
@@ -99,7 +105,7 @@ async def fetch_pages(account_id:int,book,credentials,pages:list[int],use_cache:
         try:
             password=decrypt_secret(credentials["password_ciphertext"])
             seen=await capture_pages(credentials["portal_url"],credentials["username"],password,
-                                     book["title"],missing,book["launch_url"],survey)
+                                     book["title"],missing,book["launch_url"],survey,budget)
             fresh=seen.shots;detail=seen.note or None
         except TextbookScanError as exc:
             stage=exc.stage;detail=str(exc);seen=getattr(exc,"survey",None)
@@ -141,8 +147,26 @@ async def homework_page_images(account_id:int,subject:str,task_text:str):
     if not pages:return [],{"status":"no_pages"}
     book,credentials=book_and_credentials(account_id,subject=subject)
     if not book or not credentials:return [],{"status":"not_configured","pages":pages}
-    result=await fetch_pages(account_id,book,credentials,pages)
-    shots=result["shots"];status=result["status"];stage=result["stage"];detail=result["detail"]
+    # Zuerst der Bestand: Was der Sammellauf schon abgelegt hat, kommt ohne
+    # Browser und ohne Wartezeit. Nur der Rest wird jetzt geholt.
+    from .source_collector import stored_pages, store_page
+    kept=stored_pages(account_id,subject,pages)
+    missing=[p for p in pages if p not in kept]
+    if missing:
+        result=await fetch_pages(account_id,book,credentials,missing)
+        for p,image in result["shots"]:
+            if p is not None and not looks_blank(image):
+                kept[p]=image
+                try: store_page(account_id,book,p,image,subject)
+                except Exception: _LOGGER.warning("Buchseite %s konnte nicht abgelegt werden",p)
+        stage=result["stage"];detail=result["detail"];fallback=[s for s in result["shots"] if s[0] is None]
+    else:
+        stage=None;detail=None;fallback=[]
+    ordered=[(p,kept[p]) for p in pages if p in kept]
+    if ordered: status="loaded" if len(ordered)==len(pages) else "partial"
+    elif fallback: ordered=fallback[:1];status="open_page"
+    else: status="viewer_error"
+    shots=ordered
     context={"status":status,"book":book["title"],"pages":pages}
     delivered=[p for p,_ in shots if p is not None]
     if delivered:context["delivered_pages"]=delivered
@@ -164,6 +188,13 @@ async def test_page(account_id:int,book_id:int,page:int) -> dict:
     if not credentials:return {"status":"not_configured","book":book["title"]}
     delivery=await fetch_pages(account_id,book,credentials,[page],use_cache=False,survey=True)
     shots=delivery["shots"];seen=delivery["seen"]
+    try:
+        from .source_collector import record_access
+        if shots and shots[0][0] is not None:
+            record_access(account_id,book["title"],"blank" if looks_blank(shots[0][1]) else "readable",page=page)
+        elif delivery["status"]=="viewer_error":
+            record_access(account_id,book["title"],"viewer_error",page=page,detail=delivery["detail"])
+    except Exception: _LOGGER.warning("Zugriffsnachweis für Konto %s nicht gespeichert",account_id)
     result={"status":delivery["status"],"book":book["title"],"page":page,"stage":delivery["stage"],
             "detail":delivery["detail"],"shown_page":shots[0][0] if shots else None}
     if shots:

@@ -1,6 +1,6 @@
 # Konzept und Projektgedächtnis
 
-Stand: 13.09.2026. Maßgeblicher Einstieg für die fachliche und produktbezogene Weiterentwicklung des Schul-Cockpits.
+Stand: 15.09.2026. Maßgeblicher Einstieg für die fachliche und produktbezogene Weiterentwicklung des Schul-Cockpits.
 
 ## Lesereihenfolge für jede Fortsetzung
 
@@ -20,7 +20,7 @@ Eine neue Session muss diese Dateien ausdrücklich lesen. Ihre Speicherung garan
 
 ## Laufende Arbeitspakete
 
-- [Quellen](QUELLEN.md): welche Buchstelle hinter einer Aufgabe steht, was davon abrufbar ist und was eingescannt werden muss. Enthält belegte Befunde zum Seitenabruf aus dem Medienregal.
+- [Quellen](QUELLEN.md): der Quellenbestand. Welche Buchstelle hinter einer Aufgabe steht, wie sie eingesammelt, abgelegt und geprüft wird, was eingescannt werden muss. Enthält belegte Befunde zum Seitenabruf aus dem Medienregal und den Stand der Pakete 1 bis 3.
 - [Verantwortung](VERANTWORTUNG.md): Erinnerungen, abgeleiteter Tagesabschluss, Morgen-Rückfall.
 - [Lerneinheiten](LERNEINHEITEN.md): wie Übungsthemen entstehen und gruppiert werden.
 
