@@ -109,7 +109,11 @@ async def upload(
         except Exception:
             _LOGGER.warning("Zuordnung des Fotos zur Stelle nicht gespeichert", exc_info=True)
     background.add_task(_run_analysis, account_id, material_id)
-    return store.detail(account_id, material_id) or {"id": material_id}
+    found = store.detail(account_id, material_id) or {"id": material_id}
+    # Dieselbe Seite schon einmal fotografiert? Dann sagen wir es gleich,
+    # statt zwei Lesungen zu bezahlen und zwei Einträge zu zeigen.
+    found["duplicate_of"] = store.duplicate_of(account_id, material_id)
+    return found
 
 
 @router.get("")

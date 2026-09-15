@@ -406,3 +406,54 @@ def test_comparing_a_page_with_another_model_stores_nothing(env, monkeypatch):
         row = c.execute("SELECT content_text,analysis_model FROM materials WHERE id=?", (material_id,)).fetchone()
     assert row[0].endswith(".") and row[1] is None, "die Eichung speichert nichts"
     assert client.post(f"/api/accounts/1/materials/{material_id}/analysis/compare", json={"model": "gpt-9"}).status_code == 422
+
+
+def test_consent_buttons_are_not_books_and_the_dialog_is_reported():
+    from backend import textbook_browser as tb
+    for label in ("Abbrechen", "Weiter zur App", "Welche Daten werden übertragen?"):
+        assert tb._CONSENT_PHRASES.fullmatch(label)
+        assert tb._GENERIC_LABELS.fullmatch(label) or tb._GENERIC_PHRASES.search(label) or tb._CONSENT_PHRASES.fullmatch(label)
+    assert not tb._CONSENT_PHRASES.fullmatch("Pontes Gesamtband")
+
+
+def test_a_shelf_entry_that_is_no_book_can_be_removed(env):
+    from backend.routers import textbooks as textbook_routes
+    client, state, _ = env
+    client.app.include_router(textbook_routes.router, prefix="/api")
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO digital_textbook_credentials(account_id,portal_url,username,password_ciphertext,verification_status,updated_at,created_at) "
+                  "VALUES(1,'https://schule.example','kind','x','catalog_ready','now','now')")
+        for title in ("Abbrechen", "Weiter zur App", "Pontes"):
+            c.execute("INSERT INTO digital_textbook_catalog(account_id,title,discovered_at) VALUES(1,?,'now')", (title,))
+    books = client.get("/api/accounts/1/textbooks/catalog").json()["books"]
+    bogus = [b for b in books if b["title"] != "Pontes"]
+    for b in bogus:
+        assert client.delete(f"/api/accounts/1/textbooks/catalog/{b['id']}").status_code == 204
+    assert [b["title"] for b in client.get("/api/accounts/1/textbooks/catalog").json()["books"]] == ["Pontes"]
+    assert client.delete("/api/accounts/1/textbooks/catalog/99999").status_code == 404
+
+
+def test_a_second_photo_of_the_same_page_is_reported_and_blur_is_measured(env):
+    from backend import materials as store
+    from PIL import Image, ImageDraw, ImageFilter
+    client, state, _ = env
+    client.app.include_router(materials_routes.router, prefix="/api")
+
+    def page(blur=0):
+        img = Image.new("RGB", (900, 1200), (250, 250, 250))
+        draw = ImageDraw.Draw(img)
+        for y in range(60, 1150, 28):
+            draw.text((40, y), "Servus clamat. Servi clamant. Lektion 1 Grammatik " * 2, fill=(20, 20, 20))
+        if blur:
+            img = img.filter(ImageFilter.GaussianBlur(blur))
+        out = io.BytesIO(); img.save(out, "JPEG", quality=90); return out.getvalue()
+
+    first = client.post("/api/accounts/1/materials", files={"file": ("a.jpg", page(), "image/jpeg")}, data={"subject_name": "LATEIN"}).json()
+    assert first["duplicate_of"] is None and first["blurry"] is False
+    second = client.post("/api/accounts/1/materials", files={"file": ("b.jpg", page(), "image/jpeg")}, data={"subject_name": "LATEIN"}).json()
+    assert second["duplicate_of"]["id"] == first["id"], "dieselbe Seite noch einmal"
+    soft = client.post("/api/accounts/1/materials", files={"file": ("c.jpg", page(blur=4), "image/jpeg")}, data={"subject_name": "LATEIN"}).json()
+    assert soft["blurry"] is True
+    with closing(db.webapp_conn()) as c:
+        rows = {r[0]: (r[1], r[2]) for r in c.execute("SELECT id,phash,sharpness FROM materials")}
+    assert rows[first["id"]][0] == rows[second["id"]][0] and rows[first["id"]][1] > store.BLURRY_BELOW > rows[soft["id"]][1]

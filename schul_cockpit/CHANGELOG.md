@@ -1,3 +1,8 @@
+## 0.62.0
+
+- Der Einwilligungsdialog des Verlags im Medienregal wird erkannt und gemeldet statt als Bücher gespeichert; die App stimmt nicht an Stelle der Eltern zu. Ein Regaleintrag lässt sich in den Einstellungen entfernen.
+- Beim Ablegen eines Fotos meldet die App sofort, wenn dieselbe Seite schon vorliegt (gleicher Bildabdruck) und bietet an, das neue Foto zu löschen. Ein unscharfes Foto wird als solches genannt, mit der Bitte um ein neues bei gutem Licht; gelesen wird es trotzdem. Die Liste markiert unscharfe Fotos.
+
 ## 0.61.1
 
 - Die Eichung misst zusätzlich, ob jedes Wort und jede Zahl der Seite in der zweiten Lesung vorkommt (Wortabdeckung), und nennt die fehlenden Wörter. Die reine Zeichenfolge bestraft eine anders angeordnete Tabelle, obwohl nichts fehlt.

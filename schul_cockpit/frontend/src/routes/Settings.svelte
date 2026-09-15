@@ -96,6 +96,19 @@
     }
   }
 
+  // Ein Eintrag, der kein Buch ist (etwa eine Schaltfläche des
+  // Einwilligungsdialogs), verschwindet aus dem Regal; ein echtes Buch kommt
+  // beim nächsten Scan wieder.
+  async function removeBook(book) {
+    if (!confirm(`„${book.title}“ aus dem Regal nehmen?`)) return;
+    try {
+      await api.delete(`/api/accounts/${accountId}/textbooks/catalog/${book.id}`);
+      textbookCatalog = await api.get(`/api/accounts/${accountId}/textbooks/catalog`);
+    } catch (e) {
+      textbookMessage = { ok: false, text: e.message };
+    }
+  }
+
   async function setBookSubject(book, subjectName) {
     try {
       textbookCatalog = await api.patch(
@@ -472,6 +485,7 @@
                 </small>
               {/if}
             </div>
+            <button class="ghost" style="min-height:32px;font-size:0.8rem;" onclick={() => removeBook(book)} aria-label={`${book.title} aus dem Regal nehmen`}>Entfernen</button>
             <select
               aria-label={`Fach für ${book.title}`}
               value={selectedBookSubject(book)}
