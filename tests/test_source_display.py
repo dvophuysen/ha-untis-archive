@@ -110,3 +110,16 @@ def test_the_material_list_shows_everything_and_pages(env):
     rest = client.get("/api/accounts/1/materials?limit=4&offset=4").json()
     assert len(rest["materials"]) == 2 and rest["has_more"] is False
     assert {m["source_book"] for m in first["materials"] + rest["materials"]} == {"Neue Wege 8", None}
+
+
+def test_untis_tasks_carry_the_assignment_in_their_notes(env):
+    history(homework=[(9, 'SN', '#cda, p. 28, n°1a+b', '2026-09-11')])
+    shelf()
+    task = {"id": 5, "title": "Spanisch", "subject_name": "SPANISCH",
+            "notes": "#cda, p. 28, n°1a+b\n\nGegeben am: Fr 11.09.\n\nFällig bis: Mi 16.09.\n\n[SN050675]"}
+    assert sources.task_text(task) == "cda, p. 28, n°1a+b"
+    sources.ledger(1)
+    sources.annotate_tasks(1, [task])
+    assert task["homework_id"] == 9, "ohne Kennung in der Historie zählt der Wortlaut, auch ohne das führende #"
+    assert [(s["text"], s["state"]) for s in task["text_segments"] if "pages" in s] == [("p. 28", "missing")]
+    assert task["title_segments"] is None and task["source_state"] == "missing"

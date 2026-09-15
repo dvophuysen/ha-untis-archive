@@ -469,7 +469,7 @@ async def prepare_intros(account_id: int, limit: int = 8) -> dict:
                 "SELECT title,content_text FROM materials WHERE id IN (%s) AND analysis_state='ready' AND content_text!=''"
                 % (",".join("?" * len(task["materials"])) or "NULL"),
                 tuple(m["id"] for m in task["materials"]))][:3] if task.get("materials") else []
-        context = {"aufgabe": task["title"], "fach": subject, "faellig_am": task.get("due_date"),
+        context = {"aufgabe": task.get("text") or task["title"], "fach": subject, "faellig_am": task.get("due_date"),
                    "letzte_stunden": lessons, "material": texts,
                    "material_fehlt": task.get("source_state") == "missing"}
         try:
