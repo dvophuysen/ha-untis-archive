@@ -33,17 +33,31 @@ def snapshot(account, now):
         if (end and end <= now.strftime('%H:%M') and not lesson.get('is_cancelled')
                 and not lesson.get('was_absent') and lesson.get('id') not in ratings):
             feedback += 1
+    return dict(homework=homework, material=len(items)-bag['confirmed_count'], feedback=feedback,
+                photos=photo_count(account, now))
+
+
+# Der Tagesstand wird jede Minute gelesen; die Arbeiten der nächsten zwei Wochen
+# ändern sich nicht minütlich. Zehn Minuten Vorrat je Kind.
+_PHOTOS: dict[int, tuple[datetime, int]] = {}
+
+
+def photo_count(account, now):
+    """Vor einer Arbeit: Heftseiten, die der Unterricht nennt und die weder
+    digital noch fotografiert vorliegen. Nur die Zahl; die Karte sagt, welche."""
+    cached = _PHOTOS.get(account)
+    if cached and (now - cached[0]).total_seconds() < 600:
+        return cached[1]
     photos = 0
     try:
-        # Vor einer Arbeit: Heftseiten, die der Unterricht nennt und die weder
-        # digital noch fotografiert vorliegen. Nur zählen; die Karte sagt, welche.
         from .exams import resolve_exams
         from .sources import photo_requests
         exams = asyncio.run(resolve_exams(account, days_ahead=14)).get('exams', [])
         photos = len(photo_requests(account, exams, now.date().isoformat()))
     except Exception:
         LOG.debug('Fotowünsche für Konto %s nicht bestimmbar', account)
-    return dict(homework=homework, material=len(items)-bag['confirmed_count'], feedback=feedback, photos=photos)
+    _PHOTOS[account] = (now, photos)
+    return photos
 
 
 def due(time_of_day, now):
