@@ -37,6 +37,8 @@ def _driver(*extra_args: str) -> webdriver.Chrome:
     for arg in ("--headless", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", *extra_args):
         options.add_argument(arg)
     options.add_argument("--lang=de-DE")
+    # Console errors are the only place a reader says why it draws nothing.
+    options.set_capability("goog:loggingPrefs", {"browser": "ALL"})
     service = Service(executable_path=_CHROMEDRIVER) if os.path.exists(_CHROMEDRIVER) else None
     driver = webdriver.Chrome(options=options, service=service) if service else webdriver.Chrome(options=options)
     driver.set_page_load_timeout(30)
@@ -954,6 +956,121 @@ def _survey(driver) -> dict:
     return {"controls": controls[:200], "documents": documents}
 
 
+_PAGE_AREA_DIAG_SCRIPT = r"""
+// What sits inside the areas a reader labels as pages. A BiBox reader kept
+// "Seite 18" and "Seite 19" in the document with no size at all, so the
+// geometry and the children tell whether content was ever drawn.
+const out=[];
+const short=s=>(s||'').replace(/[A-Za-z0-9_-]{24,}/g,'…').slice(0,120);
+function look(root){
+  for(const e of root.querySelectorAll('*')){
+    if(out.length>=8) return;
+    const marked=(e.getAttribute('aria-label')||e.getAttribute('title')||'');
+    if(/^(Seite|Page)\s+\d{1,4}$/i.test(marked.trim())){
+      const r=e.getBoundingClientRect();
+      const kids=[];
+      for(const k of e.querySelectorAll('img,canvas,svg,iframe,object,video,picture')){
+        if(kids.length>=6) break;
+        const kr=k.getBoundingClientRect();
+        const item={tag:k.tagName.toLowerCase(),w:Math.round(kr.width),h:Math.round(kr.height)};
+        if(k.tagName==='IMG'){item.complete=k.complete;item.natural=k.naturalWidth+'x'+k.naturalHeight;
+          try{item.src=short(new URL(k.currentSrc||k.src||'',location.href).pathname);}catch(_){}}
+        if(k.tagName==='CANVAS'){item.canvas=k.width+'x'+k.height;}
+        kids.push(item);
+      }
+      const style=getComputedStyle(e);
+      out.push({label:marked.trim(),tag:e.tagName.toLowerCase(),w:Math.round(r.width),h:Math.round(r.height),
+        top:Math.round(r.top),left:Math.round(r.left),children:e.children.length,descendants:e.querySelectorAll('*').length,
+        text:(e.innerText||'').replace(/\s+/g,' ').trim().length,display:style.display,visibility:style.visibility,
+        opacity:style.opacity,media:kids});
+    }
+    if(e.shadowRoot) look(e.shadowRoot);
+  }
+}
+look(document); return out;
+"""
+
+_RESOURCE_DIAG_SCRIPT = r"""
+// Requests the reader made and what became of them. responseStatus is 0 for
+// blocked and cross-origin-opaque answers, which is a finding in itself.
+const short=s=>(s||'').replace(/[A-Za-z0-9_-]{24,}/g,'…');
+const entries=performance.getEntriesByType('resource');
+const failed=[];const kinds={};
+for(const e of entries){
+  kinds[e.initiatorType]=(kinds[e.initiatorType]||0)+1;
+  const status=('responseStatus' in e)?e.responseStatus:null;
+  const empty=e.transferSize===0&&e.decodedBodySize===0;
+  if((status!==null&&status>=400)||(status===0&&empty)){
+    if(failed.length>=25) continue;
+    let path='';try{const u=new URL(e.name);path=u.host+short(u.pathname).slice(0,100);}catch(_){path=short(e.name).slice(0,100);}
+    failed.push({url:path,status:status,type:e.initiatorType,ms:Math.round(e.duration)});
+  }
+}
+let webgl=false,webgl2=false;
+try{const c=document.createElement('canvas');webgl=!!(c.getContext('webgl')||c.getContext('experimental-webgl'));webgl2=!!c.getContext('webgl2');}catch(_){}
+return {total:entries.length,kinds:kinds,failed:failed,webgl:webgl,webgl2:webgl2,
+  viewport:innerWidth+'x'+innerHeight,ratio:devicePixelRatio,visibility:document.visibilityState,
+  canvases:document.querySelectorAll('canvas').length,images:document.images.length,
+  worker:'serviceWorker' in navigator?(navigator.serviceWorker.controller?'active':'none'):'unsupported'};
+"""
+
+
+def looks_blank(blob: bytes, threshold: float = 0.04) -> bool:
+    """Is there anything on this image apart from the background?
+
+    A BiBox reader reported `loaded` and delivered an empty shell: toolbar,
+    icons, page counter, no book. Measured on real captures: the empty shell
+    has about 1 % of its pixels off the background colour, a book page 30 %,
+    a window with a book in it 10 %.
+    """
+    from PIL import Image
+
+    try:
+        image = Image.open(io.BytesIO(blob)).convert("L")
+        image.thumbnail((240, 240))
+        pixels = list(image.getdata())
+    except Exception:
+        return False
+    if not pixels:
+        return True
+    ordered = sorted(pixels)
+    median = ordered[len(ordered) // 2]
+    busy = sum(1 for value in pixels if abs(value - median) > 24)
+    return busy / len(pixels) < threshold
+
+
+def _console(driver) -> list[dict]:
+    """Console warnings and errors, tokens cut out, oldest first."""
+    try:
+        lines = driver.get_log("browser")
+    except Exception:
+        return []
+    kept = []
+    for line in lines:
+        level = str(line.get("level") or "")
+        if level not in ("SEVERE", "WARNING"):
+            continue
+        kept.append({"level": level, "text": _OPAQUE.sub("…", str(line.get("message") or ""))[:240]})
+    return kept[-30:]
+
+
+def _diagnostics(driver) -> dict:
+    """Why a reader shows what it shows: page areas, failed requests, console."""
+    found: dict = {}
+    driver.switch_to.default_content()
+    try:
+        found.update(driver.execute_script(_RESOURCE_DIAG_SCRIPT) or {})
+    except Exception as exc:
+        found["resources_error"] = type(exc).__name__
+    try:
+        found["page_areas"] = _in_frames(driver, _PAGE_AREA_DIAG_SCRIPT) or []
+    except Exception as exc:
+        found["page_areas_error"] = type(exc).__name__
+    driver.switch_to.default_content()
+    found["console"] = _console(driver)
+    return found
+
+
 @dataclass(frozen=True)
 class PageShot:
     page: int | None  # None: the book is open, but this page was not reachable
@@ -969,6 +1086,39 @@ class CaptureResult:
     attempts: list[dict] = field(default_factory=list)
     entry: list[dict] = field(default_factory=list)
     window_image: bytes | None = None
+    diagnostics: dict = field(default_factory=dict)
+
+
+def _wait_for_content(driver, shot: bytes, timeout: float = 15.0, pause: float = 3.0) -> tuple[bytes, dict]:
+    """Give a reader that drew nothing yet more time, and say what happened."""
+    report = {"blank_first": looks_blank(shot), "waited": 0.0}
+    if not report["blank_first"]:
+        return shot, report
+    end = time.monotonic() + timeout
+    started = time.monotonic()
+    while time.monotonic() < end:
+        time.sleep(pause)
+        again = _viewer_shot(driver)
+        if not looks_blank(again):
+            shot = again
+            break
+    report["waited"] = round(time.monotonic() - started, 1)
+    report["blank_after_wait"] = looks_blank(shot)
+    return shot, report
+
+
+def _attach_survey(exc: TextbookScanError, driver, stage: str) -> None:
+    """Even a failed run should show the parents where it stopped."""
+    try:
+        seen = _survey(driver)
+        driver.switch_to.default_content()
+        exc.survey = CaptureResult(  # type: ignore[attr-defined]
+            controls=seen["controls"], documents=seen["documents"],
+            window_image=driver.get_screenshot_as_png(),
+            diagnostics={"stage": stage, **_diagnostics(driver)},
+        )
+    except Exception:
+        pass
 
 
 def _capture_pages_sync(
@@ -1038,18 +1188,30 @@ def _capture_pages_sync(
             note = "Nicht alle Seiten erreichbar"
         result = CaptureResult(shots=shots, note=note, attempts=trace or [], entry=entry)
         if survey:
+            # A reader may still be drawing. Wait for content once, and
+            # record whether it ever came.
+            content: dict = {}
+            if shots and shots[0].page is not None:
+                image, content = _wait_for_content(driver, shots[0].image)
+                shots[0] = PageShot(shots[0].page, image)
             seen = _survey(driver)
             result.controls = seen["controls"]
             result.documents = seen["documents"]
             driver.switch_to.default_content()
             result.window_image = driver.get_screenshot_as_png()
+            result.diagnostics = {**content, **_diagnostics(driver)}
         return result
-    except TextbookScanError:
+    except TextbookScanError as exc:
+        if survey:
+            _attach_survey(exc, driver, stage)
         raise
     except Exception as exc:
-        raise TextbookScanError(
+        wrapped = TextbookScanError(
             f"Die angegebenen Buchseiten konnten nicht geöffnet werden ({stage})", stage
-        ) from exc
+        )
+        if survey:
+            _attach_survey(wrapped, driver, stage)
+        raise wrapped from exc
     finally:
         driver.quit()
 
