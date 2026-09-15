@@ -1,9 +1,22 @@
-# Quellenbestand 0.52.2–0.59.0
+# Quellenbestand 0.52.2–0.62.0
 
 Stand 15.09.2026, abends. Bis 0.56.11 auf der laufenden Instanz installiert und
 mit echten Abrufen geprüft; 0.57.0 folgt in derselben Session.
 
 ## Was ausgeliefert ist
+
+**Pakete B bis D aus der Ideenliste (0.60.0 bis 0.62.0, D53 bis D55).**
+Verzeichnisfotos gelten auch für digitale Bücher ohne lesbares Verzeichnis
+(`read_paper_toc` legt die Kapitel unter dem digitalen Titel ab); Kapitel sind
+von Hand berichtigbar und gesperrt (`update_chapter`, `book_chapters.locked`,
+Begleitband Lektion 11, 12 und 19 live korrigiert). Das Abschreibmodell ist je
+Zweck wählbar und wurde geeicht: nicht umgestellt (siehe oben). Die Rahmen der
+Eltern stehen in der Mentor-Ansicht. Fotos tragen Bildabdruck und Schärfemaß;
+Duplikate und unscharfe Aufnahmen werden beim Ablegen gemeldet. Der
+Einwilligungsdialog des Verlags wird erkannt, die drei Dialogeinträge im Regal
+des jüngeren Kindes sind entfernt. Offen: Klausurseite neu (E, wartet auf
+Layoutwünsche und die Bildschirmzeit-Antwort), Vokabeltrainer (zurückgestellt,
+Eingabe per Tippen zu umständlich).
 
 **Eichung der Abschreibmodelle (0.61.0/0.61.1, D54): nicht umgestellt.** Acht
 echte Seiten (Begleitband-Grammatik und -Wortschatz, Textband-Lektionstext,
