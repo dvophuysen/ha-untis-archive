@@ -1,9 +1,21 @@
-# Quellenbestand 0.52.2–0.57.0
+# Quellenbestand 0.52.2–0.59.0
 
 Stand 15.09.2026, abends. Bis 0.56.11 auf der laufenden Instanz installiert und
 mit echten Abrufen geprüft; 0.57.0 folgt in derselben Session.
 
 ## Was ausgeliefert ist
+
+**Ankündigung, Gegenlesen, Buchvermutung (0.59.0, D50–D52).** Ein Zettel
+der Lehrkraft legt den Stoffplan fest (`NOTICE_RULE`, Kategorie `context`).
+Zettel, Verzeichnisse und unsichere Lesungen bitten auf der Materialseite um
+„Stimmt so“ (`needs_review`, `verified`). Stellen ohne Buchteil bekommen das
+wahrscheinlichste Buch (`_book_guesser`) als Vermutung auf der Einkaufsliste.
+Dazu 0.58.x: Materialstand auf der Klausurkarte (`exam_sources`), Tagesrahmen
+je Kind ohne Hintergrundarbeit, ausgeblendete Kurse ohne Rückmeldepflicht.
+Offen aus der Ideenliste des Nutzers: Verzeichnisse aus Fotos auch für
+digitale Bücher ohne lesbares Verzeichnis, Kapitel von Hand korrigieren,
+günstigeres Modell fürs Abschreiben mit Eichung, Rahmen in der Elternansicht,
+Duplikate und unscharfe Fotos, Klausurseite neu, Regal-Dialogeinträge.
 
 **Zwei Bücher, Papierbücher, Klausurzettel (0.57.0, D45–D47).** Textband und
 Begleitband sind eigene Quellen (`sources.serves`); Aufzählungen von Seiten

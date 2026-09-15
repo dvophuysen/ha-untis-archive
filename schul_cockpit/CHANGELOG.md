@@ -1,3 +1,9 @@
+## 0.59.0
+
+- Die Ankündigung der Lehrkraft legt den Klausurstoff fest. Liegt ein Zettel vor, gruppiert der Stoffplan den Unterricht entlang seiner Punkte; was im Unterricht behandelt, aber nicht angekündigt wurde, erscheint als eigene Kategorie „nicht angekündigt“ und wird nur auf Wunsch geübt. Gilt für jedes Fach, jeden Jahrgang und jedes Kind.
+- Lesungen mit Folgen bitten um ein Gegenlesen: Zettel zu einer Arbeit, Inhaltsverzeichnisse und alles, was die Auswertung selbst für unsicher hält, stehen oben auf der Materialseite mit dem erkannten Text und den Knöpfen „Stimmt so“ und „Korrigieren“. Die Klausurkarte sagt, ob die Ankündigung gegengelesen ist, und zeigt ihren Text.
+- Stellen ohne Buchteil („S. 10, 11“) bekommen das wahrscheinlichste Buch: das mit einem gerade angeschnittenen Kapitel, das die Seite enthält. Die Einkaufsliste schreibt „vermutlich Begleitband“, ein Foto von dort bekommt den Buchteil mit; ein Foto des anderen Buchs streicht die Stelle weiterhin. Zwei gleich gute Kandidaten bleiben offen.
+
 ## 0.58.2
 
 - Ausgeblendete Kurse zählen nicht mehr als offene Rückmeldung. Kind A Französisch und Religion, die er nicht besucht, standen auf dem Dashboard als „zwei Rückmeldungen offen“, ohne im Stundenplan zu erscheinen. Das gilt auch für die Zählung in der abendlichen Mitteilung.

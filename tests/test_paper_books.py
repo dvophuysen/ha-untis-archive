@@ -241,3 +241,57 @@ def test_background_work_does_not_eat_the_childs_daily_budget(env, monkeypatch):
     with pytest.raises(HTTPException) as caught:
         ai.reserve(1, "mentor", None, 1000, 500)
     assert caught.value.status_code == 429 and "heute" in caught.value.detail
+
+
+def test_a_page_without_book_part_is_guessed_from_the_touched_chapter(env):
+    # „Voc. 1. Lektion S. 10, 11" nennt kein Buch. Lektion 1 des Begleitbands
+    # (S. 10–15) ist angeschnitten, der Textband beginnt erst auf S. 12.
+    from backend.book_structure import Chapter, store_chapters
+    for label, chapters in (("Begleitband", [Chapter(number="1", title="Wortschatz", start_page=10, level=1),
+                                             Chapter(number="2", title="Wortschatz", start_page=16, level=1)]),
+                            ("Textband", [Chapter(number="1", title="Incitatus", start_page=12, level=1),
+                                          Chapter(number="2", title="Afra", start_page=18, level=1)])):
+        title = bs.paper_title("LATEIN", label)
+        store_chapters(1, title, chapters)
+        with closing(db.webapp_conn()) as c:
+            c.execute("INSERT INTO paper_books(account_id,subject_name,part_label,title,toc_state,updated_at) VALUES(1,'LATEIN',?,?,'read','now')", (label, title))
+    # Der zuletzt genannte Buchteil gilt im selben Text weiter; die Vokabelseite
+    # steht deshalb in einem eigenen Eintrag ohne Buchteil.
+    history(lessons=[(1, "2026-09-11", "LATEIN", LA, "BB S. 13 Verben"), (2, "2026-09-12", "LATEIN", LA, "Vokabeln S. 10, 11 lernen")])
+    latin = sources.ledger(1)["subjects"][0]
+    unknown = [m for m in latin["missing"] if m["label"] == "Unbekannte Quelle"]
+    assert unknown and unknown[0]["pages"] == [10, 11] and unknown[0]["guess"] == "Begleitband"
+    # Seite 13 steht in beiden Büchern in einer Lektion, aber nur der Begleitband ist angeschnitten.
+    assert sources._book_guesser(1, "LATEIN")(13) == "Begleitband"
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO source_links(account_id,entry_kind,entry_id,entry_date,subject_name,part_label,part_kind,page,quote,synced_at,updated_at) "
+                  "VALUES(1,'homework',9,'2026-09-12','LATEIN','Textband','book',13,'TB S. 13','2099','2099')")
+    assert sources._book_guesser(1, "LATEIN")(13) is None, "zwei angeschnittene Kapitel sind keine Antwort"
+
+
+def test_readings_with_consequences_ask_to_be_checked(env):
+    from backend import materials as store
+    client, state, _ = env
+    client.app.include_router(materials_routes.router, prefix="/api")
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,content_text,document_date,analysis_state,confidence,created_at,updated_at) "
+                  "VALUES(1,'exam_notice','LATEIN','Zettel',?,'2026-09-14','ready',0.9,'now','now')", (NOTE,))
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,analysis_state,confidence,created_at,updated_at) "
+                  "VALUES(1,'worksheet','LATEIN','Blatt','ready',0.4,'now','now')")
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,analysis_state,confidence,created_at,updated_at) "
+                  "VALUES(1,'worksheet','LATEIN','Sicheres Blatt','ready',0.95,'now','now')")
+    rows = {m["title"]: m for m in client.get("/api/accounts/1/materials?books=false").json()["materials"]}
+    assert rows["Zettel"]["needs_review"] and rows["Blatt"]["needs_review"] and not rows["Sicheres Blatt"]["needs_review"]
+    history(lessons=[(1, "2026-09-11", "LATEIN", LA, "Lektion 1")])
+    sources._SYNCED.clear()
+    card = sources.exam_sources(1, "LATEIN", "2026-08-01", "2026-09-30")
+    assert card["notice"] and card["notice_verified"] is False and card["notice_text"].startswith("Voc. 1. Lektion")
+    client.post(f"/api/accounts/1/materials/{rows['Zettel']['id']}/verified", json={"value": True})
+    assert sources.exam_sources(1, "LATEIN", "2026-08-01", "2026-09-30")["notice_verified"] is True
+    assert not [m for m in client.get("/api/accounts/1/materials?books=false").json()["materials"] if m["title"] == "Zettel"][0]["needs_review"]
+
+
+def test_the_notice_rule_only_joins_the_grouping_when_a_notice_is_present():
+    from backend import exam_scope
+    assert exam_scope.Group(category="context", title="Nicht angekündigt", detail="Behandelt, nicht genannt", ids=[1])
+    assert exam_scope.NOTICE_PREFIX in exam_scope.NOTICE_RULE or "Ankündigung der Lehrkraft" in exam_scope.NOTICE_RULE

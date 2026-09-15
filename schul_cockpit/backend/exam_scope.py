@@ -17,13 +17,24 @@ class ScopeRequest(InputModel):
     start_date:date|None=None
 
 class Group(InputModel):
-    category:Literal["learning","unclear","organisation"]
+    # context: im Unterricht behandelt, aber von der Lehrkraft nicht angekündigt.
+    category:Literal["learning","unclear","organisation","context"]
     title:str=Field(min_length=3,max_length=160)
     detail:str=Field(min_length=3,max_length=1500)
     ids:list[int]=Field(min_length=1)
 
 class Groups(InputModel):
     groups:list[Group]=Field(min_length=1,max_length=8)
+
+
+# Liegt der Zettel der Lehrkraft vor, legt er den Stoff fest. Alles andere aus
+# dem Unterricht bleibt sichtbar, aber als „nicht angekündigt" gekennzeichnet;
+# das gilt für jedes Fach, jeden Jahrgang und jedes Kind gleich.
+NOTICE_PREFIX='Ankündigung der Lehrkraft zum Stoff der Arbeit: '
+NOTICE_RULE=('Eine oder mehrere Einheiten beginnen mit „Ankündigung der Lehrkraft zum Stoff der Arbeit". Diese Ankündigung legt den Stoff fest: '
+             'Bilde die learning-Gruppen entlang ihrer Punkte und ordne ihre ID der Gruppe zu, die sie am stärksten prägt. '
+             'Unterrichtseinträge, deren Inhalt in der Ankündigung nicht vorkommt, erhalten category=context (behandelt, aber nicht angekündigt), '
+             'auch wenn sie übbarer Lernstoff wären. ')
 
 
 def snapshot(account, demo):
@@ -79,7 +90,7 @@ async def collect(account,body):
         from .sources import exam_notices
         for note in exam_notices(account):
             if mc.same_subject(note['subject_name'],body.subject) and start<=note['date']<=day.isoformat():
-                units.append(dict(id=len(units),kind='notice',text='Ankündigung der Lehrkraft zum Stoff der Arbeit: '+note['text'],refs=[dict(id=note['id'],date=note['date'],text=note['text'])]))
+                units.append(dict(id=len(units),kind='notice',text=NOTICE_PREFIX+note['text'],refs=[dict(id=note['id'],date=note['date'],text=note['text'])]))
     if not units:raise HTTPException(422,'Für dieses Fach und diesen Zeitraum fehlen verwertbare Themen. Du kannst eigene Themen eintragen.')
     if len(units)>400:raise HTTPException(422,'Dieser Zeitraum enthält sehr viel Stoff. Bitte einen kürzeren Zeitraum wählen.')
     source=dict(subject=body.subject,demo=body.demo,start_date=start,end_date=day.isoformat(),grade=s['profile']['grade'],units=units,missing=missing,chapters=chapters)
@@ -113,7 +124,9 @@ async def group_units(account, items, demo=False):
                  'Jede Eingabe-ID muss genau einmal vorkommen; auch organisatorische oder unklare Einträge einer entsprechend benannten Gruppe zuordnen, niemals still auslassen. '
                  'category=learning nur für konkret erkennbaren übbaren Lernstoff; organisation für reine Organisation; unclear wenn der Inhalt aus einer bloßen Buch-/Aufgabenreferenz oder Vertretungsnotiz nicht hervorgeht. Solche Einträge separat halten. Vorgegebene Kategorien beim Zusammenführen bewahren. '
                  'detail fasst alle fachlichen Teilthemen der Gruppe konkret zusammen, keine bloße allgemeine Überschrift. '
-                 'Häufigkeit ist kein Beleg für Klausurgewichtung. Nur JSON: '+json.dumps(Groups.model_json_schema()))
+                 'Häufigkeit ist kein Beleg für Klausurgewichtung. '
+                 +(NOTICE_RULE if any(str(i.get('text','')).startswith(NOTICE_PREFIX) for i in items) else '')
+                 +'Nur JSON: '+json.dumps(Groups.model_json_schema()))
     raw,_,_=await ai.complete(account,'exam_scope',instruction,{'items':items},max_output=6000)
     try:
         result=Groups.model_validate_json(raw)
@@ -180,6 +193,6 @@ def selected_plan(account,body):
     chosen=[]
     for selection in body.selected_groups:
         if selection.group_id not in groups or selection.title not in body.scope:raise HTTPException(422,'Themenauswahl passt nicht zur Übersicht.')
-        if groups[selection.group_id].get('category','learning')!='learning':raise HTTPException(422,'Unklarer oder organisatorischer Stoff kann nicht automatisch als Klausurthema verwendet werden. Bitte Material oder eigene konkrete Themen ergänzen.')
+        if groups[selection.group_id].get('category','learning') not in ('learning','context'):raise HTTPException(422,'Unklarer oder organisatorischer Stoff kann nicht automatisch als Klausurthema verwendet werden. Bitte Material oder eigene konkrete Themen ergänzen.')
         chosen.append({**groups[selection.group_id],'title':selection.title})
     return {**plan,'groups':chosen,'selected_count':len(chosen),'available_count':len(groups)}

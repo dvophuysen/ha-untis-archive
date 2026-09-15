@@ -239,14 +239,15 @@ def mentions(account_id: int) -> tuple[list[dict], str]:
 def exam_notices(account_id: int) -> list[dict]:
     """Was die Lehrkraft für die Arbeit angekündigt hat: der abfotografierte
     Zettel mit dem Stoff. Jede Stelle darauf ist eine Quelle wie aus Untis,
-    mit Vorrang beim Holen."""
+    mit Vorrang beim Holen. `verified` sagt, ob ein Elternteil die Lesung
+    gegengelesen hat."""
     with closing(webapp_conn()) as conn:
         if "source_label" not in {r[1] for r in conn.execute("PRAGMA table_info(materials)")}:
             return []
         rows = conn.execute(
-            "SELECT id,subject_name,title,summary,content_text,document_date,created_at FROM materials "
+            "SELECT id,subject_name,title,summary,content_text,document_date,created_at,verified FROM materials "
             "WHERE account_id=? AND hidden=0 AND kind='exam_notice' ORDER BY id", (account_id,)).fetchall()
-    return [{"id": r["id"], "subject_name": r["subject_name"],
+    return [{"id": r["id"], "subject_name": r["subject_name"], "verified": bool(r["verified"]),
              "date": (r["document_date"] or r["created_at"] or "")[:10],
              "text": " ".join(filter(None, (r["content_text"], r["title"] if not r["content_text"] else None,
                                             r["summary"] if not r["content_text"] else None))).strip()}
@@ -575,11 +576,18 @@ def ledger(account_id: int) -> dict:
     subjects = []
     for bucket in by_subject.values():
         missing = []
+        guesser = _book_guesser(account_id, bucket["subject"])
         for group in bucket["groups"].values():
             gaps = list(group["pages"].values())
             newest = max(gaps, key=lambda e: e["quote_date"])
+            guesses = {guesser(e["page"]) for e in gaps} if group["kind"] == "unknown" else set()
+            guess = guesses.pop() if len(guesses) == 1 and None not in guesses else None
             missing.append({
                 "label": group["label"], "kind": group["kind"], "reason": group["reason"],
+                # Ohne Buchteil im Text: das Buch, dessen gerade behandeltes
+                # Kapitel die Seite enthält. Eine Vermutung, so benannt; ein
+                # Foto des anderen Buchs streicht die Stelle trotzdem.
+                "guess": guess,
                 "pages": sorted(e["page"] for e in gaps),
                 "pages_label": page_list([e["page"] for e in gaps]),
                 "quote": newest["quote"], "last_date": newest["quote_date"],
@@ -628,6 +636,38 @@ def ledger(account_id: int) -> dict:
             "missing_total": sum(s["missing_count"] for s in subjects),
             "pending_total": sum(s["pending"] for s in subjects),
             "books": books}
+
+
+def _book_guesser(account_id: int, subject: str):
+    """Welches Buch eine Seite ohne Buchteil meint: das mit einem gerade
+    angeschnittenen Kapitel, das die Seite enthält (D51). Zwei Kandidaten
+    sind keine Antwort; dann bleibt es offen und jedes Foto zählt."""
+    from .book_structure import chapter_of, chapters_of, paper_books, touched_chapters
+    books: list[tuple[str, list[dict], set[int]]] = []
+    try:
+        shelf = _shelf(account_id).get(subject.casefold())
+        if shelf:
+            chapters = chapters_of(account_id, shelf["title"])
+            if chapters:
+                touched = {c["id"] for c in touched_chapters(account_id, shelf["title"], subject, chapters)}
+                books.append(("Schulbuch", chapters, touched))
+        for paper in paper_books(account_id, subject):
+            chapters = chapters_of(account_id, paper["title"])
+            if chapters:
+                touched = {c["id"] for c in touched_chapters(account_id, paper["title"], subject, chapters, label=paper["part_label"])}
+                books.append((paper["part_label"], chapters, touched))
+    except Exception:
+        log.warning("Buchvermutung für %s nicht möglich", subject, exc_info=True)
+
+    def guess(page: int) -> str | None:
+        hits = [label for label, chapters, touched in books
+                if (chapter := chapter_of(chapters, page)) and chapter["id"] in touched]
+        if len(hits) == 1:
+            return hits[0]
+        # Kein angeschnittenes Kapitel: reicht ein einziges Buch bis zu dieser Seite?
+        within = [label for label, chapters, _ in books if chapter_of(chapters, page)]
+        return within[0] if len(within) == 1 else None
+    return guess
 
 
 def page_list(pages: list[int]) -> str:
@@ -946,7 +986,7 @@ def exam_sources(account_id: int, subject: str, since: str, until: str) -> dict 
         notices = [n for n in exam_notices(account_id) if n["subject_name"] and n["subject_name"].casefold() == subject.casefold()
                    and since <= n["date"] <= until]
         return {"total": 0, "ready": 0, "pending": 0, "missing": 0, "missing_items": [], "chapters": [],
-                "notice": bool(notices), "subject": subject} if notices else None
+                "notice": bool(notices), "subject": subject, **_notice_summary(notices)} if notices else None
     # Dieselbe Seite aus Stunde, Hausaufgabe und Kapitelregel ist eine Stelle.
     best: dict[tuple[str, int], str] = {}
     rank = {"missing": 0, "pending": 1, "ready": 2}
@@ -980,4 +1020,12 @@ def exam_sources(account_id: int, subject: str, since: str, until: str) -> dict 
     notices = [n for n in exam_notices(account_id) if n["subject_name"] and n["subject_name"].casefold() == subject.casefold()
                and since <= n["date"] <= until]
     return {"total": len(best), **counts, "missing_items": missing_items, "chapters": chapters,
-            "notice": bool(notices), "subject": subject}
+            "notice": bool(notices), "subject": subject, **_notice_summary(notices)}
+
+
+def _notice_summary(notices: list[dict]) -> dict:
+    if not notices:
+        return {}
+    newest = max(notices, key=lambda n: n["date"])
+    return {"notice_id": newest["id"], "notice_text": newest["text"][:300],
+            "notice_verified": all(n["verified"] for n in notices)}

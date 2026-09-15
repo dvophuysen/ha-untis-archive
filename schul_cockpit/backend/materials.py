@@ -207,10 +207,31 @@ def links(conn, material_id: int) -> list[dict]:
         "SELECT kind,target_id,origin FROM material_links WHERE material_id=?", (material_id,))]
 
 
+# Lesungen mit Folgen: Aus einem Zettel werden Stellen gebunden, aus einem
+# Verzeichnis Kapitel. Was daraus wird, hängt an jedem gelesenen Zeichen, und
+# Handschrift liest das Modell nicht sicher („70" statt „10"). Solche
+# Materialien bitten um ein Gegenlesen, bis ein Elternteil sie bestätigt.
+REVIEW_KINDS = ("exam_notice", "toc")
+REVIEW_CONFIDENCE = 0.7
+
+
+def needs_review(row) -> bool:
+    keys = row.keys() if hasattr(row, "keys") else row
+    if (row["origin"] if "origin" in keys else "") == "book_fetch":
+        return False
+    if row["analysis_state"] != "ready" or row["verified"]:
+        return False
+    if row["kind"] in REVIEW_KINDS:
+        return True
+    confidence = row["confidence"] if "confidence" in keys else None
+    return confidence is not None and confidence < REVIEW_CONFIDENCE
+
+
 def _public(row, with_links=None) -> dict:
     result = {k: row[k] for k in row.keys() if k not in ("file_bytes",)}
     result["has_file"] = bool(row["filename"])
     result["locked_fields"] = json.loads(row["locked_fields"] or "[]")
+    result["needs_review"] = needs_review(row)
     if with_links is not None:
         result["links"] = with_links
     return result
