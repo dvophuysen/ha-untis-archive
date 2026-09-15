@@ -604,6 +604,51 @@ _MIGRATIONS.append(("reminders_morning_enabled",
 _MIGRATIONS.append(("reminders_morning_off_until_agreed",
                     "UPDATE reminder_settings SET morning_enabled = 0"))
 
+# Der Quellenbestand: Jede Stelle, die der Unterricht nennt, wird an ihren
+# Untis-Eintrag gebunden und mit dem Material verknüpft, das sie belegt.
+# Abgerufene Buchseiten sind Materialien wie ein Foto, nur mit Herkunft.
+_MIGRATIONS.append(("sources_001", """
+CREATE TABLE IF NOT EXISTS source_links (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ account_id INTEGER NOT NULL,
+ entry_kind TEXT NOT NULL,
+ entry_id INTEGER NOT NULL,
+ entry_date TEXT NOT NULL,
+ subject_name TEXT NOT NULL,
+ part_label TEXT NOT NULL,
+ part_kind TEXT NOT NULL,
+ page INTEGER NOT NULL,
+ quote TEXT NOT NULL DEFAULT '',
+ status TEXT NOT NULL DEFAULT 'pending',
+ detail TEXT,
+ material_id INTEGER,
+ book_title TEXT,
+ attempts INTEGER NOT NULL DEFAULT 0,
+ synced_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL,
+ UNIQUE(account_id,entry_kind,entry_id,part_kind,part_label,page)
+);
+CREATE INDEX IF NOT EXISTS idx_source_links_account ON source_links(account_id,subject_name,page);
+CREATE TABLE IF NOT EXISTS digital_textbook_access (
+ account_id INTEGER NOT NULL,
+ book_title TEXT NOT NULL,
+ status TEXT NOT NULL,
+ page INTEGER,
+ printed_page INTEGER,
+ detail TEXT,
+ checked_at TEXT NOT NULL,
+ PRIMARY KEY(account_id,book_title)
+);
+"""))
+_MIGRATIONS.append(("materials_003_origin", "ALTER TABLE materials ADD COLUMN origin TEXT NOT NULL DEFAULT 'upload'"))
+_MIGRATIONS.append(("materials_004_source_book", "ALTER TABLE materials ADD COLUMN source_book TEXT"))
+_MIGRATIONS.append(("materials_005_source_page", "ALTER TABLE materials ADD COLUMN source_page INTEGER"))
+_MIGRATIONS.append(("materials_006_printed_pages", "ALTER TABLE materials ADD COLUMN printed_pages TEXT"))
+_MIGRATIONS.append(("materials_007_page_check", "ALTER TABLE materials ADD COLUMN page_check TEXT"))
+_MIGRATIONS.append(("materials_008_fits_quote", "ALTER TABLE materials ADD COLUMN fits_quote TEXT"))
+_MIGRATIONS.append(("materials_009_source_index",
+                    "CREATE INDEX IF NOT EXISTS idx_materials_source ON materials(account_id,source_book,source_page)"))
+
 
 def history_conn() -> sqlite3.Connection:
     """Read-only connection to the UNTIS Archive's history.db."""

@@ -142,6 +142,12 @@
     }
   }
 
+  const BOOK_ACCESS = {
+    proven: 'Abruf nachgewiesen, Seitenzahl bestätigt',
+    readable: 'Seiten kommen lesbar',
+    blank: 'liefert leere Seiten',
+    viewer_error: 'Betrachter nicht erreichbar',
+  };
   const FETCH_STATUS = {
     loaded: 'Alle genannten Seiten wurden geliefert.',
     partial: 'Nur ein Teil der Seiten wurde geliefert.',
@@ -455,7 +461,14 @@
       <div class="book-list">
         {#each textbookCatalog.books as book}
           <div class="book-row">
-            <div class="book-title"><span>📘</span><strong>{book.title}</strong></div>
+            <div class="book-title"><span>📘</span><strong>{book.title}</strong>
+              {#if book.access || book.pages_stored}
+                <small class="dim">
+                  {#if book.access}{BOOK_ACCESS[book.access.status] ?? book.access.status}{#if book.access.page} (S. {book.access.page}){/if}{/if}
+                  {#if book.pages_stored} · {book.pages_stored} {book.pages_stored === 1 ? 'Seite' : 'Seiten'} im Bestand{/if}
+                </small>
+              {/if}
+            </div>
             <select
               aria-label={`Fach für ${book.title}`}
               value={selectedBookSubject(book)}

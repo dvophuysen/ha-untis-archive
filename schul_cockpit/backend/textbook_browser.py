@@ -1313,9 +1313,10 @@ async def capture_pages(
     pages: list[int],
     launch_url: str | None = None,
     survey: bool = False,
+    budget: float = 240.0,
 ) -> CaptureResult:
     return await asyncio.to_thread(
-        _capture_pages_sync, portal_url, username, password, title, pages, launch_url, survey
+        _capture_pages_sync, portal_url, username, password, title, pages, launch_url, survey, budget
     )
 
 

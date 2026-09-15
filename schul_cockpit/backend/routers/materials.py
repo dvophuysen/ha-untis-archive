@@ -96,13 +96,14 @@ def index(
     end: str | None = None,
     q: str | None = None,
     state: str | None = None,
+    books: bool = False,
     limit: int = 100,
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     access(user, account_id)
     manage = bool(user.is_admin or user.role == "parent")
     items = store.listing(account_id, subject=subject, kind=kind, start=start, end=end,
-                          query=q, state=state, include_hidden=manage, limit=limit)
+                          query=q, state=state, include_hidden=manage, include_books=books, limit=limit)
     pending = sum(1 for m in items if m["analysis_state"] in ("pending", "failed"))
     return {
         "materials": items,
@@ -127,6 +128,24 @@ def missing_sources(account_id: int, user: CurrentUser = Depends(get_current_use
     except Exception:
         _LOGGER.warning("Quellenbilanz nicht berechenbar", exc_info=True)
         raise HTTPException(503, "Die Quellen konnten gerade nicht ausgewertet werden.")
+
+
+@router.post("/sources/collect", status_code=202)
+async def collect_sources(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Den Sammellauf von Hand anstoßen. Er läuft sonst um 14 Uhr und nachts;
+    hier für den ersten Durchlauf und für die Kontrolle durch die Eltern."""
+    access(user, account_id)
+    if not (user.is_admin or user.role == "parent"):
+        raise HTTPException(403, "Nur in der Elternansicht verfügbar")
+    from ..source_collector import start_collect
+    return start_collect(account_id)
+
+
+@router.get("/sources/collect")
+def collect_sources_state(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
+    access(user, account_id)
+    from ..source_collector import collect_state
+    return collect_state(account_id)
 
 
 @router.get("/{material_id}")

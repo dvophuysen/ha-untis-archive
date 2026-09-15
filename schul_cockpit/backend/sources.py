@@ -9,8 +9,11 @@ existiert nur auf Papier: Arbeitshefte, Arbeitsblätter, eigene Mitschriften.
 Genau die fehlen der App, wenn sie eine Lernkarte oder eine Übungsklausur auf
 den tatsächlichen Stoff stützen soll, statt etwas Ähnliches zu erfinden.
 
-Hier wird nur gerechnet und angezeigt. Nichts wird angefordert und nichts
-abgerufen.
+Jede genannte Stelle wird an ihren Untis-Eintrag gebunden (`source_links`)
+und mit dem Material verknüpft, das sie belegt: eine abgerufene Buchseite,
+ein Foto aus der Ablage. Was weder da ist noch geholt werden kann, steht auf
+der Einkaufsliste. Geholt wird in `source_collector`; hier wird gebunden,
+abgeglichen und gerechnet.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ from datetime import timedelta
 
 from .courses import hidden_keys, lesson_is_hidden
 from .db import history_conn, webapp_conn
-from .learning import today_local
+from .learning import now_iso, today_local
 from .mentor_context import rows, school_start
 from .queries import _subject_short_from_payload
 
@@ -69,34 +72,6 @@ def citations(text: str) -> list[dict]:
     return found
 
 
-def _material_pages(account_id: int) -> dict[str, set[int]]:
-    """Welche Seiten je Fach schon in der Ablage liegen."""
-    have: dict[str, set[int]] = {}
-    with closing(webapp_conn()) as conn:
-        for row in conn.execute(
-            "SELECT subject_name,title,summary,content_text FROM materials "
-            "WHERE account_id=? AND hidden=0", (account_id,)):
-            subject = (row["subject_name"] or "").strip().casefold()
-            text = " ".join(filter(None, (row["title"], row["summary"], row["content_text"])))
-            pages = have.setdefault(subject, set())
-            for cite in citations(text):
-                pages.update(cite["pages"])
-    return have
-
-
-def _shelf(account_id: int) -> set[str]:
-    """Fächer, für die ein digitales Buch im Regal liegt.
-
-    Ein stilles except hatte hier den falschen Spaltennamen verschluckt und
-    damit jede Buchseite auf die Einkaufsliste gesetzt.
-    """
-    with closing(webapp_conn()) as conn:
-        have = {r[1] for r in conn.execute("PRAGMA table_info(digital_textbook_catalog)")}
-        if "subject_name" not in have:
-            return set()
-        return {(r[0] or "").strip().casefold() for r in conn.execute(
-            "SELECT subject_name FROM digital_textbook_catalog WHERE account_id=?", (account_id,)) if r[0]}
-
 
 def subject_map(lessons: list[dict]) -> dict[str, str]:
     """Das Kürzel einer Hausaufgabe auf den Fachnamen der Stunden abbilden.
@@ -124,8 +99,8 @@ def _aliases(account_id: int) -> dict[str, str]:
             "SELECT alias,subject_name FROM subject_aliases WHERE account_id=?", (account_id,)) if r[0] and r[1]}
 
 
-def _sources(account_id: int) -> tuple[list[dict], str]:
-    """Alle genannten Stellen des laufenden Schuljahres, nach Fach."""
+def mentions(account_id: int) -> tuple[list[dict], str]:
+    """Jeder Stunden- und Hausaufgabentext des Schuljahres, mit Fach und Tag."""
     day = today_local()
     with closing(history_conn()) as conn:
         start = school_start(conn, account_id, day)
@@ -138,83 +113,217 @@ def _sources(account_id: int) -> tuple[list[dict], str]:
     hidden = hidden_keys(account_id)
     short_to_name = subject_map(lessons) | _aliases(account_id)
 
-    entries = []
+    found = []
     for row in lessons:
         if lesson_is_hidden(row, hidden) or str(row.get("code") or "").casefold() == "cancelled":
             continue
         override = row.get("supervision_manual_override")
         if override if override is not None else row.get("is_supervision_guess"):
             continue
-        text = row.get("lstext_manual_override") or row.get("lstext") or ""
-        entries.append(((row.get("subject_name") or "").strip(), row["date"], text))
+        text = (row.get("lstext_manual_override") or row.get("lstext") or "").strip()
+        subject = (row.get("subject_name") or "").strip()
+        if text and subject and row.get("date"):
+            found.append({"kind": "lesson", "id": row["id"], "subject": subject, "date": row["date"], "text": text})
     for row in homework:
         written = (row.get("subject_name") or "").strip()
-        entries.append((short_to_name.get(written.casefold(), written),
-                        row.get("assigned_date") or "", row.get("text") or ""))
+        subject = short_to_name.get(written.casefold(), written)
+        text = (row.get("text") or "").strip()
+        if text and subject and row.get("assigned_date"):
+            found.append({"kind": "homework", "id": row["id"], "subject": subject,
+                          "date": row["assigned_date"], "text": text})
+    return found, start
 
-    seen: set[tuple] = set()
-    by_subject: dict[str, dict] = {}
-    for subject, when, text in entries:
-        text = (text or "").strip()
-        if not text or not when or not subject:
-            continue
-        key = (subject, when, text)
-        if key in seen:
-            continue
-        seen.add(key)
-        for cite in citations(text):
-            bucket = by_subject.setdefault(subject, {"subject": subject, "parts": {}})
-            part = bucket["parts"].setdefault(
-                (cite["label"], cite["kind"]),
-                {"label": cite["label"], "kind": cite["kind"], "pages": {}})
-            for page in cite["pages"]:
-                entry = part["pages"].setdefault(page, {"page": page, "dates": set(), "quote": "", "quote_date": ""})
-                entry["dates"].add(when)
-                if when >= entry["quote_date"]:
-                    entry["quote_date"], entry["quote"] = when, text[:220]
-    return list(by_subject.values()), start
+
+def sync_links(account_id: int) -> dict:
+    """Die Stellen aus den Untis-Texten in source_links binden.
+
+    Ein Eintrag kann nachträglich geändert werden; was in diesem Durchlauf
+    nicht mehr genannt wird, verschwindet. Status und Versuche einer weiter
+    genannten Stelle bleiben erhalten.
+    """
+    found, start = mentions(account_id)
+    stamp = now_iso()
+    count = 0
+    with closing(webapp_conn()) as conn, conn:
+        for entry in found:
+            for cite in citations(entry["text"]):
+                for page in cite["pages"]:
+                    conn.execute(
+                        "INSERT INTO source_links(account_id,entry_kind,entry_id,entry_date,subject_name,part_label,"
+                        "part_kind,page,quote,synced_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) "
+                        "ON CONFLICT(account_id,entry_kind,entry_id,part_kind,part_label,page) DO UPDATE SET "
+                        "entry_date=excluded.entry_date,subject_name=excluded.subject_name,quote=excluded.quote,"
+                        "synced_at=excluded.synced_at",
+                        (account_id, entry["kind"], entry["id"], entry["date"], entry["subject"],
+                         cite["label"] or "Unbekannte Quelle", cite["kind"] or "unknown", page,
+                         entry["text"][:220], stamp, stamp))
+                    count += 1
+        gone = conn.execute("DELETE FROM source_links WHERE account_id=? AND synced_at<?",
+                            (account_id, stamp)).rowcount
+    return {"since": start, "links": count, "removed": gone}
+
+
+def _scanned_pages(account_id: int) -> dict[str, dict[int, int]]:
+    """Welche Seiten je Fach ein Foto oder Scan aus der Ablage belegt."""
+    have: dict[str, dict[int, int]] = {}
+    with closing(webapp_conn()) as conn:
+        for row in conn.execute(
+            "SELECT id,subject_name,title,summary,content_text FROM materials "
+            "WHERE account_id=? AND hidden=0 AND origin!='book_fetch'", (account_id,)):
+            subject = (row["subject_name"] or "").strip().casefold()
+            text = " ".join(filter(None, (row["title"], row["summary"], row["content_text"])))
+            pages = have.setdefault(subject, {})
+            for cite in citations(text):
+                for page in cite["pages"]:
+                    pages.setdefault(page, row["id"])
+    return have
+
+
+def _book_pages(account_id: int) -> dict[str, dict[int, dict]]:
+    """Welche Buchseiten je Fach abgerufen im Bestand liegen, mit Prüfstand."""
+    have: dict[str, dict[int, dict]] = {}
+    with closing(webapp_conn()) as conn:
+        for row in conn.execute(
+            "SELECT id,subject_name,source_book,source_page,page_check,fits_quote,analysis_state FROM materials "
+            "WHERE account_id=? AND hidden=0 AND origin='book_fetch' AND source_page IS NOT NULL", (account_id,)):
+            subject = (row["subject_name"] or "").strip().casefold()
+            have.setdefault(subject, {})[row["source_page"]] = dict(row)
+    return have
+
+
+def _shelf(account_id: int) -> dict[str, dict]:
+    """Je Fach das digitale Buch im Regal und der nachgewiesene Zugriff."""
+    with closing(webapp_conn()) as conn:
+        have = {r[1] for r in conn.execute("PRAGMA table_info(digital_textbook_catalog)")}
+        if "subject_name" not in have:
+            return {}
+        books = {}
+        for r in conn.execute("SELECT title,subject_name FROM digital_textbook_catalog WHERE account_id=?", (account_id,)):
+            if r["subject_name"]:
+                books.setdefault(r["subject_name"].strip().casefold(), {"title": r["title"], "access": None, "attempts": 0})
+        for r in conn.execute("SELECT book_title,status,page,checked_at,detail FROM digital_textbook_access WHERE account_id=?",
+                              (account_id,)):
+            for book in books.values():
+                if book["title"] == r["book_title"]:
+                    book["access"] = {"status": r["status"], "page": r["page"], "checked_at": r["checked_at"],
+                                      "detail": r["detail"]}
+    return books
+
+
+def refresh_status(account_id: int) -> None:
+    """Jede gebundene Stelle mit dem Bestand abgleichen und ihren Stand setzen.
+
+    digital: die Buchseite liegt abgerufen im Bestand. scanned: ein Foto aus
+    der Ablage nennt die Seite. pending: Buchseite, die noch geholt wird.
+    unavailable: das digitale Buch liefert nichts Lesbares. paper: existiert
+    nur auf Papier oder ist nicht das Schulbuch — muss fotografiert werden.
+    """
+    scanned, books, shelf = _scanned_pages(account_id), _book_pages(account_id), _shelf(account_id)
+    stamp = now_iso()
+    with closing(webapp_conn()) as conn, conn:
+        links = [dict(r) for r in conn.execute("SELECT * FROM source_links WHERE account_id=?", (account_id,))]
+        for link in links:
+            folded = link["subject_name"].casefold()
+            page = link["page"]
+            status, detail, material = "paper", None, None
+            book = shelf.get(folded)
+            stored = books.get(folded, {}).get(page)
+            photo = scanned.get(folded, {}).get(page)
+            if link["part_kind"] in ("book", "unknown"):
+                if stored and stored.get("page_check") not in ("mismatch", "blank") and not (
+                        link["part_kind"] == "unknown" and stored.get("fits_quote") == "nein"):
+                    # Belegt: Seitenzahl abgelesen und Inhalt passt zum Zitat.
+                    # Plausibel: gelesen, aber ohne bestätigten Bezug.
+                    # Ungeprüft: liegt da, die KI hat sie noch nicht gelesen.
+                    status, material = "digital", stored["id"]
+                    if stored.get("page_check") == "ok" and stored.get("fits_quote") == "ja":
+                        detail = "belegt"
+                    elif stored.get("analysis_state") == "ready":
+                        detail = "plausibel"
+                    else:
+                        detail = "ungeprüft"
+                elif stored and link["part_kind"] == "unknown" and stored.get("fits_quote") == "nein":
+                    status, detail = "paper", "passt_nicht"
+                elif photo:
+                    status, material = "scanned", photo
+                elif not book:
+                    status, detail = "paper", "kein_buch"
+                elif (book.get("access") or {}).get("status") in ("blank", "viewer_error") and link["attempts"] >= 2:
+                    status, detail = "unavailable", (book["access"] or {}).get("status")
+                else:
+                    status = "pending"
+            elif photo:
+                status, material = "scanned", photo
+            if (status, detail, material) != (link["status"], link["detail"], link["material_id"]) or (
+                    book and link["book_title"] != book["title"]):
+                conn.execute("UPDATE source_links SET status=?,detail=?,material_id=?,book_title=?,updated_at=? WHERE id=?",
+                             (status, detail, material, book["title"] if book else None, stamp, link["id"]))
 
 
 def ledger(account_id: int) -> dict:
-    """Die Einkaufsliste: was genannt wurde, was da ist, was fehlt."""
-    found, start = _sources(account_id)
-    have, shelf = _material_pages(account_id), _shelf(account_id)
+    """Die Bilanz je Fach: was da ist, was geholt wird, was fotografiert werden muss."""
+    sync = sync_links(account_id)
+    refresh_status(account_id)
+    shelf = _shelf(account_id)
+    with closing(webapp_conn()) as conn:
+        links = [dict(r) for r in conn.execute(
+            "SELECT * FROM source_links WHERE account_id=? ORDER BY subject_name,part_kind,part_label,page", (account_id,))]
+        stored = {r["source_book"]: r["n"] for r in conn.execute(
+            "SELECT source_book, COUNT(*) AS n FROM materials WHERE account_id=? AND origin='book_fetch' AND hidden=0 "
+            "GROUP BY source_book", (account_id,))}
+    by_subject: dict[str, dict] = {}
+    for link in links:
+        bucket = by_subject.setdefault(link["subject_name"], {
+            "subject": link["subject_name"], "digital": set(), "scanned": set(), "pending": set(),
+            "groups": {}})
+        key = (link["part_label"], link["part_kind"], link["page"])
+        if link["status"] == "digital":
+            bucket["digital"].add(key)
+        elif link["status"] == "scanned":
+            bucket["scanned"].add(key)
+        elif link["status"] == "pending":
+            bucket["pending"].add(key)
+        else:
+            reason = link["detail"] if link["status"] == "paper" and link["detail"] == "passt_nicht" else link["status"]
+            group = bucket["groups"].setdefault((link["part_label"], link["part_kind"], reason), {
+                "label": link["part_label"], "kind": link["part_kind"], "reason": reason, "pages": {}})
+            entry = group["pages"].setdefault(link["page"], {"page": link["page"], "dates": set(), "quote": "", "quote_date": ""})
+            entry["dates"].add(link["entry_date"])
+            if link["entry_date"] >= entry["quote_date"]:
+                entry["quote_date"], entry["quote"] = link["entry_date"], link["quote"]
+
     subjects = []
-    for bucket in found:
-        subject = bucket["subject"]
-        folded = subject.casefold()
-        digital_book = folded in shelf
-        scanned_pages = have.get(folded, set())
-        missing, digital, scanned = [], 0, 0
-        for part in bucket["parts"].values():
-            gaps = []
-            for page in sorted(part["pages"]):
-                entry = part["pages"][page]
-                if part["kind"] == "book" and digital_book:
-                    digital += 1
-                elif page in scanned_pages:
-                    scanned += 1
-                else:
-                    gaps.append(entry)
-            if gaps:
-                newest = max(gaps, key=lambda e: e["quote_date"])
-                missing.append({
-                    "label": part["label"],
-                    "kind": part["kind"],
-                    "pages": [e["page"] for e in gaps],
-                    "pages_label": page_list([e["page"] for e in gaps]),
-                    "quote": newest["quote"],
-                    "last_date": newest["quote_date"],
-                    "mentions": sum(len(e["dates"]) for e in gaps),
-                })
-        total = digital + scanned + sum(len(m["pages"]) for m in missing)
-        subjects.append({"subject": subject, "digital": digital, "scanned": scanned,
-                         "missing": sorted(missing, key=lambda m: (-len(m["pages"]), m["label"])),
-                         "missing_count": sum(len(m["pages"]) for m in missing), "total": total,
-                         "has_book": digital_book})
-    subjects.sort(key=lambda s: (-s["missing_count"], s["subject"]))
-    return {"since": start, "subjects": subjects,
-            "missing_total": sum(s["missing_count"] for s in subjects)}
+    for bucket in by_subject.values():
+        missing = []
+        for group in bucket["groups"].values():
+            gaps = list(group["pages"].values())
+            newest = max(gaps, key=lambda e: e["quote_date"])
+            missing.append({
+                "label": group["label"], "kind": group["kind"], "reason": group["reason"],
+                "pages": sorted(e["page"] for e in gaps),
+                "pages_label": page_list([e["page"] for e in gaps]),
+                "quote": newest["quote"], "last_date": newest["quote_date"],
+                "mentions": sum(len(e["dates"]) for e in gaps),
+            })
+        book = shelf.get(bucket["subject"].casefold())
+        missing_count = sum(len(m["pages"]) for m in missing)
+        subjects.append({
+            "subject": bucket["subject"],
+            "digital": len(bucket["digital"]), "scanned": len(bucket["scanned"]), "pending": len(bucket["pending"]),
+            "pending_pages": sorted({k[2] for k in bucket["pending"]}),
+            "missing": sorted(missing, key=lambda m: (-len(m["pages"]), m["label"])),
+            "missing_count": missing_count,
+            "total": len(bucket["digital"]) + len(bucket["scanned"]) + len(bucket["pending"]) + missing_count,
+            "has_book": bool(book),
+            "book_access": (book or {}).get("access"),
+        })
+    subjects.sort(key=lambda s: (-s["missing_count"], -s["pending"], s["subject"]))
+    books = [{"title": book["title"], "subject": subject, "pages_stored": stored.get(book["title"], 0),
+              "access": book.get("access")} for subject, book in sorted(shelf.items())]
+    return {"since": sync["since"], "subjects": subjects,
+            "missing_total": sum(s["missing_count"] for s in subjects),
+            "pending_total": sum(s["pending"] for s in subjects),
+            "books": books}
 
 
 def page_list(pages: list[int]) -> str:

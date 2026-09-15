@@ -1,7 +1,7 @@
 # Quellen: welche Buchstelle hinter einer Aufgabe steht
 
-Stand: 15.09.2026. Beschreibt umgesetzten Bestand (0.52.1), belegte Befunde aus
-der laufenden Instanz und das abgestimmte, noch nicht gebaute Verfahren.
+Stand: 15.09.2026, abends. Beschreibt umgesetzten Bestand (0.53.0), belegte
+Befunde aus der laufenden Instanz und die noch offenen Pakete 2 und 3.
 Keine Kinder- oder Zugangsdaten; Konten werden als „Konto mit Regal" und
 „Konto ohne Regal" unterschieden.
 
@@ -37,6 +37,54 @@ Arbeitsheft S. 85, Aufg. 5
 Buch, S.30-32. lest M6 und den Infokasten. Bearbeitet Aufgabe 1 auf S. 34
 S. 64/5 zu Ende notieren
 ```
+
+## Umgesetzt: der Quellenbestand (0.53.0)
+
+Die Zielvorgabe (D37): Der Mentor arbeitet am Originalmaterial oder gar
+nicht, und das Material liegt bereit, bevor jemand es braucht. Daraus folgt
+ein Bestand, keine Liste.
+
+**Binden.** `sources.sync_links` liest jeden Stunden- und Hausaufgabentext
+seit Schuljahresbeginn und bindet jede erkannte Stelle an ihren Untis-Eintrag
+(`source_links`: Eintrag, Fach, Buchteil, Seite, Zitat). Wird ein Eintrag in
+Untis geändert, verschwinden seine alten Stellen; Stand und Versuchszähler
+einer weiter genannten Stelle bleiben.
+
+**Holen.** `source_collector.collect` sammelt je Kind die noch fehlenden
+Schulbuchseiten, gebündelt je Buch in einer Browsersitzung, neueste Einträge
+zuerst, höchstens 40 Seiten je Lauf. Zwei Läufe am Tag, jeder einmal: nach
+2 Uhr und nach 14 Uhr (`background_loop`, alle zehn Minuten geprüft). Eltern
+können ihn auf der Materialseite von Hand anstoßen.
+
+**Ablegen.** Eine gelieferte Seite wird ein Material wie ein Foto: Art
+`book_page`, Herkunft `book_fetch`, Buch, Seite, Stundendatum. Die vorhandene
+Materialauswertung liest sie, extrahiert den Text, ordnet Themen zu. Mentor,
+Lernkarten und Klausurstoff lesen heute schon Materialien; der 60er-Cache
+ist damit nur noch Rückfall. Die Materialliste blendet Buchseiten aus
+(`?books=1` zeigt sie), damit sie die Fotos der Kinder nicht begraben.
+
+**Prüfen (D30, D31).** Vor dem Ablegen die Leerseitenprüfung
+(`looks_blank`, Pixelstatistik: leere BiBox-Hülle 1 %, Buchseite 30 %). Die
+Auswertung liest die gedruckten Seitenzahlen (`printed_pages`) und ob der
+Inhalt zu den Unterrichtszitaten passt (`fits_quote`); daraus `page_check`
+ok, mismatch, unknown oder blank. Bei mismatch löscht der Lauf nichts, er
+bestellt einmal mit dem Versatz nach und legt die richtige Seite unter der
+gedruckten Nummer ab. Der Nachweis je Buch steht in
+`digital_textbook_access`: proven (Seitenzahl bestätigt), readable, blank,
+viewer_error. Ein Treffer im Katalog zählt nicht mehr als vorhanden.
+
+**Stand je Stelle.** `refresh_status` setzt: digital (liegt abgerufen im
+Bestand; Detail belegt, plausibel oder ungeprüft), scanned (ein Foto aus der
+Ablage nennt die Seite), pending (Buchseite unterwegs), unavailable (das
+Buch liefert nach zwei Versuchen nichts Lesbares), paper (nur auf Papier,
+oder Hypothese Schulbuch widerlegt: `passt_nicht`). Die Karte „Was mir noch
+fehlt" zeigt die drei sichtbaren Zustände je Fach mit Grund.
+
+**Mentor.** `homework_page_images` nimmt Seiten aus dem Bestand und startet
+den Browser nur für Seiten, die dort fehlen; die holt es und legt sie ab. Der
+Seitenerkenner ist derselbe wie in der Bilanz: „p. 50" zählt, „AH S. 7"
+nicht. Bis 0.52.6 verstand der Mentor nur „S." und „Seite" und bekam für
+Spanisch nie eine Seite.
 
 ## Umgesetzt: die Quellenbilanz (0.52.0, korrigiert in 0.52.1)
 
@@ -97,11 +145,25 @@ Am 15.09.2026 an der laufenden Instanz geprüft, mit echten Abrufen.
 | Physik | Westermann | Seiten kommen, lesbar |
 | Geschichte | Klett | Seiten kommen |
 | Chemie | Westermann | Seiten kommen |
-| Mathematik (BiBox) | Westermann/BiBox | meldet `loaded`, Seite bleibt leer |
-| Politik | Eduplaces | `viewer_error`: „Das Medienregal wurde nicht gefunden" |
+| Mathematik (BiBox) | Westermann/BiBox | bis 0.52.5 `loaded`, Seite leer; seit 0.52.6 lesbar |
+| Erdkunde (BiBox Diercke) | Westermann/BiBox | wie Mathematik; seit 0.52.6 lesbar |
+| Politik (click & study) | Buchner | zweimal am Regalsprung gescheitert, im dritten Lauf lesbar; seit 0.52.3 wartet der Sprung auf die Kachel |
 
-Die leere Matheseite wurde zweimal abgerufen, beide Male dieselbe leere
-Betrachterhülle mit korrekter Seitenanzeige „18 - 19", aber ohne Buchinhalt.
+**BiBox, aufgeklärt (D40).** Die leere Seite war kein Lizenzproblem. Der
+Betrachter zeichnet mit WebGL; die Konsole meldete „CanvasRenderer is not yet
+implemented", `webgl=false`. Das Alpine-Chromium 131 des Add-ons bringt keinen
+SwiftShader mit (kein `libvk_swiftshader.so`), und jede GPU-Einstellung
+scheiterte an einer fehlenden Vulkan-Erweiterung: Der GPU-Prozess startete in
+Schleife neu und der Browser kam zwei Minuten lang nicht hoch. Seit 0.52.6
+enthält das Image Mesa mit Lavapipe (Software-Vulkan); WebGL läuft über ANGLE
+auf Vulkan, Start in unter zwei Sekunden, Seiten lesbar. Der Weg dahin steht
+im Changelog 0.52.2 bis 0.52.6: erst mehr Diagnose im Seitentest, dann eine
+Browser-Sonde, die Chromium mit mehreren Varianten direkt startet
+(`POST /textbooks/browser-check`). Beides bleibt für künftige Betrachter.
+
+Nebenbefund: Der Fernzugriff über Nabu Casa kappt jede Anfrage nach 100
+Sekunden. Seitentest und Sammellauf laufen deshalb als Hintergrundaufträge,
+die die Seite nachfragt (`start_job`/`job_state` in `textbook_context`).
 
 ### Drei Fehler, die jedes Verfahren berücksichtigen muss
 
@@ -154,9 +216,9 @@ Einheiten markiert und verweisen auf die Einheit im Hauptteil. Wenn die Einheit
 zu den Stundenthemen ringsum passt, ist die Zuordnung fachlich verifiziert und
 muss nicht erfragt werden.
 
-## Abgestimmtes Verfahren (noch nicht gebaut)
+## Das Prüfverfahren (D30, gebaut in 0.53.0)
 
-Vom Nutzer am 15.09.2026 als „klingt gut" bestätigt.
+Vom Nutzer am 15.09.2026 als „klingt gut" bestätigt; Umsetzung siehe oben.
 
 Fehlt zu einer Seitenangabe der Buchteil, gilt zunächst die Annahme Schulbuch.
 Diese Annahme ist eine Hypothese, die der Inhalt bestätigen oder widerlegen
@@ -172,8 +234,10 @@ muss. Vier Ergebnisse:
 
 Nur 3 und 4 werden eingefordert.
 
-Die Prüfung gehört in den nächtlichen Lauf und nur für neu hinzugekommene
+Die Prüfung läuft in den beiden Sammelläufen und nur für neu hinzugekommene
 Stellen. Einmal geprüft bleibt geprüft; gedruckte Seiten ändern sich nicht.
+Ergebnis 1 heißt im Bestand `belegt`, 2 `plausibel`, 3 `passt_nicht`, 4
+`unavailable` oder `paper`.
 
 ### Danach: die Aufforderung
 
@@ -185,6 +249,22 @@ anstehender Arbeit oder aktiver Lernkarte, sonst entsteht derselbe
 Nachlaufdruck, den das Produkt abschaffen soll. Kommt nichts, darf geübt
 werden, aber die Übungsklausur schreibt dazu, dass die Originalquelle fehlt.
 
+## Offen: Paket 2 und 3
+
+**Paket 2 (D39).** Das Inhaltsverzeichnis je Buch einmal lesen
+(`book_chapters`: Titel, Anfangs- und Endseite, Anhänge wie Vokabelteil und
+Grammatik). Daraus die Kapitelregel: Ein angeschnittenes Kapitel wird ganz
+geholt und als erwarteter Klausurstoff geführt. Die Lektionsregel für
+Sprachen: Vokabelteil und Zusammenfassung der Lektion gehören dazu, das Buch
+nennt sie selbst („Unidad 3 ▸ p. 48", „Resumen"). `exam_scope` bekommt die
+Kapitel und Materialien des Zeitraums; der Mentor den Gesamtkontext.
+
+**Paket 3.** Einträge ohne Seitenangabe gegen Kapiteltitel und Register
+halten, Treffer als Hypothese ablegen und am Seiteninhalt bestätigen.
+Fachgewohnheit: Schreibt eine Lehrkraft in ihren ausdrücklichen Angaben immer
+„AH", gilt für ein nacktes „S. 64" nicht pauschal Schulbuch. Die Aufforderung
+zum Fotografieren im Abendablauf, in den abgestimmten Grenzen.
+
 ## Offene Punkte
 
 - Der Regal-Scan des Kontos ohne Regal läuft in einen Einwilligungsdialog des
@@ -192,7 +272,9 @@ werden, aber die Übungsklausur schreibt dazu, dass die Originalquelle fehlt.
   „Welche Daten werden übertragen?") als Bücher. Der Dialog muss erkannt und
   abgewiesen werden; die drei Einträge sind zu entfernen, wofür es bisher
   keinen Weg gibt. Digitale Bücher gibt es dort erst ab Jahrgang 7.
-- `CACHE_KEEP = 60` ist für eine Verifikation über ein Schuljahr zu klein.
+- `CACHE_KEEP = 60` betrifft nur noch den Rückfall-Cache; der Bestand liegt in
+  `materials` ohne Limit außer dem Speicher je Kind (200 MB, rund 150 KB je
+  Seite).
 - Die Bilanz zählt jede genannte Stelle seit Schuljahresbeginn. Für einen
   Sammelauftrag zum Scannen ist das richtig; für eine einzelne Arbeit müsste
   sie auf deren Stoffzeitraum eingegrenzt werden.

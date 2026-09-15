@@ -40,6 +40,10 @@ class Insight(InputModel):
     contains_solutions: bool = False
     unreadable: bool = False
     confidence: float = Field(default=0.0, ge=0, le=1)
+    # Nur für abgerufene Buchseiten: die gedruckten Seitenzahlen auf dem Bild
+    # und ob der Inhalt zu den Unterrichtszitaten passt.
+    printed_pages: list[int] = Field(default_factory=list, max_length=4)
+    fits_quote: str = Field(default="", max_length=10)
 
 
 INSTRUCTION = (
@@ -67,6 +71,12 @@ INSTRUCTION = (
     "contains_solutions true, wenn Lösungen, Musterlösungen oder korrigierte Ergebnisse zu sehen sind.\n"
     "title ist kurz und konkret, ohne Fachnamen am Anfang. summary sind ein bis drei Sätze dazu, "
     "worum es geht und wofür man es brauchen kann. confidence schätzt deine Sicherheit von 0 bis 1.\n"
+    "Steht in hinweise.buchseite etwas, ist das Bild eine aus dem digitalen Schulbuch abgerufene Seite "
+    "oder Doppelseite; kind ist dann book_page. Lies die gedruckten Seitenzahlen ab und gib sie in "
+    "printed_pages an (bei einer Doppelseite beide); steht keine lesbare Seitenzahl auf dem Bild, lass die "
+    "Liste leer. fits_quote sagt, ob der Seiteninhalt zu hinweise.buchseite.zitate_aus_unterricht passt: "
+    "ja, unklar oder nein; ohne Zitate leer lassen. Ist das Bild nur eine leere Fläche ohne Buchinhalt, "
+    "setze unreadable auf true.\n"
     "JSON-Schema: "
 )
 
@@ -113,6 +123,13 @@ def _context(conn, account_id: int, row) -> dict:
     hints: dict = {"dateiname": row["filename"] or "", "seiten": row["page_count"]}
     if row["captured_at"]:
         hints["aufgenommen_am"] = row["captured_at"][:10]
+    if (row["origin"] if "origin" in row.keys() else "") == "book_fetch":
+        quotes = [r[0] for r in conn.execute(
+            "SELECT DISTINCT quote FROM source_links WHERE account_id=? AND lower(subject_name)=lower(?) "
+            "AND page=? AND part_kind IN ('book','unknown') AND quote!='' LIMIT 6",
+            (account_id, row["subject_name"] or "", row["source_page"]))]
+        hints["buchseite"] = {"buch": row["source_book"], "bestellte_seite": row["source_page"],
+                              "fach": row["subject_name"], "zitate_aus_unterricht": quotes}
     for link in store.links(conn, row["id"]):
         if link["kind"] == "task":
             task = conn.execute(
@@ -167,6 +184,21 @@ def _apply(conn, account_id: int, row, insight: Insight) -> None:
             pass
     if "contains_solutions" not in locked:
         values["contains_solutions"] = int(insight.contains_solutions)
+    if (row["origin"] if "origin" in row.keys() else "") == "book_fetch":
+        # Die gedruckte Seitenzahl ist der einzige Beleg dafür, dass die
+        # gelieferte Seite die bestellte ist; der Betrachter meldet die
+        # Bestellung zurück, nicht die Lieferung.
+        printed = [int(p) for p in insight.printed_pages if 0 < int(p) < 2000]
+        values["printed_pages"] = json.dumps(printed)
+        if insight.unreadable and not insight.content_text.strip():
+            values["page_check"] = "blank"
+        elif not printed:
+            values["page_check"] = "unknown"
+        elif row["source_page"] in printed:
+            values["page_check"] = "ok"
+        else:
+            values["page_check"] = "mismatch"
+        values["fits_quote"] = insight.fits_quote.strip().lower()[:10]
     values.update(
         analysis_state="ready",
         analysis_model=ai.ai_settings()["model"],

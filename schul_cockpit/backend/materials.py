@@ -196,11 +196,16 @@ def _public(row, with_links=None) -> dict:
 
 def listing(account_id: int, *, subject: str | None = None, kind: str | None = None,
             start: str | None = None, end: str | None = None, query: str | None = None,
-            state: str | None = None, include_hidden: bool = False, limit: int = 100) -> list[dict]:
+            state: str | None = None, include_hidden: bool = False, include_books: bool = False,
+            limit: int = 100) -> list[dict]:
     where = ["account_id=?"]
     args: list = [account_id]
     if not include_hidden:
         where.append("hidden=0")
+    if not include_books:
+        # Fetched book pages come by the hundred; they have their own place
+        # on the page and would bury every photo a child took.
+        where.append("origin!='book_fetch'")
     if subject:
         where.append("lower(subject_name)=lower(?)")
         args.append(subject)
@@ -225,7 +230,7 @@ def listing(account_id: int, *, subject: str | None = None, kind: str | None = N
             "SELECT id,account_id,kind,subject_name,title,summary,document_date,period_start,period_end,"
             "captured_at,created_by,filename,mime_type,page_count,verified,contains_solutions,hidden,"
             "locked_fields,analysis_state,analysis_model,analysis_version,analyzed_at,analysis_error,"
-            "confidence,created_at,updated_at, length(file_bytes) AS file_size "
+            "confidence,created_at,updated_at,origin,source_book,source_page, length(file_bytes) AS file_size "
             "FROM materials WHERE " + " AND ".join(where) +
             " ORDER BY COALESCE(document_date,substr(created_at,1,10)) DESC, id DESC LIMIT ?",
             tuple(args)).fetchall()

@@ -1,3 +1,12 @@
+## 0.53.0
+
+- Der Quellenbestand. Jede Stelle, die der Unterricht in Untis nennt, ob in der Stundenbeschreibung oder in der Hausaufgabe, wird an ihren Eintrag gebunden. Genannte Schulbuchseiten holt die App sich selbst aus dem Medienregal und legt sie als Material ab, mit Buch, Seite und dem Tag, an dem sie drankamen; die Materialauswertung liest sie wie ein Foto. Zwei Läufe am Tag: um 14 Uhr, wenn Hausaufgaben und Stundeneinträge stehen, und nachts für alles, was später kam. Der erste Lauf arbeitet den Bestand seit Schuljahresbeginn ab, danach nur noch die Differenz, höchstens 40 Seiten je Kind und Lauf.
+- Eine gelieferte Seite gilt erst, wenn Buchinhalt darauf ist und die gedruckte Seitenzahl zur Bestellung passt. Der Betrachter meldet die Bestellung zurück, nicht die Lieferung: Bestellung 50 brachte einmal die Seiten 48/49. Weicht sie ab, wird einmal mit dem Versatz nachbestellt. Erst eine so bestätigte Seite gilt als Nachweis, dass ein Buch abrufbar ist; ein Treffer im Katalog allein zählt nicht mehr.
+- Stellen ohne Buchteil („S. 64/5 zu Ende notieren") gelten zuerst als Schulbuch. Passt der Seiteninhalt nicht zum Zitat, war es ein anderes Heft; die Stelle wandert auf die Einkaufsliste mit genau diesem Hinweis.
+- Die Hausaufgabenhilfe nimmt Buchseiten aus dem Bestand und startet nur noch für Seiten, die dort fehlen, den Browser. Sie versteht dabei jetzt auch „p. 50" und lässt Arbeitsheftseiten aus.
+- Die Karte „Was mir noch fehlt" unterscheidet, was fotografiert werden muss, was die App gerade selbst holt und was digital vorliegt, je Fach mit Grund. Eltern können den Sammellauf von Hand anstoßen. In den Eltern-Einstellungen steht an jedem Buch, ob der Abruf nachgewiesen ist und wie viele Seiten im Bestand liegen.
+- Beim Kontowechsel ziehen die Buchseiten-Zwischenspeicher, der Abrufnachweis und die gebundenen Stellen mit um.
+
 ## 0.52.6
 
 - Der Browser des Add-ons bekommt eine Software-GPU. Die Browser-Prüfung aus 0.52.5 hat gezeigt: Das Chromium von Alpine bringt keinen SwiftShader-Treiber mit, jede GPU-Einstellung scheiterte an einer fehlenden Vulkan-Erweiterung, der GPU-Prozess startete in Schleife neu und der Browser kam zwei Minuten lang nicht hoch. Das Image enthält jetzt Mesa mit Lavapipe (Software-Vulkan) und llvmpipe (Software-GL); WebGL läuft über ANGLE auf Vulkan. Ein WebGL-Start, der fehlschlägt, wird bis zum nächsten Neustart nicht wiederholt, damit kein Abruf mehr zwei Minuten verliert.
