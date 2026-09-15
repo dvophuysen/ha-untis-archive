@@ -66,7 +66,6 @@
 
     <!-- Aus Untis steht der Auftrag in den Notizen, der Titel ist nur das Fach. -->
     <p class="assignment"><SourceText segments={task.text_segments} text={task.text || notes || task.title} subject={task.subject_name} taskId={task.id} /></p>
-    {#if notes && task.text && notes !== task.text && task.title !== task.text}<p class="notes">{notes}</p>{/if}
     {#if !task.text && notes && notes !== task.title}<p class="notes">{notes}</p>{/if}
 
     {#if task.intro}
