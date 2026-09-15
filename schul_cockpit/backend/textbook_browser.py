@@ -1226,8 +1226,9 @@ def _capture_pages_sync(
     # Ein großes Fenster statt eines Gerätefaktors: Der Faktor kam weder über
     # das Flag noch über DevTools im Screenshot an (gemessen: 1308 Pixel je
     # Doppelseite). Im doppelt so großen Fenster zeichnet der Betrachter die
-    # Seiten selbst größer, und der Zuschnitt liefert rund 2400 Pixel.
-    driver = _driver("--window-size=2600,1900")
+    # Seiten selbst größer; 2600 Pixel Fensterbreite brachten 1970 Pixel je
+    # Doppelseite, 3000 bringen rund 2300.
+    driver = _driver("--window-size=3000,2100")
     deadline = time.monotonic() + budget
     stage = "IServ-Anmeldung"
     try:
