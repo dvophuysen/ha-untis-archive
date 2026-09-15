@@ -199,8 +199,10 @@ def get_catalog(account_id: int, user: CurrentUser = Depends(get_current_user)) 
             "SELECT verification_status FROM digital_textbook_credentials WHERE account_id=?", (account_id,)
         ).fetchone()
         access_rows = {r["book_title"]: dict(r) for r in conn.execute(
-            "SELECT book_title,status,page,printed_page,detail,checked_at FROM digital_textbook_access WHERE account_id=?",
+            "SELECT book_title,status,page,printed_page,detail,checked_at,toc_state FROM digital_textbook_access WHERE account_id=?",
             (account_id,))}
+        chapters = {r["book_title"]: r["n"] for r in conn.execute(
+            "SELECT book_title, COUNT(*) AS n FROM book_chapters WHERE account_id=? GROUP BY book_title", (account_id,))}
         stored = {r["source_book"]: r["n"] for r in conn.execute(
             "SELECT source_book, COUNT(*) AS n FROM materials WHERE account_id=? AND origin='book_fetch' AND hidden=0 "
             "GROUP BY source_book", (account_id,))}
@@ -209,6 +211,7 @@ def get_catalog(account_id: int, user: CurrentUser = Depends(get_current_user)) 
             book = dict(r)
             book["access"] = access_rows.get(r["title"])
             book["pages_stored"] = stored.get(r["title"], 0)
+            book["chapters"] = chapters.get(r["title"], 0)
             books.append(book)
         return {
             "status": status[0] if status else None,

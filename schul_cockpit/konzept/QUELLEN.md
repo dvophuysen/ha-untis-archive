@@ -1,7 +1,7 @@
 # Quellen: welche Buchstelle hinter einer Aufgabe steht
 
-Stand: 15.09.2026, abends. Beschreibt umgesetzten Bestand (0.53.0), belegte
-Befunde aus der laufenden Instanz und die noch offenen Pakete 2 und 3.
+Stand: 15.09.2026, abends. Beschreibt umgesetzten Bestand (0.54.0), belegte
+Befunde aus der laufenden Instanz und das noch offene Paket 3.
 Keine Kinder- oder Zugangsdaten; Konten werden als „Konto mit Regal" und
 „Konto ohne Regal" unterschieden.
 
@@ -249,15 +249,33 @@ anstehender Arbeit oder aktiver Lernkarte, sonst entsteht derselbe
 Nachlaufdruck, den das Produkt abschaffen soll. Kommt nichts, darf geübt
 werden, aber die Übungsklausur schreibt dazu, dass die Originalquelle fehlt.
 
-## Offen: Paket 2 und 3
+## Umgesetzt: die Buchstruktur (0.54.0, D39)
 
-**Paket 2 (D39).** Das Inhaltsverzeichnis je Buch einmal lesen
-(`book_chapters`: Titel, Anfangs- und Endseite, Anhänge wie Vokabelteil und
-Grammatik). Daraus die Kapitelregel: Ein angeschnittenes Kapitel wird ganz
-geholt und als erwarteter Klausurstoff geführt. Die Lektionsregel für
-Sprachen: Vokabelteil und Zusammenfassung der Lektion gehören dazu, das Buch
-nennt sie selbst („Unidad 3 ▸ p. 48", „Resumen"). `exam_scope` bekommt die
-Kapitel und Materialien des Zeitraums; der Mentor den Gesamtkontext.
+`book_structure.read_toc` holt je Buch einmal die Seiten 2 bis 5 (und 6 bis
+9, wenn das Verzeichnis weitergeht) und lässt das Modell das Inhaltsverzeichnis
+ablesen: Nummer, Titel, Ebene, Anfangsseite, Art (Kapitel, Vokabelteil,
+Grammatik, Anhang) und zu welcher Lektion ein Anhang gehört. Ein Kapitel
+endet, wo das nächste derselben Ebene beginnt, höchstens sechzig Seiten
+später. Stand je Buch in `digital_textbook_access.toc_state`; der Sammellauf
+liest je Lauf höchstens drei Verzeichnisse, bevor er Seiten holt.
+
+**Kapitelregel.** `expand` läuft im Takt von `sync_links`: Zu jedem Kapitel,
+aus dem ein Untis-Eintrag eine Seite nennt, werden alle Seiten als zu holende
+Stellen gebunden (`entry_kind = chapter`), dazu die Vokabel- und
+Grammatikteile, die das Verzeichnis dieser Lektion zuordnet. Genannte Seiten
+kommen vor Kapitelseiten. Schneidet kein Eintrag das Kapitel mehr an, fallen
+die Zeilen weg. Der Klausurstoff (`exam_scope.collect`) führt die im Zeitraum
+angeschnittenen Kapitel als eigene Einträge, mit Seitenbereich und Anhängen;
+der Mentor bekommt bei der Hausaufgabenhilfe `book_context`: das Kapitel der
+genannten Seite, seinen Bereich, was dazugehört.
+
+**Eigener KI-Rahmen (D41).** Buchseiten lesen und Verzeichnisse ablesen laufen
+unter dem Zweck `sources` mit 15 Euro im Monat, getrennt vom
+Hintergrund-Rahmen. Der erste Sammellauf hatte 12 Seiten geholt und keine
+gelesen, weil der Hintergrund-Rahmen (5 Euro) bereits zu 4,35 Euro verbraucht
+war.
+
+## Offen: Paket 3
 
 **Paket 3.** Einträge ohne Seitenangabe gegen Kapiteltitel und Register
 halten, Treffer als Hypothese ablegen und am Seiteninhalt bestätigen.

@@ -1,10 +1,19 @@
-# Quellenbestand 0.52.2–0.53.0
+# Quellenbestand 0.52.2–0.54.0
 
-Stand 15.09.2026, abends. 226 Python-Tests grün. 0.52.2 bis 0.52.6 auf der
-laufenden Instanz installiert und mit echten Abrufen geprüft; 0.53.0 folgt in
-derselben Session.
+Stand 15.09.2026, abends. 0.52.2 bis 0.53.0 auf der laufenden Instanz
+installiert und mit echten Abrufen geprüft; 0.54.0 folgt in derselben Session.
 
 ## Was ausgeliefert ist
+
+**Buchstruktur und Kapitelregel (0.54.0, D39).** Inhaltsverzeichnis je Buch
+einmal gelesen (`book_chapters`), angeschnittene Kapitel samt Vokabel- und
+Grammatikteil vollständig geholt, im Klausurstoff und im Mentor-Kontext
+geführt. Eigener KI-Rahmen für den Quellenbestand, 15 Euro im Monat (D41).
+
+**Erster Live-Sammellauf (0.53.0).** 12 von 13 genannten Buchseiten in 404
+Sekunden geholt und abgelegt, keine leer, keine Fehlabrufe; Spanisch,
+Politik, Deutsch, Mathematik. Die KI-Auswertung scheiterte am erschöpften
+Hintergrund-Rahmen (429), daraus D41.
 
 **Alle neun Bücher des Kontos mit Regal liefern Seiten (0.52.6, D40).** Die
 BiBox-Bücher zeichnen mit WebGL; das Image trägt jetzt Mesa mit Lavapipe.
@@ -41,8 +50,7 @@ die Zustände; Eltern stoßen den Lauf von Hand an.
 
 ## Bekannte Lücken
 
-- Paket 2 (Inhaltsverzeichnis, Kapitel- und Lektionsregel, Klausurstoff) und
-  Paket 3 (Einträge ohne Quelle, Fachgewohnheit, Foto-Aufforderung) sind
+- Paket 3 (Einträge ohne Quelle, Fachgewohnheit, Foto-Aufforderung) ist
   beschrieben, nicht gebaut.
 - Der Regal-Scan des Kontos ohne Regal speichert Dialogschaltflächen als
   Bücher; kein Löschweg.

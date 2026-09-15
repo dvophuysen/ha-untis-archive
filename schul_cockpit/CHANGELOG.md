@@ -1,3 +1,11 @@
+## 0.54.0
+
+- Das Buch sagt selbst, wie weit der Stoff reicht. Je Buch liest die App einmal das Inhaltsverzeichnis von den ersten Seiten ab und kennt danach Kapitel, Abschnitte, Vokabel- und Grammatikteile mit ihren Seiten. Nennt der Unterricht eine Seite aus einem Kapitel, holt die App das ganze Kapitel, bei Sprachen mit dem Vokabelteil der Lektion, und führt es als kommenden Klausurstoff. Genannte Seiten kommen vor Kapitelseiten.
+- Der Klausurstoff nennt die im Zeitraum angeschnittenen Kapitel mit Seitenbereich und Anhängen als eigene Einträge; der Mentor bekommt bei der Hausaufgabenhilfe den Kapitelzusammenhang der genannten Seite mit.
+- Der Quellenbestand hat einen eigenen KI-Rahmen von 15 Euro im Monat, sichtbar in der Kostenübersicht. Der erste Sammellauf hatte den Hintergrund-Rahmen von 5 Euro getroffen, der schon von der Auswertung der Fotos fast aufgebraucht war; keine der zwölf geholten Seiten wurde gelesen. Beide Rahmen liegen innerhalb des Monatsrahmens.
+- Die Karte „Was mir noch fehlt" zeigt je Fach die angeschnittenen Kapitel und wie viele ihrer Seiten schon da sind; in den Eltern-Einstellungen steht an jedem Buch, ob das Inhaltsverzeichnis gelesen ist. Dieselbe Seite, einmal als „Schulbuch" und einmal ohne Buchteil genannt, zählte doppelt.
+- Kurztitel der Buchseiten ohne Ausgabenkürzel („Politik & Co. 8 S. 30" statt „Politik & Co. 8 ab S. 30").
+
 ## 0.53.0
 
 - Der Quellenbestand. Jede Stelle, die der Unterricht in Untis nennt, ob in der Stundenbeschreibung oder in der Hausaufgabe, wird an ihren Eintrag gebunden. Genannte Schulbuchseiten holt die App sich selbst aus dem Medienregal und legt sie als Material ab, mit Buch, Seite und dem Tag, an dem sie drankamen; die Materialauswertung liest sie wie ein Foto. Zwei Läufe am Tag: um 14 Uhr, wenn Hausaufgaben und Stundeneinträge stehen, und nachts für alles, was später kam. Der erste Lauf arbeitet den Bestand seit Schuljahresbeginn ab, danach nur noch die Differenz, höchstens 40 Seiten je Kind und Lauf.

@@ -247,8 +247,9 @@ async def analyze(account_id: int, material_id: int) -> bool:
     if text:
         context["dokumenttext"] = text[:20000]
     try:
+        purpose = ai.SOURCES if (row["origin"] if "origin" in row.keys() else "") == "book_fetch" else "background"
         raw, _, _ = await ai.complete(
-            account_id, "background", INSTRUCTION + json.dumps(Insight.model_json_schema()),
+            account_id, purpose, INSTRUCTION + json.dumps(Insight.model_json_schema()),
             context, images, max_output=8000)
         insight = Insight.model_validate_json(raw)
     except ValidationError:

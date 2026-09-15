@@ -54,10 +54,10 @@ def to_jpeg(blob: bytes, max_side: int = 1600) -> bytes:
 
 def short_title(title: str) -> str:
     """„BiBox Mathematik Neue Wege 8 Gymnasium G9 Niedersachsen" → „Mathematik Neue Wege 8"."""
-    cut = title.split(" - ")[0].split(" · ")[0]
-    for noise in ("BiBox ", "Gymnasium", "Niedersachsen", "Bremen", "E-Book", "Ausgabe", "G9", "(2023)", "(2016)"):
-        cut = cut.replace(noise, " ")
-    words = [w for w in cut.split() if w and not w.startswith("(") and w not in (",",)]
+    import re
+    cut = title.split(" - ")[0].split(" · ")[0].split(":")[0]
+    cut = re.sub(r"\b(ab|von)\s+\d{4}\b|\(\d{4}\)|\bG9\b|\bE-Book\b|\bAusgabe\b|\bBiBox\b|\bGymnasium\b|\bNiedersachsen\b|\bBremen\b", " ", cut)
+    words = [w for w in cut.split() if w not in (",",)]
     return " ".join(words[:5]).strip(" ,") or title[:60]
 
 
@@ -163,12 +163,14 @@ def _bump(account_id: int, subject: str, page: int, detail: str | None = None) -
 
 
 def wanted_pages(account_id: int) -> list[dict]:
-    """Was noch zu holen ist, je Buch, neueste Einträge zuerst."""
+    """Was noch zu holen ist, je Buch: genannte Seiten vor Kapitelseiten,
+    neueste Einträge zuerst."""
     with closing(webapp_conn()) as conn:
         links = [dict(r) for r in conn.execute(
-            "SELECT subject_name,page,MIN(entry_date) AS first_date,MAX(entry_date) AS last_date,MAX(attempts) AS attempts "
+            "SELECT subject_name,page,MIN(entry_date) AS first_date,MAX(entry_date) AS last_date,MAX(attempts) AS attempts,"
+            "MIN(entry_kind='chapter') AS only_chapter "
             "FROM source_links WHERE account_id=? AND status='pending' AND part_kind IN ('book','unknown') "
-            "GROUP BY lower(subject_name),page ORDER BY last_date DESC, page", (account_id,))]
+            "GROUP BY lower(subject_name),page ORDER BY only_chapter, last_date DESC, page", (account_id,))]
     groups: dict[str, dict] = {}
     for link in links:
         if link["attempts"] >= MAX_ATTEMPTS:
@@ -176,7 +178,9 @@ def wanted_pages(account_id: int) -> list[dict]:
         book, _ = book_and_credentials(account_id, subject=link["subject_name"])
         if not book:
             continue
-        group = groups.setdefault(book["title"], {"book": book, "subject": link["subject_name"], "pages": {}})
+        group = groups.setdefault(book["title"], {"book": book, "subject": link["subject_name"], "pages": {}, "order": []})
+        if link["page"] not in group["pages"]:
+            group["order"].append(link["page"])
         group["pages"][link["page"]] = link["first_date"]
     return list(groups.values())
 
@@ -193,11 +197,31 @@ async def collect(account_id: int, budget: int = PAGE_BUDGET) -> dict:
         summary["skipped"] = "kein IServ-Zugang"
         return summary
     remaining = budget
+    # Erst die Struktur: Ohne Inhaltsverzeichnis gibt es keine Kapitelregel.
+    # Je Lauf höchstens drei Bücher, jedes einmal.
+    from .book_structure import read_toc, toc_state
+    read = 0
+    for book in _books(account_id):
+        if read >= 3 or remaining <= 4:
+            break
+        if toc_state(account_id, book["title"]) in ("ready", "not_found", "failed", "no_ai"):
+            continue
+        if (access_of(account_id, book["title"]) or {}).get("status") in ("blank", "viewer_error"):
+            continue
+        outcome = await read_toc(account_id, book, credentials)
+        summary.setdefault("toc", {})[short_title(book["title"])] = outcome.get("state")
+        remaining -= len(outcome.get("pages") or [])
+        read += 1
+    if read:
+        sources.sync_links(account_id)
+        sources.refresh_status(account_id)
     for group in wanted_pages(account_id):
         if remaining <= 0:
             break
         book, subject = group["book"], group["subject"]
-        pages = sorted(group["pages"])[:remaining]
+        # Das Budget nimmt die wichtigsten Seiten zuerst (genannte vor
+        # Kapitelseiten); geblättert wird dann in Buchreihenfolge.
+        pages = sorted(group["order"][:remaining])
         remaining -= len(pages)
         delivery = await fetch_pages(account_id, book, credentials, pages, use_cache=False,
                                      budget=90 + 25 * len(pages))
@@ -253,6 +277,13 @@ async def collect(account_id: int, budget: int = PAGE_BUDGET) -> dict:
     summary["seconds"] = round((datetime.now() - started).total_seconds())
     log.info("Quellen für Konto %s eingesammelt: %s", account_id, {k: v for k, v in summary.items() if k != "account_id"})
     return summary
+
+
+def _books(account_id: int) -> list:
+    with closing(webapp_conn()) as conn:
+        return conn.execute(
+            "SELECT * FROM digital_textbook_catalog WHERE account_id=? AND subject_name IS NOT NULL ORDER BY subject_name",
+            (account_id,)).fetchall()
 
 
 def accounts_with_books() -> list[int]:

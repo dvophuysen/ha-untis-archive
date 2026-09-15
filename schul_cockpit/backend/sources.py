@@ -28,6 +28,10 @@ from .learning import now_iso, today_local
 from .mentor_context import rows, school_start
 from .queries import _subject_short_from_payload
 
+import logging
+
+log = logging.getLogger("schul_cockpit.sources")
+
 # Wie eine Quelle geschrieben wird und was sie ist. „cda" ist bei Spanisch das
 # Cuaderno de actividades, „TB" der Textband. Die Zuordnung ist eine Annahme;
 # sie steht in der Anzeige, damit sie widersprochen werden kann.
@@ -158,8 +162,20 @@ def sync_links(account_id: int) -> dict:
                          cite["label"] or "Unbekannte Quelle", cite["kind"] or "unknown", page,
                          entry["text"][:220], stamp, stamp))
                     count += 1
-        gone = conn.execute("DELETE FROM source_links WHERE account_id=? AND synced_at<?",
+    with closing(webapp_conn()) as conn, conn:
+        gone = conn.execute("DELETE FROM source_links WHERE account_id=? AND synced_at<? AND entry_kind!='chapter'",
                             (account_id, stamp)).rowcount
+    # Die Kapitelregel hängt an den eben gebundenen Stellen und trägt
+    # denselben Zeitstempel, damit ihre Zeilen den Abgleich überleben. Was
+    # kein Eintrag mehr anschneidet, fällt danach weg.
+    from .book_structure import expand
+    try:
+        count += expand(account_id, stamp)
+    except Exception:
+        log.warning("Kapitelregel für Konto %s ausgesetzt", account_id, exc_info=True)
+    with closing(webapp_conn()) as conn, conn:
+        gone += conn.execute("DELETE FROM source_links WHERE account_id=? AND synced_at<?",
+                             (account_id, stamp)).rowcount
     return {"since": start, "links": count, "removed": gone}
 
 
@@ -276,7 +292,9 @@ def ledger(account_id: int) -> dict:
         bucket = by_subject.setdefault(link["subject_name"], {
             "subject": link["subject_name"], "digital": set(), "scanned": set(), "pending": set(),
             "groups": {}})
-        key = (link["part_label"], link["part_kind"], link["page"])
+        # Dieselbe Seite als „Schulbuch" und als „Unbekannte Quelle" genannt
+        # ist eine Seite, nicht zwei.
+        key = link["page"]
         if link["status"] == "digital":
             bucket["digital"].add(key)
         elif link["status"] == "scanned":
@@ -307,10 +325,18 @@ def ledger(account_id: int) -> dict:
             })
         book = shelf.get(bucket["subject"].casefold())
         missing_count = sum(len(m["pages"]) for m in missing)
+        chapters = []
+        if book:
+            from .book_structure import overview
+            try:
+                chapters = overview(account_id, book["title"], bucket["subject"])
+            except Exception:
+                log.warning("Kapitelübersicht für %s nicht berechenbar", bucket["subject"], exc_info=True)
         subjects.append({
+            "chapters": chapters,
             "subject": bucket["subject"],
             "digital": len(bucket["digital"]), "scanned": len(bucket["scanned"]), "pending": len(bucket["pending"]),
-            "pending_pages": sorted({k[2] for k in bucket["pending"]}),
+            "pending_pages": sorted(bucket["pending"]),
             "missing": sorted(missing, key=lambda m: (-len(m["pages"]), m["label"])),
             "missing_count": missing_count,
             "total": len(bucket["digital"]) + len(bucket["scanned"]) + len(bucket["pending"]) + missing_count,

@@ -65,10 +65,30 @@ async def collect(account,body):
             if not text:continue
             by_text.setdefault(text,[]).append(row)
         for text,refs in by_text.items():units.append(dict(id=len(units),kind=kind,text=text,refs=refs))
+    # Das Buch selbst sagt, wie weit der Stoff reicht: Ein im Zeitraum
+    # angeschnittenes Kapitel gehört ganz dazu, mit Vokabel- und Grammatikteil.
+    chapters=[] if body.demo else book_chapters(account,body.subject,start,day.isoformat())
+    for chapter in chapters:
+        span=f"S. {chapter['start_page']}" + (f"–{chapter['end_page']}" if chapter.get('end_page') else '')
+        extras=''.join(f"; dazu {e['title']} S. {e['start_page']}" + (f"–{e['end_page']}" if e.get('end_page') else '') for e in chapter['companions'])
+        text=f"Buchkapitel {chapter['number']} {chapter['title']} ({span}{extras}); im Unterricht genannt: S. {', '.join(map(str,chapter['cited_pages']))}".replace('Buchkapitel  ','Buchkapitel ')
+        units.append(dict(id=len(units),kind='chapter',text=text,refs=[dict(id=chapter['id'],date=chapter['first_date'],text=text)]))
     if not units:raise HTTPException(422,'Für dieses Fach und diesen Zeitraum fehlen verwertbare Themen. Du kannst eigene Themen eintragen.')
     if len(units)>400:raise HTTPException(422,'Dieser Zeitraum enthält sehr viel Stoff. Bitte einen kürzeren Zeitraum wählen.')
-    source=dict(subject=body.subject,demo=body.demo,start_date=start,end_date=day.isoformat(),grade=s['profile']['grade'],units=units,missing=missing)
+    source=dict(subject=body.subject,demo=body.demo,start_date=start,end_date=day.isoformat(),grade=s['profile']['grade'],units=units,missing=missing,chapters=chapters)
     return source,warnings
+
+
+def book_chapters(account,subject,start,end):
+    """Die im Zeitraum angeschnittenen Kapitel des Schulbuchs dieses Fachs."""
+    from .book_structure import overview
+    from .textbook_context import book_and_credentials
+    try:
+        book,_=book_and_credentials(account,subject=subject)
+        if not book:return []
+        return [c for c in overview(account,book['title'],subject) if start<=c['first_date']<=end]
+    except Exception:
+        return []
 
 async def group_units(account, items, demo=False):
     chunk_key='chunk-v2:'+mc.fingerprint([demo,items,ai.ai_settings()['model']])
@@ -126,7 +146,7 @@ async def build(account,body):
                 for g in groups:g['ids']=[uid for i in g['ids'] for uid in chunk[i]['ids']]
                 merged.extend(groups)
             partial=merged
-        result=dict(plan_id=key,subject=body.subject,demo=body.demo,start_date=source['start_date'],end_date=source['end_date'],lesson_count=sum(len(u['refs']) for u in source['units'] if u['kind']=='lesson'),missing=source['missing'],warnings=warnings,cached=False,
+        result=dict(plan_id=key,subject=body.subject,demo=body.demo,start_date=source['start_date'],end_date=source['end_date'],lesson_count=sum(len(u['refs']) for u in source['units'] if u['kind']=='lesson'),missing=source['missing'],chapters=source.get('chapters',[]),warnings=warnings,cached=False,
                     groups=[dict(id=i,title=g['title'],category=g['category'],detail=g['detail'],sources=[{'kind':source['units'][uid]['kind'],**ref} for uid in g['ids'] for ref in source['units'][uid]['refs']]) for i,g in enumerate(partial)])
         with closing(webapp_conn()) as c:c.execute('UPDATE mentor_scope_plans SET result_json=?,updated_at=? WHERE account_id=? AND cache_key=?',(json.dumps(result,ensure_ascii=False),now_iso(),account,key))
         return result

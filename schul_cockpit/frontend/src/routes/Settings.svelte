@@ -142,7 +142,9 @@
     }
   }
 
+  const TOC_STATE = { ready: 'Inhaltsverzeichnis gelesen', not_found: 'kein Inhaltsverzeichnis auf den ersten Seiten', failed: 'Inhaltsverzeichnis nicht lesbar', no_ai: 'Inhaltsverzeichnis wartet auf die KI' };
   const BOOK_ACCESS = {
+    unknown: 'Abruf noch nicht geprüft',
     proven: 'Abruf nachgewiesen, Seitenzahl bestätigt',
     readable: 'Seiten kommen lesbar',
     blank: 'liefert leere Seiten',
@@ -466,6 +468,7 @@
                 <small class="dim">
                   {#if book.access}{BOOK_ACCESS[book.access.status] ?? book.access.status}{#if book.access.page} (S. {book.access.page}){/if}{/if}
                   {#if book.pages_stored} · {book.pages_stored} {book.pages_stored === 1 ? 'Seite' : 'Seiten'} im Bestand{/if}
+                  {#if book.access?.toc_state} · {TOC_STATE[book.access.toc_state] ?? book.access.toc_state}{#if book.chapters} ({book.chapters} Einträge){/if}{/if}
                 </small>
               {/if}
             </div>

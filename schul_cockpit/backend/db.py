@@ -649,6 +649,34 @@ _MIGRATIONS.append(("materials_008_fits_quote", "ALTER TABLE materials ADD COLUM
 _MIGRATIONS.append(("materials_009_source_index",
                     "CREATE INDEX IF NOT EXISTS idx_materials_source ON materials(account_id,source_book,source_page)"))
 
+# Die Struktur eines Buches aus seinem eigenen Inhaltsverzeichnis: Kapitel mit
+# Seitenbereich, dazu Vokabel- und Grammatikanhänge, die zu einer Lektion
+# gehören. Daraus die Kapitelregel: ein angeschnittenes Kapitel wird ganz
+# geholt und gilt als kommender Klausurstoff (D39).
+_MIGRATIONS.append(("book_chapters_001", """
+CREATE TABLE IF NOT EXISTS book_chapters (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ account_id INTEGER NOT NULL,
+ book_title TEXT NOT NULL,
+ number TEXT NOT NULL DEFAULT '',
+ title TEXT NOT NULL,
+ kind TEXT NOT NULL DEFAULT 'chapter',
+ level INTEGER NOT NULL DEFAULT 1,
+ start_page INTEGER NOT NULL,
+ end_page INTEGER,
+ belongs_to TEXT,
+ created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_book_chapters_book ON book_chapters(account_id,book_title,start_page);
+"""))
+_MIGRATIONS.append(("textbook_access_toc_state", "ALTER TABLE digital_textbook_access ADD COLUMN toc_state TEXT"))
+_MIGRATIONS.append(("textbook_access_toc_pages", "ALTER TABLE digital_textbook_access ADD COLUMN toc_pages TEXT"))
+# 15 Euro im Monat für den Quellenbestand, innerhalb des Monatsrahmens: bei
+# etwa fünf bis zehn Cent je gelesener Seite reicht das für den Erstlauf eines
+# Schuljahresbeginns und danach für die tägliche Differenz.
+_MIGRATIONS.append(("ai_config_sources_budget",
+                    "ALTER TABLE mentor_ai_config ADD COLUMN sources_micro INTEGER NOT NULL DEFAULT 15000000"))
+
 
 def history_conn() -> sqlite3.Connection:
     """Read-only connection to the UNTIS Archive's history.db."""
