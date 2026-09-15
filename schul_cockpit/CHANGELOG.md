@@ -1,3 +1,8 @@
+## 0.58.0
+
+- Die Klausurkarte unter „Arbeiten & Tests“ zeigt den Materialstand für den angenommenen Stoff: wie viele genannte Stellen gelesen vorliegen, was unterwegs ist und was fehlt, mit Link auf die Einkaufsliste des Fachs. Dazu je angeschnittenes Kapitel die fotografierten oder abgerufenen Seiten und ob die Ankündigung der Lehrkraft vorliegt.
+- Fotos und Scans, die vor 0.57.0 gelesen wurden, kennen ihre gedruckte Seite noch nicht; der Nachtlauf liest sie nach. Für Josias Englisch-Seite 206 wurde das von Hand angestoßen, die Hausaufgabe ist grün.
+
 ## 0.57.5
 
 - Auch eine direkt genannte Einführungsseite eines Teils („TB S. 10, 11“) holt nicht mehr den ganzen Teil: Ein Eintrag ohne Nummer, unter dem Lektionen liegen, ist eine Überschrift. Die Einkaufsliste für Latein schrumpft damit auf die angeschnittenen Lektionen.

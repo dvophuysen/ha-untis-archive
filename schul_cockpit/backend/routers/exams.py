@@ -6,6 +6,8 @@ IServ exam plan, and a second place to maintain them only drifts.
 
 from __future__ import annotations
 
+import logging
+
 import sqlite3
 from contextlib import closing
 from datetime import date, datetime, timedelta, timezone
@@ -24,6 +26,7 @@ from ..exams import (
 from ..supervisor_client import SupervisorError, get_supervisor
 
 router = APIRouter()
+_LOG = logging.getLogger("schul_cockpit.exams")
 
 
 def _now() -> str:
@@ -244,8 +247,16 @@ async def exams_all(
         }
         if e["date"] >= today_iso:
             e["practice"] = practice.get(_norm(e.get("subject_name") or ""))
-            e["scope"] = exam_scope(account_id, e.get("subject_name"),
-                                    scope_start(e.get("subject_name"), e["date"], data["exams"]), e["date"])
+            since = scope_start(e.get("subject_name"), e["date"], data["exams"])
+            e["scope"] = exam_scope(account_id, e.get("subject_name"), since, e["date"])
+            # Liegt das Material für diesen Stoff vor? Fehlt etwas, führt der
+            # Weg auf die Einkaufsliste des Fachs.
+            try:
+                from .. import sources
+                e["sources"] = sources.exam_sources(account_id, e.get("subject_name"), since, e["date"])
+            except Exception:
+                _LOG.warning("Quellenstand für die Arbeit in %s nicht berechenbar", e.get("subject_name"), exc_info=True)
+                e["sources"] = None
         (upcoming if e["date"] >= today_iso else past).append(e)
 
     cutoff = archive_before(account_id)

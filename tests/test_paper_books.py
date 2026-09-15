@@ -200,3 +200,21 @@ def test_an_unnumbered_part_heading_is_not_a_chapter(env):
     latin = sources.ledger(1)["subjects"][0]
     assert [(c["number"], c["start_page"], c["end_page"]) for c in latin["chapters"]] == [("2", 18, 23)]
     assert {m["label"]: m["pages"] for m in latin["missing"]} == {"Textband": [10, 11, 18, 19, 20, 21, 22, 23]}
+
+
+def test_the_exam_card_knows_what_material_is_there_and_what_is_missing(env):
+    history(lessons=[(1, "2026-09-11", "LATEIN", LA, "Lektion 1")],
+            homework=[(1, "LA", "BB S. 13 lernen", "2026-09-07"), (2, "LA", "TB S. 13 Aufg. C", "2026-09-08")])
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,source_label,source_page,analysis_state,created_at,updated_at) "
+                  "VALUES(1,'book_page','LATEIN','BB S. 13','Begleitband',13,'ready','now','now')")
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,content_text,document_date,analysis_state,created_at,updated_at) "
+                  "VALUES(1,'exam_notice','LATEIN','Zettel',?,'2026-09-14','ready','now','now')", (NOTE,))
+    # Der Zehn-Minuten-Takt des Abgleichs gilt je Prozess; hier ist die Datenbank neu.
+    sources._SYNCED.clear()
+    got = sources.exam_sources(1, "LATEIN", "2026-08-01", "2026-09-30")
+    assert got["notice"] and got["ready"] == 1 and got["missing"] >= 1
+    assert {m["label"] for m in got["missing_items"]} == {"Textband", "Unbekannte Quelle", "Begleitband"}
+    # Vor dem Zeitraum genannt zählt nicht; ohne Stellen und Zettel gibt es nichts zu zeigen.
+    assert sources.exam_sources(1, "LATEIN", "2026-09-20", "2026-09-30") is None
+    assert sources.exam_sources(1, "", "2026-08-01", "2026-09-30") is None
