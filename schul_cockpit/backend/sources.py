@@ -60,8 +60,23 @@ def part_of(text: str) -> tuple[str, str]:
     return best
 
 
+# Ein Arbeitsblatt hat keine Seitenzahl und ist trotzdem die Originalquelle
+# der Aufgabe („Arbeitsblatt beenden"). Es wird als Seite 0 geführt.
+SHEET = re.compile(PARTS[4][0], re.I)
+
+
+def sheet_mentions(text: str) -> list[re.Match]:
+    """Arbeitsblätter, die ohne Seitenangabe genannt sind."""
+    text = text or ""
+    covered = {hit.start() for hit in PAGE.finditer(text)
+               if part_of(text[:hit.start()])[1] == "worksheet"}
+    if covered:
+        return []
+    return list(SHEET.finditer(text))
+
+
 def citations(text: str) -> list[dict]:
-    """Jede Seitenangabe mit dem Buchteil, der davor steht."""
+    """Jede Seitenangabe mit dem Buchteil, der davor steht, dazu Blätter ohne Seite."""
     found = []
     for hit in PAGE.finditer(text or ""):
         first = int(hit.group(1))
@@ -73,6 +88,8 @@ def citations(text: str) -> list[dict]:
         label, kind = part_of(text[:hit.start()])
         found.append({"label": label or "Unbekannte Quelle", "kind": kind or "unknown",
                       "pages": list(range(first, last + 1))})
+    if sheet_mentions(text):
+        found.append({"label": "Arbeitsblatt", "kind": "worksheet", "pages": [0]})
     return found
 
 
@@ -226,6 +243,51 @@ def _shelf(account_id: int) -> dict[str, dict]:
     return books
 
 
+def _sheet_photos(account_id: int) -> dict:
+    """Fotografierte Blätter: an eine Aufgabe gehängt (→ ihre Hausaufgabe) oder
+    lose, je Fach mit Datum."""
+    found: dict = {}
+    with closing(webapp_conn()) as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT id,subject_name,kind,document_date,created_at FROM materials WHERE account_id=? AND hidden=0 "
+            "AND origin!='book_fetch' AND kind IN ('worksheet','handout','other','notes','own_work')", (account_id,))]
+        links = [dict(r) for r in conn.execute(
+            "SELECT l.material_id,l.target_id FROM material_links l JOIN materials m ON m.id=l.material_id "
+            "WHERE l.kind='task' AND m.account_id=?", (account_id,))]
+        tasks = {r["id"]: dict(r) for r in conn.execute("SELECT id,title,notes FROM tasks WHERE account_id=?", (account_id,))}
+    if links:
+        with closing(history_conn()) as hconn:
+            for link in links:
+                task = tasks.get(link["target_id"])
+                if not task:
+                    continue
+                try:
+                    homework = homework_for_task(hconn, account_id, task)
+                except Exception:
+                    homework = None
+                if homework:
+                    found.setdefault(("homework", homework), link["material_id"])
+    for row in rows:
+        day = (row["document_date"] or row["created_at"] or "")[:10]
+        found.setdefault(("loose", (row["subject_name"] or "").strip().casefold()), []).append((day, row["id"]))
+    return found
+
+
+def _sheet_near(sheets: dict, subject: str, entry_date: str, days: int = 5) -> int | None:
+    from datetime import date, timedelta
+    try:
+        anchor = date.fromisoformat(entry_date[:10])
+    except ValueError:
+        return None
+    for day, material_id in sheets.get(("loose", subject), []):
+        try:
+            if abs((date.fromisoformat(day) - anchor).days) <= days:
+                return material_id
+        except ValueError:
+            continue
+    return None
+
+
 def subject_habits(links: list[dict]) -> dict[str, str]:
     """Welchen Buchteil eine Lehrkraft nennt, wenn sie einen nennt.
 
@@ -256,6 +318,7 @@ def refresh_status(account_id: int) -> None:
     nur auf Papier oder ist nicht das Schulbuch — muss fotografiert werden.
     """
     scanned, books, shelf = _scanned_pages(account_id), _book_pages(account_id), _shelf(account_id)
+    sheets = _sheet_photos(account_id)
     stamp = now_iso()
     with closing(webapp_conn()) as conn, conn:
         links = [dict(r) for r in conn.execute("SELECT * FROM source_links WHERE account_id=?", (account_id,))]
@@ -267,6 +330,9 @@ def refresh_status(account_id: int) -> None:
             book = shelf.get(folded)
             stored = books.get(folded, {}).get(page)
             photo = scanned.get(folded, {}).get(page)
+            if page == 0:
+                photo = sheets.get(("homework", link["entry_id"])) or sheets.get(("lesson", link["entry_id"])) \
+                    or _sheet_near(sheets, folded, link["entry_date"])
             habit = habits.get(folded)
             if link["part_kind"] == "unknown" and habit in ("workbook", "worksheet") and not (
                     stored and stored.get("fits_quote") == "ja"):
@@ -382,7 +448,10 @@ def ledger(account_id: int) -> dict:
 
 
 def page_list(pages: list[int]) -> str:
-    """6, 7, 8 und 12 statt einer langen Aufzählung."""
+    """6, 7, 8 und 12 statt einer langen Aufzählung; Seite 0 ist das Blatt selbst."""
+    pages = [p for p in pages if p]
+    if not pages:
+        return "ohne Seitenangabe"
     spans, run = [], []
     for page in sorted(set(pages)):
         if run and page == run[-1] + 1:
@@ -463,6 +532,26 @@ def segments(text: str) -> list[dict]:
         pos = hit.end()
     if pos < len(text):
         out.append({"text": text[pos:]})
+    sheets = sheet_mentions(text)
+    if sheets:
+        first = sheets[0]
+        # Das erste genannte Blatt wird zum Link; sein Stück Text wird geteilt.
+        offset = 0
+        result = []
+        for seg in out:
+            length = len(seg["text"])
+            if "pages" not in seg and offset <= first.start() < offset + length:
+                cut = first.start() - offset
+                if cut:
+                    result.append({"text": seg["text"][:cut]})
+                result.append({"text": first.group(0), "pages": [0], "label": "Arbeitsblatt", "kind": "worksheet"})
+                rest = seg["text"][cut + len(first.group(0)):]
+                if rest:
+                    result.append({"text": rest})
+            else:
+                result.append(seg)
+            offset += length
+        return result
     return out
 
 

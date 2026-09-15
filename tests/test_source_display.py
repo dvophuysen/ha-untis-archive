@@ -123,3 +123,30 @@ def test_untis_tasks_carry_the_assignment_in_their_notes(env):
     assert task["homework_id"] == 9, "ohne Kennung in der Historie zählt der Wortlaut, auch ohne das führende #"
     assert [(s["text"], s["state"]) for s in task["text_segments"] if "pages" in s] == [("p. 28", "missing")]
     assert task["title_segments"] is None and task["source_state"] == "missing"
+
+
+def test_a_worksheet_without_a_page_is_a_missing_source_until_a_photo_hangs_on_the_task(env):
+    history(homework=[(11, 'GE', 'Arbeitsblatt beenden\nText schreiben zu Aufgabe A oder B', '2026-09-11')])
+    assert [(c["label"], c["pages"]) for c in sources.citations("Arbeitsblatt beenden")] == [("Arbeitsblatt", [0])]
+    assert sources.citations("AB S. 3 fertig") == [{"label": "Arbeitsblatt", "kind": "worksheet", "pages": [3]}], "mit Seite zählt die Seite, nicht doppelt"
+    segs = sources.segments("Arbeitsblatt beenden\nText schreiben")
+    assert [s["text"] for s in segs] == ["Arbeitsblatt", " beenden\nText schreiben"] and segs[0]["pages"] == [0]
+    book = sources.ledger(1)
+    need = book["subjects"][0]["missing"][0]
+    assert (need["label"], need["pages_label"], need["reason"]) == ("Arbeitsblatt", "ohne Seitenangabe", "paper")
+    task = {"id": 3, "title": "Geschichte", "subject_name": "GE",
+            "notes": "Arbeitsblatt beenden\nText schreiben zu Aufgabe A oder B\n\nGegeben am: Fr 11.09.\n\n[GE1]"}
+    sources.annotate_tasks(1, [task])
+    assert task["source_state"] == "missing" and task["text_segments"][0]["state"] == "missing"
+    # Das Foto an der Aufgabe macht das Blatt zur vorhandenen Quelle.
+    with closing(db.webapp_conn()) as conn:
+        conn.execute("INSERT INTO tasks(id,account_id,title,task_type,status,source,notes,subject_name,created_at,updated_at) "
+                     "VALUES(3,1,'Geschichte','homework','open','ha_todo',?,'GE','now','now')", (task["notes"],))
+        conn.execute("INSERT INTO materials(account_id,kind,subject_name,title,mime_type,analysis_state,created_at,updated_at) "
+                     "VALUES(1,'worksheet','GE','Blatt','image/jpeg','ready','now','now')")
+        mid = conn.execute("SELECT id FROM materials").fetchone()[0]
+        conn.execute("INSERT INTO material_links(material_id,kind,target_id,origin,created_at) VALUES(?,'task',3,'mensch','now')", (mid,))
+    sources.ledger(1)
+    sources.annotate_tasks(1, [task])
+    assert task["source_state"] == "ready" and task["text_segments"][0]["material_id"] == mid
+    assert sources.ledger(1)["missing_total"] == 0

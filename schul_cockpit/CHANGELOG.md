@@ -1,3 +1,8 @@
+## 0.56.4
+
+- Ein Arbeitsblatt ohne Seitenzahl („Arbeitsblatt beenden") ist eine Quelle: Das Wort wird zum roten Link mit Kamera, bis ein Foto an der Aufgabe hängt oder ein Blatt-Foto des Fachs aus den Tagen um den Eintrag da ist. Auf der Einkaufsliste steht es als „Arbeitsblatt ohne Seitenangabe".
+- Der Auftrag einer Untis-Hausaufgabe stand in der Ansicht zweimal.
+
 ## 0.56.3
 
 - Deutsch trägt wieder ein Icon (Schreibfeder) statt der Flagge; nur Fremdsprachen haben ihre Landesflagge.
