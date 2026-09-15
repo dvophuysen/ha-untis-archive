@@ -199,6 +199,8 @@ async def test_page(account_id:int,book_id:int,page:int) -> dict:
             "detail":delivery["detail"],"shown_page":shots[0][0] if shots else None}
     if shots:
         result["image"]="data:image/jpeg;base64,"+base64.b64encode(_jpeg(shots[0][1])).decode()
+        try: result["image_size"]=list(Image.open(io.BytesIO(shots[0][1])).size)
+        except Exception: result["image_size"]=None
     if seen is not None:
         result["controls"]=seen.controls
         result["documents"]=seen.documents
