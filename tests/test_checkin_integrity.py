@@ -59,7 +59,8 @@ def test_comprehension_ignores_comments_and_supervision_but_gaps_do_not(env):
     patch.setattr(today, 'upcoming_exams', lambda *a, **kw: [])
     patch.setattr(today, 'hidden_keys', lambda a: set())
     patch.setattr(today, 'lesson_is_hidden', lambda *a: False)
-    data=today.today(1, env[1].user)
+    import asyncio
+    data=asyncio.run(today.today(1, env[1].user))
     assert data['summary']['unrated_lessons'] == 2
     assert data['lessons'][0]['checkin']['note'] == 'Material'
 

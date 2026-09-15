@@ -1,7 +1,7 @@
 # Quellen: welche Buchstelle hinter einer Aufgabe steht
 
-Stand: 15.09.2026, abends. Beschreibt umgesetzten Bestand (0.54.0), belegte
-Befunde aus der laufenden Instanz und das noch offene Paket 3.
+Stand: 15.09.2026, abends. Beschreibt umgesetzten Bestand (0.55.0) und belegte
+Befunde aus der laufenden Instanz.
 Keine Kinder- oder Zugangsdaten; Konten werden als „Konto mit Regal" und
 „Konto ohne Regal" unterschieden.
 
@@ -275,13 +275,35 @@ Hintergrund-Rahmen. Der erste Sammellauf hatte 12 Seiten geholt und keine
 gelesen, weil der Hintergrund-Rahmen (5 Euro) bereits zu 4,35 Euro verbraucht
 war.
 
-## Offen: Paket 3
+## Umgesetzt: Einträge ohne Quelle, Fachgewohnheit, Aufforderung (0.55.0)
 
-**Paket 3.** Einträge ohne Seitenangabe gegen Kapiteltitel und Register
-halten, Treffer als Hypothese ablegen und am Seiteninhalt bestätigen.
-Fachgewohnheit: Schreibt eine Lehrkraft in ihren ausdrücklichen Angaben immer
-„AH", gilt für ein nacktes „S. 64" nicht pauschal Schulbuch. Die Aufforderung
-zum Fotografieren im Abendablauf, in den abgestimmten Grenzen.
+**Einträge ohne Seitenangabe (D42).** `book_structure.map_entries` nimmt je
+Buch die neuen Stunden- und Hausaufgabentexte ohne Seitenangabe. Steht eine
+Lektionsnummer im Text, entscheidet `rule_match` ohne Modell; zwei Nummern
+sind keine Zuordnung. Den Rest bekommt das Modell mit dem Inhaltsverzeichnis
+in einem Aufruf je Buch (Zweck `sources`), höchstens 40 Texte je Aufruf, und
+nennt Kapitel oder „keines“ mit Sicherheit; unter 0,6 zählt als keines. Das
+Ergebnis liegt in `entry_chapters` mit dem Hash des Textes, damit nichts
+zweimal gefragt wird und ein geänderter Text neu gefragt wird. Ein so
+erschlossenes Kapitel gilt in `touched_chapters` als angeschnitten, mit
+Kennzeichen `inferred`; die Kapitelregel holt es, die Bilanz und der
+Klausurstoff zeigen die Herkunft.
+
+**Fachgewohnheit (D42).** `sources.subject_habits` zählt je Fach die
+ausdrücklichen Buchteile. Ab drei Angaben mit vier Fünfteln auf demselben Teil
+gilt er für die Stellen ohne Buchteil: Zeigt er auf Arbeitsheft oder Blatt,
+wird die Stelle nicht als Schulbuch geholt, sondern steht mit dem Grund
+`gewohnheit` auf der Einkaufsliste. Eine bereits geholte Seite, deren Inhalt
+zum Zitat passt, bleibt.
+
+**Aufforderung (D43).** `sources.photo_requests` nimmt die Arbeiten der
+nächsten vierzehn Tage (`exams.resolve_exams`, also Klausurplan und Untis) und
+die Papierstellen dieser Fächer, höchstens drei, mit Heft, Seiten und Zitat.
+Die Abendkarte zeigt sie unter „Für die Arbeit brauche ich noch“ mit Sprung
+zur Materialseite; die abendliche Mitteilung zählt „Heftseiten für die Arbeit“
+als offenen Punkt. Ohne Arbeit: nichts.
+
+## Offen
 
 ## Offene Punkte
 

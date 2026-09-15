@@ -33,7 +33,17 @@ def snapshot(account, now):
         if (end and end <= now.strftime('%H:%M') and not lesson.get('is_cancelled')
                 and not lesson.get('was_absent') and lesson.get('id') not in ratings):
             feedback += 1
-    return dict(homework=homework, material=len(items)-bag['confirmed_count'], feedback=feedback)
+    photos = 0
+    try:
+        # Vor einer Arbeit: Heftseiten, die der Unterricht nennt und die weder
+        # digital noch fotografiert vorliegen. Nur zählen; die Karte sagt, welche.
+        from .exams import resolve_exams
+        from .sources import photo_requests
+        exams = asyncio.run(resolve_exams(account, days_ahead=14)).get('exams', [])
+        photos = len(photo_requests(account, exams, now.date().isoformat()))
+    except Exception:
+        LOG.debug('Fotowünsche für Konto %s nicht bestimmbar', account)
+    return dict(homework=homework, material=len(items)-bag['confirmed_count'], feedback=feedback, photos=photos)
 
 
 def due(time_of_day, now):
@@ -51,6 +61,7 @@ def wording(counts):
     if counts['homework']: parts.append('Hausaufgaben')
     if counts['material']: parts.append('Schultasche')
     if counts['feedback']: parts.append('Rückmeldungen')
+    if counts.get('photos'): parts.append('Heftseiten für die Arbeit')
     return ' · '.join(parts)
 
 
@@ -171,6 +182,7 @@ def run_once(now=None):
                 if counts['homework']: parts.append('Hausaufgaben abhaken')
                 if counts['material']: parts.append('Fachmaterial prüfen')
                 if counts['feedback']: parts.append('Stunden zurückmelden')
+                if counts.get('photos'): parts.append('Heftseiten fotografieren')
                 # Generic content is appropriate for a locked screen.
                 payload = dict(title='Noch ein kurzer Tagescheck 🔔', body=' · '.join(parts),
                                url=f'./?acc={account}#/today', tag=f'day-check-{account}')

@@ -42,6 +42,7 @@
   const REASON_HINT = {
     unavailable: 'das digitale Buch liefert diese Seite nicht',
     passt_nicht: 'die Schulbuchseite passt nicht zum Zitat, vermutlich ein anderes Heft',
+    gewohnheit: 'in diesem Fach ist sonst immer das Arbeitsheft gemeint',
   };
   const ACCESS_NAMES = { unknown: 'noch nicht geprüft', proven: 'Abruf nachgewiesen', readable: 'Seite lesbar', blank: 'liefert leere Seiten', viewer_error: 'nicht erreichbar' };
   let collecting = $state(null);
@@ -208,7 +209,7 @@
         {#if subject.pending}<p class="muted">Buchseiten, die ich noch hole: {subject.pending_pages.join(', ')}.</p>{/if}
         {#each subject.chapters ?? [] as chapter}
           <p class="muted">Kapitel {chapter.number} {chapter.title} (S. {chapter.start_page}{chapter.end_page ? `–${chapter.end_page}` : ''}):
-            {chapter.pages_stored} von {chapter.pages} Seiten da{#if chapter.companions?.length}, dazu {chapter.companions.map((c) => c.title).join(', ')}{/if}.</p>
+            {chapter.pages_stored} von {chapter.pages} Seiten da{#if chapter.companions?.length}, dazu {chapter.companions.map((c) => c.title).join(', ')}{/if}{#if chapter.inferred}; aus dem Stundenthema erschlossen, nicht aus einer Seitenangabe{/if}.</p>
         {/each}
         {#each subject.missing as need}
           <div class="need">

@@ -70,11 +70,11 @@ def test_snapshot_uses_due_tasks_material_and_ended_feedback(env):
     patch.setattr(r,'packing_plan',plan)
     with closing(db.webapp_conn()) as c:
         c.execute("INSERT INTO tasks(account_id,title,status,source,due_date,created_at,updated_at) VALUES(1,'Aufgabe','open','manual','2026-09-15','now','now')")
-    assert r.snapshot(1,NOW)==dict(homework=1,material=1,feedback=1)
+    assert r.snapshot(1,NOW)==dict(homework=1,material=1,feedback=1,photos=0)
     with closing(db.webapp_conn()) as c:
         c.execute("UPDATE tasks SET status='done'")
         c.execute("INSERT INTO packing_items VALUES(1,'2026-09-15','subject:math',1,1,'now',2)")
-    assert r.snapshot(1,NOW)==dict(homework=0,material=0,feedback=1)
+    assert r.snapshot(1,NOW)==dict(homework=0,material=0,feedback=1,photos=0)
 
 def test_subscription_rejects_non_provider_endpoints():
     for endpoint in ['http://localhost/push','https://127.0.0.1/push','https://web.push.apple.com.evil.test/push','https://user:pass@web.push.apple.com/push']:

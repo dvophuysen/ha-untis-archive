@@ -29,7 +29,7 @@ def evening_from(account_id: int) -> str:
 
 
 @router.get("/accounts/{account_id}/today")
-def today(
+async def today(
     account_id: int,
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
@@ -107,6 +107,9 @@ def today(
         "upcoming_exams": exams,
         "next": next_block,
         "evening_from": evening_from(account_id),
+        # Vor einer Arbeit: Heftseiten, die der Unterricht nennt und die weder
+        # digital noch fotografiert vorliegen. Höchstens drei Bitten.
+        "photo_requests": await photo_requests(account_id, today_iso),
         # Ob der Tag schon durchgegangen wurde — davon hängt die Abendkarte ab
         # und am nächsten Morgen die zweite Mitteilung.
         "day_close": {
@@ -114,3 +117,13 @@ def today(
             "reliability": day_close.reliability(account_id, today_date),
         },
     }
+
+
+async def photo_requests(account_id: int, day: str) -> list[dict]:
+    try:
+        from ..exams import resolve_exams
+        from ..sources import photo_requests as requests
+        found = (await resolve_exams(account_id, days_ahead=14)).get("exams", [])
+        return requests(account_id, found, day)
+    except Exception:
+        return []

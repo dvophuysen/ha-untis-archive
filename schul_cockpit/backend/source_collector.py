@@ -212,6 +212,15 @@ async def collect(account_id: int, budget: int = PAGE_BUDGET) -> dict:
         summary.setdefault("toc", {})[short_title(book["title"])] = outcome.get("state")
         remaining -= len(outcome.get("pages") or [])
         read += 1
+    # Stunden ohne Seitenangabe ihrem Kapitel zuordnen, je Buch ein Aufruf.
+    from .book_structure import map_entries
+    try:
+        mapped = await map_entries(account_id)
+        if any(mapped.values()):
+            summary["mapped"] = mapped
+            read += 1
+    except Exception:
+        log.warning("Kapitelzuordnung für Konto %s ausgesetzt", account_id, exc_info=True)
     if read:
         sources.sync_links(account_id)
         sources.refresh_status(account_id)

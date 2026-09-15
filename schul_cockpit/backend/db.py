@@ -677,6 +677,28 @@ _MIGRATIONS.append(("textbook_access_toc_pages", "ALTER TABLE digital_textbook_a
 _MIGRATIONS.append(("ai_config_sources_budget",
                     "ALTER TABLE mentor_ai_config ADD COLUMN sources_micro INTEGER NOT NULL DEFAULT 15000000"))
 
+# Stunden ohne Seitenangabe: Welches Kapitel behandelt diesen Stoff? Erst
+# eine Regel (die Lektionsnummer im Text), dann das Modell mit dem
+# Inhaltsverzeichnis. Eine Hypothese, als solche gekennzeichnet; auch ein
+# „kein Kapitel" wird gespeichert, damit nicht jede Nacht neu gefragt wird.
+_MIGRATIONS.append(("entry_chapters_001", """
+CREATE TABLE IF NOT EXISTS entry_chapters (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ account_id INTEGER NOT NULL,
+ entry_kind TEXT NOT NULL,
+ entry_id INTEGER NOT NULL,
+ entry_date TEXT NOT NULL,
+ subject_name TEXT NOT NULL,
+ book_title TEXT NOT NULL,
+ chapter_id INTEGER,
+ confidence REAL NOT NULL DEFAULT 0,
+ origin TEXT NOT NULL,
+ text_hash TEXT NOT NULL,
+ created_at TEXT NOT NULL,
+ UNIQUE(account_id,entry_kind,entry_id)
+);
+"""))
+
 
 def history_conn() -> sqlite3.Connection:
     """Read-only connection to the UNTIS Archive's history.db."""
