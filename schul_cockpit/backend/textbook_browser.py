@@ -36,13 +36,12 @@ def browser_arguments(*extra_args: str, software_webgl: bool = True) -> list[str
 
     The BiBox reader draws its pages with WebGL. With --disable-gpu, WebGL is
     gone entirely: the reader keeps toolbar and page counter, shows a white
-    void and reports "CanvasRenderer is not yet implemented". Without a GPU,
-    Chromium can render WebGL in software (SwiftShader); since Chromium 126
-    that needs an explicit opt-in. --ignore-gpu-blocklist is deliberately
-    absent: on the Raspberry Pi it made the browser probe a GPU it cannot
-    reach, and the start never came back.
+    void and reports "CanvasRenderer is not yet implemented". Alpine's
+    Chromium carries no SwiftShader, so software WebGL comes from Mesa's
+    Lavapipe through ANGLE's Vulkan backend; software drivers are on the GPU
+    blocklist and need --ignore-gpu-blocklist.
     """
-    gpu = (["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+    gpu = (["--use-gl=angle", "--use-angle=vulkan", "--ignore-gpu-blocklist"]
            if software_webgl else ["--disable-gpu"])
     return ["--headless", "--no-sandbox", "--disable-dev-shm-usage", *gpu, "--lang=de-DE", *extra_args]
 
@@ -60,6 +59,12 @@ def _start(arguments: list[str]) -> webdriver.Chrome:
     return driver
 
 
+# Whether the browser came up with software WebGL in this process. A failed
+# start costs two minutes of waiting on the driver, so it is tried once and
+# remembered until the add-on restarts.
+_SOFTWARE_WEBGL_WORKS: bool | None = None
+
+
 def _driver(*extra_args: str) -> webdriver.Chrome:
     """Headless Chromium on the driver shipped in the image. Without the
     explicit service, Selenium Manager first tries to download one and fails
@@ -68,14 +73,18 @@ def _driver(*extra_args: str) -> webdriver.Chrome:
     Software WebGL first; if the browser does not come up that way, once more
     without a GPU, so the readers that never needed WebGL keep working.
     """
-    started = time.monotonic()
-    try:
-        driver = _start(browser_arguments(*extra_args))
-        _LOGGER.info("textbook browser up after %.1fs (software WebGL)", time.monotonic() - started)
-        return driver
-    except Exception as exc:
-        _LOGGER.warning("textbook browser start with software WebGL failed after %.1fs: %s; retrying without GPU",
-                        time.monotonic() - started, type(exc).__name__)
+    global _SOFTWARE_WEBGL_WORKS
+    if _SOFTWARE_WEBGL_WORKS is not False:
+        started = time.monotonic()
+        try:
+            driver = _start(browser_arguments(*extra_args))
+            _SOFTWARE_WEBGL_WORKS = True
+            _LOGGER.info("textbook browser up after %.1fs (software WebGL)", time.monotonic() - started)
+            return driver
+        except Exception as exc:
+            _SOFTWARE_WEBGL_WORKS = False
+            _LOGGER.warning("textbook browser start with software WebGL failed after %.1fs: %s; "
+                            "running without GPU until the next restart", time.monotonic() - started, type(exc).__name__)
     started = time.monotonic()
     driver = _start(browser_arguments(*extra_args, software_webgl=False))
     _LOGGER.info("textbook browser up after %.1fs (no GPU)", time.monotonic() - started)
@@ -1322,12 +1331,17 @@ let r="";try{const d=g&&g.getExtension("WEBGL_debug_renderer_info");r=g&&d?g.get
 document.body.textContent="RESULT webgl="+!!g+" webgl2="+!!g2+" renderer="+r;
 </script></body>"""
 
+# Alpine's Chromium has no SwiftShader driver (no libvk_swiftshader.so), so
+# the "swiftshader" ANGLE backend cannot initialise. The image therefore
+# carries Mesa: Lavapipe as a software Vulkan driver, llvmpipe for GL.
 PROBE_VARIANTS: dict[str, list[str]] = {
     "ohne GPU": ["--disable-gpu"],
+    "ANGLE auf Vulkan (Lavapipe)": ["--use-gl=angle", "--use-angle=vulkan", "--ignore-gpu-blocklist"],
+    "ANGLE auf Vulkan mit Vulkan-Compositing": ["--use-gl=angle", "--use-angle=vulkan", "--ignore-gpu-blocklist",
+                                               "--enable-features=Vulkan"],
+    "ANGLE auf GL (llvmpipe)": ["--use-gl=angle", "--use-angle=gl", "--ignore-gpu-blocklist"],
+    "natives EGL": ["--use-gl=egl", "--ignore-gpu-blocklist"],
     "SwiftShader": ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
-    "SwiftShader im Prozess": ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--in-process-gpu"],
-    "SwiftShader ohne GPU-Sandbox": ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--disable-gpu-sandbox"],
-    "Standard": [],
 }
 
 
@@ -1345,6 +1359,8 @@ def probe_browser(seconds: float = 40.0) -> dict:
         report["version"] = type(exc).__name__
     report["gl_libraries"] = sorted(os.path.basename(p) for p in glob.glob("/usr/lib/chromium/*.so*")
                                     if re.search(r"(swiftshader|EGL|GLES|vulkan|angle)", p, re.I))
+    report["vulkan_drivers"] = sorted(os.path.basename(p) for p in glob.glob("/usr/share/vulkan/icd.d/*.json"))
+    report["dri_drivers"] = sorted(os.path.basename(p) for p in glob.glob("/usr/lib/dri/*.so"))
     with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False) as handle:
         handle.write(_PROBE_PAGE)
         page = handle.name

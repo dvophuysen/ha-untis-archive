@@ -1,3 +1,8 @@
+## 0.52.6
+
+- Der Browser des Add-ons bekommt eine Software-GPU. Die Browser-Prüfung aus 0.52.5 hat gezeigt: Das Chromium von Alpine bringt keinen SwiftShader-Treiber mit, jede GPU-Einstellung scheiterte an einer fehlenden Vulkan-Erweiterung, der GPU-Prozess startete in Schleife neu und der Browser kam zwei Minuten lang nicht hoch. Das Image enthält jetzt Mesa mit Lavapipe (Software-Vulkan) und llvmpipe (Software-GL); WebGL läuft über ANGLE auf Vulkan. Ein WebGL-Start, der fehlschlägt, wird bis zum nächsten Neustart nicht wiederholt, damit kein Abruf mehr zwei Minuten verliert.
+- Die Browser-Prüfung probiert die Mesa-Varianten durch und listet die vorhandenen Vulkan- und DRI-Treiber.
+
 ## 0.52.5
 
 - Browser-Prüfung für die Eltern-Diagnose: Chromium wird mit mehreren GPU-Einstellungen direkt gestartet und meldet, ob WebGL zur Verfügung steht und was der Browser dazu sagt. Hintergrund: Der Browser des Add-ons kommt auf dem Raspberry Pi mit jeder GPU-Einstellung nicht hoch, ohne GPU zeichnet der BiBox-Betrachter aber keine Seiten. Kein Portal und kein Zugang werden dabei berührt.

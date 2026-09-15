@@ -19,7 +19,12 @@ ENV LANG=C.UTF-8 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-RUN apk add --no-cache sqlite-libs libffi openssl chromium chromium-chromedriver nss freetype harfbuzz ttf-freefont poppler-utils
+# mesa-vulkan-swrast (Lavapipe) and the Mesa GL stack give Chromium a
+# software GPU. Alpine's Chromium ships no SwiftShader driver, so without
+# them WebGL is unavailable and readers that draw with WebGL (BiBox) show
+# an empty page.
+RUN apk add --no-cache sqlite-libs libffi openssl chromium chromium-chromedriver nss freetype harfbuzz ttf-freefont poppler-utils \
+        mesa-vulkan-swrast mesa-egl mesa-gles mesa-gl mesa-dri-gallium
 
 WORKDIR /app
 
