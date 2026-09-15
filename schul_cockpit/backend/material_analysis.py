@@ -273,7 +273,12 @@ async def analyze(account_id: int, material_id: int) -> bool:
     if text:
         context["dokumenttext"] = text[:20000]
     try:
-        purpose = ai.SOURCES if (row["origin"] if "origin" in row.keys() else "") == "book_fetch" else "background"
+        # Buch- und Heftseiten, Verzeichnisse und Klausurzettel sind Quellen
+        # und laufen im Quellen-Rahmen (D41), nicht im Tagesrahmen des Kontos:
+        # 26 Latein-Uploads an einem Nachmittag scheiterten sonst mit 429.
+        source_like = (row["origin"] if "origin" in row.keys() else "") == "book_fetch" or \
+            row["kind"] in ("book_page", "workbook", "toc", "exam_notice")
+        purpose = ai.SOURCES if source_like else "background"
         raw, _, _ = await ai.complete(
             account_id, purpose, INSTRUCTION + json.dumps(Insight.model_json_schema()),
             context, images, max_output=8000)
