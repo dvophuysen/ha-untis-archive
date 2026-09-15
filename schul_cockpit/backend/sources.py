@@ -622,15 +622,15 @@ def ledger(account_id: int) -> dict:
             "book_access": (book or {}).get("access"),
         })
     subjects.sort(key=lambda s: (-s["missing_count"], -s["pending"], s["subject"]))
-    books = [{"title": book["title"], "subject": subject, "pages_stored": stored.get(book["title"], 0),
-              "access": book.get("access")} for subject, book in sorted(shelf.items())]
-    # Papierbücher stehen mit dazu: was von ihnen fotografiert vorliegt.
     from .book_structure import paper_books, units_of
+    books = [{"title": book["title"], "subject": subject, "part_label": "Schulbuch", "pages_stored": stored.get(book["title"], 0),
+              "units": units_of(account_id, book["title"]), "access": book.get("access")} for subject, book in sorted(shelf.items())]
+    # Papierbücher stehen mit dazu: was von ihnen fotografiert vorliegt.
     scanned = _scanned_pages(account_id)
     for paper in paper_books(account_id):
         pages = {page for (have, page) in scanned.get(paper["subject_name"].casefold(), {}) if serves(have, paper["part_label"])}
-        books.append({"title": paper["title"], "subject": paper["subject_name"].casefold(), "pages_stored": len(pages),
-                      "units": units_of(account_id, paper["title"]),
+        books.append({"title": paper["title"], "subject": paper["subject_name"].casefold(), "part_label": paper["part_label"],
+                      "pages_stored": len(pages), "units": units_of(account_id, paper["title"]),
                       "access": {"status": "paper", "toc_state": paper["toc_state"], "page": None, "checked_at": paper["updated_at"], "detail": None}})
     return {"since": sync["since"], "subjects": subjects,
             "missing_total": sum(s["missing_count"] for s in subjects),

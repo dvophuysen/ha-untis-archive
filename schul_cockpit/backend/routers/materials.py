@@ -174,6 +174,36 @@ async def collect_sources(account_id: int, user: CurrentUser = Depends(get_curre
     return start_collect(account_id)
 
 
+class ChapterPatch(InputModel):
+    start_page: int | None = Field(default=None, ge=1, le=1999)
+    end_page: int | None = Field(default=None, ge=0, le=1999)
+    number: str | None = Field(default=None, max_length=20)
+    title: str | None = Field(default=None, max_length=160)
+
+
+@router.patch("/sources/chapters/{chapter_id}")
+def correct_chapter(account_id: int, chapter_id: int, body: ChapterPatch,
+                    user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Ein gelesenes Kapitel von Hand berichtigen; die Korrektur überlebt
+    jedes neue Lesen. Danach werden die Stellen sofort neu gebunden."""
+    access(user, account_id, write=True, parent=True)
+    changes = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
+    if "end_page" in changes and changes["end_page"] == 0:
+        changes["end_page"] = None
+    if not changes:
+        raise HTTPException(422, "Nichts zu ändern.")
+    from ..book_structure import update_chapter
+    fixed = update_chapter(account_id, chapter_id, changes)
+    if not fixed:
+        raise HTTPException(404, "Kapitel nicht gefunden.")
+    try:
+        sources.sync_links(account_id)
+        sources.refresh_status(account_id)
+    except Exception:
+        _LOGGER.warning("Stellen nach Kapitelkorrektur nicht neu gebunden", exc_info=True)
+    return fixed
+
+
 @router.get("/sources/collect")
 def collect_sources_state(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
     access(user, account_id)

@@ -295,3 +295,58 @@ def test_the_notice_rule_only_joins_the_grouping_when_a_notice_is_present():
     from backend import exam_scope
     assert exam_scope.Group(category="context", title="Nicht angekündigt", detail="Behandelt, nicht genannt", ids=[1])
     assert exam_scope.NOTICE_PREFIX in exam_scope.NOTICE_RULE or "Ankündigung der Lehrkraft" in exam_scope.NOTICE_RULE
+
+
+def test_photographed_contents_serve_the_digital_book_whose_contents_were_not_found(env, monkeypatch):
+    # Spanisch hat ein digitales Buch, dessen Verzeichnis der Abruf auf den
+    # Seiten 2 bis 9 nicht fand. Fotos der Inhaltsseiten gelten dann für
+    # dieses Buch, und der Sammellauf holt danach ganze Kapitel.
+    history(lessons=[(1, "2026-09-11", "SPANISCH", '{"su": [{"name": "SN"}]}', "Repaso (#libro, p. 50)")])
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO digital_textbook_catalog(account_id,subject_name,title,discovered_at) VALUES(1,'spanisch','¡Apúntate! 2','now')")
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,source_label,source_page,file_bytes,mime_type,created_at,updated_at) "
+                  "VALUES(1,'toc','SPANISCH','Inhalt','Schulbuch',2,?,'image/jpeg','now','now')", (photo(),))
+
+    async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None):
+        assert context["buch"] == "¡Apúntate! 2"
+        return json.dumps({"is_toc": True, "continues": False, "chapters": [
+            {"number": "Unidad 3", "title": "¡Acércate!", "start_page": 48, "level": 1},
+            {"number": "Unidad 4", "title": "De viaje", "start_page": 62, "level": 1}]}), 0, 0
+    monkeypatch.setattr(bs.ai, "complete", complete)
+    result = asyncio.run(bs.read_paper_toc(1, "SPANISCH", "Schulbuch"))
+    assert result["digital"] and result["title"] == "¡Apúntate! 2" and result["chapters"] == 2
+    assert bs.toc_state(1, "¡Apúntate! 2") == "ready", "der Sammellauf sucht das Verzeichnis nicht mehr"
+    assert bs.paper_books(1, "SPANISCH") == []
+    spanish = sources.ledger(1)["subjects"][0]
+    assert [(c["number"], c["pages"]) for c in spanish["chapters"]] == [("Unidad 3", 14)]
+    assert spanish["pending"] == 14, "die ganze Unidad wird geholt, nicht nur Seite 50"
+
+
+def test_a_corrected_chapter_keeps_its_pages_through_a_new_reading(env):
+    from backend.book_structure import Chapter, store_chapters, update_chapter, chapters_of
+    client, state, _ = env
+    client.app.include_router(materials_routes.router, prefix="/api")
+    title = bs.paper_title("LATEIN", "Begleitband")
+    reading = [Chapter(number="10", title="Wortschatz", start_page=64, level=1),
+               Chapter(number="11", title="Wortschatz", start_page=69, level=1),
+               Chapter(number="12", title="Wortschatz", start_page=75, level=1),
+               Chapter(number="13", title="Wortschatz", start_page=84, level=1)]
+    store_chapters(1, title, reading)
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO paper_books(account_id,subject_name,part_label,title,toc_state,updated_at) VALUES(1,'LATEIN','Begleitband',?,'read','now')", (title,))
+    history(lessons=[(1, "2026-09-11", "LATEIN", LA, "BB S. 70")])
+    by_number = {c["number"]: c for c in chapters_of(1, title)}
+    assert (by_number["10"]["end_page"], by_number["11"]["start_page"]) == (68, 69)
+    # Lektion 11 beginnt laut Foto auf S. 70, das Modell las 69.
+    reply = client.patch(f"/api/accounts/1/materials/sources/chapters/{by_number['11']['id']}", json={"start_page": 70})
+    assert reply.status_code == 200, reply.text
+    by_number = {c["number"]: c for c in chapters_of(1, title)}
+    assert (by_number["10"]["end_page"], by_number["11"]["start_page"], by_number["11"]["end_page"]) == (69, 70, 74)
+    assert by_number["11"]["locked"] == 1
+    # Ein neues Lesen bringt wieder 69; die Korrektur bleibt.
+    store_chapters(1, title, reading)
+    by_number = {c["number"]: c for c in chapters_of(1, title)}
+    assert (by_number["10"]["end_page"], by_number["11"]["start_page"]) == (69, 70)
+    latin = sources.ledger(1)["subjects"][0]
+    assert {m["label"]: m["pages"] for m in latin["missing"]} == {"Begleitband": [70, 71, 72, 73, 74]}
+    assert client.patch("/api/accounts/1/materials/sources/chapters/99999", json={"start_page": 5}).status_code == 404

@@ -135,37 +135,86 @@ async def _read(account_id: int, book, shots: list[bytes], limit: int = 4, join:
     return None
 
 
+def _end_of(index: int, ordered: list[dict]) -> int | None:
+    """Ein Kapitel endet, wo das nächste derselben oder einer höheren Ebene
+    beginnt; ein Anhang endet am nächsten Anhang. Mehr als sechzig Seiten
+    holt kein Kapitel: Das letzte vor dem Register läse sich sonst bis dorthin."""
+    chapter = ordered[index]
+    end = None
+    for later in ordered[index + 1:]:
+        if later["level"] <= chapter["level"] or later["kind"] != chapter["kind"]:
+            end = later["start_page"] - 1
+            break
+    if end is not None and end < chapter["start_page"]:
+        end = None
+    if end is not None and end - chapter["start_page"] >= MAX_CHAPTER_PAGES:
+        end = chapter["start_page"] + MAX_CHAPTER_PAGES - 1
+    return end
+
+
 def store_chapters(account_id: int, title: str, chapters: list[Chapter]) -> int:
-    """Kapitel ablegen; ein Kapitel endet, wo das nächste derselben Ebene beginnt."""
-    ordered = sorted(chapters, key=lambda c: (c.start_page, c.level))
+    """Kapitel ablegen. Von Hand berichtigte Kapitel (locked) behalten ihre
+    Seiten, auch wenn das Verzeichnis neu gelesen wird."""
     stamp = now_iso()
+    rows = []
+    for chapter in chapters:
+        kind = chapter.kind if chapter.kind in ("chapter", "vocab", "grammar", "appendix") else "chapter"
+        if chapter.number.strip() and chapter.level == 1 and kind in ("vocab", "grammar"):
+            # Eine nummerierte Lektion ist ein Kapitel, auch wenn sie im
+            # Begleitband „Wortschatz" heißt; Vokabel- und Grammatikteile
+            # sind die unnummerierten Anhänge einer Lektion.
+            kind = "chapter"
+        rows.append({"number": chapter.number.strip(), "title": chapter.title.strip(), "kind": kind, "level": chapter.level,
+                     "start_page": chapter.start_page, "end_page": chapter.end_page,
+                     "belongs_to": chapter.belongs_to.strip() or None, "locked": 0})
     with closing(webapp_conn()) as conn, conn:
+        kept = [dict(r) for r in conn.execute(
+            "SELECT * FROM book_chapters WHERE account_id=? AND book_title=? AND locked=1", (account_id, title))]
+        for fixed in kept:
+            match = next((r for r in rows if r["number"] == fixed["number"] and r["level"] == fixed["level"]
+                          and (fixed["number"] or r["title"].casefold() == fixed["title"].casefold())), None)
+            if match:
+                match.update(start_page=fixed["start_page"], end_page=fixed["end_page"], title=fixed["title"], locked=1)
+            else:
+                rows.append({k: fixed[k] for k in ("number", "title", "kind", "level", "start_page", "end_page", "belongs_to")} | {"locked": 1})
+        ordered = sorted(rows, key=lambda c: (c["start_page"], c["level"]))
         conn.execute("DELETE FROM book_chapters WHERE account_id=? AND book_title=?", (account_id, title))
-        for i, chapter in enumerate(ordered):
-            end = chapter.end_page
-            if end is None:
-                for later in ordered[i + 1:]:
-                    if later.level <= chapter.level or later.kind != chapter.kind:
-                        end = later.start_page - 1
-                        break
-            if end is not None and end < chapter.start_page:
-                end = None
-            if end is not None and end - chapter.start_page >= MAX_CHAPTER_PAGES:
-                # Das letzte Kapitel vor dem Anhang liest sich sonst bis zum
-                # Register. Mehr als sechzig Seiten holt kein Kapitel.
-                end = chapter.start_page + MAX_CHAPTER_PAGES - 1
-            kind = chapter.kind if chapter.kind in ("chapter", "vocab", "grammar", "appendix") else "chapter"
-            if chapter.number.strip() and chapter.level == 1 and kind in ("vocab", "grammar"):
-                # Eine nummerierte Lektion ist ein Kapitel, auch wenn sie im
-                # Begleitband „Wortschatz" heißt; Vokabel- und Grammatikteile
-                # sind die unnummerierten Anhänge einer Lektion.
-                kind = "chapter"
+        for i, row in enumerate(ordered):
+            end = row["end_page"] if row["locked"] or row["end_page"] is not None else _end_of(i, ordered)
             conn.execute(
-                "INSERT INTO book_chapters(account_id,book_title,number,title,kind,level,start_page,end_page,belongs_to,created_at) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?)",
-                (account_id, title, chapter.number.strip(), chapter.title.strip(), kind,
-                 chapter.level, chapter.start_page, end, chapter.belongs_to.strip() or None, stamp))
+                "INSERT INTO book_chapters(account_id,book_title,number,title,kind,level,start_page,end_page,belongs_to,created_at,locked) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (account_id, title, row["number"], row["title"], row["kind"], row["level"], row["start_page"], end,
+                 row["belongs_to"], stamp, row["locked"]))
     return len(ordered)
+
+
+def update_chapter(account_id: int, chapter_id: int, changes: dict) -> dict | None:
+    """Ein Kapitel von Hand berichtigen: Anfangsseite, Endseite, Nummer, Titel.
+    Die Nachbarn enden danach wieder, wo dieses beginnt; die Zeile bleibt
+    gegen jedes neue Lesen gesperrt. Der Verzeichnisleser richtet den Blick
+    nicht immer auf dieselbe Zeile wie die Seitenzahl daneben."""
+    with closing(webapp_conn()) as conn, conn:
+        row = conn.execute("SELECT * FROM book_chapters WHERE id=? AND account_id=?", (chapter_id, account_id)).fetchone()
+        if not row:
+            return None
+        title = row["book_title"]
+        fields = {k: changes[k] for k in ("start_page", "end_page", "number", "title") if k in changes}
+        if "end_page" in fields and fields["end_page"] is not None and fields["end_page"] < fields.get("start_page", row["start_page"]):
+            fields["end_page"] = None
+        assignments = ",".join(f"{k}=?" for k in fields)
+        conn.execute(f"UPDATE book_chapters SET {assignments}{',' if assignments else ''}locked=1 WHERE id=?",
+                     (*fields.values(), chapter_id))
+        ordered = [dict(r) for r in conn.execute(
+            "SELECT * FROM book_chapters WHERE account_id=? AND book_title=? ORDER BY start_page,level", (account_id, title))]
+        for i, unit in enumerate(ordered):
+            if unit["locked"] and unit["id"] != chapter_id:
+                continue
+            end = unit["end_page"] if unit["id"] == chapter_id and "end_page" in fields else _end_of(i, ordered)
+            if end != unit["end_page"]:
+                conn.execute("UPDATE book_chapters SET end_page=? WHERE id=?", (end, unit["id"]))
+        fixed = dict(conn.execute("SELECT * FROM book_chapters WHERE id=?", (chapter_id,)).fetchone())
+    return fixed
 
 
 async def read_toc(account_id: int, book, credentials) -> dict:
@@ -320,9 +369,11 @@ def paper_books(account_id: int, subject: str | None = None) -> list[dict]:
 
 
 def units_of(account_id: int, title: str) -> list[dict]:
-    """Die Einheiten der obersten Ebene, für die Anzeige des gelesenen Verzeichnisses."""
-    return [{"number": c["number"], "title": c["title"], "kind": c["kind"], "start_page": c["start_page"], "end_page": c["end_page"]}
-            for c in chapters_of(account_id, title) if c["level"] == 1]
+    """Die Einheiten der obersten beiden Ebenen, für Anzeige und Korrektur
+    des gelesenen Verzeichnisses."""
+    return [{"id": c["id"], "number": c["number"], "title": c["title"], "kind": c["kind"], "level": c["level"],
+             "start_page": c["start_page"], "end_page": c["end_page"], "locked": bool(c.get("locked"))}
+            for c in chapters_of(account_id, title) if c["level"] <= 2]
 
 
 def paper_title(subject: str, part_label: str) -> str:
@@ -337,8 +388,16 @@ async def read_paper_toc(account_id: int, subject: str, part_label: str) -> dict
     sind zusammen das Verzeichnis; jedes weitere Foto liest es neu.
     """
     from . import materials as store
+    from .sources import _shelf, book_serves
     subject = store.canonical_subject(account_id, subject) or subject
     title = paper_title(subject, part_label)
+    # Gehört der Buchteil zum digitalen Buch im Regal, dessen Verzeichnis der
+    # Abruf nicht fand (Spanisch, Englisch, Geschichte), gelten die Fotos für
+    # dieses Buch: Die Kapitelregel und der Abruf ganzer Kapitel greifen dann.
+    digital = _shelf(account_id).get(subject.casefold())
+    digital_title = digital["title"] if digital and book_serves(digital["title"], part_label) else None
+    if digital_title:
+        title = digital_title
     with closing(webapp_conn()) as conn:
         rows = conn.execute(
             "SELECT id,file_bytes,mime_type,source_page FROM materials WHERE account_id=? AND hidden=0 AND kind='toc' "
@@ -355,12 +414,13 @@ async def read_paper_toc(account_id: int, subject: str, part_label: str) -> dict
         else:
             shots.append(row["file_bytes"])
     stamp = now_iso()
-    with closing(webapp_conn()) as conn, conn:
-        conn.execute(
-            "INSERT INTO paper_books(account_id,subject_name,part_label,title,toc_state,toc_pages,updated_at) "
-            "VALUES(?,?,?,?,'reading',?,?) ON CONFLICT(account_id,subject_name,part_label) DO UPDATE SET "
-            "title=excluded.title,toc_state='reading',toc_pages=excluded.toc_pages,updated_at=excluded.updated_at",
-            (account_id, subject, part_label, title, len(rows), stamp))
+    if not digital_title:
+        with closing(webapp_conn()) as conn, conn:
+            conn.execute(
+                "INSERT INTO paper_books(account_id,subject_name,part_label,title,toc_state,toc_pages,updated_at) "
+                "VALUES(?,?,?,?,'reading',?,?) ON CONFLICT(account_id,subject_name,part_label) DO UPDATE SET "
+                "title=excluded.title,toc_state='reading',toc_pages=excluded.toc_pages,updated_at=excluded.updated_at",
+                (account_id, subject, part_label, title, len(rows), stamp))
     toc = await _read(account_id, {"title": title, "subject_name": subject}, shots[:6], limit=6, join=False) if shots else None
     count = 0
     if toc and toc.is_toc and toc.chapters:
@@ -368,11 +428,15 @@ async def read_paper_toc(account_id: int, subject: str, part_label: str) -> dict
         state = "read"
     else:
         state = "none" if toc else "failed"
-    with closing(webapp_conn()) as conn, conn:
-        conn.execute("UPDATE paper_books SET toc_state=?,updated_at=? WHERE account_id=? AND subject_name=? AND part_label=?",
-                     (state, now_iso(), account_id, subject, part_label))
+    if digital_title:
+        # Für den Sammellauf ist das Verzeichnis damit erledigt oder weiter offen.
+        _set_state(account_id, title, "ready" if state == "read" else "failed", [])
+    else:
+        with closing(webapp_conn()) as conn, conn:
+            conn.execute("UPDATE paper_books SET toc_state=?,updated_at=? WHERE account_id=? AND subject_name=? AND part_label=?",
+                         (state, now_iso(), account_id, subject, part_label))
     log.info("Inhaltsverzeichnis %s: %s, %s Einträge", title, state, count)
-    return {"state": state, "title": title, "chapters": count}
+    return {"state": state, "title": title, "chapters": count, "digital": bool(digital_title)}
 
 
 def _bind_units(account_id: int, subject: str, units: dict, part_label: str, stamp: str) -> int:

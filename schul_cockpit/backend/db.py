@@ -736,6 +736,8 @@ CREATE TABLE IF NOT EXISTS paper_books (
 # der App zählt seit 0.58.1 nicht mehr dagegen.
 _MIGRATIONS.append(("ai_config_daily_ten",
                     "ALTER TABLE mentor_ai_config ADD COLUMN daily_micro INTEGER NOT NULL DEFAULT 10000000"))
+# Ein von Hand berichtigtes Kapitel überlebt jedes neue Lesen des Verzeichnisses.
+_MIGRATIONS.append(("book_chapters_locked", "ALTER TABLE book_chapters ADD COLUMN locked INTEGER NOT NULL DEFAULT 0"))
 _MIGRATIONS.append(("book_chapters_numbered_units",
                     "UPDATE book_chapters SET kind='chapter' WHERE level=1 AND number!='' AND kind IN ('vocab','grammar')"))
 
