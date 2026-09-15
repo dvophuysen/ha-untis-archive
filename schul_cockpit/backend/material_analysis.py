@@ -290,8 +290,16 @@ async def compare(account_id: int, material_id: int, model: str) -> dict:
     if not row:
         raise ValueError("Material nicht gefunden")
     insight, key = await extract(account_id, row, model=model)
+    import re as _re
     stored = row["content_text"] or ""
     ratio = difflib.SequenceMatcher(None, " ".join(stored.split()), " ".join(insight.content_text.split())).ratio()
+    # Die Reihenfolge einer Tabelle oder die Beschreibung eines Bildes darf
+    # abweichen; ob jedes Wort und jede Zahl der Seite da ist, nicht.
+    words_stored = set(_re.findall(r"\w+", stored.casefold()))
+    words_read = set(_re.findall(r"\w+", insight.content_text.casefold()))
+    recall = len(words_stored & words_read) / len(words_stored) if words_stored else 0.0
+    precision = len(words_stored & words_read) / len(words_read) if words_read else 0.0
+    missing_words = sorted(words_stored - words_read, key=lambda w: (-len(w), w))[:25]
     with closing(webapp_conn()) as conn:
         call = conn.execute("SELECT charged_micro,reserved_micro,status FROM mentor_ai_calls WHERE id=?", (key,)).fetchone()
     printed = [int(p) for p in insight.printed_pages if 0 < int(p) < 2000]
@@ -307,7 +315,8 @@ async def compare(account_id: int, material_id: int, model: str) -> dict:
         "stored_pages": stored_pages, "read_pages": printed, "pages_match": bool(stored_pages) and stored_pages[0] in printed,
         "stored_part": row["source_label"], "read_part": insight.book_part.strip() or None,
         "part_match": (row["source_label"] or None) == (insight.book_part.strip() or None),
-        "text_ratio": round(ratio, 3), "stored_chars": len(stored), "read_chars": len(insight.content_text),
+        "text_ratio": round(ratio, 3), "word_recall": round(recall, 3), "word_precision": round(precision, 3),
+        "missing_words": missing_words, "stored_chars": len(stored), "read_chars": len(insight.content_text),
         "confidence": insight.confidence, "unreadable": insight.unreadable,
         "cost_eur": round(((call["charged_micro"] if call and call["status"] == "settled" and call["charged_micro"] else (call["reserved_micro"] if call else 0)) or 0) / 1e6, 4),
         "read_text": insight.content_text[:600],
