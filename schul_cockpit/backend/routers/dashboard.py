@@ -277,20 +277,24 @@ def _plan_for_account(account_id: int, today: date) -> dict:
 
 def _feedback_gap(account_id: int, today: date) -> dict:
     """Stunden der letzten 7 Tage, die tatsächlich stattgefunden haben
-    (nicht cancelled, Kind nicht abwesend) und noch keinen Checkin haben."""
+    (nicht cancelled, Kind nicht abwesend, kein ausgeblendeter Kurs) und
+    noch keinen Checkin haben. Ausgeblendete Kurse zählen nicht: Noahs
+    Französisch und Religion, die er nicht besucht, standen sonst als „zwei
+    Rückmeldungen offen" da, ohne im Stundenplan zu erscheinen."""
     horizon = (today - timedelta(days=FEEDBACK_GAP_DAYS)).isoformat()
     today_iso = today.isoformat()
+    hidden = hidden_keys(account_id)
     hconn = history_conn()
     wconn = webapp_conn()
     try:
         lesson_rows = hconn.execute(
-            "SELECT id FROM lessons WHERE account_id = ? "
+            "SELECT * FROM lessons WHERE account_id = ? "
             "AND date >= ? AND date <= ? "
             "AND (code IS NULL OR LOWER(code) != 'cancelled') "
             "AND was_absent = 0",
             (account_id, horizon, today_iso),
         ).fetchall()
-        ids = [r["id"] for r in lesson_rows]
+        ids = [r["id"] for r in lesson_rows if not lesson_is_hidden(dict(r), hidden)]
         if not ids:
             return {"unrated_lessons": 0, "total_lessons": 0}
         placeholder = ",".join("?" for _ in ids)

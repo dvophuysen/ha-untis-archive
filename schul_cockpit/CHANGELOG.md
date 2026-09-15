@@ -1,3 +1,7 @@
+## 0.58.2
+
+- Ausgeblendete Kurse zählen nicht mehr als offene Rückmeldung. Noahs Französisch und Religion, die er nicht besucht, standen auf dem Dashboard als „zwei Rückmeldungen offen“, ohne im Stundenplan zu erscheinen. Das gilt auch für die Zählung in der abendlichen Mitteilung.
+
 ## 0.58.1
 
 - Der Tagesrahmen je Kind zählt nur noch, was das Kind selbst übt und fragt. Das Einlesen von Quellen, das Auswerten von Fotos und die Einstiegshilfen laufen im Hintergrund und hatten Josias Tagesrahmen am Nachmittag aufgebraucht, bevor er eine Frage gestellt hatte. Der Tagesrahmen steigt von 5 auf 10 Euro je Kind, der Rahmen einer einzelnen Übungseinheit von 2 auf 4 Euro. Der Monatsrahmen von 50 Euro bleibt.
