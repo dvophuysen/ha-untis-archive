@@ -1308,3 +1308,71 @@ async def capture_pages(
     return await asyncio.to_thread(
         _capture_pages_sync, portal_url, username, password, title, pages, launch_url, survey
     )
+
+
+# --- Browser probe -----------------------------------------------------------
+# Starts Chromium itself, without Selenium, on a page that reports whether
+# WebGL exists, and keeps its stderr: that is where Chromium says why a GPU
+# process does not come up. Used by the parent-facing browser check only.
+
+_PROBE_PAGE = """<!doctype html><body><script>
+const c=document.createElement("canvas");
+const g=c.getContext("webgl")||c.getContext("experimental-webgl");const g2=c.getContext("webgl2");
+let r="";try{const d=g&&g.getExtension("WEBGL_debug_renderer_info");r=g&&d?g.getParameter(d.UNMASKED_RENDERER_WEBGL):""}catch(e){}
+document.body.textContent="RESULT webgl="+!!g+" webgl2="+!!g2+" renderer="+r;
+</script></body>"""
+
+PROBE_VARIANTS: dict[str, list[str]] = {
+    "ohne GPU": ["--disable-gpu"],
+    "SwiftShader": ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
+    "SwiftShader im Prozess": ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--in-process-gpu"],
+    "SwiftShader ohne GPU-Sandbox": ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--disable-gpu-sandbox"],
+    "Standard": [],
+}
+
+
+def probe_browser(seconds: float = 40.0) -> dict:
+    """Run every variant once, with a hard time limit, and report what
+    Chromium printed. Nothing here touches a portal or a credential."""
+    import glob
+    import subprocess
+    import tempfile
+
+    report: dict = {"binary": _CHROMIUM, "variants": []}
+    try:
+        report["version"] = subprocess.run([_CHROMIUM, "--version"], capture_output=True, text=True, timeout=20).stdout.strip()
+    except Exception as exc:
+        report["version"] = type(exc).__name__
+    report["gl_libraries"] = sorted(os.path.basename(p) for p in glob.glob("/usr/lib/chromium/*.so*")
+                                    if re.search(r"(swiftshader|EGL|GLES|vulkan|angle)", p, re.I))
+    with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False) as handle:
+        handle.write(_PROBE_PAGE)
+        page = handle.name
+    try:
+        for name, flags in PROBE_VARIANTS.items():
+            entry: dict = {"variant": name, "flags": flags}
+            started = time.monotonic()
+            try:
+                done = subprocess.run(
+                    [_CHROMIUM, "--headless", "--no-sandbox", "--disable-dev-shm-usage", *flags,
+                     "--dump-dom", f"file://{page}"],
+                    capture_output=True, text=True, timeout=seconds)
+                entry["returncode"] = done.returncode
+                found = re.search(r"RESULT [^<\n]*", done.stdout or "")
+                entry["result"] = found.group(0) if found else "kein Ergebnis"
+                lines = [_OPAQUE.sub("…", line.strip())[:220] for line in (done.stderr or "").splitlines() if line.strip()]
+                entry["stderr"] = lines[-25:]
+            except subprocess.TimeoutExpired as exc:
+                entry["result"] = "Zeitlimit"
+                lines = [_OPAQUE.sub("…", line.strip())[:220] for line in ((exc.stderr or b"").decode("utf-8", "replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")).splitlines() if line.strip()]
+                entry["stderr"] = lines[-25:]
+            except Exception as exc:
+                entry["result"] = type(exc).__name__
+            entry["seconds"] = round(time.monotonic() - started, 1)
+            report["variants"].append(entry)
+    finally:
+        try:
+            os.unlink(page)
+        except OSError:
+            pass
+    return report

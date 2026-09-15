@@ -1,3 +1,7 @@
+## 0.52.5
+
+- Browser-Prüfung für die Eltern-Diagnose: Chromium wird mit mehreren GPU-Einstellungen direkt gestartet und meldet, ob WebGL zur Verfügung steht und was der Browser dazu sagt. Hintergrund: Der Browser des Add-ons kommt auf dem Raspberry Pi mit jeder GPU-Einstellung nicht hoch, ohne GPU zeichnet der BiBox-Betrachter aber keine Seiten. Kein Portal und kein Zugang werden dabei berührt.
+
 ## 0.52.4
 
 - Der Browser des Add-ons kam mit den WebGL-Flags aus 0.52.3 auf dem Raspberry Pi nicht mehr hoch; jeder Abruf lief in einen Zeitüberschreitungsfehler. Software-WebGL wird jetzt ohne den Griff nach einer echten GPU angefordert, und wenn der Browser so nicht startet, startet er ein zweites Mal ohne GPU wie zuvor. Start, Abschluss und Ende jedes Browserlaufs stehen mit Dauer im Protokoll.

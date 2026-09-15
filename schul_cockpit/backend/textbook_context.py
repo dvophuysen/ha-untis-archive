@@ -184,28 +184,51 @@ async def test_page(account_id:int,book_id:int,page:int) -> dict:
 # request after 100 seconds. So the request starts the job and the page asks
 # again until it is done. One job per book at a time; the latest result stays
 # until the next one replaces it.
-_PAGE_TESTS:dict[tuple[int,int],dict]={}
-_PAGE_TEST_TASKS:dict[tuple[int,int],asyncio.Task]={}
+_JOBS:dict[tuple,dict]={}
+_JOB_TASKS:dict[tuple,asyncio.Task]={}
+
+def job_state(key:tuple) -> dict:
+    return _JOBS.get(key) or {"state":"none"}
+
+async def _run_job(key:tuple,work) -> None:
+    try: result=await work()
+    except Exception as exc:
+        _LOGGER.warning("digital textbook job %s failed: %s",key[1] if len(key)>1 else key,type(exc).__name__)
+        result={"status":"viewer_error","stage":"Seitenabruf","detail":type(exc).__name__}
+    _JOBS[key]={"state":"done","finished_at":_now(),"result":result}
+    _JOB_TASKS.pop(key,None)
+
+def start_job(key:tuple,work,**shown) -> dict:
+    """Start the job unless one runs under this key; say what is running."""
+    current=_JOBS.get(key)
+    if current and current.get("state")=="running": return current
+    _JOBS[key]={"state":"running","status":"running","started_at":_now(),**shown}
+    _JOB_TASKS[key]=asyncio.get_running_loop().create_task(_run_job(key,work))
+    return _JOBS[key]
 
 def page_test_state(account_id:int,book_id:int) -> dict:
-    return _PAGE_TESTS.get((account_id,book_id)) or {"state":"none"}
-
-async def _run_page_test(key:tuple[int,int],account_id:int,book_id:int,page:int) -> None:
-    try: result=await test_page(account_id,book_id,page)
-    except Exception as exc:
-        _LOGGER.warning("digital textbook page test failed for account %s: %s",account_id,type(exc).__name__)
-        result={"status":"viewer_error","page":page,"stage":"Seitenabruf","detail":type(exc).__name__}
-    _PAGE_TESTS[key]={"state":"done","finished_at":_now(),"result":result}
-    _PAGE_TEST_TASKS.pop(key,None)
+    return job_state((account_id,"page-test",book_id))
 
 def start_page_test(account_id:int,book_id:int,page:int) -> dict:
-    """Start the job unless one runs for this book; say what is running."""
-    key=(account_id,book_id)
-    current=_PAGE_TESTS.get(key)
+    key=(account_id,"page-test",book_id)
+    current=_JOBS.get(key)
     if current and current.get("state")=="running": return current
     book,credentials=book_and_credentials(account_id,book_id=book_id)
     if not book:return {"state":"none","status":"unknown_book"}
     if not credentials:return {"state":"none","status":"not_configured","book":book["title"]}
-    _PAGE_TESTS[key]={"state":"running","status":"running","started_at":_now(),"book":book["title"],"page":page}
-    _PAGE_TEST_TASKS[key]=asyncio.get_running_loop().create_task(_run_page_test(key,account_id,book_id,page))
-    return _PAGE_TESTS[key]
+    async def work():
+        try: return await test_page(account_id,book_id,page)
+        except Exception as exc:
+            _LOGGER.warning("digital textbook page test failed for account %s: %s",account_id,type(exc).__name__)
+            return {"status":"viewer_error","page":page,"stage":"Seitenabruf","detail":type(exc).__name__}
+    return start_job(key,work,book=book["title"],page=page)
+
+def browser_check_state(account_id:int) -> dict:
+    return job_state((account_id,"browser-check"))
+
+def start_browser_check(account_id:int) -> dict:
+    """Chromium itself, with and without GPU flags: does WebGL come up, and
+    what does the browser say if not? Runs in a thread, minutes at worst."""
+    from .textbook_browser import probe_browser
+    async def work(): return await asyncio.to_thread(probe_browser)
+    return start_job((account_id,"browser-check"),work)
