@@ -1,3 +1,7 @@
+## 0.52.1
+
+- Ein Fach stand zweimal auf der Einkaufsliste, einmal unter seinem Namen und einmal unter dem Kürzel der Hausaufgabe („LATEIN" und „LA"). Hausaufgaben führen in Untis keine Fach-ID, nur das Kürzel; es wird jetzt über das echte Untis-Kürzel der Stunde aufgelöst. Ein selbst gepflegter Fach-Alias hat Vorrang.
+
 ## 0.52.0
 
 - Die Materialseite führt eine Einkaufsliste: „Was mir noch fehlt", je Fach aufklappbar. Sie sammelt aus Stunden- und Hausaufgabentexten die genannten Buchstellen („TB S. 13 Aufg. C, AH S. 7", „#cda, p. 28") und zeigt, welche davon weder digital im Regal liegen noch fotografiert wurden. Mit Zitat und Datum, damit erkennbar ist, worum es geht.
