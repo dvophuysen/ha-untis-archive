@@ -154,11 +154,16 @@ def store_chapters(account_id: int, title: str, chapters: list[Chapter]) -> int:
                 # Das letzte Kapitel vor dem Anhang liest sich sonst bis zum
                 # Register. Mehr als sechzig Seiten holt kein Kapitel.
                 end = chapter.start_page + MAX_CHAPTER_PAGES - 1
+            kind = chapter.kind if chapter.kind in ("chapter", "vocab", "grammar", "appendix") else "chapter"
+            if chapter.number.strip() and chapter.level == 1 and kind in ("vocab", "grammar"):
+                # Eine nummerierte Lektion ist ein Kapitel, auch wenn sie im
+                # Begleitband „Wortschatz" heißt; Vokabel- und Grammatikteile
+                # sind die unnummerierten Anhänge einer Lektion.
+                kind = "chapter"
             conn.execute(
                 "INSERT INTO book_chapters(account_id,book_title,number,title,kind,level,start_page,end_page,belongs_to,created_at) "
                 "VALUES(?,?,?,?,?,?,?,?,?,?)",
-                (account_id, title, chapter.number.strip(), chapter.title.strip(),
-                 chapter.kind if chapter.kind in ("chapter", "vocab", "grammar", "appendix") else "chapter",
+                (account_id, title, chapter.number.strip(), chapter.title.strip(), kind,
                  chapter.level, chapter.start_page, end, chapter.belongs_to.strip() or None, stamp))
     return len(ordered)
 
@@ -300,6 +305,12 @@ def paper_books(account_id: int, subject: str | None = None) -> list[dict]:
             where += " AND lower(subject_name)=lower(?)"
             args.append(subject)
         return [dict(r) for r in conn.execute(f"SELECT * FROM paper_books WHERE {where} ORDER BY subject_name,part_label", args)]
+
+
+def units_of(account_id: int, title: str) -> list[dict]:
+    """Die Einheiten der obersten Ebene, für die Anzeige des gelesenen Verzeichnisses."""
+    return [{"number": c["number"], "title": c["title"], "kind": c["kind"], "start_page": c["start_page"], "end_page": c["end_page"]}
+            for c in chapters_of(account_id, title) if c["level"] == 1]
 
 
 def paper_title(subject: str, part_label: str) -> str:

@@ -731,6 +731,9 @@ CREATE TABLE IF NOT EXISTS paper_books (
  UNIQUE(account_id,subject_name,part_label)
 );
 """))
+# Eine nummerierte Lektion ist ein Kapitel, auch wenn sie „Wortschatz" heißt.
+_MIGRATIONS.append(("book_chapters_numbered_units",
+                    "UPDATE book_chapters SET kind='chapter' WHERE level=1 AND number!='' AND kind IN ('vocab','grammar')"))
 
 _MIGRATIONS.append(("entry_chapters_001", """
 CREATE TABLE IF NOT EXISTS entry_chapters (

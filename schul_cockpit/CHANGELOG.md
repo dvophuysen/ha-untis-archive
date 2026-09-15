@@ -1,3 +1,7 @@
+## 0.57.4
+
+- Der Begleitband nennt jede Lektion „Wortschatz“, und das Modell hielt sie für Vokabelteile statt Kapitel; die Lektion 1 fehlte deshalb in der Bilanz. Eine nummerierte Einheit der obersten Ebene ist ein Kapitel. Die Bücherzeile zeigt, mit wie vielen Kapiteln ein Verzeichnis gelesen wurde.
+
 ## 0.57.3
 
 - Ein Teil ohne Nummer im Inhaltsverzeichnis („Gefahr im Circus Maximus“, Lektionen 1–3) ist eine Überschrift über mehreren Lektionen, kein Kapitel: Er kommt nicht mehr als Ganzes auf die Einkaufsliste, nur die angeschnittene Lektion.
