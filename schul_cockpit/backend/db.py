@@ -693,6 +693,12 @@ CREATE TABLE IF NOT EXISTS source_claims (
  PRIMARY KEY(account_id,subject_key,part_label,page)
 );
 """))
+# Eine gelesene Buchseite kostet gemessen rund 13 Cent (die wortgetreue
+# Abschrift ist der Preis). Für den Altstand eines Schuljahresbeginns, den der
+# Nutzer sofort vollständig will, reichen 15 Euro nicht. Wo die Voreinstellung
+# steht, gelten 30 Euro; ein eigener Wert bleibt.
+_MIGRATIONS.append(("ai_config_sources_thirty",
+                    "UPDATE mentor_ai_config SET sources_micro=30000000 WHERE sources_micro=15000000"))
 _MIGRATIONS.append(("ai_config_background_ten",
                     "UPDATE mentor_ai_config SET background_micro=10000000 WHERE background_micro=5000000"))
 
