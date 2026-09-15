@@ -218,3 +218,26 @@ def test_the_exam_card_knows_what_material_is_there_and_what_is_missing(env):
     # Vor dem Zeitraum genannt zählt nicht; ohne Stellen und Zettel gibt es nichts zu zeigen.
     assert sources.exam_sources(1, "LATEIN", "2026-09-20", "2026-09-30") is None
     assert sources.exam_sources(1, "", "2026-08-01", "2026-09-30") is None
+
+
+def test_background_work_does_not_eat_the_childs_daily_budget(env, monkeypatch):
+    from backend import ai_gateway as ai
+    from fastapi import HTTPException
+    import pytest
+    for k, v in {'LEARNING_AI_MODEL': 'test', 'LEARNING_AI_URL': 'https://example.com/responses', 'LEARNING_AI_KEY': 'fake'}.items():
+        monkeypatch.setenv(k, v)
+    with closing(db.webapp_conn()) as c, c:
+        ai.init_config(c)
+        c.execute("UPDATE mentor_ai_config SET monthly_micro=50000000, sources_micro=30000000, background_micro=10000000, opening_confirmed=1")
+        # Ein Nachmittag Quellenbestand und Auswertung für dieses Kind: 9,50 Euro.
+        for purpose, micro in (("sources", 6_000_000), ("background", 3_500_000)):
+            c.execute("INSERT INTO mentor_ai_calls(id,account_id,session_id,purpose,month,day,model,status,reserved_micro,charged_micro,input_rate,output_rate,created_at) "
+                      "VALUES(?,1,NULL,?,'2026-09','2026-09-11','test','settled',?,?,10,45,'now')", (purpose, purpose, micro, micro))
+    key = ai.reserve(1, "mentor", None, 1000, 500)
+    assert key, "das Kind darf fragen, obwohl die App heute schon gearbeitet hat"
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO mentor_ai_calls(id,account_id,session_id,purpose,month,day,model,status,reserved_micro,charged_micro,input_rate,output_rate,created_at) "
+                  "VALUES('own',1,NULL,'mentor','2026-09','2026-09-11','test','settled',9_900_000,9_900_000,10,45,'now')")
+    with pytest.raises(HTTPException) as caught:
+        ai.reserve(1, "mentor", None, 1000, 500)
+    assert caught.value.status_code == 429 and "heute" in caught.value.detail

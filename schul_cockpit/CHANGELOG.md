@@ -1,3 +1,7 @@
+## 0.58.1
+
+- Der Tagesrahmen je Kind zählt nur noch, was das Kind selbst übt und fragt. Das Einlesen von Quellen, das Auswerten von Fotos und die Einstiegshilfen laufen im Hintergrund und hatten Kind B Tagesrahmen am Nachmittag aufgebraucht, bevor er eine Frage gestellt hatte. Der Tagesrahmen steigt von 5 auf 10 Euro je Kind, der Rahmen einer einzelnen Übungseinheit von 2 auf 4 Euro. Der Monatsrahmen von 50 Euro bleibt.
+
 ## 0.58.0
 
 - Die Klausurkarte unter „Arbeiten & Tests“ zeigt den Materialstand für den angenommenen Stoff: wie viele genannte Stellen gelesen vorliegen, was unterwegs ist und was fehlt, mit Link auf die Einkaufsliste des Fachs. Dazu je angeschnittenes Kapitel die fotografierten oder abgerufenen Seiten und ob die Ankündigung der Lehrkraft vorliegt.
