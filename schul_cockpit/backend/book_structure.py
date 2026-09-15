@@ -67,9 +67,8 @@ INSTRUCTION = (
 )
 
 
-def _shrink(blob: bytes, max_side: int = 1800) -> bytes:
-    """Ein Foto auf höchstens 1800 Pixel Kante: Fünf Handyfotos in voller
-    Größe wies der Dienst mit 413 ab; Verzeichnistext bleibt so lesbar."""
+def _shrink(blob: bytes, max_side: int = 1600) -> bytes:
+    """Ein Foto auf höchstens 1600 Pixel Kante, das Maß der Schnittstelle."""
     import io
     from PIL import Image
     try:
@@ -85,13 +84,16 @@ def _shrink(blob: bytes, max_side: int = 1800) -> bytes:
         return blob
 
 
-def _image_parts(shots: list[bytes], limit: int = 4) -> list[dict]:
-    """Je zwei Aufnahmen untereinander in ein Bild; das digitale Verzeichnis
-    braucht vier Seiten, ein fotografiertes Papierbuch bis zu acht."""
+def _image_parts(shots: list[bytes], limit: int = 4, join: bool = True) -> list[dict]:
+    """Das digitale Verzeichnis: vier Seiten, je zwei untereinander in einem
+    Bild. Ein fotografiertes Papierbuch: bis zu sechs Aufnahmen, jede für
+    sich, weil die Schnittstelle jedes Bild auf 1600 Pixel verkleinert und
+    zwei Handyfotos übereinander dann nicht mehr lesbar wären."""
     from .textbook_context import _join
     parts = []
-    for i in range(0, min(len(shots), limit), 2):
-        blob = _join([_shrink(shot) for shot in shots[i:i + 2]])
+    step = 2 if join else 1
+    for i in range(0, min(len(shots), limit), step):
+        blob = _join([_shrink(shot) for shot in shots[i:i + step]])
         parts.append({"type": "image_url", "image_url": {
             "url": "data:image/jpeg;base64," + base64.b64encode(blob).decode(), "detail": "high"}})
     return parts
@@ -120,11 +122,11 @@ def toc_state(account_id: int, title: str) -> str | None:
     return row[0] if row else None
 
 
-async def _read(account_id: int, book, shots: list[bytes], limit: int = 4) -> TableOfContents | None:
+async def _read(account_id: int, book, shots: list[bytes], limit: int = 4, join: bool = True) -> TableOfContents | None:
     context = {"buch": book["title"], "fach": book["subject_name"]}
     try:
         raw, _, _ = await ai.complete(account_id, ai.SOURCES, INSTRUCTION + json.dumps(TableOfContents.model_json_schema()),
-                                      context, _image_parts(shots, limit), max_output=8000)
+                                      context, _image_parts(shots, limit, join), max_output=8000)
         return TableOfContents.model_validate_json(raw)
     except ValidationError:
         log.warning("Inhaltsverzeichnis von %s nicht auswertbar", book["title"])
@@ -332,7 +334,7 @@ async def read_paper_toc(account_id: int, subject: str, part_label: str) -> dict
             "VALUES(?,?,?,?,'reading',?,?) ON CONFLICT(account_id,subject_name,part_label) DO UPDATE SET "
             "title=excluded.title,toc_state='reading',toc_pages=excluded.toc_pages,updated_at=excluded.updated_at",
             (account_id, subject, part_label, title, len(rows), stamp))
-    toc = await _read(account_id, {"title": title, "subject_name": subject}, shots[:8], limit=8) if shots else None
+    toc = await _read(account_id, {"title": title, "subject_name": subject}, shots[:6], limit=6, join=False) if shots else None
     count = 0
     if toc and toc.is_toc and toc.chapters:
         count = store_chapters(account_id, title, toc.chapters)

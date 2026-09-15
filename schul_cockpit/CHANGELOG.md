@@ -1,3 +1,8 @@
+## 0.57.2
+
+- Das fotografierte Inhaltsverzeichnis eines Papierbuchs wird mit bis zu sechs Aufnahmen in einem Aufruf gelesen, jede für sich: Die Schnittstelle verkleinert jedes Bild auf 1600 Pixel und ließ bisher nur zwei Bilder zu; zwei Handyfotos übereinander wären unlesbar, fünf Seiten scheiterten mit 413.
+- Eine fotografierte Doppelseite belegt beide gedruckten Seiten, nicht nur die erste.
+
 ## 0.57.1
 
 - Fotos von Buch- und Heftseiten, Inhaltsverzeichnisse und Klausurzettel werden im Quellen-Rahmen gelesen, nicht im Tagesrahmen des Kontos: 26 Latein-Uploads an einem Nachmittag blieben sonst mit 429 liegen.
