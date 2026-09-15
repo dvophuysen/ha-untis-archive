@@ -1223,14 +1223,11 @@ def _capture_pages_sync(
     # Gerätefaktor 2: Eine Doppelseite hat sonst rund 650 Pixel je Seite und
     # ist im Bestand unscharf. Die Seitenbereiche werden mit dem Faktor
     # zugeschnitten, das Bild ist also doppelt so fein bei gleichem Fenster.
-    driver = _driver("--window-size=1440,1100", "--force-device-scale-factor=2")
-    # Das Flag greift im Headless-Betrieb nicht (gemessen: Seiten blieben bei
-    # 1308 Pixeln). Das DevTools-Protokoll setzt den Faktor verbindlich.
-    try:
-        driver.execute_cdp_cmd("Emulation.setDeviceMetricsOverride",
-                               {"width": 1440, "height": 1100, "deviceScaleFactor": 2, "mobile": False})
-    except Exception as exc:
-        _LOGGER.warning("device scale factor not applied: %s", type(exc).__name__)
+    # Ein großes Fenster statt eines Gerätefaktors: Der Faktor kam weder über
+    # das Flag noch über DevTools im Screenshot an (gemessen: 1308 Pixel je
+    # Doppelseite). Im doppelt so großen Fenster zeichnet der Betrachter die
+    # Seiten selbst größer, und der Zuschnitt liefert rund 2400 Pixel.
+    driver = _driver("--window-size=2600,1900")
     deadline = time.monotonic() + budget
     stage = "IServ-Anmeldung"
     try:

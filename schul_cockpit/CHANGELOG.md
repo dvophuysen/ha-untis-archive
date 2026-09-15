@@ -1,3 +1,7 @@
+## 0.56.10
+
+- Schärfe, dritter Anlauf: Der Gerätefaktor kam auch über DevTools nicht im Screenshot an. Der Browser läuft jetzt in einem 2600 mal 1900 Pixel großen Fenster, der Betrachter zeichnet die Seiten entsprechend größer. Der Seitentest meldet die Rohgröße des gelieferten Bildes.
+
 ## 0.56.9
 
 - Die Schärfe aus 0.56.6 kam nicht an: Das Chromium-Flag für den Gerätefaktor greift im Headless-Betrieb nicht, die Seiten blieben bei 1308 Pixeln Breite. Der Faktor wird jetzt über das DevTools-Protokoll gesetzt.
