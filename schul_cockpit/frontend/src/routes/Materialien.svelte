@@ -59,6 +59,28 @@
     for (const m of data?.materials ?? []) if (m.subject_name && !seen.has(m.subject_name)) seen.set(m.subject_name, subjectStyle(m.subject_name).name + ' (nicht im Stundenplan)');
     return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, 'de'));
   });
+  // Verzeichnisfotos, die noch nicht gegengelesen sind, je Buch gebündelt.
+  const tocGroups = $derived.by(() => {
+    const groups = new Map();
+    for (const m of data?.materials ?? []) {
+      if (!m.needs_review || m.kind !== 'toc') continue;
+      const key = `${m.subject_name ?? ''}|${m.source_label ?? ''}`;
+      if (!groups.has(key)) {
+        const book = (ledger?.books ?? []).find((b) => b.subject === (m.subject_name ?? '').toLowerCase() && (b.part_label === m.source_label || (!b.part_label && !m.source_label)));
+        groups.set(key, { key, subject: m.subject_name ?? '', label: m.source_label ?? '', items: [], book });
+      }
+      groups.get(key).items.push(m);
+    }
+    return [...groups.values()];
+  });
+  // Kapitel eines Buchs berichtigen: Anfangs- oder Endseite.
+  async function fixChapter(unit, field, value) {
+    const page = Number(value);
+    if (!Number.isFinite(page)) return;
+    await api.patch(`${base}/sources/chapters/${unit.id}`, { [field]: page });
+    message = 'Kapitel berichtigt. Die Stellen sind neu gebunden.';
+    await load();
+  }
   // Was das nächste Foto ist, wenn man es vorher sagen will; sonst erkenne ich es selbst.
   let upload = $state({ subject: '', kind: '', part: '', page: '' });
   let collecting = $state(null);
@@ -315,17 +337,29 @@
   <div class="card review">
     <strong>Bitte gegenlesen</strong>
     <p class="lead">Aus diesen Lesungen leite ich Stellen oder Kapitel ab. Handschrift lese ich nicht sicher; ein Blick genügt.</p>
-    {#each (data.materials ?? []).filter((m) => m.needs_review) as m (m.id)}
+    {#each (data.materials ?? []).filter((m) => m.needs_review && m.kind !== 'toc') as m (m.id)}
       <div class="review-item">
         <div><strong>{m.title || 'Ohne Titel'}</strong> <small class="muted">· {KIND_NAMES[m.kind] ?? m.kind}{m.subject_name ? ` · ${subjectStyle(m.subject_name).name}` : ''}{m.source_label ? ` · ${m.source_label}` : ''}</small></div>
-        {#if m.kind === 'toc'}
-          <p class="muted">Verzeichnisseite{m.source_page ? ` S. ${m.source_page}` : ''}. Was daraus gelesen wurde, steht unten bei den Büchern.</p>
-        {:else}
-          <p class="preserve">{m.content_text || m.summary || '(kein Text erkannt)'}</p>
-        {/if}
+        <p class="preserve">{m.content_text || m.summary || '(kein Text erkannt)'}</p>
         <div class="row gap-sm">
           <button class="primary" disabled={busy} onclick={() => act(async () => { await api.post(`${base}/${m.id}/verified`, { value: true }); message = 'Danke, so gelesen bleibt es.'; await load(); })}>✓ Stimmt so</button>
           <button disabled={busy} onclick={() => act(() => show(m))}>Korrigieren</button>
+        </div>
+      </div>
+    {/each}
+    <!-- Ein Verzeichnis besteht aus mehreren Fotos; gegengelesen wird das
+         Ergebnis je Buch, die Kapitel stehen zum Berichtigen darunter. -->
+    {#each tocGroups as group (group.key)}
+      <div class="review-item">
+        <div><strong>Inhaltsverzeichnis {group.label}</strong> <small class="muted">· {subjectStyle(group.subject).name} · {group.items.length} {group.items.length === 1 ? 'Foto' : 'Fotos'}</small></div>
+        {#if group.book}
+          <p class="muted">Gelesen: {group.book.units.filter((u) => u.kind === 'chapter').length} Kapitel. Stimmen die Anfangsseiten? Unten bei den Büchern lässt sich jede Seite berichtigen.</p>
+        {:else}
+          <p class="muted">Das Verzeichnis wird gerade gelesen oder konnte nicht gelesen werden.</p>
+        {/if}
+        <div class="row gap-sm">
+          <button class="primary" disabled={busy} onclick={() => act(async () => { for (const m of group.items) await api.post(`${base}/${m.id}/verified`, { value: true }); message = 'Danke, das Verzeichnis gilt.'; await load(); })}>✓ Stimmt so</button>
+          <a class="quiet" href="#buecher">Kapitel prüfen</a>
         </div>
       </div>
     {/each}
@@ -384,9 +418,37 @@
       </details>
     {/each}
     {#if ledger.books?.length}
-      <p class="muted foot">Bücher:
-        {#each ledger.books as book, i}{i ? ' · ' : ''}{subjectStyle(book.subject).name}, {book.title}: {book.pages_stored} {book.pages_stored === 1 ? 'Seite' : 'Seiten'} gespeichert{#if book.units?.length}, Verzeichnis mit {book.units.filter((u) => u.kind === 'chapter').length} Kapiteln{/if}{#if book.access} ({ACCESS_NAMES[book.access.status] ?? book.access.status}){/if}{/each}
-      </p>
+      <div class="books" id="buecher">
+        <p class="muted foot">Bücher</p>
+        {#each ledger.books as book (book.title)}
+          <details class="book">
+            <summary>{subjectStyle(book.subject).name}, {book.title}: {book.pages_stored} {book.pages_stored === 1 ? 'Seite' : 'Seiten'} gespeichert{#if book.units?.length}, Verzeichnis mit {book.units.filter((u) => u.kind === 'chapter').length} Kapiteln{/if}{#if book.access} ({ACCESS_NAMES[book.access.status] ?? book.access.status}){/if}</summary>
+            {#if book.units?.length}
+              <!-- Anfangs- und Endseite je Kapitel; eine Korrektur bleibt gesperrt gegen jedes neue Lesen. -->
+              <table class="units">
+                <tbody>
+                  {#each book.units as unit (unit.id)}
+                    <tr class:locked={unit.locked} class:sub={unit.level > 1}>
+                      <td class="num">{unit.number}</td>
+                      <td class="title">{unit.title}{#if unit.kind !== 'chapter'}<small class="muted"> · {unit.kind === 'appendix' ? 'Anhang' : unit.kind === 'vocab' ? 'Vokabeln' : 'Grammatik'}</small>{/if}</td>
+                      {#if data?.can_manage}
+                        <td><input type="number" min="1" max="1999" value={unit.start_page} aria-label="Anfangsseite" onchange={(e) => act(() => fixChapter(unit, 'start_page', e.currentTarget.value))} /></td>
+                        <td><input type="number" min="0" max="1999" value={unit.end_page ?? ''} placeholder="–" aria-label="Endseite" onchange={(e) => act(() => fixChapter(unit, 'end_page', e.currentTarget.value || 0))} /></td>
+                      {:else}
+                        <td colspan="2">S. {unit.start_page}{unit.end_page ? `–${unit.end_page}` : ''}</td>
+                      {/if}
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            {:else if book.access?.toc_state === 'reading'}
+              <p class="muted">Das Verzeichnis wird gerade gelesen.</p>
+            {:else}
+              <p class="muted">Kein Verzeichnis gelesen. Fotografiere die Inhaltsseiten mit „Was ist es?“ = Inhaltsverzeichnis und dem Buchteil, dann lese ich es daraus.</p>
+            {/if}
+          </details>
+        {/each}
+      </div>
     {/if}
     {#if data?.can_manage}
       <p class="foot">
@@ -582,6 +644,14 @@
   .wanted>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;list-style:none}
   .wanted>summary::-webkit-details-marker{display:none}
   .review{border-left:4px solid var(--warm,#b26a00)}
+  .books .book{border-top:1px solid var(--border);padding:6px 0}
+  .books .book>summary{cursor:pointer;min-height:40px;display:flex;align-items:center;font-size:0.9rem}
+  .units{width:100%;border-collapse:collapse;font-size:0.85rem}
+  .units td{padding:2px 4px;vertical-align:middle}
+  .units .num{width:3rem;color:var(--fg-muted)}
+  .units tr.sub .title{padding-left:1rem}
+  .units tr.locked .title::after{content:" ✎";color:var(--fg-muted)}
+  .units input{width:4.5rem;min-height:36px}
   .review-item{border-top:1px solid var(--border);padding:8px 0}
   .review-item .preserve{white-space:pre-wrap;margin:4px 0 8px}
   .options label{display:grid;gap:2px;font-size:0.85rem;color:var(--fg-muted)}

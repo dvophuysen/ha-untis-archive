@@ -1,3 +1,9 @@
+## 0.60.0
+
+- Fotografierte Inhaltsverzeichnisse gelten auch für digitale Bücher, deren Verzeichnis der Abruf auf den ersten Seiten nicht findet (Spanisch, Englisch, Geschichte). Die Kapitel landen beim digitalen Buch, der Sammellauf holt danach ganze Kapitel und sucht das Verzeichnis nicht weiter.
+- Kapitel lassen sich von Hand berichtigen: Unter „Bücher“ auf der Materialseite stehen alle gelesenen Einheiten mit Anfangs- und Endseite zum Ändern; die Nachbarn rücken nach, die Korrektur überlebt jedes neue Lesen und die Stellen werden sofort neu gebunden.
+- Verzeichnisfotos stehen zum Gegenlesen als ein Eintrag je Buch, nicht mehr je Foto.
+
 ## 0.59.0
 
 - Die Ankündigung der Lehrkraft legt den Klausurstoff fest. Liegt ein Zettel vor, gruppiert der Stoffplan den Unterricht entlang seiner Punkte; was im Unterricht behandelt, aber nicht angekündigt wurde, erscheint als eigene Kategorie „nicht angekündigt“ und wird nur auf Wunsch geübt. Gilt für jedes Fach, jeden Jahrgang und jedes Kind.
