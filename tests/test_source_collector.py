@@ -251,3 +251,21 @@ async def test_blurry_pages_from_earlier_runs_get_a_sharper_image_without_a_new_
         row = conn.execute("SELECT file_bytes,analysis_state,content_text FROM materials").fetchone()
     assert Image.open(io.BytesIO(row["file_bytes"])).width == 2400 and row["analysis_state"] == "ready" and row["content_text"] == "Text bleibt"
     assert await collector.resharpen(1, credentials, 20) == 0, "einmal scharf bleibt scharf"
+
+
+def test_pages_of_open_homework_and_exam_subjects_come_first(env):
+    history(lessons=[(1, '2026-09-01', 'LATEIN', LA, ''), (2, '2026-09-14', 'SPANISCH', SN, 'libro p. 70')],
+            homework=[(7, 'LA', 'TB S. 13', '2026-09-10'), (8, 'SN', 'libro p. 50', '2026-09-08')])
+    shelf()
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO digital_textbook_catalog(account_id,subject_name,title,discovered_at) VALUES(1,'latein','Prima','now')")
+        c.execute("INSERT INTO tasks(account_id,title,task_type,status,source,notes,subject_name,created_at,updated_at) "
+                  "VALUES(1,'Latein','homework','open','ha_todo','TB S. 13\n[LA7]','LATEIN','now','now')")
+    sources.ledger(1)
+    plain = collector.wanted_pages(1)
+    assert [g["subject"] for g in plain] == ["SPANISCH", "LATEIN"], "ohne Vorrang zählt das Datum: die Spanischstunde ist neuer"
+    priority = {"homework_pages": {("latein", 13)}, "exam_subjects": set()}
+    assert [g["subject"] for g in collector.wanted_pages(1, priority)] == ["LATEIN", "SPANISCH"], "die offene Hausaufgabe zuerst"
+    priority = {"homework_pages": set(), "exam_subjects": {"spanisch"}}
+    groups = collector.wanted_pages(1, priority)
+    assert groups[0]["subject"] == "SPANISCH" and groups[0]["order"][0] in (50, 70)

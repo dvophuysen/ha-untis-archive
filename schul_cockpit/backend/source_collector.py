@@ -227,15 +227,59 @@ def _bump(account_id: int, subject: str, page: int, detail: str | None = None) -
             (detail, now_iso(), account_id, subject, page))
 
 
-def wanted_pages(account_id: int) -> list[dict]:
-    """Was noch zu holen ist, je Buch: genannte Seiten vor Kapitelseiten,
-    neueste Einträge zuerst."""
+async def priorities(account_id: int) -> dict:
+    """Was zuerst dran ist: Seiten offener Hausaufgaben, dann Fächer mit einer
+    Arbeit in den nächsten zwei Wochen. Die Kinder brauchen das heute."""
+    from datetime import date, timedelta
+    homework_pages: set[tuple[str, int]] = set()
+    exam_subjects: set[str] = set()
+    with closing(webapp_conn()) as conn:
+        tasks = [dict(r) for r in conn.execute(
+            "SELECT id,title,notes,subject_name FROM tasks WHERE account_id=? AND status!='done'", (account_id,))]
+    if tasks:
+        from .db import history_conn
+        with closing(history_conn()) as hconn:
+            homework_ids = [h for h in (sources.homework_for_task(hconn, account_id, t) for t in tasks) if h]
+        if homework_ids:
+            marks = ",".join("?" * len(homework_ids))
+            with closing(webapp_conn()) as conn:
+                for r in conn.execute(
+                        f"SELECT lower(subject_name) AS s,page FROM source_links WHERE account_id=? AND entry_kind='homework' "
+                        f"AND entry_id IN ({marks})", (account_id, *homework_ids)):
+                    homework_pages.add((r["s"], r["page"]))
+    try:
+        from .exams import resolve_exams
+        horizon = (date.today() + timedelta(days=14)).isoformat()
+        for exam in (await resolve_exams(account_id, days_ahead=14)).get("exams", []):
+            if (exam.get("subject_name") or "") and (exam.get("date") or "")[:10] <= horizon:
+                exam_subjects.add(exam["subject_name"].strip().casefold())
+    except Exception:
+        log.debug("Klausuren für Konto %s nicht bestimmbar", account_id)
+    return {"homework_pages": homework_pages, "exam_subjects": exam_subjects}
+
+
+def _rank(priority: dict | None, subject: str, page: int, only_chapter: bool) -> tuple:
+    if not priority:
+        return (0, int(only_chapter))
+    folded = subject.casefold()
+    if (folded, page) in priority["homework_pages"]:
+        return (0, 0)
+    if folded in priority["exam_subjects"]:
+        return (1, int(only_chapter))
+    return (2, int(only_chapter))
+
+
+def wanted_pages(account_id: int, priority: dict | None = None) -> list[dict]:
+    """Was noch zu holen ist, je Buch: Seiten offener Hausaufgaben, dann
+    Klausurfächer, dann der Rest; genannte Seiten vor Kapitelseiten, neueste
+    Einträge zuerst."""
     with closing(webapp_conn()) as conn:
         links = [dict(r) for r in conn.execute(
             "SELECT subject_name,page,MIN(entry_date) AS first_date,MAX(entry_date) AS last_date,MAX(attempts) AS attempts,"
             "MIN(entry_kind='chapter') AS only_chapter "
             "FROM source_links WHERE account_id=? AND status='pending' AND part_kind IN ('book','unknown') "
-            "GROUP BY lower(subject_name),page ORDER BY only_chapter, last_date DESC, page", (account_id,))]
+            "GROUP BY lower(subject_name),page ORDER BY last_date DESC, page", (account_id,))]
+    links.sort(key=lambda l: _rank(priority, l["subject_name"], l["page"], bool(l["only_chapter"])))
     groups: dict[str, dict] = {}
     for link in links:
         if link["attempts"] >= MAX_ATTEMPTS:
@@ -243,11 +287,13 @@ def wanted_pages(account_id: int) -> list[dict]:
         book, _ = book_and_credentials(account_id, subject=link["subject_name"])
         if not book:
             continue
-        group = groups.setdefault(book["title"], {"book": book, "subject": link["subject_name"], "pages": {}, "order": []})
+        group = groups.setdefault(book["title"], {"book": book, "subject": link["subject_name"], "pages": {}, "order": [],
+                                                  "rank": _rank(priority, link["subject_name"], link["page"], bool(link["only_chapter"]))})
         if link["page"] not in group["pages"]:
             group["order"].append(link["page"])
         group["pages"][link["page"]] = link["first_date"]
-    return list(groups.values())
+    # Das Buch mit der dringendsten Seite zuerst.
+    return sorted(groups.values(), key=lambda g: g["rank"])
 
 
 # Ein Lauf je Kind zugleich: Der 14-Uhr-Lauf und ein Handstart der Eltern
@@ -266,12 +312,15 @@ async def collect(account_id: int, budget: int = PAGE_BUDGET) -> dict:
         _RUNNING.discard(account_id)
 
 
-def _unread_pages(account_id: int, limit: int) -> list[int]:
-    """Abgelegte Buchseiten, deren Auswertung noch fehlt oder scheiterte."""
+def _unread_pages(account_id: int, limit: int, priority: dict | None = None) -> list[int]:
+    """Abgelegte Buchseiten, deren Auswertung noch fehlt oder scheiterte,
+    dringende zuerst."""
     with closing(webapp_conn()) as conn:
-        return [r[0] for r in conn.execute(
-            "SELECT id FROM materials WHERE account_id=? AND origin='book_fetch' AND hidden=0 "
-            "AND analysis_state IN ('pending','failed') ORDER BY id LIMIT ?", (account_id, limit))]
+        rows = [dict(r) for r in conn.execute(
+            "SELECT id,subject_name,source_page FROM materials WHERE account_id=? AND origin='book_fetch' AND hidden=0 "
+            "AND analysis_state IN ('pending','failed') ORDER BY id", (account_id,))]
+    rows.sort(key=lambda r: _rank(priority, r["subject_name"] or "", r["source_page"] or 0, False))
+    return [r["id"] for r in rows[:limit]]
 
 
 async def _collect(account_id: int, budget: int) -> dict:
@@ -311,7 +360,9 @@ async def _collect(account_id: int, budget: int) -> dict:
         log.warning("Kapitelzuordnung für Konto %s ausgesetzt", account_id, exc_info=True)
     # Seiten, die da sind, aber noch nicht gelesen wurden (etwa weil der
     # KI-Rahmen erschöpft war), kommen vor neuen Abrufen an die Reihe.
-    for material_id in _unread_pages(account_id, 12):
+    priority = await priorities(account_id)
+    summary["priority"] = {"homework_pages": len(priority["homework_pages"]), "exam_subjects": sorted(priority["exam_subjects"])}
+    for material_id in _unread_pages(account_id, 40, priority):
         row = await analyze_page(account_id, material_id)
         if row and row.get("analysis_state") == "ready":
             summary["reread"] = summary.get("reread", 0) + 1
@@ -326,7 +377,7 @@ async def _collect(account_id: int, budget: int) -> dict:
     if read:
         sources.sync_links(account_id)
         sources.refresh_status(account_id)
-    for group in wanted_pages(account_id):
+    for group in wanted_pages(account_id, priority):
         if remaining <= 0:
             break
         book, subject = group["book"], group["subject"]
