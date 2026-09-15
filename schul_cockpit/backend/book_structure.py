@@ -211,9 +211,21 @@ def chapters_of(account_id: int, title: str) -> list[dict]:
             (account_id, title))]
 
 
+def _is_part_heading(unit: dict, chapters: list[dict]) -> bool:
+    """Ein Eintrag ohne Nummer, unter dem weitere Kapitel liegen („Gefahr im
+    Circus Maximus", Lektionen 1–3): eine Überschrift, kein Kapitel."""
+    if (unit.get("number") or "").strip():
+        return False
+    end = unit["end_page"] or unit["start_page"]
+    return any(c["kind"] == "chapter" and c["level"] > unit["level"] and unit["start_page"] <= c["start_page"] <= end
+               for c in chapters)
+
+
 def chapter_of(chapters: list[dict], page: int) -> dict | None:
-    """Das kleinste Stoffkapitel, das die Seite enthält; Anhänge zählen nicht."""
-    hits = [c for c in chapters if c["kind"] == "chapter" and c["start_page"] <= page <= (c["end_page"] or c["start_page"])]
+    """Das kleinste Stoffkapitel, das die Seite enthält; Anhänge und
+    Teilüberschriften zählen nicht."""
+    hits = [c for c in chapters if c["kind"] == "chapter" and c["start_page"] <= page <= (c["end_page"] or c["start_page"])
+            and not _is_part_heading(c, chapters)]
     if not hits:
         return None
     return max(hits, key=lambda c: c["level"])
@@ -258,7 +270,7 @@ def touched_chapters(account_id: int, title: str, subject: str, chapters: list[d
         # eine Überschrift über mehreren Lektionen, kein Kapitel; er würde
         # sonst zwanzig Seiten auf die Liste setzen, die noch niemand hatte.
         for unit in [chapter] + [c for c in chapters if c["kind"] == "chapter" and c["level"] < chapter["level"]
-                                 and (c.get("number") or "").strip()
+                                 and not _is_part_heading(c, chapters)
                                  and c["start_page"] <= row["page"] <= (c["end_page"] or c["start_page"])]:
             entry = found.setdefault(unit["id"], {**unit, "first_date": row["first_date"], "cited_pages": set(), "inferred": False})
             entry["first_date"] = min(entry["first_date"], row["first_date"])

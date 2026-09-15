@@ -13,6 +13,19 @@ Fotos (`toc`, `paper_books`, `read_paper_toc`) und die Kapitelregel. Jede
 Datei kennt Buchteil und gedruckte Seite; das Fach kommt aus dem Katalog.
 Tests: `tests/test_paper_books.py`.
 
+Live-Befund Latein (Konto 2, 0.57.0–0.57.4): Beide Verzeichnisse aus Fotos
+gelesen (Textband 105 Einträge aus 5 Fotos, Begleitband 35). Dabei gelernt:
+die Schnittstelle verkleinert jedes Bild auf 1600 Pixel und ließ zwei Bilder
+zu, fünf Fotos gehen jetzt einzeln in einem Aufruf (0.57.2); ein Teil ohne
+Nummer („Gefahr im Circus Maximus", Lektionen 1–3) ist kein Kapitel (0.57.3);
+nummerierte Lektionen, die „Wortschatz" heißen, sind Kapitel (0.57.4). Die
+Auswertung las den handschriftlichen Klausurzettel mit „70, 71" statt
+„10, 11"; der Text wurde von Hand korrigiert und ist gesperrt. Drei
+„Grammatik üben"-Seiten des Textbands hielt das Modell für Arbeitsheft oder
+Begleitband; von Hand berichtigt. Uploads von Quellenseiten laufen seit
+0.57.1 im Quellen-Rahmen, weil 26 Auswertungen an einem Nachmittag den
+Tagesrahmen sprengten.
+
 **Quellen sichtbar, Hausaufgabe neu (0.56.0, D44).** `sources.segments`
 zerlegt jeden Untis-Text; `annotate_lessons` und `annotate_tasks` hängen Stand
 und Material an (Tag, Woche, Fachdetail, Aufgabenliste). Die Aufgabe findet

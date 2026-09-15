@@ -1,3 +1,7 @@
+## 0.57.5
+
+- Auch eine direkt genannte Einführungsseite eines Teils („TB S. 10, 11“) holt nicht mehr den ganzen Teil: Ein Eintrag ohne Nummer, unter dem Lektionen liegen, ist eine Überschrift. Die Einkaufsliste für Latein schrumpft damit auf die angeschnittenen Lektionen.
+
 ## 0.57.4
 
 - Der Begleitband nennt jede Lektion „Wortschatz“, und das Modell hielt sie für Vokabelteile statt Kapitel; die Lektion 1 fehlte deshalb in der Bilanz. Eine nummerierte Einheit der obersten Ebene ist ein Kapitel. Die Bücherzeile zeigt, mit wie vielen Kapiteln ein Verzeichnis gelesen wurde.
