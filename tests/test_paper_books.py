@@ -237,7 +237,7 @@ def test_background_work_does_not_eat_the_childs_daily_budget(env, monkeypatch):
     assert key, "das Kind darf fragen, obwohl die App heute schon gearbeitet hat"
     with closing(db.webapp_conn()) as c, c:
         c.execute("INSERT INTO mentor_ai_calls(id,account_id,session_id,purpose,month,day,model,status,reserved_micro,charged_micro,input_rate,output_rate,created_at) "
-                  "VALUES('own',1,NULL,'mentor','2026-09','2026-09-11','test','settled',9_900_000,9_900_000,10,45,'now')")
+                  "VALUES('own',1,NULL,'mentor','2026-09','2026-09-11','test','settled',9990000,9990000,10,45,'now')")
     with pytest.raises(HTTPException) as caught:
         ai.reserve(1, "mentor", None, 1000, 500)
     assert caught.value.status_code == 429 and "heute" in caught.value.detail
