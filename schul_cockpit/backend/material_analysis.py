@@ -254,6 +254,66 @@ def _defer(material_id: int, reason: str) -> None:
                      (reason[:80], store.now_iso(), material_id))
 
 
+def _purpose(row) -> str:
+    # Buch- und Heftseiten, Verzeichnisse und Klausurzettel sind Quellen
+    # und laufen im Quellen-Rahmen (D41), nicht im Tagesrahmen des Kontos:
+    # 26 Latein-Uploads an einem Nachmittag scheiterten sonst mit 429.
+    source_like = (row["origin"] if "origin" in row.keys() else "") == "book_fetch" or \
+        row["kind"] in ("book_page", "workbook", "toc", "exam_notice")
+    return ai.SOURCES if source_like else "background"
+
+
+async def extract(account_id: int, row, model: str | None = None) -> tuple[Insight, str]:
+    """Das Material lesen, ohne etwas zu speichern. Gibt die Lesung und den
+    Schlüssel des Aufrufs zurück; mit `model` lässt sich ein anderes Modell
+    an derselben Seite messen (Eichung, D54)."""
+    with closing(webapp_conn()) as conn:
+        context = _context(conn, account_id, row)
+    images, text = _parts(row)
+    if not images and not text:
+        raise ValueError("kein lesbarer Inhalt")
+    if text:
+        context["dokumenttext"] = text[:20000]
+    raw, _, key = await ai.complete(
+        account_id, _purpose(row), INSTRUCTION + json.dumps(Insight.model_json_schema()),
+        context, images, max_output=8000, **({"model": model} if model else {}))
+    return Insight.model_validate_json(raw), key
+
+
+async def compare(account_id: int, material_id: int, model: str) -> dict:
+    """Eine bereits gelesene Seite mit einem anderen Modell lesen und gegen
+    den gespeicherten Stand halten: Seitenzahl, Buchteil, Art und wie viel
+    vom Wortlaut übereinstimmt. Gespeichert wird nichts."""
+    import difflib
+    with closing(webapp_conn()) as conn:
+        row = conn.execute("SELECT * FROM materials WHERE id=? AND account_id=?", (material_id, account_id)).fetchone()
+    if not row:
+        raise ValueError("Material nicht gefunden")
+    insight, key = await extract(account_id, row, model=model)
+    stored = row["content_text"] or ""
+    ratio = difflib.SequenceMatcher(None, " ".join(stored.split()), " ".join(insight.content_text.split())).ratio()
+    with closing(webapp_conn()) as conn:
+        call = conn.execute("SELECT charged_micro,reserved_micro,status FROM mentor_ai_calls WHERE id=?", (key,)).fetchone()
+    printed = [int(p) for p in insight.printed_pages if 0 < int(p) < 2000]
+    stored_pages = []
+    try:
+        stored_pages = [int(p) for p in json.loads(row["printed_pages"] or "[]")]
+    except (ValueError, TypeError):
+        pass
+    if not stored_pages and row["source_page"]:
+        stored_pages = [row["source_page"]]
+    return {
+        "material_id": material_id, "model": model, "kind": row["kind"], "stored_kind": row["kind"], "read_kind": insight.kind,
+        "stored_pages": stored_pages, "read_pages": printed, "pages_match": bool(stored_pages) and stored_pages[0] in printed,
+        "stored_part": row["source_label"], "read_part": insight.book_part.strip() or None,
+        "part_match": (row["source_label"] or None) == (insight.book_part.strip() or None),
+        "text_ratio": round(ratio, 3), "stored_chars": len(stored), "read_chars": len(insight.content_text),
+        "confidence": insight.confidence, "unreadable": insight.unreadable,
+        "cost_eur": round(((call["charged_micro"] if call and call["status"] == "settled" and call["charged_micro"] else (call["reserved_micro"] if call else 0)) or 0) / 1e6, 4),
+        "read_text": insight.content_text[:600],
+    }
+
+
 async def analyze(account_id: int, material_id: int) -> bool:
     """One material. Returns True when fields were written."""
     with closing(webapp_conn()) as conn:
@@ -261,30 +321,13 @@ async def analyze(account_id: int, material_id: int) -> bool:
                            (material_id, account_id)).fetchone()
         if not row:
             return False
-        context = _context(conn, account_id, row)
     try:
-        images, text = _parts(row)
-    except Exception as exc:
-        _defer(material_id, type(exc).__name__)
-        return False
-    if not images and not text:
-        _defer(material_id, "kein lesbarer Inhalt")
-        return False
-    if text:
-        context["dokumenttext"] = text[:20000]
-    try:
-        # Buch- und Heftseiten, Verzeichnisse und Klausurzettel sind Quellen
-        # und laufen im Quellen-Rahmen (D41), nicht im Tagesrahmen des Kontos:
-        # 26 Latein-Uploads an einem Nachmittag scheiterten sonst mit 429.
-        source_like = (row["origin"] if "origin" in row.keys() else "") == "book_fetch" or \
-            row["kind"] in ("book_page", "workbook", "toc", "exam_notice")
-        purpose = ai.SOURCES if source_like else "background"
-        raw, _, _ = await ai.complete(
-            account_id, purpose, INSTRUCTION + json.dumps(Insight.model_json_schema()),
-            context, images, max_output=8000)
-        insight = Insight.model_validate_json(raw)
+        insight, _ = await extract(account_id, row)
     except ValidationError:
         _defer(material_id, "Antwort nicht auswertbar")
+        return False
+    except ValueError as exc:
+        _defer(material_id, str(exc)[:80])
         return False
     except Exception as exc:
         # Never log prompts, material content or provider bodies.

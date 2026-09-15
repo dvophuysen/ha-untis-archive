@@ -54,6 +54,9 @@ def status():
         counts = c.execute('SELECT status,COUNT(*) n FROM mentor_ai_calls WHERE month=? GROUP BY status',(month,)).fetchall()
     model = ai_settings()['model']
     return dict(month=month,used_eur=round(used/1e6,4),limit_eur=cfg['monthly_micro']/1e6,daily_limit_eur=cfg['daily_micro']/1e6,
+                background_limit_eur=cfg['background_micro']/1e6,session_limit_eur=SESSION_MICRO/1e6,
+                model=model,sources_model=cfg.get('sources_model') or None,models=sorted(RATES),
+                rates={m:{'input_per_m':r[0],'output_per_m':r[1]} for m,r in RATES.items()},
                 warning_eur=cfg['warning_micro']/1e6,background_eur=round(bg/1e6,4),
                 sources_eur=round(src/1e6,4),sources_limit_eur=cfg['sources_micro']/1e6,
                 warning=used>=cfg['warning_micro'],remaining_eur=max(0,(cfg['monthly_micro']-used)/1e6),
@@ -63,8 +66,25 @@ def status():
                 calls={r['status']:r['n'] for r in counts})
 
 
-def reserve(account_id, purpose, session_id, input_max, output_max):
-    cfg_ai = ai_settings(); model=cfg_ai['model']
+def model_for(purpose, cfg=None, override=None):
+    """Welches Modell einen Aufruf bedient: fürs Abschreiben von Quellen und
+    die Hintergrundauswertung das in mentor_ai_config.sources_model gewählte,
+    sonst das Hauptmodell. Erklären und Üben bleiben beim Hauptmodell."""
+    if override: return override
+    main=ai_settings()['model']
+    if purpose!=SOURCES and purpose not in BACKGROUND: return main
+    if cfg is None:
+        # Nur lesen, keine Konfiguration anlegen: Das tut reserve() selbst.
+        with closing(webapp_conn()) as c:
+            row=c.execute("SELECT sources_model FROM mentor_ai_config WHERE id=1").fetchone()
+        chosen=(row['sources_model'] or '').strip() if row else ''
+    else:
+        chosen=(cfg.get('sources_model') or '').strip()
+    return chosen or main
+
+
+def reserve(account_id, purpose, session_id, input_max, output_max, model=None):
+    model=model or model_for(purpose)
     if model not in RATES or today_local()>=RATE_UNTIL:
         raise HTTPException(503,'Für dieses Modell müssen die Budget-Kostensätze geprüft werden.')
     ri,ro=RATES[model]
@@ -113,8 +133,9 @@ def settle(key, result=None, error=None):
             c.execute("UPDATE mentor_ai_calls SET status='uncertain',finished_at=?,error=? WHERE id=?",(now_iso(),error or 'usage_missing',key))
 
 
-async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None):
+async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, model=None):
     config=ai_settings();url=urlsplit(config['url'])
+    model=model_for(purpose,override=model)
     if not config['key'] or not config['model'] or url.scheme!='https' or not url.hostname or url.username or url.password:
         raise HTTPException(503,'Die KI-Verbindung ist noch nicht eingerichtet.')
     if not 256<=max_output<=8000: raise ValueError('Invalid output boundary')
@@ -145,14 +166,14 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
     text_bytes=len((instruction+raw).encode())
     if text_bytes>48000: raise HTTPException(413,'Zu viel Material für einen Schritt. Bitte einen kleineren Abschnitt wählen.')
     upper_input=text_bytes+1024+32768*len(images)
-    payload=model_payload(config['url'],config['model'],instruction,context,images)
+    payload=model_payload(config['url'],model,instruction,context,images)
     if uses_responses(config['url']):
         payload['max_output_tokens']=max_output
         payload['reasoning']={'effort':'low'}
     else:
         payload['max_completion_tokens']=max_output
         payload['reasoning_effort']='low'
-    key=reserve(account_id,purpose,session_id,upper_input,max_output)
+    key=reserve(account_id,purpose,session_id,upper_input,max_output,model=model)
     result=None
     try:
         async with httpx.AsyncClient(timeout=90,follow_redirects=False) as client:

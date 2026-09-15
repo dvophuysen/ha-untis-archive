@@ -355,3 +355,53 @@ def test_a_corrected_chapter_keeps_its_pages_through_a_new_reading(env):
     latin = sources.ledger(1)["subjects"][0]
     assert {m["label"]: m["pages"] for m in latin["missing"]} == {"Begleitband": [70, 71, 72, 73, 74]}
     assert client.patch("/api/accounts/1/materials/sources/chapters/99999", json={"start_page": 5}).status_code == 404
+
+
+def test_the_transcription_model_is_chosen_per_purpose_and_set_by_parents(env, monkeypatch):
+    from backend import ai_gateway as ai
+    from backend.routers import mentor as mentor_routes
+    client, state, _ = env
+    client.app.include_router(mentor_routes.router, prefix="/api")
+    for k, v in {'LEARNING_AI_MODEL': 'test', 'LEARNING_AI_URL': 'https://example.com/responses', 'LEARNING_AI_KEY': 'fake'}.items():
+        monkeypatch.setenv(k, v)
+    assert ai.model_for("sources") == "test" and ai.model_for("mentor") == "test"
+    reply = client.put("/api/accounts/1/learning/mentor/budget-limits",
+                       json={"monthly_eur": 80, "daily_eur": 12, "sources_model": "test-model"})
+    assert reply.status_code == 200, reply.text
+    body = reply.json()
+    assert (body["limit_eur"], body["daily_limit_eur"], body["sources_model"]) == (80.0, 12.0, "test-model")
+    # Abschreiben und Hintergrund nehmen das gewählte Modell, Üben bleibt beim Hauptmodell.
+    assert ai.model_for("sources") == "test-model" and ai.model_for("background") == "test-model"
+    assert ai.model_for("mentor") == "test" and ai.model_for("exam_scope") == "test"
+    assert client.put("/api/accounts/1/learning/mentor/budget-limits", json={"sources_model": "gpt-9"}).status_code == 422
+    # Zurück auf das Hauptmodell.
+    assert client.put("/api/accounts/1/learning/mentor/budget-limits", json={"sources_model": ""}).json()["sources_model"] is None
+    assert ai.model_for("sources") == "test"
+
+
+def test_comparing_a_page_with_another_model_stores_nothing(env, monkeypatch):
+    from backend import material_analysis as analysis
+    client, state, _ = env
+    client.app.include_router(materials_routes.router, prefix="/api")
+    for k, v in {'LEARNING_AI_MODEL': 'test', 'LEARNING_AI_URL': 'https://example.com/responses', 'LEARNING_AI_KEY': 'fake'}.items():
+        monkeypatch.setenv(k, v)
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,content_text,source_label,source_page,printed_pages,file_bytes,mime_type,analysis_state,created_at,updated_at) "
+                  "VALUES(1,'book_page','LATEIN','Seite 13','Substantive der a- und o-Deklination im Nominativ.','Begleitband',13,'[13]',?,'image/jpeg','ready','now','now')", (photo(),))
+        material_id = c.execute("SELECT id FROM materials").fetchone()[0]
+    seen = {}
+
+    async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, model=None):
+        seen["model"] = model; seen["purpose"] = purpose
+        return json.dumps({"kind": "book_page", "content_text": "Substantive der a- und o-Deklination im Nominativ", "printed_pages": [13],
+                           "book_part": "Begleitband", "confidence": 0.9}), {}, "call-1"
+    monkeypatch.setattr(analysis.ai, "complete", complete)
+    reply = client.post(f"/api/accounts/1/materials/{material_id}/analysis/compare", json={"model": "test-model"})
+    assert reply.status_code == 200, reply.text
+    got = reply.json()
+    assert seen == {"model": "test-model", "purpose": "sources"}
+    assert got["pages_match"] and got["part_match"] and got["text_ratio"] > 0.95
+    with closing(db.webapp_conn()) as c:
+        row = c.execute("SELECT content_text,analysis_model FROM materials WHERE id=?", (material_id,)).fetchone()
+    assert row[0].endswith(".") and row[1] is None, "die Eichung speichert nichts"
+    assert client.post(f"/api/accounts/1/materials/{material_id}/analysis/compare", json={"model": "gpt-9"}).status_code == 422
