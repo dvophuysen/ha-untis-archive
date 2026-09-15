@@ -249,7 +249,11 @@ def touched_chapters(account_id: int, title: str, subject: str, chapters: list[d
         if not chapter:
             continue
         # Der Abschnitt und das Kapitel darüber: beide gelten als angeschnitten.
+        # Ein Teil ohne Nummer („Gefahr im Circus Maximus", Lektionen 1–3) ist
+        # eine Überschrift über mehreren Lektionen, kein Kapitel; er würde
+        # sonst zwanzig Seiten auf die Liste setzen, die noch niemand hatte.
         for unit in [chapter] + [c for c in chapters if c["kind"] == "chapter" and c["level"] < chapter["level"]
+                                 and (c.get("number") or "").strip()
                                  and c["start_page"] <= row["page"] <= (c["end_page"] or c["start_page"])]:
             entry = found.setdefault(unit["id"], {**unit, "first_date": row["first_date"], "cited_pages": set(), "inferred": False})
             entry["first_date"] = min(entry["first_date"], row["first_date"])
