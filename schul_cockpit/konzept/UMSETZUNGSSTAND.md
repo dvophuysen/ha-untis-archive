@@ -5,6 +5,22 @@ mit echten Abrufen geprüft; 0.57.0 folgt in derselben Session.
 
 ## Was ausgeliefert ist
 
+**Eichung der Abschreibmodelle (0.61.0/0.61.1, D54): nicht umgestellt.** Acht
+echte Seiten (Begleitband-Grammatik und -Wortschatz, Textband-Lektionstext,
+Arbeitsheft, Verzeichnisseite, handschriftlicher Klausurzettel, zwei
+abgerufene Doppelseiten aus Deutsch und Mathematik) wurden mit dem Hauptmodell
+noch einmal und mit den beiden günstigeren Modellen gelesen. Maß: gedruckte
+Seitenzahl, Buchteil, Wortabdeckung gegenüber der gespeicherten Lesung.
+Hauptmodell gegen sich selbst: Wortabdeckung 0,95 bis 1,00, es fehlen nur
+Wörter aus Bildbeschreibungen; 0,07 bis 0,14 Euro je Seite. Mittleres Modell
+(rund 0,04 Euro): auf Einzelseiten 0,91 bis 0,99, aber bei der
+Mathematik-Doppelseite 34/35 nur Seite 35 gelesen (Abdeckung 0,66), auf dem
+Klausurzettel alle Seitenzahlen verloren, auf der Wortschatzseite ein Lernwort
+(„cōgitāre“). Kleines Modell (rund 0,016 Euro): Lektionstext nur zur Hälfte
+(0,48). Doppelseiten sind der Hauptanteil des Bestands; ein Modell, das eine
+Seite davon auslässt, spart am falschen Ende. Das Abschreiben bleibt beim
+Hauptmodell. Der Vergleichsaufruf bleibt für spätere Modelle bestehen.
+
 **Ankündigung, Gegenlesen, Buchvermutung (0.59.0, D50–D52).** Ein Zettel
 der Lehrkraft legt den Stoffplan fest (`NOTICE_RULE`, Kategorie `context`).
 Zettel, Verzeichnisse und unsichere Lesungen bitten auf der Materialseite um
