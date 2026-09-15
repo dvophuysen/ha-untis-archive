@@ -1,3 +1,7 @@
+## 0.56.8
+
+- Der Quellen-Rahmen steht auf 30 Euro im Monat, wo bisher die Voreinstellung von 15 Euro galt. Gemessen kostet eine gelesene Buchseite rund 13 Cent, weil der Text wortgetreu abgeschrieben wird; der Altstand des Schuljahresbeginns braucht mehr als 15 Euro. Ein selbst gesetzter Wert bleibt.
+
 ## 0.56.7
 
 - Der Altstand wird jetzt eingelesen. Der KI-Tagesrahmen von 5 Euro je Kind gilt nicht mehr für den Quellenbestand; der hat seinen eigenen Monatsrahmen. Der Sammellauf nimmt zuerst die Seiten offener Hausaufgaben, dann die Fächer mit einer Arbeit in den nächsten zwei Wochen, dann den Rest, und liest je Lauf bis zu 40 abgelegte, noch ungelesene Seiten nach.
