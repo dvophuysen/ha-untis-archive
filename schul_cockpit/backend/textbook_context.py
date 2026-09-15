@@ -1,6 +1,6 @@
 """Book pages for the homework mentor: cached, diagnosable, never raising."""
 from __future__ import annotations
-import base64, io, json, logging, re
+import asyncio, base64, io, json, logging, re
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from PIL import Image
@@ -177,3 +177,35 @@ async def test_page(account_id:int,book_id:int,page:int) -> dict:
         if seen.window_image:
             result["window_image"]="data:image/jpeg;base64,"+base64.b64encode(_jpeg(seen.window_image)).decode()
     return result
+
+
+# The parent page test as a background job. A fetch takes 30 seconds to a few
+# minutes, and the remote-access proxy in front of Home Assistant cuts every
+# request after 100 seconds. So the request starts the job and the page asks
+# again until it is done. One job per book at a time; the latest result stays
+# until the next one replaces it.
+_PAGE_TESTS:dict[tuple[int,int],dict]={}
+_PAGE_TEST_TASKS:dict[tuple[int,int],asyncio.Task]={}
+
+def page_test_state(account_id:int,book_id:int) -> dict:
+    return _PAGE_TESTS.get((account_id,book_id)) or {"state":"none"}
+
+async def _run_page_test(key:tuple[int,int],account_id:int,book_id:int,page:int) -> None:
+    try: result=await test_page(account_id,book_id,page)
+    except Exception as exc:
+        _LOGGER.warning("digital textbook page test failed for account %s: %s",account_id,type(exc).__name__)
+        result={"status":"viewer_error","page":page,"stage":"Seitenabruf","detail":type(exc).__name__}
+    _PAGE_TESTS[key]={"state":"done","finished_at":_now(),"result":result}
+    _PAGE_TEST_TASKS.pop(key,None)
+
+def start_page_test(account_id:int,book_id:int,page:int) -> dict:
+    """Start the job unless one runs for this book; say what is running."""
+    key=(account_id,book_id)
+    current=_PAGE_TESTS.get(key)
+    if current and current.get("state")=="running": return current
+    book,credentials=book_and_credentials(account_id,book_id=book_id)
+    if not book:return {"state":"none","status":"unknown_book"}
+    if not credentials:return {"state":"none","status":"not_configured","book":book["title"]}
+    _PAGE_TESTS[key]={"state":"running","status":"running","started_at":_now(),"book":book["title"],"page":page}
+    _PAGE_TEST_TASKS[key]=asyncio.get_running_loop().create_task(_run_page_test(key,account_id,book_id,page))
+    return _PAGE_TESTS[key]

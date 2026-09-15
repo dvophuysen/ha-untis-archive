@@ -12,7 +12,7 @@ from ..iserv_connector import IservLoginError, verify_iserv_login
 from ..secret_store import decrypt_secret, encrypt_secret
 from ..textbook_browser import TextbookScanError
 from ..textbook_catalog import scan_account
-from ..textbook_context import last_fetch, test_page
+from ..textbook_context import last_fetch, page_test_state, start_page_test
 
 router = APIRouter(prefix="/accounts/{account_id}/textbooks", tags=["textbooks"])
 
@@ -238,18 +238,34 @@ def update_catalog_subject(
     return get_catalog(account_id, user)
 
 
-@router.post("/catalog/{book_id}/page-test")
+@router.post("/catalog/{book_id}/page-test", status_code=202)
 async def page_test(
     account_id: int,
     book_id: int,
     body: PageTestIn,
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
-    """Run one real page fetch and report the stage it reached."""
+    """Start one real page fetch in the background.
+
+    The fetch outlasts the 100 seconds the remote-access proxy allows a
+    request, so the answer is "running" and GET on the same address tells how
+    it went.
+    """
     _require_parent(user, account_id)
-    result = await test_page(account_id, book_id, body.page)
-    if result["status"] == "unknown_book":
+    state = start_page_test(account_id, book_id, body.page)
+    if state.get("status") == "unknown_book":
         raise HTTPException(status_code=404, detail="Schulbuch nicht gefunden")
-    if result["status"] == "not_configured":
+    if state.get("status") == "not_configured":
         raise HTTPException(status_code=422, detail="Noch kein Zugang gespeichert")
-    return result
+    return state
+
+
+@router.get("/catalog/{book_id}/page-test")
+def page_test_result(
+    account_id: int,
+    book_id: int,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """The running or last finished page test of this book."""
+    _require_parent(user, account_id)
+    return page_test_state(account_id, book_id)

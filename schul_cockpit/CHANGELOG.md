@@ -1,3 +1,8 @@
+## 0.52.4
+
+- Der Browser des Add-ons kam mit den WebGL-Flags aus 0.52.3 auf dem Raspberry Pi nicht mehr hoch; jeder Abruf lief in einen Zeitüberschreitungsfehler. Software-WebGL wird jetzt ohne den Griff nach einer echten GPU angefordert, und wenn der Browser so nicht startet, startet er ein zweites Mal ohne GPU wie zuvor. Start, Abschluss und Ende jedes Browserlaufs stehen mit Dauer im Protokoll.
+- Der Seitentest in den Eltern-Einstellungen läuft im Hintergrund. Ein Abruf dauert bis zu einigen Minuten, der Fernzugriff über Nabu Casa kappt eine Anfrage aber nach 100 Sekunden; bisher endete der Test dann in einem Fehler, obwohl er im Add-on weiterlief. Die Seite fragt jetzt nach, bis das Ergebnis da ist.
+
 ## 0.52.3
 
 - Die BiBox-Bücher (Mathematik, Erdkunde) liefern ihre Seiten. Der Betrachter zeichnet mit WebGL, und das war im Browser des Add-ons abgeschaltet; er meldete „geladen" und zeigte eine weiße Fläche. WebGL läuft jetzt in Software. Eine Seite, die nach dem Blättern noch leer ist, bekommt bis zu 15 Sekunden Zeit, bevor sie als leer gilt.

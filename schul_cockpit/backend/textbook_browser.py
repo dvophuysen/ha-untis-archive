@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import logging
 import os
 import re
 import time
@@ -17,6 +18,8 @@ from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
+_LOGGER = logging.getLogger("schul_cockpit.textbooks")
+
 
 class TextbookScanError(RuntimeError):
     def __init__(self, message: str, stage: str | None = None):
@@ -28,27 +31,26 @@ _CHROMIUM = "/usr/bin/chromium-browser"
 _CHROMEDRIVER = "/usr/bin/chromedriver"
 
 
-def browser_arguments(*extra_args: str) -> list[str]:
+def browser_arguments(*extra_args: str, software_webgl: bool = True) -> list[str]:
     """Flags for the headless browser.
 
-    No --disable-gpu: it switches WebGL off entirely, and the BiBox reader
-    draws its pages with WebGL. Measured on the live instance, it then keeps
-    the toolbar and the page counter and shows a white void, reporting
-    "CanvasRenderer is not yet implemented". Without a GPU, Chromium renders
-    WebGL in software (SwiftShader); since Chromium 126 that needs an explicit
-    opt-in, hence --enable-unsafe-swiftshader.
+    The BiBox reader draws its pages with WebGL. With --disable-gpu, WebGL is
+    gone entirely: the reader keeps toolbar and page counter, shows a white
+    void and reports "CanvasRenderer is not yet implemented". Without a GPU,
+    Chromium can render WebGL in software (SwiftShader); since Chromium 126
+    that needs an explicit opt-in. --ignore-gpu-blocklist is deliberately
+    absent: on the Raspberry Pi it made the browser probe a GPU it cannot
+    reach, and the start never came back.
     """
-    return ["--headless", "--no-sandbox", "--disable-dev-shm-usage",
-            "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--lang=de-DE", *extra_args]
+    gpu = (["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+           if software_webgl else ["--disable-gpu"])
+    return ["--headless", "--no-sandbox", "--disable-dev-shm-usage", *gpu, "--lang=de-DE", *extra_args]
 
 
-def _driver(*extra_args: str) -> webdriver.Chrome:
-    """Headless Chromium on the driver shipped in the image. Without the
-    explicit service, Selenium Manager first tries to download one and fails
-    on aarch64 before falling back."""
+def _start(arguments: list[str]) -> webdriver.Chrome:
     options = webdriver.ChromeOptions()
     options.binary_location = _CHROMIUM
-    for arg in browser_arguments(*extra_args):
+    for arg in arguments:
         options.add_argument(arg)
     # Console errors are the only place a reader says why it draws nothing.
     options.set_capability("goog:loggingPrefs", {"browser": "ALL"})
@@ -56,6 +58,37 @@ def _driver(*extra_args: str) -> webdriver.Chrome:
     driver = webdriver.Chrome(options=options, service=service) if service else webdriver.Chrome(options=options)
     driver.set_page_load_timeout(30)
     return driver
+
+
+def _driver(*extra_args: str) -> webdriver.Chrome:
+    """Headless Chromium on the driver shipped in the image. Without the
+    explicit service, Selenium Manager first tries to download one and fails
+    on aarch64 before falling back.
+
+    Software WebGL first; if the browser does not come up that way, once more
+    without a GPU, so the readers that never needed WebGL keep working.
+    """
+    started = time.monotonic()
+    try:
+        driver = _start(browser_arguments(*extra_args))
+        _LOGGER.info("textbook browser up after %.1fs (software WebGL)", time.monotonic() - started)
+        return driver
+    except Exception as exc:
+        _LOGGER.warning("textbook browser start with software WebGL failed after %.1fs: %s; retrying without GPU",
+                        time.monotonic() - started, type(exc).__name__)
+    started = time.monotonic()
+    driver = _start(browser_arguments(*extra_args, software_webgl=False))
+    _LOGGER.info("textbook browser up after %.1fs (no GPU)", time.monotonic() - started)
+    return driver
+
+
+def _quit(driver) -> None:
+    started = time.monotonic()
+    try:
+        driver.quit()
+        _LOGGER.info("textbook browser closed after %.1fs", time.monotonic() - started)
+    except Exception as exc:
+        _LOGGER.warning("textbook browser close failed after %.1fs: %s", time.monotonic() - started, type(exc).__name__)
 
 
 @dataclass(frozen=True)
@@ -226,7 +259,7 @@ def _scan_shelf_sync(portal_url: str, username: str, password: str) -> list[Shel
     except Exception as exc:
         raise TextbookScanError("Das Medienregal konnte nicht automatisch gelesen werden") from exc
     finally:
-        driver.quit()
+        _quit(driver)
 
 
 async def scan_shelf(portal_url: str, username: str, password: str) -> list[ShelfBook]:
@@ -1238,6 +1271,8 @@ def _capture_pages_sync(
         elif len(shots) < len(pages) and not note:
             note = "Nicht alle Seiten erreichbar"
         result = CaptureResult(shots=shots, note=note, attempts=trace or [], entry=entry)
+        _LOGGER.info("textbook capture done: %s of %s pages after %.0fs%s", sum(1 for s in shots if s.page is not None),
+                     len(pages), time.monotonic() - (deadline - budget), f" ({note})" if note else "")
         if survey:
             seen = _survey(driver)
             result.controls = seen["controls"]
@@ -1258,7 +1293,7 @@ def _capture_pages_sync(
             _attach_survey(wrapped, driver, stage)
         raise wrapped from exc
     finally:
-        driver.quit()
+        _quit(driver)
 
 
 async def capture_pages(

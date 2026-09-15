@@ -39,6 +39,20 @@ def png(marker):
     return out.getvalue()
 
 
+def outcome(isolated, book_id, page, timeout=10.0):
+    """Start the parent page test and poll until it is done."""
+    import time
+    started = isolated.post(f"/api/accounts/1/textbooks/catalog/{book_id}/page-test", json={"page": page})
+    assert started.status_code == 202 and started.json()["state"] == "running"
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        state = isolated.get(f"/api/accounts/1/textbooks/catalog/{book_id}/page-test").json()
+        if state["state"] == "done":
+            return state["result"]
+        time.sleep(0.05)
+    raise AssertionError("page test never finished")
+
+
 async def test_all_pages_delivered_are_reported_as_loaded(env, monkeypatch):
     seed()
     calls = []
@@ -144,11 +158,7 @@ def test_parent_page_test_reports_the_stage_and_a_preview(env, monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: state.user
     patch.setattr(textbooks, "webapp_conn", db.webapp_conn)
     with TestClient(app) as isolated:
-        answer = isolated.post(
-            f"/api/accounts/1/textbooks/catalog/{book_id}/page-test", json={"page": 34}
-        )
-        assert answer.status_code == 200
-        body = answer.json()
+        body = outcome(isolated, book_id, 34)
         assert body["status"] == "loaded" and body["page"] == 34 and body["shown_page"] == 34
         assert body["image"].startswith("data:image/jpeg;base64,")
         assert body["window_image"].startswith("data:image/jpeg;base64,")
@@ -156,7 +166,7 @@ def test_parent_page_test_reports_the_stage_and_a_preview(env, monkeypatch):
             {"tag": "button", "label": "Nächste Seite", "visible": True, "frame": 1}
         ]
         assert body["documents"][0]["url"] == "/reader#/page/1"
-        assert "geheim" not in answer.text
+        assert "geheim" not in str(body)
         catalog = isolated.get("/api/accounts/1/textbooks/catalog").json()
         assert catalog["last_fetch"]["status"] == "loaded"
         assert catalog["last_fetch"]["pages"] == [34]
@@ -237,7 +247,7 @@ def test_page_test_passes_the_viewer_diagnostics_through(env, monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: state.user
     patch.setattr(textbooks, "webapp_conn", db.webapp_conn)
     with TestClient(app) as isolated:
-        body = isolated.post(f"/api/accounts/1/textbooks/catalog/{book_id}/page-test", json={"page": 18}).json()
+        body = outcome(isolated, book_id, 18)
     assert body["diagnostics"]["blank_after_wait"] is True
     assert body["diagnostics"]["page_areas"][0]["label"] == "Seite 18"
     assert body["diagnostics"]["console"][0]["level"] == "SEVERE"
@@ -264,8 +274,43 @@ def test_a_failed_run_still_reports_where_it_stopped(env, monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: state.user
     patch.setattr(textbooks, "webapp_conn", db.webapp_conn)
     with TestClient(app) as isolated:
-        body = isolated.post(f"/api/accounts/1/textbooks/catalog/{book_id}/page-test", json={"page": 30}).json()
+        body = outcome(isolated, book_id, 30)
     assert body["status"] == "viewer_error" and body["stage"] == "Eduplaces öffnen"
     assert body["controls"][0]["text"] == "click & study"
     assert body["window_image"].startswith("data:image/jpeg;base64,")
     assert body["diagnostics"]["stage"] == "Eduplaces öffnen"
+
+
+def test_a_second_page_test_waits_for_the_running_one(env, monkeypatch):
+    """One browser per book at a time; a second click reports the running job."""
+    import asyncio
+    client, state, patch = env
+    book_id = seed()
+    gate = {"release": None}
+
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False):
+        while not gate["release"]:
+            await asyncio.sleep(0.01)
+        return CaptureResult(shots=[PageShot(pages[0], png(12))])
+
+    monkeypatch.setattr(ctx, "capture_pages", capture)
+    app = FastAPI()
+    app.include_router(textbooks.router, prefix="/api")
+    app.dependency_overrides[get_current_user] = lambda: state.user
+    patch.setattr(textbooks, "webapp_conn", db.webapp_conn)
+    with TestClient(app) as isolated:
+        first = isolated.post(f"/api/accounts/1/textbooks/catalog/{book_id}/page-test", json={"page": 12}).json()
+        second = isolated.post(f"/api/accounts/1/textbooks/catalog/{book_id}/page-test", json={"page": 99}).json()
+        assert first["state"] == "running" and second["page"] == 12, "the running job is reported, not a new one"
+        assert isolated.get(f"/api/accounts/1/textbooks/catalog/{book_id}/page-test").json()["state"] == "running"
+        gate["release"] = True
+        body = None
+        import time
+        end = time.monotonic() + 5
+        while time.monotonic() < end:
+            got = isolated.get(f"/api/accounts/1/textbooks/catalog/{book_id}/page-test").json()
+            if got["state"] == "done":
+                body = got["result"]
+                break
+            time.sleep(0.05)
+        assert body and body["status"] == "loaded" and body["page"] == 12
