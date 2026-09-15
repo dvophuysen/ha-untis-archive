@@ -60,3 +60,25 @@ D15 · 13.09.2026 · Beschlossen: Allgemein formulierte Produktkonzepte dürfen 
 D16 · 13.09.2026 · Beschlossen: Fälligkeit rechts über Hilfe auch auf dem iPhone. Kleinere visuelle Dichte und konsistente Aktionssymbole; identische Aktion erhält identische Darstellung.
 
 D17 · 13.09.2026 · Zielrichtung präzisiert: Fächerübersicht als kompakte status-sortierte Grafik mit sichtbarer Entwicklung und Details erst nach Antippen. Balken oder Sterne als mögliche Darstellung; exakte Bewertung weiterhin offen. Ausarbeitung in FAECHERUEBERSICHT.md. Elternstartseite: ganze Liste, Auszug oder Verzicht erst später entscheiden.
+
+## Quellen und Material
+
+D28 · 15.09.2026 · Beschlossen: Die Buchstelle hinter einer Aufgabe wird aus Stunden- und Hausaufgabentexten gelesen, nicht erfragt. Als Seite gilt nur eine ausdrückliche Angabe (`S.`, `Seite`, `p.`, `pp.`, `página`); Aufgabennummern sind keine Seiten. Der zuletzt genannte Buchteil gilt über den Satz hinaus weiter. Steht nirgends ein Buchteil, heißt die Quelle „Unbekannt“ — geraten wird keiner. Herkunft: Produktabstimmung, belegt an 27 von 36 beziehungsweise 14 von 30 Hausaufgaben mit Buchangabe. Ausgestaltung in [Quellen](QUELLEN.md).
+
+D29 · 15.09.2026 · Beschlossen: Die Materialseite führt eine Einkaufsliste der Quellen, die der Unterricht nennt und die weder digital abrufbar noch fotografiert sind, je Fach aufklappbar, mit Zitat und Datum. Sie zeigt nur an; angefordert oder abgerufen wird nichts. Herkunft: ausdrücklicher Nutzerwunsch nach einer zentralen Übersicht für einen Sammelauftrag zum Scannen.
+
+D30 · 15.09.2026 · Beschlossen: Fehlt zu einer Seitenangabe der Buchteil, gilt zunächst die Annahme Schulbuch. Sie ist eine Hypothese, die der Seiteninhalt bestätigen oder widerlegen muss, mit vier Ergebnissen: belegt, plausibel, passt nicht, nicht prüfbar. Eingefordert werden nur die letzten beiden. Maßgeblich ist die gedruckte Seitenzahl auf dem Bild, nicht die Angabe der Schnittstelle: Bei acht Abrufen wich die gelieferte Seite dreimal von der bestellten ab, ohne dass die Schnittstelle das meldete. Ebenso muss geprüft werden, ob überhaupt Buchinhalt auf dem Bild ist; ein Betrachter meldet `loaded` und liefert eine leere Seite. Herkunft: Vorschlag des Nutzers, an der laufenden Instanz nachgewiesen. Noch nicht gebaut.
+
+D31 · 15.09.2026 · Beschlossen: Ein Treffer im Buchkatalog ist kein Zugriff. Der Abruf wird je Buch einmal nachgewiesen, bevor die Quellenbilanz seine Seiten als vorhanden verbucht. Zwei von acht Büchern eines Kontos sind nicht abrufbar, eines mit Betrachterfehler, eines mit leerer Seite trotz Erfolgsmeldung. Herkunft: eigene Prüfung. Korrigiert eine zu optimistische Annahme in 0.52.0; noch nicht gebaut.
+
+## Verantwortung und Erinnerungen
+
+D32 · 15.09.2026 · Verworfen: Ein Knopf „Tag abschließen“ unter der Abendkarte. Begründung des Nutzers: „Die Kinder machen keinen Abschluss. Sie lassen einfach Dinge offen. Oder sie haben sie halt erledigt.“ Ein Knopf, den niemand drückt, liefert kein Signal; einer, den man gedankenlos drückt, ein falsches. In 0.51.0 gebaut, in 0.51.2 wieder entfernt, bevor ihn jemand zu sehen bekam.
+
+D33 · 15.09.2026 · Beschlossen: Der erledigte Abend wird abgeleitet statt abgefragt. Er gilt als erledigt, sobald keine Aufgabe mehr fällig, die Tasche für morgen bestätigt und die Stunden zurückgemeldet sind — dieselben drei Zahlen, über die auch die Erinnerung entscheidet. Festgehalten wird der Zeitpunkt und ob die Erinnerung da schon draußen war; läuft später etwas nach, bleibt der Moment stehen. Angezeigt wird dazu nichts. Herkunft: Produktabstimmung nach D32.
+
+D34 · 15.09.2026 · Beschlossen: Selbstständig heißt, dass vor der Erinnerung alles erledigt war. Gezählt werden nur Abende vor einem Schultag; ein Sonntagabend gehört zur Woche des Montags, den er vorbereitet. Keine Serie, kein Nullpunkt. Ob und wie die Zahl den Kindern gezeigt wird, ist offen und wird verabredet, nicht gebaut.
+
+D35 · 15.09.2026 · Beschlossen: Die Morgenmitteilung ist ab Werk aus und wird in den Eltern-Einstellungen eingeschaltet. Begründung: Eingeschaltet wäre sie am Morgen nach dem Update erstmals um Viertel vor sieben losgegangen, unangekündigt. Eine Mitteilung zu dieser Uhrzeit wird verabredet, nicht ausgeliefert. Herkunft: eigene Korrektur vor der Auslieferung.
+
+D36 · 15.09.2026 · Beschlossen: Arbeitsweise für die Fortsetzung. Vor jeder Änderung liegen drei Dinge vor: was das Problem ist, was gebaut würde, und woran man merkt, ob es hilft. Der Nutzer entscheidet; gebaut wird nur, was auf der Liste steht. Reine Diagnose — Daten lesen, messen, nachsehen — braucht keine Rückfrage. Herkunft: Nutzerhinweis nach D32: „bevor du wirklich irgendwie was komplett Neues erfindest, erst mit mir abstimmen.“

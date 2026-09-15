@@ -18,6 +18,16 @@ Bei neuen Entscheidungen: Kennung, Datum, Herkunft und Begründung ergänzen; ab
 
 Eine neue Session muss diese Dateien ausdrücklich lesen. Ihre Speicherung garantiert keinen automatischen Kontextabruf durch jedes Chat-System. Einstiegssatz: „Arbeite im Repository dvophuysen/ha-untis-archive weiter; lies zuerst schul_cockpit/konzept/README.md und die dort verlinkten Dokumente.“
 
+## Laufende Arbeitspakete
+
+- [Quellen](QUELLEN.md): welche Buchstelle hinter einer Aufgabe steht, was davon abrufbar ist und was eingescannt werden muss. Enthält belegte Befunde zum Seitenabruf aus dem Medienregal.
+- [Verantwortung](VERANTWORTUNG.md): Erinnerungen, abgeleiteter Tagesabschluss, Morgen-Rückfall.
+- [Lerneinheiten](LERNEINHEITEN.md): wie Übungsthemen entstehen und gruppiert werden.
+
+## Arbeitsweise
+
+Vor jeder Änderung liegen drei Dinge vor: was das Problem ist, was gebaut würde, und woran man merkt, ob es hilft. Der Nutzer entscheidet; gebaut wird nur, was auf der Liste steht. Reine Diagnose — Daten lesen, messen, nachsehen — braucht keine Rückfrage. Siehe D36.
+
 ## Technische Referenzen
 
 - [Lernplan-Verzahnung](../LERNPLAN_VERZAHNUNG.md): gemeinsamer Planungsdienst und Wiederholungen.
