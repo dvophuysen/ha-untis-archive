@@ -111,6 +111,18 @@
     const august = start.getMonth() === 7 && start.getDate() === 1;
     return august ? 'seit Schuljahresbeginn' : `seit der letzten Arbeit am ${formatShortDate(s.since)}`;
   }
+  function sourcesLabel(src) {
+    if (!src.total) return 'Noch keine Buchstelle genannt.';
+    const pieces = [`${src.ready} von ${src.total} ${src.total === 1 ? 'Stelle liegt' : 'Stellen liegen'} gelesen vor`];
+    if (src.pending) pieces.push(`${src.pending} unterwegs`);
+    if (src.missing) pieces.push(`${src.missing} ${src.missing === 1 ? 'fehlt' : 'fehlen'}`);
+    return `Material: ${pieces.join(' · ')}`;
+  }
+  function sourcesClass(src) {
+    if (src.missing) return 'missing';
+    if (src.pending) return 'pending';
+    return src.total ? 'ready' : '';
+  }
   function practiceUrl(e) {
     const q = new URLSearchParams({ subject: e.subject_name ?? '', topic: e.title ?? '', mode: 'exam' });
     return `#/lernen?${q.toString()}`;
@@ -179,6 +191,26 @@
           {/if}
         {:else}
           <div class="measured">{practiceLabel(e.practice)}</div>
+        {/if}
+        <!-- Liegt das Material für den Stoff vor? Grün liegt vor und ist gelesen,
+             gelb unterwegs, rot muss fotografiert werden; der Link führt zur
+             Einkaufsliste des Fachs. -->
+        {#if e.sources}
+          <div class="sources">
+            <strong class={sourcesClass(e.sources)}>{sourcesLabel(e.sources)}</strong>
+            {#if e.sources.notice}<div class="dim">Die Ankündigung der Lehrkraft, was in der Arbeit vorkommt, liegt vor.</div>{/if}
+            {#each e.sources.chapters as chapter}
+              <div class="dim">{chapter.part_label ? `${chapter.part_label}, ` : ''}Kapitel {chapter.number} {chapter.title} (S. {chapter.start_page}{chapter.end_page ? `–${chapter.end_page}` : ''}):
+                {chapter.pages_stored} von {chapter.pages} Seiten da{#if chapter.inferred}, aus dem Stundenthema erschlossen{/if}</div>
+            {/each}
+            {#if e.sources.missing}
+              <a class="missing" href={`#/materialien/${encodeURIComponent(e.subject_name ?? '')}`}>
+                Fehlt: {e.sources.missing_items.map((m) => `${m.label} ${m.pages_label}`).join(' · ')} – jetzt fotografieren
+              </a>
+            {/if}
+          </div>
+        {:else if e.date >= today}
+          <div class="dim sources">Aus diesem Zeitraum ist noch keine Buchstelle genannt; ich habe kein Material, das ich prüfen könnte.</div>
         {/if}
         {#if e.subject_name}
           <a class="practice-link" href={practiceUrl(e)}>Für diese Arbeit üben</a>
@@ -288,6 +320,11 @@
   .measured { margin-top: 0.5rem; font-size: 0.85rem; }
   .measured-when { font-size: 0.78rem; }
   .practice-link { display: inline-block; margin-top: 0.5rem; font-weight: 600; }
+  .sources { margin-top: 0.5rem; font-size: 0.88rem; display: grid; gap: 0.15rem; }
+  .sources .ready { color: var(--rating-3); }
+  .sources .pending { color: var(--warm, #b26a00); }
+  .sources .missing { color: var(--rating-1); }
+  .sources a.missing { font-weight: 600; text-decoration: underline; }
   .scope > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-size: 0.85rem; }
   .scope-row { display: flex; gap: 0.5rem; padding: 0.25rem 0; font-size: 0.85rem; }
   .scope-row.done { opacity: 0.65; }

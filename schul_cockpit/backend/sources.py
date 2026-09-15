@@ -923,3 +923,61 @@ def annotate_tasks(account_id: int, tasks: list[dict]) -> None:
         task["source_state"] = state
         task["homework_id"] = hw
         task["materials"] = [details[m] for m in materials if m in details]
+
+
+# --- Der Quellenstand einer Arbeit ---------------------------------------------
+# Auf der Klausurkarte steht, ob das Material für den angenommenen Stoff
+# vorliegt: jede im Zeitraum genannte Stelle, die Kapitel dazu, der Zettel
+# der Lehrkraft. Was fehlt, ist ein Link zur Einkaufsliste des Fachs.
+
+
+def exam_sources(account_id: int, subject: str, since: str, until: str) -> dict | None:
+    """Was für die Arbeit eines Fachs im Zeitraum an Quellen vorliegt und fehlt."""
+    if not subject:
+        return None
+    ensure_synced(account_id)
+    with closing(webapp_conn()) as conn:
+        links = [dict(r) for r in conn.execute(
+            "SELECT part_label,part_kind,page,status,detail,material_id,entry_kind FROM source_links "
+            "WHERE account_id=? AND lower(subject_name)=lower(?) AND entry_date>=? AND entry_date<=?",
+            (account_id, subject, since, until))]
+        analysis = _analysis_states(conn, [l["material_id"] for l in links if l["material_id"]])
+    if not links:
+        notices = [n for n in exam_notices(account_id) if n["subject_name"] and n["subject_name"].casefold() == subject.casefold()
+                   and since <= n["date"] <= until]
+        return {"total": 0, "ready": 0, "pending": 0, "missing": 0, "missing_items": [], "chapters": [],
+                "notice": bool(notices), "subject": subject} if notices else None
+    # Dieselbe Seite aus Stunde, Hausaufgabe und Kapitelregel ist eine Stelle.
+    best: dict[tuple[str, int], str] = {}
+    rank = {"missing": 0, "pending": 1, "ready": 2}
+    for link in links:
+        state = _state_of(link, analysis) or "missing"
+        key = (link["part_label"], link["page"])
+        if key not in best or rank[state] > rank[best[key]]:
+            best[key] = state
+    counts = {"ready": 0, "pending": 0, "missing": 0}
+    gaps: dict[str, list[int]] = {}
+    for (label, page), state in best.items():
+        counts[state] += 1
+        if state == "missing":
+            gaps.setdefault(label, []).append(page)
+    missing_items = [{"label": label, "pages": sorted(pages), "pages_label": page_list(pages)}
+                     for label, pages in sorted(gaps.items(), key=lambda kv: -len(kv[1]))]
+    chapters = []
+    from .book_structure import overview, paper_books
+    book = _shelf(account_id).get(subject.casefold())
+    try:
+        if book:
+            chapters += overview(account_id, book["title"], subject)
+        for paper in paper_books(account_id, subject):
+            chapters += overview(account_id, paper["title"], subject, paper["part_label"])
+    except Exception:
+        log.warning("Kapitel für die Arbeit in %s nicht berechenbar", subject, exc_info=True)
+    chapters = [{"part_label": c.get("part_label"), "number": c["number"], "title": c["title"],
+                 "start_page": c["start_page"], "end_page": c["end_page"], "pages": c["pages"],
+                 "pages_stored": c["pages_stored"], "inferred": c.get("inferred", False)}
+                for c in chapters if since <= c["first_date"] <= until]
+    notices = [n for n in exam_notices(account_id) if n["subject_name"] and n["subject_name"].casefold() == subject.casefold()
+               and since <= n["date"] <= until]
+    return {"total": len(best), **counts, "missing_items": missing_items, "chapters": chapters,
+            "notice": bool(notices), "subject": subject}
