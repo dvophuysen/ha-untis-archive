@@ -174,6 +174,25 @@ async def collect_sources(account_id: int, user: CurrentUser = Depends(get_curre
     return start_collect(account_id)
 
 
+class CompareIn(InputModel):
+    model: str = Field(min_length=1, max_length=60)
+
+
+@router.post("/{material_id}/analysis/compare")
+async def compare_models(account_id: int, material_id: int, body: CompareIn,
+                         user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Eichung: dieselbe Seite mit einem anderen Modell lesen und gegen den
+    gespeicherten Stand halten. Speichert nichts, kostet einen Aufruf."""
+    access(user, account_id, write=True, parent=True)
+    from .. import ai_gateway as ai
+    if body.model not in ai.RATES:
+        raise HTTPException(422, "Unbekanntes Modell.")
+    try:
+        return await analysis.compare(account_id, material_id, body.model)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from None
+
+
 class ChapterPatch(InputModel):
     start_page: int | None = Field(default=None, ge=1, le=1999)
     end_page: int | None = Field(default=None, ge=0, le=1999)

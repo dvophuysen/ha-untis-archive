@@ -69,6 +69,14 @@ class SettingsIn(InputModel):
     enabled:bool=True
     background_enabled:bool=False
 
+class LimitsIn(InputModel):
+    monthly_eur:float|None=Field(default=None,ge=1,le=1000,allow_inf_nan=False)
+    warning_eur:float|None=Field(default=None,ge=1,le=1000,allow_inf_nan=False)
+    daily_eur:float|None=Field(default=None,ge=0.5,le=200,allow_inf_nan=False)
+    sources_eur:float|None=Field(default=None,ge=0,le=1000,allow_inf_nan=False)
+    background_eur:float|None=Field(default=None,ge=0,le=1000,allow_inf_nan=False)
+    sources_model:str|None=Field(default=None,max_length=60)
+
 class PauseIn(InputModel):
     paused:bool=True
 
@@ -182,6 +190,27 @@ def settings(account_id:int,body:SettingsIn,user:CurrentUser=Depends(get_current
                   (account_id,int(body.enabled),int(body.background_enabled),now_iso()))
         c.execute('INSERT INTO learning_discovery_settings(account_id,enabled) VALUES(?,?) ON CONFLICT(account_id) DO UPDATE SET enabled=excluded.enabled',(account_id,int(body.background_enabled)))
     return {'ok':True}
+
+
+@router.put('/budget-limits')
+def limits(account_id:int,body:LimitsIn,user:CurrentUser=Depends(get_current_user)):
+    """Die Rahmen der Eltern: Monat, Warnung, Tag je Kind, Quellen, Hintergrund
+    und das Modell fürs Abschreiben. Bisher nur in der Datenbank einstellbar."""
+    access(user,account_id,write=True,parent=True)
+    fields={}
+    for name,column in (('monthly_eur','monthly_micro'),('warning_eur','warning_micro'),('daily_eur','daily_micro'),
+                        ('sources_eur','sources_micro'),('background_eur','background_micro')):
+        value=getattr(body,name)
+        if value is not None:fields[column]=round(value*1e6)
+    if body.sources_model is not None:
+        chosen=body.sources_model.strip()
+        if chosen and chosen not in ai.RATES:raise HTTPException(422,'Unbekanntes Modell.')
+        fields['sources_model']=chosen or None
+    if not fields:raise HTTPException(422,'Nichts zu ändern.')
+    with closing(webapp_conn()) as c,c:
+        c.execute('BEGIN IMMEDIATE');ai.init_config(c)
+        c.execute('UPDATE mentor_ai_config SET '+','.join(f'{k}=?' for k in fields)+',updated_at=? WHERE id=1',(*fields.values(),now_iso()))
+    return ai.status()
 
 
 @router.put('/budget-opening')

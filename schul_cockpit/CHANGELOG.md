@@ -1,3 +1,8 @@
+## 0.61.0
+
+- Das Modell fürs Abschreiben von Quellen und für die Hintergrundauswertung ist getrennt wählbar; Erklären und Üben bleiben beim Hauptmodell. Umgestellt wird erst nach einer Eichung an echten, bereits gelesenen Seiten: Ein Vergleichsaufruf liest dieselbe Seite mit dem anderen Modell und meldet, ob Seitenzahl, Buchteil und Art stimmen und wie viel vom Wortlaut übereinstimmt. Gespeichert wird dabei nichts.
+- Die Rahmen der Eltern stehen in der Mentor-Ansicht unter „KI-Rahmen einstellen“: Monat, Warnung, Tag je Kind, Quellenbestand, Hintergrund und das Modell fürs Abschreiben. Bisher ging das nur in der Datenbank.
+
 ## 0.60.1
 
 - Rückt bei einer Kapitelkorrektur der Nachbar, rückt das nicht ausdrücklich gesetzte Ende des berichtigten Kapitels mit. Nur eine von Hand gesetzte Endseite bleibt stehen.
