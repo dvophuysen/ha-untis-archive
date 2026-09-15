@@ -188,3 +188,41 @@ async def test_book_pages_stop_before_the_storage_of_the_child_is_full(env, monk
     assert summary["stored"] == 2 and summary["skipped"] == "Materialspeicher voll", "90 Prozent von 150 KB: zwei Seiten passen, die dritte nicht"
     with closing(db.webapp_conn()) as conn:
         assert conn.execute("SELECT COUNT(*) FROM materials").fetchone()[0] == 2
+
+
+async def test_pages_left_unread_are_read_before_new_fetches(env, monkeypatch):
+    """Der KI-Rahmen war erschöpft: die Seiten liegen da, ungelesen. Der
+    nächste Lauf liest sie zuerst und weist damit das Buch nach."""
+    history(homework=[(1, 'SN', 'libro p. 50', '2026-09-10')])
+    shelf()
+    with closing(db.webapp_conn()) as conn:
+        conn.execute("INSERT INTO materials(account_id,kind,subject_name,title,origin,source_book,source_page,analysis_state,"
+                     "analysis_error,created_at,updated_at) VALUES(1,'book_page','SPANISCH','S. 50','book_fetch','¡Apúntate! 2',50,"
+                     "'failed','429','now','now')")
+    capture, calls = fake_capture({50})
+    monkeypatch.setattr(ctx, "capture_pages", capture)
+    fake_analysis(monkeypatch)
+    summary = await collector.collect(1)
+    assert calls == [], "die Seite liegt da, nichts wird geholt"
+    assert summary["reread"] == 1 and summary["verified"] == 1
+    with closing(db.webapp_conn()) as conn:
+        assert conn.execute("SELECT status FROM digital_textbook_access").fetchone()[0] == 'proven'
+        assert conn.execute("SELECT status,detail FROM source_links").fetchone()[:] == ('digital', 'belegt')
+
+
+async def test_two_runs_for_the_same_child_do_not_overlap(env, monkeypatch):
+    import asyncio
+    shelf()
+    gate = asyncio.Event()
+
+    async def slow(account_id, budget):
+        await gate.wait()
+        return {"account_id": account_id, "fetched": 0, "stored": 0, "verified": 0, "skipped": None}
+    monkeypatch.setattr(collector, "_collect", slow)
+    first = asyncio.create_task(collector.collect(1))
+    await asyncio.sleep(0.01)
+    second = await collector.collect(1)
+    assert second["skipped"] == "läuft bereits"
+    gate.set()
+    assert (await first)["skipped"] is None
+    assert (await collector.collect(1))["skipped"] is None, "nach dem Ende ist der Weg wieder frei"
