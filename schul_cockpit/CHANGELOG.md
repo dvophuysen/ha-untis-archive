@@ -1,3 +1,7 @@
+## 0.56.9
+
+- Die Schärfe aus 0.56.6 kam nicht an: Das Chromium-Flag für den Gerätefaktor greift im Headless-Betrieb nicht, die Seiten blieben bei 1308 Pixeln Breite. Der Faktor wird jetzt über das DevTools-Protokoll gesetzt.
+
 ## 0.56.8
 
 - Der Quellen-Rahmen steht auf 30 Euro im Monat, wo bisher die Voreinstellung von 15 Euro galt. Gemessen kostet eine gelesene Buchseite rund 13 Cent, weil der Text wortgetreu abgeschrieben wird; der Altstand des Schuljahresbeginns braucht mehr als 15 Euro. Ein selbst gesetzter Wert bleibt.
