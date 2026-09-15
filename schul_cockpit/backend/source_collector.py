@@ -194,8 +194,31 @@ def wanted_pages(account_id: int) -> list[dict]:
     return list(groups.values())
 
 
+# Ein Lauf je Kind zugleich: Der 14-Uhr-Lauf und ein Handstart der Eltern
+# sollen nicht dieselben Seiten mit zwei Browsern holen.
+_RUNNING: set[int] = set()
+
+
 async def collect(account_id: int, budget: int = PAGE_BUDGET) -> dict:
     """Ein Sammellauf für ein Kind. Bindet, holt, legt ab, prüft, gleicht ab."""
+    if account_id in _RUNNING:
+        return {"account_id": account_id, "skipped": "läuft bereits", "fetched": 0, "stored": 0, "verified": 0}
+    _RUNNING.add(account_id)
+    try:
+        return await _collect(account_id, budget)
+    finally:
+        _RUNNING.discard(account_id)
+
+
+def _unread_pages(account_id: int, limit: int) -> list[int]:
+    """Abgelegte Buchseiten, deren Auswertung noch fehlt oder scheiterte."""
+    with closing(webapp_conn()) as conn:
+        return [r[0] for r in conn.execute(
+            "SELECT id FROM materials WHERE account_id=? AND origin='book_fetch' AND hidden=0 "
+            "AND analysis_state IN ('pending','failed') ORDER BY id LIMIT ?", (account_id, limit))]
+
+
+async def _collect(account_id: int, budget: int) -> dict:
     started = datetime.now()
     sync = sources.sync_links(account_id)
     sources.refresh_status(account_id)
@@ -230,6 +253,20 @@ async def collect(account_id: int, budget: int = PAGE_BUDGET) -> dict:
             read += 1
     except Exception:
         log.warning("Kapitelzuordnung für Konto %s ausgesetzt", account_id, exc_info=True)
+    # Seiten, die da sind, aber noch nicht gelesen wurden (etwa weil der
+    # KI-Rahmen erschöpft war), kommen vor neuen Abrufen an die Reihe.
+    for material_id in _unread_pages(account_id, 12):
+        row = await analyze_page(account_id, material_id)
+        if row and row.get("analysis_state") == "ready":
+            summary["reread"] = summary.get("reread", 0) + 1
+            if row.get("page_check") == "ok":
+                summary["verified"] += 1
+                with closing(webapp_conn()) as conn:
+                    hit = conn.execute("SELECT source_book,source_page FROM materials WHERE id=?", (material_id,)).fetchone()
+                if hit:
+                    record_access(account_id, hit["source_book"], "proven", page=hit["source_page"], printed=hit["source_page"])
+        else:
+            break
     if read:
         sources.sync_links(account_id)
         sources.refresh_status(account_id)
