@@ -1,3 +1,7 @@
+## 0.56.5
+
+- Aufgaben- und Stundenansichten ziehen die Quellenverknüpfungen selbst nach, wenn sie älter als zehn Minuten sind. Bisher zeigte ein neuer Untis-Eintrag seine Quelle erst nach der Materialseite oder dem nächsten Sammellauf.
+
 ## 0.56.4
 
 - Ein Arbeitsblatt ohne Seitenzahl („Arbeitsblatt beenden") ist eine Quelle: Das Wort wird zum roten Link mit Kamera, bis ein Foto an der Aufgabe hängt oder ein Blatt-Foto des Fachs aus den Tagen um den Eintrag da ist. Auf der Einkaufsliste steht es als „Arbeitsblatt ohne Seitenangabe".
