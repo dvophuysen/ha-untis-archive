@@ -1,3 +1,7 @@
+## 0.56.2
+
+- Steht die Untis-Kennung in derselben Zeile wie ein Datum, blieb diese Zeile Teil des Auftrags. Kennungen werden jetzt überall aus dem Text genommen.
+
 ## 0.56.1
 
 - Bei Aufgaben aus Untis steht der Auftrag in den Notizen, der Titel ist nur das Fach. Die Quell-Links und die Zuordnung zur Untis-Hausaufgabe gehen jetzt vom Auftrag aus; in 0.56.0 blieben sie leer.

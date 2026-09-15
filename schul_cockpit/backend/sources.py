@@ -550,10 +550,10 @@ def task_text(task: dict) -> str:
     Kennung und Datumszeilen; der Titel ist dort nur das Fach."""
     kept = []
     for raw in (task.get("notes") or "").splitlines():
-        line = raw.strip()
-        if not line or _META_LINE.match(line) or _TAG.fullmatch(line):
+        line = _TAG.sub(" ", raw).strip()
+        if not line or _META_LINE.match(line):
             continue
-        kept.append(re.sub(r"^\s*#\s?", "", raw).strip())
+        kept.append(re.sub(r"^\s*#\s?", "", line).strip())
     body = "\n".join(kept).strip()
     return body or (task.get("title") or "").strip()
 
