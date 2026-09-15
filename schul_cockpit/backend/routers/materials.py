@@ -9,6 +9,7 @@ from pydantic import Field
 
 from .. import material_analysis as analysis
 from .. import materials as store
+from .. import sources
 from ..auth import CurrentUser, get_current_user
 from ..learning import InputModel
 from .learning import access
@@ -111,6 +112,21 @@ def index(
         "needs_check": sum(1 for m in items if not m["verified"]),
         "pending_analysis": pending,
     }
+
+
+@router.get("/sources")
+def missing_sources(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Die Einkaufsliste: welche im Unterricht genannten Quellen noch fehlen.
+
+    Muss vor /{material_id} stehen, sonst versucht FastAPI, „sources" als ID
+    zu lesen. Hier wird nur gerechnet; angefordert oder abgerufen wird nichts.
+    """
+    access(user, account_id)
+    try:
+        return sources.ledger(account_id)
+    except Exception:
+        _LOGGER.warning("Quellenbilanz nicht berechenbar", exc_info=True)
+        raise HTTPException(503, "Die Quellen konnten gerade nicht ausgewertet werden.")
 
 
 @router.get("/{material_id}")

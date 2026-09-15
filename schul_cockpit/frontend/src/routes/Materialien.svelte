@@ -32,10 +32,12 @@
   let filterKind = $state('');
   let search = $state('');
   let picker = $state(null);
+  let ledger = $state(null);
   let camera = $state(null);
   let timer = null;
 
   const base = $derived(`/api/accounts/${accountId}/materials`);
+  const KIND_HINT = { workbook: 'Heftseite', worksheet: 'Blatt', book: 'Buchseite', unknown: 'Quelle unklar' };
   const waiting = $derived((data?.materials ?? []).some((m) => m.analysis_state === 'pending'));
 
   async function load() {
@@ -49,6 +51,12 @@
       error = null;
     } catch (e) {
       error = e.message;
+    }
+    // Die Einkaufsliste darf die Seite nicht mitreißen, wenn sie ausfällt.
+    try {
+      ledger = await api.get(`${base}/sources`);
+    } catch {
+      ledger = null;
     }
   }
 
@@ -150,6 +158,36 @@
   {#if message}<div class="banner">{message}</div>{/if}
   {#if error}<div class="error-box">{error}</div>{/if}
 </div>
+
+{#if ledger?.missing_total}
+  <details class="card wanted">
+    <summary>
+      <span><strong>Was mir noch fehlt</strong> · {ledger.missing_total} {ledger.missing_total === 1 ? 'Stelle' : 'Stellen'}</span>
+    </summary>
+    <p class="lead">Diese Stellen nennt der Unterricht seit Schuljahresbeginn, und ich habe sie nicht.
+      Ohne sie übe ich etwas Ähnliches statt genau das, was ihr im Heft hattet. Digitale Bücher hole ich mir selbst,
+      hier steht nur, was fotografiert werden müsste.</p>
+    {#each ledger.subjects.filter((s) => s.missing_count) as subject (subject.subject)}
+      <details class="subject">
+        <summary>
+          <span class="name">{subject.subject}</span>
+          <span class="count">{subject.missing_count} {subject.missing_count === 1 ? 'Seite' : 'Seiten'}</span>
+        </summary>
+        {#if subject.digital}<p class="muted">{subject.digital} Buchseiten liegen digital vor, die brauche ich nicht.</p>{/if}
+        {#each subject.missing as need}
+          <div class="need">
+            <p class="what"><strong>{need.label} {need.pages_label}</strong>
+              <span class="muted">· {KIND_HINT[need.kind] ?? need.kind}</span></p>
+            <p class="quote">„{need.quote}"</p>
+            <p class="muted">zuletzt genannt am {new Date(need.last_date).toLocaleDateString('de-DE')}{#if need.mentions > 1} · {need.mentions}× erwähnt{/if}</p>
+          </div>
+        {/each}
+      </details>
+    {/each}
+    <p class="muted foot">Die Zuordnung der Kürzel ist eine Annahme aus dem Wortlaut: „TB" als Schulbuch, „AH" und „cda" als Arbeitsheft.
+      Wo im Text kein Buchteil steht, heißt es „Unbekannte Quelle" — dann hilft das Zitat weiter.</p>
+  </details>
+{/if}
 
 {#if data}
   <div class="row gap-sm filters">
@@ -278,6 +316,19 @@
 {/if}
 
 <style>
+  .wanted{border-left:4px solid var(--accent)}
+  .wanted>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;list-style:none}
+  .wanted>summary::-webkit-details-marker{display:none}
+  .wanted .subject{border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin:8px 0}
+  .wanted .subject>summary{cursor:pointer;min-height:40px;display:flex;justify-content:space-between;align-items:center;gap:12px;list-style:none}
+  .wanted .subject>summary::-webkit-details-marker{display:none}
+  .wanted .name{font-weight:550}
+  .wanted .count{color:var(--fg-muted);font-size:.9rem;white-space:nowrap}
+  .need{padding:8px 0;border-top:1px solid var(--border)}
+  .need .what{margin:0 0 4px}
+  .need .quote{margin:0 0 4px;font-style:italic;overflow-wrap:anywhere}
+  .wanted .foot{margin-top:12px}
+
   .head h1 { margin: 0; font-size: 1.3rem; }
   .drop { margin-top: 0.6rem; }
   .lead { margin: 0 0 0.7rem; }
