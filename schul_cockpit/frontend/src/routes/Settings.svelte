@@ -147,6 +147,7 @@
     partial: 'Nur ein Teil der Seiten wurde geliefert.',
     open_page: 'Das Buch war offen, die genannte Seite war aber nicht anzusteuern.',
     viewer_error: 'Es kam keine Seite an.',
+    running: 'Der Abruf läuft …',
   };
 
   function controlLine(c) {
@@ -174,11 +175,21 @@
     }
     textbookTestBusy = book.id;
     textbookTest = null;
+    const path = `/api/accounts/${accountId}/textbooks/catalog/${book.id}/page-test`;
+    const startedAt = Date.now();
     try {
-      textbookTest = await api.post(
-        `/api/accounts/${accountId}/textbooks/catalog/${book.id}/page-test`,
-        { page },
-      );
+      // Der Abruf dauert länger, als der Fernzugriff einer Anfrage erlaubt.
+      // Also anstoßen und nachfragen, bis er fertig ist.
+      let state = await api.post(path, { page });
+      while (state.state === 'running' && Date.now() - startedAt < 6 * 60 * 1000) {
+        const seconds = Math.round((Date.now() - startedAt) / 1000);
+        textbookTest = { book: book.title, page, status: 'running', detail: `Der Browser arbeitet seit ${seconds} Sekunden.` };
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        state = await api.get(path);
+      }
+      textbookTest = state.state === 'done'
+        ? state.result
+        : { book: book.title, page, status: 'request_failed', detail: 'Der Abruf läuft noch. Später erneut nachsehen.' };
       textbookCatalog = await api.get(`/api/accounts/${accountId}/textbooks/catalog`);
     } catch (e) {
       textbookTest = { book: book.title, status: 'request_failed', detail: e.message };
