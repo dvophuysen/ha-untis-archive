@@ -67,13 +67,31 @@ INSTRUCTION = (
 )
 
 
+def _shrink(blob: bytes, max_side: int = 1800) -> bytes:
+    """Ein Foto auf höchstens 1800 Pixel Kante: Fünf Handyfotos in voller
+    Größe wies der Dienst mit 413 ab; Verzeichnistext bleibt so lesbar."""
+    import io
+    from PIL import Image
+    try:
+        image = Image.open(io.BytesIO(blob))
+        if max(image.size) <= max_side:
+            return blob
+        image = image.convert("RGB")
+        image.thumbnail((max_side, max_side))
+        out = io.BytesIO()
+        image.save(out, "JPEG", quality=82)
+        return out.getvalue()
+    except Exception:
+        return blob
+
+
 def _image_parts(shots: list[bytes], limit: int = 4) -> list[dict]:
     """Je zwei Aufnahmen untereinander in ein Bild; das digitale Verzeichnis
     braucht vier Seiten, ein fotografiertes Papierbuch bis zu acht."""
     from .textbook_context import _join
     parts = []
     for i in range(0, min(len(shots), limit), 2):
-        blob = _join(shots[i:i + 2])
+        blob = _join([_shrink(shot) for shot in shots[i:i + 2]])
         parts.append({"type": "image_url", "image_url": {
             "url": "data:image/jpeg;base64," + base64.b64encode(blob).decode(), "detail": "high"}})
     return parts

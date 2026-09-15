@@ -1,3 +1,7 @@
+## 0.57.1
+
+- Fünf Handyfotos eines Inhaltsverzeichnisses in voller Größe wies der KI-Dienst mit 413 ab; die Aufnahmen werden vor dem Lesen auf 1800 Pixel Kante verkleinert. Ein gescheitertes Lesen löscht das zuvor gelesene Verzeichnis nicht.
+
 ## 0.57.0
 
 - Latein hat zwei Bücher: „TB" ist jetzt der Textband, „BB" der Begleitband; beide sind eigene Quellen, eine Seite 13 gibt es in jedem. Eine Begleitband-Seite belegt keine Textband-Stelle und umgekehrt; ein nacktes „S. 19" meint weiter das Hauptbuch.
