@@ -1,3 +1,34 @@
+# Quellenbilanz und abgeleiteter Tagesabschluss 0.51.0–0.52.1
+
+Stand 15.09.2026, auf der laufenden Instanz installiert und geprüft. 210 Python-Tests grün.
+
+## Was ausgeliefert ist
+
+**Quellenbilanz (0.52.0, korrigiert 0.52.1).** `backend/sources.py` liest aus Stunden- und Hausaufgabentexten die genannten Buchstellen und stellt ihnen gegenüber, was digital im Regal liegt oder in der Materialablage vorhanden ist. Endpunkt `GET /api/accounts/{id}/materials/sources`; er muss im Router vor `/{material_id}` stehen, sonst versucht FastAPI, „sources" als ID zu lesen. Die Materialseite zeigt das Ergebnis als aufklappbare Karte „Was mir noch fehlt", je Fach, mit Zitat und Datum. Angefordert oder abgerufen wird nichts. Details und Befunde: [Quellen](QUELLEN.md).
+
+**Abgeleiteter Tagesabschluss (0.51.0, umgebaut 0.51.2).** `backend/day_close.py` hält fest, wann an einem Tag nichts mehr offen war und ob die Erinnerung da schon draußen war. Eingetragen wird das vom Erinnerungsdienst (`reminders.run_once` → `record_if_clear`), nicht von einer Bedienhandlung. Der zunächst gebaute Knopf ist verworfen (D32) und entfernt, bevor ihn jemand gesehen hat. Sichtbar ist davon nichts; die Angabe trägt die Morgenmitteilung und das Maß der Verlässlichkeit.
+
+**Morgen-Rückfall (0.51.0, ab Werk aus seit 0.51.1).** `reminders.morning_fallback` schickt vor dem Aufbruch eine kurze Mitteilung, aber nur an den, der am Abend nicht fertig war, nur an Schultagen und nur wenn Hausaufgaben oder Tasche offen sind. Einstellungen `morning_enabled` und `morning_at` in der Elternansicht, Voreinstellung 06:45, ausgeschaltet.
+
+**Kontowechsel.** `reconcile._ACCOUNT_TABLES` führt jetzt auch `reminder_app_targets`, `reminder_app_deliveries`, `day_closures` und `morning_app_deliveries` mit. Vorher hätte ein Wechsel die für Mitteilungen gewählten Telefone verloren, ohne Fehlermeldung.
+
+## Fehler, die dabei gefunden und behoben wurden
+
+- Ein Fach stand doppelt auf der Quellenliste, als Langform aus den Stunden und als Kürzel aus den Hausaufgaben. Untis speichert an einer Hausaufgabe keine Fach-ID; aufgelöst wird über `su[0].name` aus dem `payload_json` der Stunde.
+- Die Regalabfrage nutzte einen falschen Spaltennamen und verschluckte den Fehler in einem `try/except`. Dadurch wären alle Buchseiten eines Kontos auf der Einkaufsliste gelandet. Vom Test gefunden.
+- Ein erstes Suchmuster hielt „Klassenfahrt" für eine Arbeitsheftangabe und „vocabulario 4 b" für Seite 4.
+- Der Stoff einer Arbeit begann bis 0.50.1 unter Umständen bei einer Arbeit des vorigen Schuljahres.
+
+## Bekannte Lücken
+
+- Die Bilanz verbucht jede Buchseite als vorhanden, sobald das Fach ein Buch im Katalog hat. Zwei von acht Büchern eines Kontos sind aber nicht abrufbar (D31).
+- Die inhaltliche Verifikation einer Seite (D30) ist abgestimmt, aber nicht gebaut.
+- Der Regal-Scan speichert die Schaltflächen eines Einwilligungsdialogs als Bücher; drei solche Einträge stehen in einem Konto und lassen sich derzeit nicht löschen.
+- `CACHE_KEEP = 60` begrenzt die zwischengespeicherten Buchseiten je Kind.
+- Ob die App auf dem älteren Kindergerät eine Bildschirmzeit-Auszeit übersteht, ist weiterhin nur vom Nutzer prüfbar.
+
+---
+
 # Grafische Fächerliste 0.34.0
 
 Auf ausdrücklichen Auftrag, das Gesamtpaket fertigzustellen und bereitzustellen, wurde die grafische Fachliste ergänzt. Balken visualisieren bestehende Themen-Selbsteinschätzungen einschließlich neutraler unbekannter Themen; keine neue Kompetenzformel. Sortierung stärkorientiert nach Anteil verstandener unter eingeschätzten Themen, bekannte Fächer vor unbekannten, Gleichstände alphabetisch. Alle sichtbaren Fächer bleiben erreichbar.
