@@ -226,6 +226,27 @@ def _shelf(account_id: int) -> dict[str, dict]:
     return books
 
 
+def subject_habits(links: list[dict]) -> dict[str, str]:
+    """Welchen Buchteil eine Lehrkraft nennt, wenn sie einen nennt.
+
+    Ab drei ausdrücklichen Angaben, von denen vier Fünftel auf denselben
+    Teil zeigen, gilt der für die Stellen ohne Buchteil im selben Fach.
+    """
+    counts: dict[str, dict[str, int]] = {}
+    for link in links:
+        if link["entry_kind"] == "chapter" or link["part_kind"] == "unknown":
+            continue
+        bucket = counts.setdefault(link["subject_name"].casefold(), {})
+        bucket[link["part_kind"]] = bucket.get(link["part_kind"], 0) + 1
+    habits = {}
+    for subject, bucket in counts.items():
+        total = sum(bucket.values())
+        kind, n = max(bucket.items(), key=lambda kv: kv[1])
+        if total >= 3 and n / total >= 0.8:
+            habits[subject] = kind
+    return habits
+
+
 def refresh_status(account_id: int) -> None:
     """Jede gebundene Stelle mit dem Bestand abgleichen und ihren Stand setzen.
 
@@ -238,6 +259,7 @@ def refresh_status(account_id: int) -> None:
     stamp = now_iso()
     with closing(webapp_conn()) as conn, conn:
         links = [dict(r) for r in conn.execute("SELECT * FROM source_links WHERE account_id=?", (account_id,))]
+        habits = subject_habits(links)
         for link in links:
             folded = link["subject_name"].casefold()
             page = link["page"]
@@ -245,7 +267,14 @@ def refresh_status(account_id: int) -> None:
             book = shelf.get(folded)
             stored = books.get(folded, {}).get(page)
             photo = scanned.get(folded, {}).get(page)
-            if link["part_kind"] in ("book", "unknown"):
+            habit = habits.get(folded)
+            if link["part_kind"] == "unknown" and habit in ("workbook", "worksheet") and not (
+                    stored and stored.get("fits_quote") == "ja"):
+                # Schreibt die Lehrkraft sonst immer „AH“, ist ein nacktes
+                # „S. 64“ das Arbeitsheft, nicht das Schulbuch.
+                status, detail = ("scanned", None) if photo else ("paper", "gewohnheit")
+                material = photo
+            elif link["part_kind"] in ("book", "unknown"):
                 if stored and stored.get("page_check") not in ("mismatch", "blank") and not (
                         link["part_kind"] == "unknown" and stored.get("fits_quote") == "nein"):
                     # Belegt: Seitenzahl abgelesen und Inhalt passt zum Zitat.
@@ -302,7 +331,7 @@ def ledger(account_id: int) -> dict:
         elif link["status"] == "pending":
             bucket["pending"].add(key)
         else:
-            reason = link["detail"] if link["status"] == "paper" and link["detail"] == "passt_nicht" else link["status"]
+            reason = link["detail"] if link["status"] == "paper" and link["detail"] in ("passt_nicht", "gewohnheit") else link["status"]
             group = bucket["groups"].setdefault((link["part_label"], link["part_kind"], reason), {
                 "label": link["part_label"], "kind": link["part_kind"], "reason": reason, "pages": {}})
             entry = group["pages"].setdefault(link["page"], {"page": link["page"], "dates": set(), "quote": "", "quote_date": ""})
@@ -368,3 +397,41 @@ def page_list(pages: list[int]) -> str:
     if len(parts) == 1:
         return f"S. {parts[0]}"
     return "S. " + ", ".join(parts[:-1]) + " und " + parts[-1]
+
+
+def photo_requests(account_id: int, exams: list[dict], day: str, days_ahead: int = 14, limit: int = 3) -> list[dict]:
+    """Was vor einer anstehenden Arbeit noch fotografiert werden müsste.
+
+    Nur bei anstehender Arbeit, höchstens drei Bitten, konkret mit Heft, Seite
+    und dem Unterrichtszitat. Ohne Arbeit wird nichts eingefordert; die Liste
+    steht dann nur auf der Materialseite.
+    """
+    from datetime import date, timedelta
+    horizon = (date.fromisoformat(day) + timedelta(days=days_ahead)).isoformat()
+    soon = {}
+    for exam in exams or []:
+        subject = (exam.get("subject_name") or "").strip()
+        when = (exam.get("date") or exam.get("start_date") or "")[:10]
+        if subject and day <= when <= horizon:
+            soon.setdefault(subject.casefold(), (subject, when))
+    if not soon:
+        return []
+    with closing(webapp_conn()) as conn:
+        links = [dict(r) for r in conn.execute(
+            "SELECT subject_name,part_label,part_kind,page,quote,entry_date,detail FROM source_links "
+            "WHERE account_id=? AND status='paper' AND entry_kind IN ('lesson','homework') ORDER BY entry_date DESC",
+            (account_id,))]
+    groups: dict[tuple, dict] = {}
+    for link in links:
+        hit = soon.get(link["subject_name"].casefold())
+        if not hit:
+            continue
+        subject, when = hit
+        group = groups.setdefault((subject, link["part_label"]), {
+            "subject": subject, "exam_date": when, "label": link["part_label"], "kind": link["part_kind"],
+            "pages": set(), "quote": link["quote"], "quote_date": link["entry_date"]})
+        group["pages"].add(link["page"])
+    out = []
+    for group in sorted(groups.values(), key=lambda g: (g["exam_date"], -len(g["pages"]))):
+        out.append({**group, "pages": sorted(group["pages"]), "pages_label": page_list(sorted(group["pages"]))})
+    return out[:limit]

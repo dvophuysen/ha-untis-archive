@@ -85,6 +85,15 @@
       {#if nextSchoolDay}<PackingChecklist {accountId} schoolDay={nextSchoolDay} />{:else}
         <p class="muted">In den nächsten Tagen steht keine Schule an.</p>
       {/if}
+      {#if data?.photo_requests?.length}
+        <!-- Nur vor einer Arbeit, höchstens drei Bitten, konkret mit Heft und Seite. -->
+        <h4>Für die Arbeit brauche ich noch</h4>
+        {#each data.photo_requests as need}
+          <p class="photo-request"><strong>{need.subject}</strong> am {formatShortDate(need.exam_date)}: {need.label} {need.pages_label}
+            <span class="muted">· „{need.quote}"</span>
+            <a href="#/materialien">fotografieren</a></p>
+        {/each}
+      {/if}
     </section>
   {/if}
   {#if data}
@@ -136,6 +145,9 @@
   .day-section{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:12px;margin:0 0 8px}
   .evening{border-color:var(--accent);background:var(--accent-soft)}
   .evening h3{margin-top:0}
+  .evening h4{margin:12px 0 4px}
+  .photo-request{margin:4px 0;overflow-wrap:anywhere}
+  .photo-request a{margin-left:6px}
   .fold>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;list-style:none}
   .fold>summary::-webkit-details-marker{display:none}
   .fold>summary h3{margin:0}

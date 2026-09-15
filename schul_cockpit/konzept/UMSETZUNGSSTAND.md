@@ -1,9 +1,20 @@
-# Quellenbestand 0.52.2–0.54.0
+# Quellenbestand 0.52.2–0.55.0
 
-Stand 15.09.2026, abends. 0.52.2 bis 0.53.0 auf der laufenden Instanz
-installiert und mit echten Abrufen geprüft; 0.54.0 folgt in derselben Session.
+Stand 15.09.2026, abends. 0.52.2 bis 0.54.0 auf der laufenden Instanz
+installiert und mit echten Abrufen geprüft; 0.55.0 folgt in derselben Session.
 
 ## Was ausgeliefert ist
+
+**Einträge ohne Quelle, Fachgewohnheit, Aufforderung (0.55.0, D42/D43).**
+Stundentexte ohne Seitenangabe werden ihrem Kapitel zugeordnet (Regel, sonst
+Modell mit Inhaltsverzeichnis) und das Kapitel als Hypothese eingesammelt.
+Nennt eine Lehrkraft sonst immer das Arbeitsheft, gilt das für ihre Stellen
+ohne Buchteil. Vor einer Arbeit bittet die Abendkarte um die fehlenden
+Heftseiten, höchstens drei, mit Zitat.
+
+**Zweiter Live-Lauf (0.54.0).** Das Inhaltsverzeichnis des Chemiebuchs wurde
+mit 105 Einträgen gelesen; die Auswertung lief über den neuen Rahmen
+`sources`. Weitere Bücher folgten im selben Lauf.
 
 **Buchstruktur und Kapitelregel (0.54.0, D39).** Inhaltsverzeichnis je Buch
 einmal gelesen (`book_chapters`), angeschnittene Kapitel samt Vokabel- und
@@ -50,8 +61,6 @@ die Zustände; Eltern stoßen den Lauf von Hand an.
 
 ## Bekannte Lücken
 
-- Paket 3 (Einträge ohne Quelle, Fachgewohnheit, Foto-Aufforderung) ist
-  beschrieben, nicht gebaut.
 - Der Regal-Scan des Kontos ohne Regal speichert Dialogschaltflächen als
   Bücher; kein Löschweg.
 - Ob die App auf dem älteren Kindergerät eine Bildschirmzeit-Auszeit übersteht,

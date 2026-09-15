@@ -1,3 +1,9 @@
+## 0.55.0
+
+- Stunden ohne Seitenangabe finden ihr Kapitel. Steht eine Lektionsnummer im Text („Lektion 3: Wortschatz Stadt"), entscheidet sie allein; sonst ordnet das Modell die neuen Stundentexte eines Fachs mit dem Inhaltsverzeichnis in einem Aufruf je Buch zu. Ein so erschlossenes Kapitel wird wie ein genanntes eingesammelt, steht aber als Hypothese gekennzeichnet: „aus dem Stundenthema erschlossen". Einmal zugeordnet bleibt zugeordnet, auch ein „passt zu keinem Kapitel".
+- Fachgewohnheit. Schreibt eine Lehrkraft sonst immer „AH", ist ein nacktes „S. 12" im selben Fach das Arbeitsheft, nicht das Schulbuch: ab drei ausdrücklichen Angaben, von denen vier Fünftel auf denselben Teil zeigen. Die Stelle wandert dann auf die Einkaufsliste statt in den Abruf, mit genau diesem Hinweis.
+- Vor einer Arbeit bittet die App um die Heftseiten, die der Unterricht nennt und die weder digital noch fotografiert vorliegen: in der Abendkarte, mit Heft, Seite und Unterrichtszitat, höchstens drei Bitten, nur bei einer Arbeit in den nächsten zwei Wochen. Die abendliche Mitteilung nennt „Heftseiten für die Arbeit" als offenen Punkt. Ohne Arbeit steht die Liste weiter nur auf der Materialseite.
+
 ## 0.54.0
 
 - Das Buch sagt selbst, wie weit der Stoff reicht. Je Buch liest die App einmal das Inhaltsverzeichnis von den ersten Seiten ab und kennt danach Kapitel, Abschnitte, Vokabel- und Grammatikteile mit ihren Seiten. Nennt der Unterricht eine Seite aus einem Kapitel, holt die App das ganze Kapitel, bei Sprachen mit dem Vokabelteil der Lektion, und führt es als kommenden Klausurstoff. Genannte Seiten kommen vor Kapitelseiten.
