@@ -23,6 +23,7 @@ from .courses import hidden_keys, lesson_is_hidden
 from .db import history_conn, webapp_conn
 from .learning import today_local
 from .mentor_context import rows, school_start
+from .queries import _subject_short_from_payload
 
 # Wie eine Quelle geschrieben wird und was sie ist. „cda" ist bei Spanisch das
 # Cuaderno de actividades, „TB" der Textband. Die Zuordnung ist eine Annahme;
@@ -97,6 +98,32 @@ def _shelf(account_id: int) -> set[str]:
             "SELECT subject_name FROM digital_textbook_catalog WHERE account_id=?", (account_id,)) if r[0]}
 
 
+def subject_map(lessons: list[dict]) -> dict[str, str]:
+    """Das Kürzel einer Hausaufgabe auf den Fachnamen der Stunden abbilden.
+
+    Hausaufgaben führen in Untis nie eine Fach-ID, nur das Kürzel („LA", „SN").
+    Das echte Kürzel steht im payload_json der Stunde (su[0].name); ohne diesen
+    Weg stünde Latein zweimal auf der Liste, einmal als „LATEIN" und einmal als
+    „LA". Ein selbst gepflegter Alias hat Vorrang.
+    """
+    found: dict[str, str] = {}
+    for row in lessons:
+        name = (row.get("subject_name") or "").strip()
+        short = (_subject_short_from_payload(row.get("payload_json")) or "").strip()
+        if name and short:
+            found.setdefault(short.casefold(), name)
+    return found
+
+
+def _aliases(account_id: int) -> dict[str, str]:
+    with closing(webapp_conn()) as conn:
+        have = {r[1] for r in conn.execute("PRAGMA table_info(subject_aliases)")}
+        if not {"alias", "subject_name"} <= have:
+            return {}
+        return {(r[0] or "").strip().casefold(): r[1] for r in conn.execute(
+            "SELECT alias,subject_name FROM subject_aliases WHERE account_id=?", (account_id,)) if r[0] and r[1]}
+
+
 def _sources(account_id: int) -> tuple[list[dict], str]:
     """Alle genannten Stellen des laufenden Schuljahres, nach Fach."""
     day = today_local()
@@ -104,18 +131,12 @@ def _sources(account_id: int) -> tuple[list[dict], str]:
         start = school_start(conn, account_id, day)
         lessons = rows(conn, "lessons",
                        "id date subject_name subject_untis_id teacher_untis_id code lstext lstext_manual_override "
-                       "is_supervision_guess supervision_manual_override",
+                       "payload_json is_supervision_guess supervision_manual_override",
                        account_id, "AND date>=? AND date<=? ORDER BY date", (start, day.isoformat()))
-        homework = rows(conn, "homework", "id subject_name subject_untis_id text assigned_date",
+        homework = rows(conn, "homework", "id subject_name text assigned_date",
                         account_id, "AND assigned_date>=? ORDER BY assigned_date", (start,))
     hidden = hidden_keys(account_id)
-    # Hausaufgaben führen das Kürzel („LA"), Stunden die Langform („LATEIN").
-    # Die Untis-Fach-ID verbindet beide; ohne sie bleibt der geschriebene Name.
-    names: dict[int, str] = {}
-    for row in lessons:
-        sid, name = row.get("subject_untis_id"), (row.get("subject_name") or "").strip()
-        if sid and name and len(name) > len(names.get(sid, "")):
-            names[sid] = name
+    short_to_name = subject_map(lessons) | _aliases(account_id)
 
     entries = []
     for row in lessons:
@@ -125,19 +146,17 @@ def _sources(account_id: int) -> tuple[list[dict], str]:
         if override if override is not None else row.get("is_supervision_guess"):
             continue
         text = row.get("lstext_manual_override") or row.get("lstext") or ""
-        entries.append((row.get("subject_untis_id"), row.get("subject_name"), row["date"], text))
+        entries.append(((row.get("subject_name") or "").strip(), row["date"], text))
     for row in homework:
-        entries.append((row.get("subject_untis_id"), row.get("subject_name"),
+        written = (row.get("subject_name") or "").strip()
+        entries.append((short_to_name.get(written.casefold(), written),
                         row.get("assigned_date") or "", row.get("text") or ""))
 
     seen: set[tuple] = set()
     by_subject: dict[str, dict] = {}
-    for sid, written, when, text in entries:
+    for subject, when, text in entries:
         text = (text or "").strip()
-        if not text or not when:
-            continue
-        subject = names.get(sid) or (written or "").strip()
-        if not subject:
+        if not text or not when or not subject:
             continue
         key = (subject, when, text)
         if key in seen:
