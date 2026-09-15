@@ -115,7 +115,11 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
     if not 256<=max_output<=8000: raise ValueError('Invalid output boundary')
     images=images or []
     normalized=[]
-    if len(images)>2: raise HTTPException(413,'Bitte höchstens zwei Bilder auf einmal verwenden.')
+    # Chat und Übung: zwei Bilder. Der Quellenbestand liest ein fotografiertes
+    # Inhaltsverzeichnis mit bis zu sechs Aufnahmen in einem Aufruf; zusammen-
+    # gefügt würden sie beim Verkleinern auf 1600 Pixel unlesbar.
+    most=6 if purpose==SOURCES else 2
+    if len(images)>most: raise HTTPException(413,f'Bitte höchstens {most} Bilder auf einmal verwenden.')
     for part in images:
         try:
             from PIL import Image,ImageOps
@@ -129,7 +133,7 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
             normalized.append({'type':'image_url','image_url':{'url':'data:image/jpeg;base64,'+base64.b64encode(out.getvalue()).decode(),'detail':'high'}})
         except (ValueError,KeyError,OSError):raise HTTPException(422,'Das Bild ist nicht lesbar oder zu groß.') from None
     images=normalized
-    if len(images)>2: raise HTTPException(413,'Bitte höchstens zwei Bilder auf einmal verwenden.')
+    if len(images)>most: raise HTTPException(413,f'Bitte höchstens {most} Bilder auf einmal verwenden.')
     # Each UTF-8 byte is a conservative text-token upper bound. Vision inputs
     # must be locally constrained; 32k tokens/image also leaves ample patch margin.
     raw=json.dumps(context,ensure_ascii=False)

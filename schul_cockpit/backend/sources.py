@@ -18,6 +18,7 @@ abgeglichen und gerechnet.
 
 from __future__ import annotations
 
+import json
 import re
 from contextlib import closing
 from datetime import timedelta
@@ -305,14 +306,21 @@ def _scanned_pages(account_id: int) -> dict[str, dict[tuple[str, int], int]]:
     have: dict[str, dict[tuple[str, int], int]] = {}
     with closing(webapp_conn()) as conn:
         for row in conn.execute(
-            "SELECT id,subject_name,title,summary,source_label,source_page,kind FROM materials "
+            "SELECT id,subject_name,title,summary,source_label,source_page,printed_pages,kind FROM materials "
             "WHERE account_id=? AND hidden=0 AND origin!='book_fetch' AND kind NOT IN ('exam_notice','toc')", (account_id,)):
             subject = (row["subject_name"] or "").strip().casefold()
             pages = have.setdefault(subject, {})
             # Ohne ausdrücklichen Buchteil sagt die Art der Datei, was sie ist.
             label = (row["source_label"] or "").strip() or {"workbook": "Arbeitsheft", "worksheet": "Arbeitsblatt"}.get(row["kind"], "")
             if row["source_page"]:
-                pages.setdefault((label, row["source_page"]), row["id"])
+                # Eine fotografierte Doppelseite belegt beide gedruckten Seiten.
+                printed = []
+                try:
+                    printed = [int(p) for p in json.loads(row["printed_pages"] or "[]")]
+                except (ValueError, TypeError):
+                    pass
+                for page in [row["source_page"]] + [p for p in printed if abs(p - row["source_page"]) <= 1]:
+                    pages.setdefault((label, page), row["id"])
                 continue
             text = " ".join(filter(None, (row["title"], row["summary"])))
             for cite in citations(text):

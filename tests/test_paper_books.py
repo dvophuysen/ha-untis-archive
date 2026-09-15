@@ -55,6 +55,14 @@ def test_a_begleitband_scan_settles_only_the_begleitband_page(env):
     assert sources.ledger(1)["missing_total"] == 0, "ohne Buchteil gilt das Hauptbuch"
 
 
+def test_a_photographed_double_page_settles_both_pages(env):
+    history(homework=[(1, "LA", "TB S. 10, 11 lesen", "2026-09-07")])
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,source_label,source_page,printed_pages,created_at,updated_at) "
+                  "VALUES(1,'book_page','LA','Gefahr im Circus Maximus','Textband',10,'[10, 11]','now','now')")
+    assert sources.ledger(1)["missing_total"] == 0
+
+
 def test_a_workbook_photo_with_a_printed_page_is_the_workbook(env):
     history(homework=[(1, "LA", "AH S. 7 Aufg. C", "2026-09-07"), (2, "LA", "TB S. 7", "2026-09-08")])
     with closing(db.webapp_conn()) as c:
@@ -113,8 +121,9 @@ def test_a_paper_book_gets_the_chapter_rule_from_its_photographed_contents(env, 
                       "VALUES(1,'toc','LATEIN','Inhalt','Begleitband',?,?,'image/jpeg','now','now')", (page, photo()))
 
     async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None):
-        # Zwei Fotos werden zu einem Bild; fünf Verzeichnisseiten passen in einen Aufruf.
-        assert "Inhaltsverzeichnis" in instruction and len(images) == 1 and context["buch"] == "Begleitband Latein"
+        # Jedes Foto für sich; fünf Verzeichnisseiten passen in einen Aufruf.
+        assert "Inhaltsverzeichnis" in instruction and len(images) == 2 and context["buch"] == "Begleitband Latein"
+        assert purpose == "sources"
         return json.dumps({"is_toc": True, "continues": False, "chapters": [
             {"number": "1", "title": "Wortschatz", "start_page": 10, "level": 1},
             {"number": "2", "title": "Wortschatz", "start_page": 16, "level": 1},
