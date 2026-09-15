@@ -314,3 +314,33 @@ def test_a_second_page_test_waits_for_the_running_one(env, monkeypatch):
                 break
             time.sleep(0.05)
         assert body and body["status"] == "loaded" and body["page"] == 12
+
+
+def test_the_browser_check_runs_in_the_background_and_reports_each_variant(env, monkeypatch):
+    client, state, patch = env
+    from backend import textbook_browser as browser
+
+    def probe(seconds=40.0):
+        return {"version": "Chromium 126", "variants": [
+            {"variant": "ohne GPU", "result": "RESULT webgl=false", "seconds": 1.2, "stderr": []},
+            {"variant": "SwiftShader", "result": "Zeitlimit", "seconds": 40.0, "stderr": ["gpu_process_host.cc: GPU process exited"]},
+        ]}
+
+    monkeypatch.setattr(browser, "probe_browser", probe)
+    app = FastAPI()
+    app.include_router(textbooks.router, prefix="/api")
+    app.dependency_overrides[get_current_user] = lambda: state.user
+    patch.setattr(textbooks, "webapp_conn", db.webapp_conn)
+    import time
+    with TestClient(app) as isolated:
+        assert isolated.post("/api/accounts/1/textbooks/browser-check").status_code == 202
+        end = time.monotonic() + 5
+        got = None
+        while time.monotonic() < end:
+            got = isolated.get("/api/accounts/1/textbooks/browser-check").json()
+            if got["state"] == "done":
+                break
+            time.sleep(0.05)
+    assert got["state"] == "done"
+    assert [v["variant"] for v in got["result"]["variants"]] == ["ohne GPU", "SwiftShader"]
+    assert got["result"]["variants"][1]["result"] == "Zeitlimit"

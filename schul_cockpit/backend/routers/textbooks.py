@@ -12,7 +12,8 @@ from ..iserv_connector import IservLoginError, verify_iserv_login
 from ..secret_store import decrypt_secret, encrypt_secret
 from ..textbook_browser import TextbookScanError
 from ..textbook_catalog import scan_account
-from ..textbook_context import last_fetch, page_test_state, start_page_test
+from ..textbook_context import (browser_check_state, last_fetch, page_test_state, start_browser_check,
+                                start_page_test)
 
 router = APIRouter(prefix="/accounts/{account_id}/textbooks", tags=["textbooks"])
 
@@ -269,3 +270,18 @@ def page_test_result(
     """The running or last finished page test of this book."""
     _require_parent(user, account_id)
     return page_test_state(account_id, book_id)
+
+
+@router.post("/browser-check", status_code=202)
+async def browser_check(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Start the browser probe: Chromium with several GPU settings on a page
+    that says whether WebGL exists, plus what Chromium printed. Diagnosis for
+    readers that draw with WebGL; touches no portal and no credential."""
+    _require_parent(user, account_id)
+    return start_browser_check(account_id)
+
+
+@router.get("/browser-check")
+def browser_check_result(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
+    _require_parent(user, account_id)
+    return browser_check_state(account_id)
