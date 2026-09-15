@@ -458,5 +458,5 @@ def test_the_browser_keeps_webgl_available_for_the_bibox_reader():
 
     args = browser_arguments("--window-size=1440,1100")
     assert "--disable-gpu" not in args
-    assert "--enable-unsafe-swiftshader" in args and "--headless" in args
+    assert "--use-angle=vulkan" in args and "--headless" in args
     assert args[-1] == "--window-size=1440,1100"
