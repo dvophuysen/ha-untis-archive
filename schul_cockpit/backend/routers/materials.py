@@ -58,9 +58,15 @@ async def upload(
     topic_id: int | None = Form(default=None),
     lesson_id: int | None = Form(default=None),
     exam_id: int | None = Form(default=None),
+    source_label: str = Form(default=""),
+    source_page: int | None = Form(default=None),
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
-    """Drop a photo or PDF. Everything else is proposed by the analysis."""
+    """Drop a photo or PDF. Everything else is proposed by the analysis.
+
+    Mit source_label und source_page kommt das Foto von der Einkaufsliste und
+    belegt genau diese Stelle, ohne dass die Auswertung sie erst erkennen muss.
+    """
     access(user, account_id, write=True)
     content = await file.read(store.MAX_FILE + 1)
     await file.close()
@@ -71,6 +77,11 @@ async def upload(
     mime = store.sniff(content)
     if not mime:
         raise HTTPException(415, "Bitte ein Foto (JPEG, PNG, WebP) oder ein PDF verwenden.")
+    claimed = bool(source_label.strip() and source_page is not None and subject_name.strip())
+    if claimed and not kind:
+        kind = {"Arbeitsheft": "workbook", "Grammatikheft": "workbook", "Arbeitsblatt": "worksheet"}.get(source_label.strip(), "")
+    if claimed and not title.strip():
+        title = f"{source_label.strip()} {sources.page_list([source_page])}" if source_page else source_label.strip()
     hints = {
         "kind": kind if kind in store.KINDS else "",
         "subject_name": subject_name.strip() or None,
@@ -83,6 +94,11 @@ async def upload(
         raise HTTPException(413, str(exc)) from None
     except Exception:
         raise HTTPException(422, "Die Datei konnte nicht gelesen werden.") from None
+    if claimed:
+        try:
+            sources.claim(account_id, subject_name, source_label.strip(), int(source_page), material_id)
+        except Exception:
+            _LOGGER.warning("Zuordnung des Fotos zur Stelle nicht gespeichert", exc_info=True)
     background.add_task(_run_analysis, account_id, material_id)
     return store.detail(account_id, material_id) or {"id": material_id}
 

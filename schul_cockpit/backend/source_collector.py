@@ -48,12 +48,68 @@ class StorageFull(RuntimeError):
     pass
 
 
-def to_jpeg(blob: bytes, max_side: int = 1600) -> bytes:
+# 2400 Pixel Kantenlänge: eine Doppelseite mit rund 1200 je Seite, lesbar
+# auch vergrößert. Etwa 300 KB je Seite; der Speicher je Kind trägt damit
+# gut 500 Seiten neben den Fotos.
+PAGE_MAX_SIDE = 2400
+# Darunter gilt ein Bild aus früheren Läufen als unscharf und wird ersetzt.
+SHARP_MIN_WIDTH = 1800
+
+
+def to_jpeg(blob: bytes, max_side: int = PAGE_MAX_SIDE) -> bytes:
     image = Image.open(io.BytesIO(blob)).convert("RGB")
     image.thumbnail((max_side, max_side))
     out = io.BytesIO()
-    image.save(out, "JPEG", quality=85)
+    image.save(out, "JPEG", quality=82)
     return out.getvalue()
+
+
+def _image_width(blob: bytes) -> int:
+    try:
+        return Image.open(io.BytesIO(blob)).width
+    except Exception:
+        return 0
+
+
+def _blurry_pages(account_id: int, limit: int) -> list[dict]:
+    """Seiten aus Läufen mit Gerätefaktor 1: nur das Bild wird ersetzt, die
+    Auswertung bleibt."""
+    found = []
+    with closing(webapp_conn()) as conn:
+        for row in conn.execute(
+                "SELECT id,source_book,source_page,subject_name,file_bytes FROM materials WHERE account_id=? "
+                "AND origin='book_fetch' AND hidden=0 AND COALESCE(page_check,'') NOT IN ('mismatch','blank') "
+                "ORDER BY id", (account_id,)):
+            if row["file_bytes"] and _image_width(row["file_bytes"]) < SHARP_MIN_WIDTH:
+                found.append({k: row[k] for k in ("id", "source_book", "source_page", "subject_name")})
+                if len(found) >= limit:
+                    break
+    return found
+
+
+async def resharpen(account_id: int, credentials, budget: int) -> int:
+    """Unscharfe Seiten neu holen und nur das Bild austauschen."""
+    if budget <= 0:
+        return 0
+    by_book: dict[str, list[dict]] = {}
+    for row in _blurry_pages(account_id, budget):
+        by_book.setdefault(row["source_book"], []).append(row)
+    replaced = 0
+    for title, rows in by_book.items():
+        book, _ = book_and_credentials(account_id, subject=rows[0]["subject_name"])
+        if not book or book["title"] != title:
+            continue
+        pages = sorted({r["source_page"] for r in rows})
+        delivery = await fetch_pages(account_id, book, credentials, pages, use_cache=False, budget=90 + 25 * len(pages))
+        delivered = {p: image for p, image in delivery["shots"] if p is not None and not looks_blank(image)}
+        with closing(webapp_conn()) as conn, conn:
+            for row in rows:
+                image = delivered.get(row["source_page"])
+                if image is None or _image_width(image) < SHARP_MIN_WIDTH:
+                    continue
+                conn.execute("UPDATE materials SET file_bytes=?,updated_at=? WHERE id=?", (to_jpeg(image), now_iso(), row["id"]))
+                replaced += 1
+    return replaced
 
 
 def short_title(title: str) -> str:
@@ -337,6 +393,13 @@ async def _collect(account_id: int, budget: int) -> dict:
         summary["intros"] = await prepare_intros(account_id)
     except Exception:
         log.warning("Einstiegshilfen für Konto %s ausgesetzt", account_id, exc_info=True)
+    # Was vom Budget übrig ist, geht in schärfere Bilder alter Seiten.
+    try:
+        replaced = await resharpen(account_id, credentials, min(remaining, 20))
+        if replaced:
+            summary["resharpened"] = replaced
+    except Exception:
+        log.warning("Nachschärfen für Konto %s ausgesetzt", account_id, exc_info=True)
     return _finish(account_id, summary, started)
 
 

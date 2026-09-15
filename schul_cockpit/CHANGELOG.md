@@ -1,3 +1,11 @@
+## 0.56.6
+
+- „Was mir noch fehlt" ist eine Checkliste: je Seite ein Eintrag mit Kamera und Datei. Antippen, fotografieren, und das Foto gehört genau zu dieser Stelle; sie verschwindet von der Liste, noch bevor die Auswertung die Seitenzahl gelesen hat. Die Zuordnung von Hand hat Vorrang vor jeder Herleitung.
+- Buchseiten kommen scharf. Der Browser nahm mit Gerätefaktor 1 auf, eine Doppelseite hatte rund 650 Pixel je Seite. Jetzt Faktor 2, gespeichert bis 2400 Pixel Kantenlänge, etwa 300 KB je Seite. Vorhandene unscharfe Seiten tauscht der Sammellauf nach und nach gegen scharfe Bilder aus, bis zu 20 je Lauf; die Auswertung bleibt, nur das Bild wird ersetzt.
+- Die Materialseite ist je Fach aufklappbar gruppiert; Fotos und Scans stehen direkt darin, Buchseiten je Buch noch einmal eingeklappt und nach Seite sortiert. Das Detail öffnet sich unmittelbar unter der angetippten Zeile statt am Seitenende.
+- „Konnte nicht gelesen werden" war für Seiten, die am KI-Tagesrahmen scheiterten, die falsche Auskunft. Sie heißen jetzt „wartet auf KI-Rahmen"; die Seite sagt oben, wie viele es sind. Gelesen werden sie im nächsten Lauf, sobald der Tagesrahmen wieder frei ist.
+- Der Hintergrund-Rahmen für die Fotos der Kinder steht auf zehn Euro im Monat, wo bisher die Voreinstellung von fünf Euro galt; die war im September aufgebraucht, bevor das erste Foto des jüngeren Kindes gelesen war. Ein selbst gesetzter Wert bleibt unverändert.
+
 ## 0.56.5
 
 - Aufgaben- und Stundenansichten ziehen die Quellenverknüpfungen selbst nach, wenn sie älter als zehn Minuten sind. Bisher zeigte ein neuer Untis-Eintrag seine Quelle erst nach der Materialseite oder dem nächsten Sammellauf.

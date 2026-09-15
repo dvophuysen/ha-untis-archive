@@ -676,6 +676,25 @@ _MIGRATIONS.append(("textbook_access_toc_pages", "ALTER TABLE digital_textbook_a
 # Schuljahresbeginns und danach für die tägliche Differenz.
 _MIGRATIONS.append(("ai_config_sources_budget",
                     "ALTER TABLE mentor_ai_config ADD COLUMN sources_micro INTEGER NOT NULL DEFAULT 15000000"))
+# Der Hintergrund-Rahmen (Fotos der Kinder, Themenfelder) stand ab Werk bei
+# fünf Euro und war im September zu 4,35 Euro verbraucht, bevor das erste Foto
+# des jüngeren Kindes gelesen war. Wo niemand den Wert angefasst hat, gelten
+# zehn Euro; ein eigener Wert bleibt.
+# Ein Foto, das jemand zu einer Stelle der Einkaufsliste macht, gehört zu
+# dieser Stelle, auch wenn die Auswertung die Seitenzahl nicht liest.
+_MIGRATIONS.append(("source_claims_001", """
+CREATE TABLE IF NOT EXISTS source_claims (
+ account_id INTEGER NOT NULL,
+ subject_key TEXT NOT NULL,
+ part_label TEXT NOT NULL,
+ page INTEGER NOT NULL,
+ material_id INTEGER NOT NULL,
+ created_at TEXT NOT NULL,
+ PRIMARY KEY(account_id,subject_key,part_label,page)
+);
+"""))
+_MIGRATIONS.append(("ai_config_background_ten",
+                    "UPDATE mentor_ai_config SET background_micro=10000000 WHERE background_micro=5000000"))
 
 # Stunden ohne Seitenangabe: Welches Kapitel behandelt diesen Stoff? Erst
 # eine Regel (die Lektionsnummer im Text), dann das Modell mit dem
