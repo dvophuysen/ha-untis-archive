@@ -190,6 +190,7 @@ def context(account_id,session):
             topics[t['id']]={k:(v[:700] if isinstance(v,str) else v) for k,v in t.items()}
             topics[t['id']].update(source_lesson_id=lesson['id'],source_date=lesson['date'],status='KI-Themenvorschlag aus dokumentiertem Unterricht; keine gemessene Kompetenz')
     state['topic_connections']=list(topics.values())
+    state['book_context']=book_context(account_id,subject,source)
     consolidated={}
     for lesson in lessons:
         normalized=('discovered:'+str(lesson['topic']['id'])) if lesson.get('topic',{}).get('id') else ' '.join((lesson.get('text') or '').split()).casefold()
@@ -201,3 +202,25 @@ def context(account_id,session):
     state.update(messages=msgs,summary=session['summary'],phase=session['phase'],current_task=json.loads(session['current_task']) if session['current_task'] else None,
                  help_count=session['help_count'],task_help=bool(session['task_help']),read_at=s['read_at'])
     return state,version,s
+
+
+def book_context(account_id,subject,source):
+    """Der Gesamtkontext aus dem Buch: In welchem Kapitel steht die Stelle, die
+    gerade dran ist, wie weit reicht es, was gehört dazu."""
+    text=' '.join(str(v) for v in ((source.get('task') or {}).get('title'),(source.get('task') or {}).get('notes'),source.get('text')) if v)
+    if not text.strip():return None
+    try:
+        from .textbook_context import book_and_credentials, page_numbers
+        from .book_structure import chapters_of, chapter_of, companions
+        pages=page_numbers(text)
+        if not pages:return None
+        book,_=book_and_credentials(account_id,subject=subject)
+        if not book:return None
+        chapters=chapters_of(account_id,book['title'])
+        hit=next((chapter_of(chapters,p) for p in pages if chapter_of(chapters,p)),None)
+        if not hit:return None
+        return dict(buch=book['title'],kapitel=f"{hit['number']} {hit['title']}".strip(),seiten=[hit['start_page'],hit['end_page']],
+                    genannte_seiten=pages,dazu=[dict(titel=c['title'],art=c['kind'],seiten=[c['start_page'],c['end_page']]) for c in companions(chapters,hit)],
+                    hinweis='Das Kapitel ist der Zusammenhang, in dem die Aufgabe steht; Erklärungen daran ausrichten, nicht darüber hinaus.')
+    except Exception:
+        return None

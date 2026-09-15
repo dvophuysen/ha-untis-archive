@@ -23,6 +23,10 @@ RATE_UNTIL = date(2026, 12, 1)
 # EUR per million tokens, deliberately no prompt-cache discount.
 RATES = {'gpt-5.6-sol': (10.0, 45.0), 'gpt-5.6-terra': (5.0, 18.0), 'gpt-5.6-luna': (1.9, 9.0)}
 BACKGROUND = {'discovery', 'background'}
+# Der Quellenbestand (Buchseiten lesen, Inhaltsverzeichnisse ablesen) hat
+# seinen eigenen Rahmen, damit er die Auswertung der Kinderfotos nicht
+# verdrängt und umgekehrt. Beides bleibt innerhalb des Monatsrahmens.
+SOURCES = 'sources'
 
 
 def init_config(c):
@@ -44,10 +48,12 @@ def status():
         opening = cfg['opening_micro'] if cfg['opening_month'] == month else 0
         used = effective_sum(c,'month=?',(month,)) + opening
         bg = effective_sum(c,"month=? AND purpose IN ('discovery','background')",(month,))
+        src = effective_sum(c,"month=? AND purpose='sources'",(month,))
         counts = c.execute('SELECT status,COUNT(*) n FROM mentor_ai_calls WHERE month=? GROUP BY status',(month,)).fetchall()
     model = ai_settings()['model']
     return dict(month=month,used_eur=round(used/1e6,4),limit_eur=cfg['monthly_micro']/1e6,
                 warning_eur=cfg['warning_micro']/1e6,background_eur=round(bg/1e6,4),
+                sources_eur=round(src/1e6,4),sources_limit_eur=cfg['sources_micro']/1e6,
                 warning=used>=cfg['warning_micro'],remaining_eur=max(0,(cfg['monthly_micro']-used)/1e6),
                 opening_confirmed=bool(cfg['opening_confirmed'] or cfg['opening_month']!=month),
                 opening_eur=opening/1e6,rate_available=model in RATES and today_local()<RATE_UNTIL,
@@ -75,6 +81,8 @@ def reserve(account_id, purpose, session_id, input_max, output_max):
             raise HTTPException(429,'Für diese Einheit ist der KI-Rahmen erreicht. Dein Stand bleibt gespeichert.')
         if purpose in BACKGROUND and effective_sum(c,"month=? AND purpose IN ('discovery','background')",(month,))+upper>cfg['background_micro']:
             raise HTTPException(429,'Die weitere Hintergrundauswertung wartet auf das nächste Monatsbudget.')
+        if purpose==SOURCES and effective_sum(c,"month=? AND purpose='sources'",(month,))+upper>cfg['sources_micro']:
+            raise HTTPException(429,'Der Rahmen für den Quellenbestand ist für diesen Monat ausgeschöpft.')
         c.execute('INSERT INTO mentor_ai_calls(id,account_id,session_id,purpose,month,day,model,status,reserved_micro,input_rate,output_rate,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
                   (key,account_id,session_id,purpose,month,day,model,'reserved',upper,ri,ro,now_iso()))
     return key

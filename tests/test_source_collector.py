@@ -29,6 +29,9 @@ def shelf(title="¡Apúntate! 2", subject="spanisch"):
     with closing(db.webapp_conn()) as conn:
         conn.execute("INSERT INTO digital_textbook_catalog(account_id,title,provider,launch_url,subject_name,discovered_at)"
                      " VALUES(1,?,NULL,'https://viewer.example/b',?,'2026-09-01T00:00:00+00:00')", (title, subject))
+        # Das Verzeichnis gilt als gelesen, damit ein Lauf im Test nicht erst blättert.
+        conn.execute("INSERT OR IGNORE INTO digital_textbook_access(account_id,book_title,status,checked_at,toc_state) "
+                     "VALUES(1,?,'unknown','2026-09-01T00:00:00+00:00','not_found')", (title,))
         conn.execute("INSERT INTO digital_textbook_credentials(account_id,portal_url,username,password_ciphertext,"
                      "verification_status,created_at,updated_at) VALUES(1,'https://beispiel-iserv.de','kind',?,'catalog_ready','2026-09-01','2026-09-01')",
                      (encrypt_secret("geheim"),))
