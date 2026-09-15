@@ -33,20 +33,101 @@ import logging
 log = logging.getLogger("schul_cockpit.sources")
 
 # Wie eine Quelle geschrieben wird und was sie ist. „cda" ist bei Spanisch das
-# Cuaderno de actividades, „TB" der Textband. Die Zuordnung ist eine Annahme;
-# sie steht in der Anzeige, damit sie widersprochen werden kann.
+# Cuaderno de actividades. Latein hat zwei Bücher: den Textband („TB") und
+# den Begleitband („BB") mit Wortschatz und Grammatik; „Schulbuch" allein
+# wäre dort zu grob, eine Seite 13 gibt es in beiden. Die Zuordnung ist eine
+# Annahme; sie steht in der Anzeige, damit sie widersprochen werden kann.
 PARTS: list[tuple[str, str, str]] = [
     # (Muster, Anzeigename, Art)
-    (r"textband|lehrbuch|schulbuch|kursbuch|textbook|\bTB\b|\bSB\b|\blibro\b|\bbuch\b", "Schulbuch", "book"),
+    (r"begleitband|\bBB\b", "Begleitband", "book"),
+    (r"textband|\bTB\b", "Textband", "book"),
+    (r"lehrbuch|schulbuch|kursbuch|textbook|\bSB\b|\blibro\b|\bbuch\b", "Schulbuch", "book"),
     (r"vocabulario|wordbank|wortschatzteil", "Schulbuch, Vokabelteil", "book"),
     (r"arbeitsheft|\bA-?Heft\b|\bAH\b|workbook|cuaderno|\bcda\b|übungsheft|uebungsheft|arbeitsbuch", "Arbeitsheft", "workbook"),
     (r"grammatikheft|grammatisches beiheft|beiheft", "Grammatikheft", "workbook"),
     (r"arbeitsblatt|\bAB\b|handout|merkblatt|kopie", "Arbeitsblatt", "worksheet"),
 ]
+PART_LABELS = [label for _, label, _ in PARTS]
+BOOK_LABELS = {label for _, label, kind in PARTS if kind == "book"}
+# Ein Buchteil, den es nur als eigenes Buch gibt: Eine Seite des Textbands
+# oder des digitalen Schulbuchs belegt keine Begleitband-Seite und umgekehrt.
+SEPARATE_BOOKS = {"Begleitband"}
+
+
+def serves(have: str | None, want: str | None) -> bool:
+    """Ob eine Seite mit Buchteil `have` eine genannte Stelle im Teil `want` belegt.
+
+    Gleicher Teil immer. Ohne Angabe auf einer der Seiten gilt das Hauptbuch:
+    „Schulbuch", „Textband" und der Vokabelteil sind dasselbe Buch, ein
+    nacktes „S. 19" meint es auch. Der Begleitband bleibt für sich.
+    """
+    have = (have or "").strip()
+    want = (want or "").strip()
+    unknown = {"", "Unbekannte Quelle"}
+    if have == want:
+        return True
+    if want in unknown:
+        # Ein nacktes „S. 10" kann in jedem Buch des Fachs stehen.
+        return have in unknown or have in BOOK_LABELS
+    if want in SEPARATE_BOOKS or have in SEPARATE_BOOKS:
+        return False
+    main = unknown | (BOOK_LABELS - SEPARATE_BOOKS)
+    return have in main and want in main
+
+
+def book_serves(book_title: str | None, label: str | None) -> bool:
+    """Ob das digitale Buch im Regal die Stelle liefern kann."""
+    title = (book_title or "").casefold()
+    own = next((part for part in SEPARATE_BOOKS if part.casefold() in title), "")
+    return serves(own, label)
+
 
 # Nur eine ausdrückliche Seitenangabe zählt. Ohne diese Regel wird aus
 # „#libro, p. 50 vocabulario 4 b" eine Seite 4, obwohl 4 b die Aufgabe ist.
 PAGE = re.compile(r"\b(?:S\.|Seite|pp?\.|página|pagina)\s*(\d{1,3})(?:\s*(?:-|–|bis)\s*(\d{1,3}))?", re.I)
+# Eine Aufzählung hinter der Angabe („S. 10, 11, 14, 15") gehört dazu, solange
+# sie aufsteigt und nah bleibt; „S. 12, 3a" ist Seite 12 und Aufgabe 3a.
+_MORE = re.compile(r"\s*,\s*(\d{1,3})(?:\s*(?:-|–|bis)\s*(\d{1,3}))?(?![\w.])")
+
+
+def _span(first: int, last: int | None) -> list[int]:
+    last = last if last is not None else first
+    if last < first or last - first > 30:
+        last = first
+    return list(range(first, last + 1))
+
+
+def page_hits(text: str) -> list[tuple[int, int, list[int]]]:
+    """Jede Seitenangabe als (Anfang, Ende, Seiten), Aufzählungen eingeschlossen.
+
+    Eine Spanne über dreißig Seiten ist ein Tippfehler und zählt als ihre
+    erste Seite; `wide_spans` sagt, welche Angaben so gekürzt wurden."""
+    return [(start, end, pages) for start, end, pages, _ in _hits(text)]
+
+
+def wide_spans(text: str) -> set[int]:
+    return {start for start, _, _, wide in _hits(text) if wide}
+
+
+def _hits(text: str) -> list[tuple[int, int, list[int], bool]]:
+    text = text or ""
+    out = []
+    for hit in PAGE.finditer(text):
+        first, last = int(hit.group(1)), int(hit.group(2)) if hit.group(2) else None
+        wide = last is not None and (last < first or last - first > 30)
+        pages = _span(first, last)
+        end = hit.end()
+        while True:
+            more = _MORE.match(text, end)
+            if not more:
+                break
+            first = int(more.group(1))
+            if first <= pages[-1] or first - pages[-1] > 30:
+                break
+            pages += _span(first, int(more.group(2)) if more.group(2) else None)
+            end = more.end()
+        out.append((hit.start(), end, pages, wide))
+    return out
 
 
 def part_of(text: str) -> tuple[str, str]:
@@ -62,14 +143,13 @@ def part_of(text: str) -> tuple[str, str]:
 
 # Ein Arbeitsblatt hat keine Seitenzahl und ist trotzdem die Originalquelle
 # der Aufgabe („Arbeitsblatt beenden"). Es wird als Seite 0 geführt.
-SHEET = re.compile(PARTS[4][0], re.I)
+SHEET = re.compile(PARTS[-1][0], re.I)
 
 
 def sheet_mentions(text: str) -> list[re.Match]:
     """Arbeitsblätter, die ohne Seitenangabe genannt sind."""
     text = text or ""
-    covered = {hit.start() for hit in PAGE.finditer(text)
-               if part_of(text[:hit.start()])[1] == "worksheet"}
+    covered = {start for start, _, _ in page_hits(text) if part_of(text[:start])[1] == "worksheet"}
     if covered:
         return []
     return list(SHEET.finditer(text))
@@ -78,20 +158,14 @@ def sheet_mentions(text: str) -> list[re.Match]:
 def citations(text: str) -> list[dict]:
     """Jede Seitenangabe mit dem Buchteil, der davor steht, dazu Blätter ohne Seite."""
     found = []
-    for hit in PAGE.finditer(text or ""):
-        first = int(hit.group(1))
-        last = int(hit.group(2)) if hit.group(2) else first
-        if last < first or last - first > 30:
-            last = first
+    for start, _, pages in page_hits(text):
         # Der zuletzt genannte Teil gilt weiter: In „Buch, S. 30-32 … Aufgabe 1
         # auf S. 34" gehört auch die 34 ins Buch.
-        label, kind = part_of(text[:hit.start()])
-        found.append({"label": label or "Unbekannte Quelle", "kind": kind or "unknown",
-                      "pages": list(range(first, last + 1))})
+        label, kind = part_of(text[:start])
+        found.append({"label": label or "Unbekannte Quelle", "kind": kind or "unknown", "pages": pages})
     if sheet_mentions(text):
         found.append({"label": "Arbeitsblatt", "kind": "worksheet", "pages": [0]})
     return found
-
 
 
 def subject_map(lessons: list[dict]) -> dict[str, str]:
@@ -152,7 +226,30 @@ def mentions(account_id: int) -> tuple[list[dict], str]:
         if text and subject and row.get("assigned_date"):
             found.append({"kind": "homework", "id": row["id"], "subject": subject,
                           "date": row["assigned_date"], "text": text})
+    for row in exam_notices(account_id):
+        written = (row["subject_name"] or "").strip()
+        subject = short_to_name.get(written.casefold(), written)
+        if row["text"] and subject and row["date"] >= start:
+            found.append({"kind": "exam_notice", "id": row["id"], "subject": subject,
+                          "date": row["date"], "text": row["text"]})
     return found, start
+
+
+def exam_notices(account_id: int) -> list[dict]:
+    """Was die Lehrkraft für die Arbeit angekündigt hat: der abfotografierte
+    Zettel mit dem Stoff. Jede Stelle darauf ist eine Quelle wie aus Untis,
+    mit Vorrang beim Holen."""
+    with closing(webapp_conn()) as conn:
+        if "source_label" not in {r[1] for r in conn.execute("PRAGMA table_info(materials)")}:
+            return []
+        rows = conn.execute(
+            "SELECT id,subject_name,title,summary,content_text,document_date,created_at FROM materials "
+            "WHERE account_id=? AND hidden=0 AND kind='exam_notice' ORDER BY id", (account_id,)).fetchall()
+    return [{"id": r["id"], "subject_name": r["subject_name"],
+             "date": (r["document_date"] or r["created_at"] or "")[:10],
+             "text": " ".join(filter(None, (r["content_text"], r["title"] if not r["content_text"] else None,
+                                            r["summary"] if not r["content_text"] else None))).strip()}
+            for r in rows]
 
 
 def sync_links(account_id: int) -> dict:
@@ -196,20 +293,46 @@ def sync_links(account_id: int) -> dict:
     return {"since": start, "links": count, "removed": gone}
 
 
-def _scanned_pages(account_id: int) -> dict[str, dict[int, int]]:
-    """Welche Seiten je Fach ein Foto oder Scan aus der Ablage belegt."""
-    have: dict[str, dict[int, int]] = {}
+def _scanned_pages(account_id: int) -> dict[str, dict[tuple[str, int], int]]:
+    """Welche Seiten je Fach ein Foto oder Scan aus der Ablage belegt, mit Buchteil.
+
+    Zuerst zählt, was die Auswertung oder die Einkaufsliste an der Datei
+    festgehalten hat (gedruckte Seitenzahl, Buchteil). Nur ohne diese Angabe
+    gilt eine Seitenangabe in Titel oder Kurzbeschreibung; der erkannte Text
+    zählt nicht, weil ein Verweis „→ S. 12" auf einer Seite 15 keine Seite 12
+    belegt.
+    """
+    have: dict[str, dict[tuple[str, int], int]] = {}
     with closing(webapp_conn()) as conn:
         for row in conn.execute(
-            "SELECT id,subject_name,title,summary,content_text FROM materials "
-            "WHERE account_id=? AND hidden=0 AND origin!='book_fetch'", (account_id,)):
+            "SELECT id,subject_name,title,summary,source_label,source_page,kind FROM materials "
+            "WHERE account_id=? AND hidden=0 AND origin!='book_fetch' AND kind NOT IN ('exam_notice','toc')", (account_id,)):
             subject = (row["subject_name"] or "").strip().casefold()
-            text = " ".join(filter(None, (row["title"], row["summary"], row["content_text"])))
             pages = have.setdefault(subject, {})
+            # Ohne ausdrücklichen Buchteil sagt die Art der Datei, was sie ist.
+            label = (row["source_label"] or "").strip() or {"workbook": "Arbeitsheft", "worksheet": "Arbeitsblatt"}.get(row["kind"], "")
+            if row["source_page"]:
+                pages.setdefault((label, row["source_page"]), row["id"])
+                continue
+            text = " ".join(filter(None, (row["title"], row["summary"])))
             for cite in citations(text):
                 for page in cite["pages"]:
-                    pages.setdefault(page, row["id"])
+                    if page:
+                        pages.setdefault((label or (cite["label"] if cite["label"] != "Unbekannte Quelle" else ""), page), row["id"])
     return have
+
+
+def scan_for(scanned: dict[str, dict[tuple[str, int], int]], subject: str, label: str, page: int) -> int | None:
+    """Das Foto, das diese Stelle belegt: gleicher Buchteil zuerst, dann was
+    das Hauptbuch ebenfalls belegt."""
+    candidates = scanned.get(subject.casefold(), {})
+    exact = candidates.get((label, page))
+    if exact:
+        return exact
+    for (have, have_page), material_id in candidates.items():
+        if have_page == page and serves(have, label):
+            return material_id
+    return None
 
 
 def _book_pages(account_id: int) -> dict[str, dict[int, dict]]:
@@ -300,6 +423,10 @@ def claim(account_id: int, subject: str, label: str, page: int, material_id: int
             "UPDATE source_links SET status='scanned',detail='foto',material_id=?,updated_at=? "
             "WHERE account_id=? AND lower(subject_name)=lower(?) AND part_label=? AND page=?",
             (material_id, now_iso(), account_id, subject.strip(), label, page))
+        # Die Datei weiß danach selbst, welche Seite sie zeigt.
+        conn.execute("UPDATE materials SET source_label=COALESCE(NULLIF(source_label,''),?),"
+                     "source_page=COALESCE(source_page,?),updated_at=? WHERE id=? AND account_id=?",
+                     (label, page or None, now_iso(), material_id, account_id))
 
 
 def _claims(account_id: int) -> dict[tuple, int]:
@@ -357,8 +484,11 @@ def refresh_status(account_id: int) -> None:
                                  (claimed, stamp, link["id"]))
                 continue
             book = shelf.get(folded)
-            stored = books.get(folded, {}).get(page)
-            photo = scanned.get(folded, {}).get(page)
+            if book and not book_serves(book["title"], link["part_label"]):
+                # Das digitale Buch ist ein anderes Buch (Begleitband).
+                book = None
+            stored = books.get(folded, {}).get(page) if book else None
+            photo = scan_for(scanned, folded, link["part_label"], page)
             if page == 0:
                 photo = sheets.get(("homework", link["entry_id"])) or sheets.get(("lesson", link["entry_id"])) \
                     or _sheet_near(sheets, folded, link["entry_date"])
@@ -453,12 +583,17 @@ def ledger(account_id: int) -> dict:
         book = shelf.get(bucket["subject"].casefold())
         missing_count = sum(len(m["pages"]) for m in missing)
         chapters = []
+        from .book_structure import overview, paper_books
         if book:
-            from .book_structure import overview
             try:
                 chapters = overview(account_id, book["title"], bucket["subject"])
             except Exception:
                 log.warning("Kapitelübersicht für %s nicht berechenbar", bucket["subject"], exc_info=True)
+        for paper in paper_books(account_id, bucket["subject"]):
+            try:
+                chapters += overview(account_id, paper["title"], bucket["subject"], paper["part_label"])
+            except Exception:
+                log.warning("Kapitelübersicht für %s nicht berechenbar", paper["title"], exc_info=True)
         subjects.append({
             "chapters": chapters,
             "subject": bucket["subject"],
@@ -473,6 +608,13 @@ def ledger(account_id: int) -> dict:
     subjects.sort(key=lambda s: (-s["missing_count"], -s["pending"], s["subject"]))
     books = [{"title": book["title"], "subject": subject, "pages_stored": stored.get(book["title"], 0),
               "access": book.get("access")} for subject, book in sorted(shelf.items())]
+    # Papierbücher stehen mit dazu: was von ihnen fotografiert vorliegt.
+    from .book_structure import paper_books
+    scanned = _scanned_pages(account_id)
+    for paper in paper_books(account_id):
+        pages = {page for (have, page) in scanned.get(paper["subject_name"].casefold(), {}) if serves(have, paper["part_label"])}
+        books.append({"title": paper["title"], "subject": paper["subject_name"].casefold(), "pages_stored": len(pages),
+                      "access": {"status": "paper", "toc_state": paper["toc_state"], "page": None, "checked_at": paper["updated_at"], "detail": None}})
     return {"since": sync["since"], "subjects": subjects,
             "missing_total": sum(s["missing_count"] for s in subjects),
             "pending_total": sum(s["pending"] for s in subjects),
@@ -520,7 +662,7 @@ def photo_requests(account_id: int, exams: list[dict], day: str, days_ahead: int
     with closing(webapp_conn()) as conn:
         links = [dict(r) for r in conn.execute(
             "SELECT subject_name,part_label,part_kind,page,quote,entry_date,detail FROM source_links "
-            "WHERE account_id=? AND status='paper' AND entry_kind IN ('lesson','homework') ORDER BY entry_date DESC",
+            "WHERE account_id=? AND status='paper' AND entry_kind IN ('lesson','homework','exam_notice') ORDER BY entry_date DESC",
             (account_id,))]
     groups: dict[tuple, dict] = {}
     for link in links:
@@ -551,17 +693,13 @@ def segments(text: str) -> list[dict]:
     text = text or ""
     out: list[dict] = []
     pos = 0
-    for hit in PAGE.finditer(text):
-        if hit.start() > pos:
-            out.append({"text": text[pos:hit.start()]})
-        first = int(hit.group(1))
-        last = int(hit.group(2)) if hit.group(2) else first
-        if last < first or last - first > 30:
-            last = first
-        label, kind = part_of(text[:hit.start()])
-        out.append({"text": text[hit.start():hit.end()], "pages": list(range(first, last + 1)),
+    for start, end, pages in page_hits(text):
+        if start > pos:
+            out.append({"text": text[pos:start]})
+        label, kind = part_of(text[:start])
+        out.append({"text": text[start:end], "pages": pages,
                     "label": label or "Unbekannte Quelle", "kind": kind or "unknown"})
-        pos = hit.end()
+        pos = end
     if pos < len(text):
         out.append({"text": text[pos:]})
     sheets = sheet_mentions(text)
@@ -608,6 +746,7 @@ def _decorate(text: str, links: list[dict], analysis: dict[int, str]) -> tuple[l
     """Segmente mit Stand und Material versehen; dazu der Gesamtstand."""
     by_page: dict[tuple[str, int], dict] = {}
     for link in links:
+        by_page.setdefault((link.get("part_label") or "", link["page"]), link)
         by_page.setdefault((link["part_kind"], link["page"]), link)
     states: list[str | None] = []
     materials: list[int] = []
@@ -619,7 +758,8 @@ def _decorate(text: str, links: list[dict], analysis: dict[int, str]) -> tuple[l
         page_states = []
         page_materials = []
         for page in seg["pages"]:
-            link = by_page.get((seg["kind"], page)) or by_page.get(("unknown", page)) or by_page.get(("book", page))
+            link = by_page.get((seg["label"], page)) or by_page.get((seg["kind"], page)) \
+                or by_page.get(("unknown", page)) or by_page.get(("book", page))
             state = _state_of(link, analysis)
             page_states.append(state)
             if link and link.get("material_id"):
@@ -669,7 +809,7 @@ def annotate_lessons(account_id: int, lessons: list[dict], key: str = "lstext", 
     marks = ",".join("?" * len(ids))
     with closing(webapp_conn()) as conn:
         links = [dict(r) for r in conn.execute(
-            f"SELECT entry_id,part_kind,page,status,detail,material_id FROM source_links "
+            f"SELECT entry_id,part_kind,part_label,page,status,detail,material_id FROM source_links "
             f"WHERE account_id=? AND entry_kind='lesson' AND entry_id IN ({marks})", (account_id, *ids))]
         analysis = _analysis_states(conn, [l["material_id"] for l in links if l["material_id"]])
     by_lesson: dict[int, list[dict]] = {}
@@ -740,7 +880,7 @@ def annotate_tasks(account_id: int, tasks: list[dict]) -> None:
         if hw_ids:
             marks = ",".join("?" * len(hw_ids))
             links = [dict(r) for r in conn.execute(
-                f"SELECT entry_id,part_kind,page,status,detail,material_id FROM source_links "
+                f"SELECT entry_id,part_kind,part_label,page,status,detail,material_id FROM source_links "
                 f"WHERE account_id=? AND entry_kind='homework' AND entry_id IN ({marks})", (account_id, *hw_ids))]
         task_ids = [t["id"] for t in tasks]
         marks = ",".join("?" * len(task_ids))

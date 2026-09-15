@@ -28,6 +28,8 @@ class MaterialPatch(InputModel):
     period_start: str | None = Field(default=None, max_length=10)
     period_end: str | None = Field(default=None, max_length=10)
     contains_solutions: bool | None = None
+    source_label: str | None = Field(default=None, max_length=40)
+    source_page: int | None = Field(default=None, ge=0, le=1999)
 
 
 class LinkIn(InputModel):
@@ -77,16 +79,23 @@ async def upload(
     mime = store.sniff(content)
     if not mime:
         raise HTTPException(415, "Bitte ein Foto (JPEG, PNG, WebP) oder ein PDF verwenden.")
-    claimed = bool(source_label.strip() and source_page is not None and subject_name.strip())
-    if claimed and not kind:
-        kind = {"Arbeitsheft": "workbook", "Grammatikheft": "workbook", "Arbeitsblatt": "worksheet"}.get(source_label.strip(), "")
-    if claimed and not title.strip():
-        title = f"{source_label.strip()} {sources.page_list([source_page])}" if source_page else source_label.strip()
+    source_label = source_label.strip()
+    if source_label and source_label not in store.BOOK_PARTS:
+        raise HTTPException(422, "Unbekannter Buchteil.")
+    # Getippt oder gewählt: gespeichert wird die Schreibweise des Stundenplans.
+    subject_name = store.canonical_subject(account_id, subject_name) or ""
+    claimed = bool(source_label and source_page is not None and subject_name)
+    if source_label and not kind:
+        kind = {"Arbeitsheft": "workbook", "Grammatikheft": "workbook", "Arbeitsblatt": "worksheet"}.get(source_label, "book_page")
+    if claimed and not title.strip() and kind != "toc":
+        title = f"{source_label} {sources.page_list([source_page])}" if source_page else source_label
     hints = {
         "kind": kind if kind in store.KINDS else "",
-        "subject_name": subject_name.strip() or None,
+        "subject_name": subject_name or None,
         "title": title.strip() or None,
         "task_id": task_id, "topic_id": topic_id, "lesson_id": lesson_id, "exam_id": exam_id,
+        "source_label": source_label or None,
+        "source_page": source_page if source_page else None,
     }
     try:
         material_id = store.create(account_id, user.id, content, file.filename or "Material", mime, hints)
@@ -193,18 +202,30 @@ def download(account_id: int, material_id: int, user: CurrentUser = Depends(get_
 
 
 @router.patch("/{material_id}")
-def correct(account_id: int, material_id: int, body: MaterialPatch,
+def correct(account_id: int, material_id: int, body: MaterialPatch, background: BackgroundTasks,
             user: CurrentUser = Depends(get_current_user)) -> dict:
     """A parent correction wins and is protected against later analysis runs."""
     access(user, account_id, write=True, parent=True)
     changes = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
     if "kind" in changes and changes["kind"] not in store.KINDS:
         raise HTTPException(422, "Unbekannte Materialart.")
+    if "source_label" in changes:
+        changes["source_label"] = changes["source_label"].strip()
+        if changes["source_label"] and changes["source_label"] not in store.BOOK_PARTS:
+            raise HTTPException(422, "Unbekannter Buchteil.")
+    if "source_page" in changes and not changes["source_page"]:
+        changes["source_page"] = None
+    if "subject_name" in changes:
+        changes["subject_name"] = store.canonical_subject(account_id, changes["subject_name"])
     if "contains_solutions" in changes:
         changes["contains_solutions"] = int(changes["contains_solutions"])
     found = store.update(account_id, material_id, changes, by_parent=True)
     if not found:
         raise HTTPException(404, "Material nicht gefunden.")
+    if changes.keys() & {"kind", "subject_name", "source_label", "source_page"}:
+        # Ein umgewidmetes Foto (Inhaltsverzeichnis, Klausurzettel, andere
+        # Seite) wirkt sofort auf Verzeichnis und Einkaufsliste.
+        background.add_task(analysis.after_analysis, account_id, material_id)
     return found
 
 

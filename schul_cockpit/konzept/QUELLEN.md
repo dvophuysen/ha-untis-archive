@@ -122,14 +122,18 @@ der Anzeige, damit man ihr widersprechen kann.
 
 | geschrieben | gilt als | Art |
 |---|---|---|
-| TB, Textband, Lehrbuch, Buch, SB, libro, Kursbuch | Schulbuch | digital möglich |
+| BB, Begleitband | Begleitband (eigenes Buch, nur von eigenen Seiten belegt) | Papier oder digital |
+| TB, Textband | Textband (das Hauptbuch) | digital möglich |
+| Lehrbuch, Buch, SB, libro, Kursbuch | Schulbuch (das Hauptbuch) | digital möglich |
 | vocabulario, Wordbank, Wortschatzteil | Schulbuch, Vokabelteil | digital möglich |
 | AH, A-Heft, Arbeitsheft, workbook, cuaderno, cda, Übungsheft | Arbeitsheft | nur Papier |
 | Grammatikheft, Beiheft | Grammatikheft | nur Papier |
 | Arbeitsblatt, AB, Handout, Merkblatt, Kopie | Arbeitsblatt | nur Papier |
 
 Diese Ableitung hat sich im Betrieb bewährt; die Kürzel mussten nicht erfragt
-werden.
+werden. Seit 0.57.0 zählt eine Aufzählung hinter der Angabe vollständig
+(„S. 10, 11, 14, 15"), solange sie aufsteigt und nah bleibt; „S. 12, 3a" ist
+Seite 12 mit Aufgabe 3a.
 
 ## Belegter Befund: Seitenabruf aus dem Medienregal
 
@@ -303,9 +307,38 @@ Die Abendkarte zeigt sie unter „Für die Arbeit brauche ich noch“ mit Sprung
 zur Materialseite; die abendliche Mitteilung zählt „Heftseiten für die Arbeit“
 als offenen Punkt. Ohne Arbeit: nichts.
 
-## Offen
+## Umgesetzt: zwei Bücher, Papierbücher, Klausurzettel (0.57.0, D45–D47)
+
+- `sources.serves(have, want)` entscheidet, ob eine Seite eines Buchteils eine
+  genannte Stelle belegt; `book_serves` dasselbe für das digitale Buch im
+  Regal. Der Begleitband ist ein eigenes Buch (`SEPARATE_BOOKS`).
+- `materials.source_label`/`source_page`: Buchteil und gedruckte Seite einer
+  Datei. Gesetzt von der Einkaufsliste (`claim`), vom Upload mit Vorgabe oder
+  von der Auswertung (`Insight.printed_pages`, `Insight.book_part`). Der
+  Abgleich (`_scanned_pages`, `scan_for`) nutzt zuerst diese Angaben und
+  sonst nur Titel und Kurzbeschreibung — nicht mehr den erkannten Text.
+- Materialart `exam_notice`: `sources.exam_notices` liefert die Zettel,
+  `mentions` bindet ihre Stellen mit `entry_kind` exam_notice; Priorität wie
+  Hausaufgaben (`source_collector.priorities`), eigene Einheit im Klausurstoff
+  (`exam_scope.collect`), vorn im Mentor-Kontext (`materials.for_context`).
+- Materialart `toc` plus Buchteil: `book_structure.read_paper_toc` liest aus
+  allen Fotos dieses Verzeichnisses die Kapitel (bis acht Aufnahmen, je zwei
+  zu einem Bild) und trägt das Buch in `paper_books` ein. `expand` bindet die
+  Kapitelseiten mit dem Buchteil als `part_label`; `overview(..., label)`
+  zählt fotografierte statt abgerufener Seiten. `exam_scope.book_chapters`
+  nimmt Papierbücher dazu.
+- Fach: `/api/accounts/{id}/subjects` liefert `untis_name`; die Materialseite
+  wählt daraus, `materials.canonical_subject` bringt jede Eingabe auf die
+  Schreibweise des Stundenplans.
 
 ## Offene Punkte
+
+- Der Klausurstoff nennt den Zettel als Einheit; ob das Modell ihn beim
+  Gruppieren als Vorgabe behandelt (statt als eine Notiz unter vielen), ist
+  am ersten echten Stoffplan zu prüfen.
+- Stellen ohne Buchteil in einem Fach mit zwei Papierbüchern („Voc. 1.
+  Lektion S. 10, 11") landen als „Unbekannte Quelle" auf der Liste und werden
+  vom ersten passenden Foto beliebigen Buchteils gestrichen.
 
 - Der Regal-Scan des Kontos ohne Regal läuft in einen Einwilligungsdialog des
   Verlags und speichert dessen Schaltflächen („Abbrechen", „Weiter zur App",

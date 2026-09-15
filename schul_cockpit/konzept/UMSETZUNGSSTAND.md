@@ -1,9 +1,17 @@
-# Quellenbestand 0.52.2–0.56.0
+# Quellenbestand 0.52.2–0.57.0
 
-Stand 15.09.2026, abends. Bis 0.55.1 auf der laufenden Instanz installiert und
-mit echten Abrufen geprüft; 0.56.0 folgt in derselben Session.
+Stand 15.09.2026, abends. Bis 0.56.11 auf der laufenden Instanz installiert und
+mit echten Abrufen geprüft; 0.57.0 folgt in derselben Session.
 
 ## Was ausgeliefert ist
+
+**Zwei Bücher, Papierbücher, Klausurzettel (0.57.0, D45–D47).** Textband und
+Begleitband sind eigene Quellen (`sources.serves`); Aufzählungen von Seiten
+gelten ganz. Der abfotografierte Zettel zum Klausurstoff (`exam_notice`)
+bindet seine Stellen mit Vorrang; Papierbücher bekommen ihr Verzeichnis aus
+Fotos (`toc`, `paper_books`, `read_paper_toc`) und die Kapitelregel. Jede
+Datei kennt Buchteil und gedruckte Seite; das Fach kommt aus dem Katalog.
+Tests: `tests/test_paper_books.py`.
 
 **Quellen sichtbar, Hausaufgabe neu (0.56.0, D44).** `sources.segments`
 zerlegt jeden Untis-Text; `annotate_lessons` und `annotate_tasks` hängen Stand

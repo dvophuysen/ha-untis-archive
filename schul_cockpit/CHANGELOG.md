@@ -1,3 +1,12 @@
+## 0.57.0
+
+- Latein hat zwei Bücher: „TB" ist jetzt der Textband, „BB" der Begleitband; beide sind eigene Quellen, eine Seite 13 gibt es in jedem. Eine Begleitband-Seite belegt keine Textband-Stelle und umgekehrt; ein nacktes „S. 19" meint weiter das Hauptbuch.
+- Aufzählungen wie „S. 10, 11, 14, 15" gelten vollständig, nicht nur die erste Zahl. „S. 12, 3a" bleibt Seite 12 mit Aufgabe 3a.
+- Der Zettel der Lehrkraft, was in der Arbeit vorkommt, ist eine eigene Materialart „Ankündigung einer Arbeit". Jede darauf genannte Stelle kommt wie ein Untis-Eintrag auf die Liste, wird beim Holen vorgezogen und steht im Klausurstoff ganz vorn.
+- Bücher, die nur auf Papier existieren, bekommen ihr Inhaltsverzeichnis aus Fotos (Materialart „Inhaltsverzeichnis", Buchteil dazu). Danach gilt für sie die Kapitelregel: Wird eine Seite genannt, steht die ganze Lektion auf der Einkaufsliste, und die Bilanz zeigt je Kapitel, wie viele Seiten fotografiert vorliegen.
+- Ein Foto oder Scan merkt sich, welche gedruckte Seite welchen Buchteils es zeigt: von der Einkaufsliste mitgegeben oder von der Auswertung abgelesen. Eine von Hand gescannte Seite 19 verschwindet damit von der Liste. Ein Verweis „→ S. 12" im Text einer Seite 15 belegt keine Seite 12 mehr.
+- Das Fach wird auf der Materialseite aus dem Stundenplan gewählt, nicht mehr getippt, und beim Speichern auf dessen Schreibweise gebracht: kein „Latein" neben „LATEIN" mehr. Vor dem Fotografieren lassen sich Fach, Art, Buchteil und Seite vorgeben; die Korrektur eines Materials kennt Buchteil und gedruckte Seite.
+
 ## 0.56.11
 
 - Fenster 3000 mal 2100 Pixel: eine Doppelseite kommt mit rund 2300 Pixeln Breite an, gemessen 1970 bei 2600.

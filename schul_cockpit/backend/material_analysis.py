@@ -24,8 +24,10 @@ from .subject_names import SubjectCatalog, key as subject_key
 _LOGGER = logging.getLogger("schul_cockpit.materials")
 
 # Raise this when the instruction or the extracted fields change, so the night
-# run picks up everything that was filed under the older rules.
-ANALYSIS_VERSION = 2
+# run picks up everything that was filed under the older rules. Abgerufene
+# Buchseiten bleiben davon ausgenommen: ihre Felder haben sich nicht geändert,
+# und 84 Seiten neu zu lesen kostete rund elf Euro.
+ANALYSIS_VERSION = 3
 
 
 class Insight(InputModel):
@@ -44,6 +46,8 @@ class Insight(InputModel):
     # und ob der Inhalt zu den Unterrichtszitaten passt.
     printed_pages: list[int] = Field(default_factory=list, max_length=4)
     fits_quote: str = Field(default="", max_length=10)
+    # Für Fotos von Buch- und Heftseiten: welcher Buchteil zu sehen ist.
+    book_part: str = Field(default="", max_length=20)
 
 
 INSTRUCTION = (
@@ -57,7 +61,8 @@ INSTRUCTION = (
     "kind ist genau einer dieser Werte: worksheet Arbeitsblatt der Lehrkraft, workbook Seite aus einem "
     "Arbeitsheft, book_page Buchseite, notes eigene Mitschrift oder Heftseite, assignment reine "
     "Aufgabenstellung, own_work vom Kind bearbeitete Aufgaben, exam geschriebene Klassenarbeit oder "
-    "Klausur, handout Merk- oder Infoblatt, other sonst.\n"
+    "Klausur, handout Merk- oder Infoblatt, exam_notice Ankündigung oder Zettel der Lehrkraft, was in "
+    "einer Klassenarbeit vorkommt (Stoffliste), toc Inhaltsübersicht eines Buchs mit Kapiteln und Seitenzahlen, other sonst.\n"
     "subject_name nur setzen, wenn das Fach im Material oder im mitgelieferten Zusammenhang belegt ist; "
     "sonst leer lassen. Verwende dann genau eine Schreibweise aus bekannte_faecher.\n"
     "topics: höchstens sechs Stichworte zum Inhalt. Passt ein Eintrag aus bekannte_themen, übernimm "
@@ -77,6 +82,13 @@ INSTRUCTION = (
     "Liste leer. fits_quote sagt, ob der Seiteninhalt zu hinweise.buchseite.zitate_aus_unterricht passt: "
     "ja, unklar oder nein; ohne Zitate leer lassen. Ist das Bild nur eine leere Fläche ohne Buchinhalt, "
     "setze unreadable auf true.\n"
+    "Zeigt das Foto eine Seite aus einem Buch oder Heft (book_page, workbook, toc), lies ebenfalls die gedruckte "
+    "Seitenzahl ab und gib sie in printed_pages an; ohne lesbare Seitenzahl bleibt die Liste leer. book_part ist "
+    "der Buchteil, genau ein Wert aus bekannte_buchteile: hinweise.buchteil, wenn gesetzt, sonst was das Bild "
+    "belegt (ein Vokabel- und Grammatikteil in Latein ist der Begleitband, ein Lektionstext der Textband, "
+    "Übungen mit Schreiblinien das Arbeitsheft); im Zweifel leer.\n"
+    "Bei exam_notice gib in content_text jede Zeile wortgetreu wieder, Abkürzungen wie BB, TB, AH und S. "
+    "unverändert, damit die genannten Stellen daraus gelesen werden können.\n"
     "JSON-Schema: "
 )
 
@@ -130,6 +142,8 @@ def _context(conn, account_id: int, row) -> dict:
             (account_id, row["subject_name"] or "", row["source_page"]))]
         hints["buchseite"] = {"buch": row["source_book"], "bestellte_seite": row["source_page"],
                               "fach": row["subject_name"], "zitate_aus_unterricht": quotes}
+    if "source_label" in row.keys() and row["source_label"]:
+        hints["buchteil"] = row["source_label"]
     for link in store.links(conn, row["id"]):
         if link["kind"] == "task":
             task = conn.execute(
@@ -144,7 +158,8 @@ def _context(conn, account_id: int, row) -> dict:
                                  (link["target_id"],)).fetchone()
             if topic:
                 hints["gehoert_zu_thema"] = {"fach": topic["subject"], "titel": topic["title"]}
-    return {"hinweise": hints, "bekannte_faecher": sorted(set(catalog)), "bekannte_themen": topics}
+    return {"hinweise": hints, "bekannte_faecher": sorted(set(catalog)), "bekannte_themen": topics,
+            "bekannte_buchteile": list(store.BOOK_PARTS)}
 
 
 def _parts(row) -> tuple[list[dict], str]:
@@ -199,6 +214,17 @@ def _apply(conn, account_id: int, row, insight: Insight) -> None:
         else:
             values["page_check"] = "mismatch"
         values["fits_quote"] = insight.fits_quote.strip().lower()[:10]
+    elif "source_label" in row.keys():
+        # Ein Foto weiß danach, welche Seite welchen Buchteils es zeigt; so
+        # verschwindet eine von Hand gescannte Seite von der Einkaufsliste.
+        kind = values.get("kind") or row["kind"]
+        printed = [int(p) for p in insight.printed_pages if 0 < int(p) < 2000]
+        if printed and kind in ("book_page", "workbook", "toc") and "source_page" not in locked and not row["source_page"]:
+            values["source_page"] = printed[0]
+            values["printed_pages"] = json.dumps(printed)
+        part = insight.book_part.strip()
+        if part in store.BOOK_PARTS and "source_label" not in locked and not row["source_label"]:
+            values["source_label"] = part
     values.update(
         analysis_state="ready",
         analysis_model=ai.ai_settings()["model"],
@@ -264,7 +290,29 @@ async def analyze(account_id: int, material_id: int) -> bool:
         current = conn.execute("SELECT * FROM materials WHERE id=?", (material_id,)).fetchone()
         if current:
             _apply(conn, account_id, current, insight)
+    await after_analysis(account_id, material_id)
     return True
+
+
+async def after_analysis(account_id: int, material_id: int) -> None:
+    """Ein Foto eines Inhaltsverzeichnisses liest das Verzeichnis seines
+    Papierbuchs neu; ein Klausurzettel bindet seine Stellen sofort."""
+    with closing(webapp_conn()) as conn:
+        row = conn.execute("SELECT kind,subject_name,source_label,origin FROM materials WHERE id=? AND account_id=?",
+                           (material_id, account_id)).fetchone()
+    if not row or (row["origin"] or "") == "book_fetch":
+        # Abgerufene Buchseiten gleicht der Sammellauf selbst ab.
+        return
+    try:
+        if row["kind"] == "toc" and row["subject_name"] and row["source_label"]:
+            from .book_structure import read_paper_toc
+            await read_paper_toc(account_id, row["subject_name"], row["source_label"])
+        if row["kind"] in ("toc", "exam_notice", "book_page", "workbook"):
+            from . import sources
+            sources.sync_links(account_id)
+            sources.refresh_status(account_id)
+    except Exception:
+        _LOGGER.warning("Nacharbeit zu Material %s nicht möglich", material_id, exc_info=True)
 
 
 def due(limit: int = 20) -> list[tuple[int, int]]:
@@ -277,7 +325,7 @@ def due(limit: int = 20) -> list[tuple[int, int]]:
             "JOIN learning_profiles p ON p.account_id=m.account_id AND p.active=1 AND p.ai_enabled=1 "
             "WHERE m.hidden=0 AND ("
             " m.analysis_state IN ('pending','failed')"
-            " OR m.analysis_version<?"
+            " OR (m.analysis_version<? AND COALESCE(m.origin,'')!='book_fetch')"
             " OR COALESCE(m.analysis_model,'')!=?"
             " OR (m.subject_name IS NULL OR m.subject_name='')"
             " OR NOT EXISTS (SELECT 1 FROM material_links l WHERE l.material_id=m.id AND l.kind='topic')"

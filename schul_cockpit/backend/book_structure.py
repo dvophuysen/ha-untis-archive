@@ -67,10 +67,12 @@ INSTRUCTION = (
 )
 
 
-def _image_parts(shots: list[bytes]) -> list[dict]:
+def _image_parts(shots: list[bytes], limit: int = 4) -> list[dict]:
+    """Je zwei Aufnahmen untereinander in ein Bild; das digitale Verzeichnis
+    braucht vier Seiten, ein fotografiertes Papierbuch bis zu acht."""
     from .textbook_context import _join
     parts = []
-    for i in range(0, min(len(shots), 4), 2):
+    for i in range(0, min(len(shots), limit), 2):
         blob = _join(shots[i:i + 2])
         parts.append({"type": "image_url", "image_url": {
             "url": "data:image/jpeg;base64," + base64.b64encode(blob).decode(), "detail": "high"}})
@@ -100,11 +102,11 @@ def toc_state(account_id: int, title: str) -> str | None:
     return row[0] if row else None
 
 
-async def _read(account_id: int, book, shots: list[bytes]) -> TableOfContents | None:
+async def _read(account_id: int, book, shots: list[bytes], limit: int = 4) -> TableOfContents | None:
     context = {"buch": book["title"], "fach": book["subject_name"]}
     try:
         raw, _, _ = await ai.complete(account_id, ai.SOURCES, INSTRUCTION + json.dumps(TableOfContents.model_json_schema()),
-                                      context, _image_parts(shots), max_output=8000)
+                                      context, _image_parts(shots, limit), max_output=8000)
         return TableOfContents.model_validate_json(raw)
     except ValidationError:
         log.warning("Inhaltsverzeichnis von %s nicht auswertbar", book["title"])
@@ -197,20 +199,30 @@ def _pages(chapter: dict) -> list[int]:
     return list(range(chapter["start_page"], min(end, chapter["start_page"] + MAX_CHAPTER_PAGES) + 1))
 
 
-def touched_chapters(account_id: int, title: str, subject: str, chapters: list[dict] | None = None) -> list[dict]:
+def touched_chapters(account_id: int, title: str, subject: str, chapters: list[dict] | None = None,
+                     label: str | None = None) -> list[dict]:
     """Welche Kapitel der Unterricht angeschnitten hat, mit dem ersten Tag.
 
-    Gezählt werden nur Stellen aus Untis-Einträgen, nicht die Seiten, die
-    die Kapitelregel selbst hinzugefügt hat.
+    Gezählt werden nur Stellen aus Untis-Einträgen und Klausurankündigungen,
+    nicht die Seiten, die die Kapitelregel selbst hinzugefügt hat. Ohne
+    `label` ist es das digitale Buch im Regal; mit `label` ein Papierbuch
+    („Begleitband"), dem nur die Stellen seines Buchteils gehören.
     """
+    from .sources import book_serves, serves
     chapters = chapters if chapters is not None else chapters_of(account_id, title)
     if not chapters:
         return []
     with closing(webapp_conn()) as conn:
-        cited = conn.execute(
-            "SELECT page, MIN(entry_date) AS first_date FROM source_links WHERE account_id=? "
-            "AND lower(subject_name)=lower(?) AND part_kind IN ('book','unknown') AND entry_kind IN ('lesson','homework') "
-            "GROUP BY page", (account_id, subject)).fetchall()
+        rows = conn.execute(
+            "SELECT page, part_label, MIN(entry_date) AS first_date FROM source_links WHERE account_id=? "
+            "AND lower(subject_name)=lower(?) AND part_kind IN ('book','unknown') "
+            "AND entry_kind IN ('lesson','homework','exam_notice') GROUP BY page, part_label", (account_id, subject)).fetchall()
+    cited: dict[int, str] = {}
+    for row in rows:
+        fits = serves(row["part_label"], label) if label else book_serves(title, row["part_label"])
+        if fits and (row["page"] not in cited or row["first_date"] < cited[row["page"]]):
+            cited[row["page"]] = row["first_date"]
+    cited = [{"page": page, "first_date": day} for page, day in cited.items()]
     found: dict[int, dict] = {}
     for row in cited:
         chapter = chapter_of(chapters, row["page"])
@@ -254,11 +266,111 @@ def companions(chapters: list[dict], chapter: dict) -> list[dict]:
     return out
 
 
+def paper_books(account_id: int, subject: str | None = None) -> list[dict]:
+    """Bücher, die nur auf Papier existieren und deren Verzeichnis aus Fotos stammt."""
+    with closing(webapp_conn()) as conn:
+        if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='paper_books'").fetchone():
+            return []
+        where, args = "account_id=?", [account_id]
+        if subject:
+            where += " AND lower(subject_name)=lower(?)"
+            args.append(subject)
+        return [dict(r) for r in conn.execute(f"SELECT * FROM paper_books WHERE {where} ORDER BY subject_name,part_label", args)]
+
+
+def paper_title(subject: str, part_label: str) -> str:
+    from .subject_names import label as nice
+    return f"{part_label} {nice(subject)}".strip()
+
+
+async def read_paper_toc(account_id: int, subject: str, part_label: str) -> dict:
+    """Das Inhaltsverzeichnis eines Papierbuchs aus den abgelegten Fotos lesen.
+
+    Alle Fotos der Art „Inhaltsverzeichnis" desselben Fachs und Buchteils
+    sind zusammen das Verzeichnis; jedes weitere Foto liest es neu.
+    """
+    from . import materials as store
+    subject = store.canonical_subject(account_id, subject) or subject
+    title = paper_title(subject, part_label)
+    with closing(webapp_conn()) as conn:
+        rows = conn.execute(
+            "SELECT id,file_bytes,mime_type,source_page FROM materials WHERE account_id=? AND hidden=0 AND kind='toc' "
+            "AND lower(subject_name)=lower(?) AND COALESCE(source_label,'')=? ORDER BY COALESCE(source_page,999),id",
+            (account_id, subject, part_label)).fetchall()
+    if not rows:
+        return {"state": "none", "title": title, "chapters": 0}
+    shots: list[bytes] = []
+    for row in rows:
+        if not row["file_bytes"]:
+            continue
+        if row["mime_type"] == "application/pdf":
+            shots.extend(store.pdf_page_images(row["file_bytes"], 1, 6))
+        else:
+            shots.append(row["file_bytes"])
+    stamp = now_iso()
+    with closing(webapp_conn()) as conn, conn:
+        conn.execute(
+            "INSERT INTO paper_books(account_id,subject_name,part_label,title,toc_state,toc_pages,updated_at) "
+            "VALUES(?,?,?,?,'reading',?,?) ON CONFLICT(account_id,subject_name,part_label) DO UPDATE SET "
+            "title=excluded.title,toc_state='reading',toc_pages=excluded.toc_pages,updated_at=excluded.updated_at",
+            (account_id, subject, part_label, title, len(rows), stamp))
+    toc = await _read(account_id, {"title": title, "subject_name": subject}, shots[:8], limit=8) if shots else None
+    count = 0
+    if toc and toc.is_toc and toc.chapters:
+        count = store_chapters(account_id, title, toc.chapters)
+        state = "read"
+    else:
+        state = "none" if toc else "failed"
+    with closing(webapp_conn()) as conn, conn:
+        conn.execute("UPDATE paper_books SET toc_state=?,updated_at=? WHERE account_id=? AND subject_name=? AND part_label=?",
+                     (state, now_iso(), account_id, subject, part_label))
+    log.info("Inhaltsverzeichnis %s: %s, %s Einträge", title, state, count)
+    return {"state": state, "title": title, "chapters": count}
+
+
+def _bind_units(account_id: int, subject: str, units: dict, part_label: str, stamp: str) -> int:
+    count = 0
+    with closing(webapp_conn()) as conn, conn:
+        for unit, label, first_date in units.values():
+            for page in _pages(unit):
+                conn.execute(
+                    "INSERT INTO source_links(account_id,entry_kind,entry_id,entry_date,subject_name,part_label,part_kind,"
+                    "page,quote,synced_at,updated_at) VALUES(?,'chapter',?,?,?,?,'book',?,?,?,?) "
+                    "ON CONFLICT(account_id,entry_kind,entry_id,part_kind,part_label,page) DO UPDATE SET "
+                    "entry_date=excluded.entry_date,quote=excluded.quote,synced_at=excluded.synced_at",
+                    (account_id, unit["id"], first_date, subject, part_label, page, label[:220], stamp, stamp))
+                count += 1
+    return count
+
+
+def _units_of(account_id: int, title: str, subject: str, chapters: list[dict], label: str | None) -> dict:
+    units: dict[int, tuple[dict, str, str]] = {}
+    for chapter in touched_chapters(account_id, title, subject, chapters, label=label):
+        name = f"Kapitel {chapter['number']} {chapter['title']}".replace("Kapitel  ", "").strip()
+        if label:
+            name = f"{label}: {name}"
+        if chapter.get("inferred"):
+            name += " (aus dem Stundenthema erschlossen)"
+        units[chapter["id"]] = (chapter, name, chapter["first_date"])
+        for extra in companions(chapters, chapter):
+            units.setdefault(extra["id"], (extra, f"{name}: {extra['title']}", chapter["first_date"]))
+    return units
+
+
+def _spelling(account_id: int, subject: str) -> str:
+    with closing(webapp_conn()) as conn:
+        row = conn.execute(
+            "SELECT subject_name FROM source_links WHERE account_id=? AND lower(subject_name)=lower(?) LIMIT 1",
+            (account_id, subject)).fetchone()
+    return row[0] if row else subject
+
+
 def expand(account_id: int, stamp: str) -> int:
     """Die Kapitelregel: zu jedem angeschnittenen Kapitel alle Seiten als zu
     holende Stellen binden, dazu die zugehörigen Vokabel- und Grammatikteile.
     Läuft im Takt von sync_links und trägt dessen Zeitstempel, damit die
-    Zeilen den Abgleich überleben."""
+    Zeilen den Abgleich überleben. Papierbücher mit gelesenem Verzeichnis
+    bekommen dieselbe Regel; ihre Seiten landen auf der Einkaufsliste."""
     with closing(webapp_conn()) as conn:
         books = [dict(r) for r in conn.execute(
             "SELECT DISTINCT c.book_title, k.subject_name FROM book_chapters c "
@@ -267,43 +379,36 @@ def expand(account_id: int, stamp: str) -> int:
     count = 0
     for book in books:
         chapters = chapters_of(account_id, book["book_title"])
-        subject_row = None
-        with closing(webapp_conn()) as conn:
-            subject_row = conn.execute(
-                "SELECT subject_name FROM source_links WHERE account_id=? AND lower(subject_name)=lower(?) LIMIT 1",
-                (account_id, book["subject_name"])).fetchone()
-        subject = subject_row[0] if subject_row else book["subject_name"]
-        units: dict[int, tuple[dict, str, str]] = {}
-        for chapter in touched_chapters(account_id, book["book_title"], subject, chapters):
-            label = f"Kapitel {chapter['number']} {chapter['title']}".replace("Kapitel  ", "").strip()
-            if chapter.get("inferred"):
-                label += " (aus dem Stundenthema erschlossen)"
-            units[chapter["id"]] = (chapter, label, chapter["first_date"])
-            for extra in companions(chapters, chapter):
-                units.setdefault(extra["id"], (extra, f"{label}: {extra['title']}", chapter["first_date"]))
-        with closing(webapp_conn()) as conn, conn:
-            for unit, label, first_date in units.values():
-                for page in _pages(unit):
-                    conn.execute(
-                        "INSERT INTO source_links(account_id,entry_kind,entry_id,entry_date,subject_name,part_label,part_kind,"
-                        "page,quote,synced_at,updated_at) VALUES(?,'chapter',?,?,?,'Schulbuch','book',?,?,?,?) "
-                        "ON CONFLICT(account_id,entry_kind,entry_id,part_kind,part_label,page) DO UPDATE SET "
-                        "entry_date=excluded.entry_date,quote=excluded.quote,synced_at=excluded.synced_at",
-                        (account_id, unit["id"], first_date, subject, page, label[:220], stamp, stamp))
-                    count += 1
+        subject = _spelling(account_id, book["subject_name"])
+        units = _units_of(account_id, book["book_title"], subject, chapters, None)
+        count += _bind_units(account_id, subject, units, "Schulbuch", stamp)
+    for paper in paper_books(account_id):
+        chapters = chapters_of(account_id, paper["title"])
+        if not chapters:
+            continue
+        subject = _spelling(account_id, paper["subject_name"])
+        units = _units_of(account_id, paper["title"], subject, chapters, paper["part_label"])
+        count += _bind_units(account_id, subject, units, paper["part_label"], stamp)
     return count
 
 
-def overview(account_id: int, title: str, subject: str) -> list[dict]:
-    """Angeschnittene Kapitel mit Fortschritt, für Bilanz und Klausurstoff."""
+def overview(account_id: int, title: str, subject: str, label: str | None = None) -> list[dict]:
+    """Angeschnittene Kapitel mit Fortschritt, für Bilanz und Klausurstoff.
+
+    Beim digitalen Buch zählen die abgerufenen Seiten, beim Papierbuch die
+    Fotos und Scans, die diesen Buchteil zeigen."""
     chapters = chapters_of(account_id, title)
-    touched = touched_chapters(account_id, title, subject, chapters)
+    touched = touched_chapters(account_id, title, subject, chapters, label=label)
     if not touched:
         return []
-    with closing(webapp_conn()) as conn:
-        stored = {r[0] for r in conn.execute(
-            "SELECT source_page FROM materials WHERE account_id=? AND origin='book_fetch' AND hidden=0 AND source_book=? "
-            "AND COALESCE(page_check,'') NOT IN ('mismatch','blank')", (account_id, title))}
+    if label:
+        from .sources import _scanned_pages, serves
+        stored = {page for (have, page) in _scanned_pages(account_id).get(subject.casefold(), {}) if serves(have, label)}
+    else:
+        with closing(webapp_conn()) as conn:
+            stored = {r[0] for r in conn.execute(
+                "SELECT source_page FROM materials WHERE account_id=? AND origin='book_fetch' AND hidden=0 AND source_book=? "
+                "AND COALESCE(page_check,'') NOT IN ('mismatch','blank')", (account_id, title))}
     out = []
     for chapter in touched:
         pages = _pages(chapter)
@@ -314,6 +419,7 @@ def overview(account_id: int, title: str, subject: str) -> list[dict]:
             "first_date": chapter["first_date"], "cited_pages": sorted(chapter["cited_pages"]),
             "inferred": chapter.get("inferred", False), "confidence": chapter.get("confidence"),
             "pages": len(pages), "pages_stored": sum(1 for p in pages if p in stored),
+            "book": title, "part_label": label,
             "companions": [{"title": e["title"], "kind": e["kind"], "start_page": e["start_page"], "end_page": e["end_page"]}
                            for e in extras],
         })

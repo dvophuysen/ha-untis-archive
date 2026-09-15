@@ -211,7 +211,7 @@ async def analyze_page(account_id: int, material_id: int) -> dict | None:
     try:
         await analysis.analyze(account_id, material_id)
     except Exception:
-        log.warning("Buchseite %s konnte nicht ausgewertet werden", material_id)
+        log.warning("Buchseite %s konnte nicht ausgewertet werden", material_id, exc_info=True)
         return None
     with closing(webapp_conn()) as conn:
         row = conn.execute("SELECT id,page_check,printed_pages,fits_quote,analysis_state FROM materials WHERE id=?",
@@ -247,6 +247,12 @@ async def priorities(account_id: int) -> dict:
                         f"SELECT lower(subject_name) AS s,page FROM source_links WHERE account_id=? AND entry_kind='homework' "
                         f"AND entry_id IN ({marks})", (account_id, *homework_ids)):
                     homework_pages.add((r["s"], r["page"]))
+    with closing(webapp_conn()) as conn:
+        # Was die Lehrkraft für die Arbeit angekündigt hat, ist so dringend wie
+        # eine offene Hausaufgabe.
+        for r in conn.execute("SELECT lower(subject_name) AS s,page FROM source_links WHERE account_id=? "
+                              "AND entry_kind='exam_notice'", (account_id,)):
+            homework_pages.add((r["s"], r["page"]))
     try:
         from .exams import resolve_exams
         horizon = (date.today() + timedelta(days=14)).isoformat()

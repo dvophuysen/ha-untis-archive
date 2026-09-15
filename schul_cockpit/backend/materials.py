@@ -34,8 +34,12 @@ KINDS = (
     "own_work",    # bearbeitete Lösung des Kindes
     "exam",        # geschriebene Arbeit
     "handout",     # Informations- oder Merkblatt
+    "exam_notice", # Ankündigung der Lehrkraft, was in der Arbeit vorkommt
+    "toc",         # Inhaltsverzeichnis eines Buchs, das nur auf Papier existiert
     "other",
 )
+# Buchteile, die eine Datei zeigen kann; die Namen sind die der Quellenbilanz.
+BOOK_PARTS = ("Textband", "Begleitband", "Schulbuch", "Arbeitsheft", "Grammatikheft", "Arbeitsblatt")
 
 LINK_KINDS = ("topic", "task", "lesson", "exam")
 
@@ -44,7 +48,25 @@ LINK_KINDS = ("topic", "task", "lesson", "exam")
 EDITABLE = (
     "kind", "subject_name", "title", "summary", "content_text",
     "document_date", "period_start", "period_end", "contains_solutions",
+    "source_label", "source_page",
 )
+
+
+def canonical_subject(account_id: int, name: str | None) -> str | None:
+    """Die Schreibweise des Stundenplans („LATEIN"), egal wie es getippt wurde.
+
+    Materialien und Quellen werden über den Fachnamen zusammengeführt; ein
+    „Latein" neben „LATEIN" wäre ein zweites Fach.
+    """
+    name = (name or "").strip()
+    if not name:
+        return None
+    try:
+        from .subject_names import SubjectCatalog
+        found = SubjectCatalog(account_id).resolve(name)
+    except Exception:
+        found = None
+    return found["name"] if found else name
 
 
 def now_iso() -> str:
@@ -164,12 +186,12 @@ def create(account_id: int, user_id: int | None, content: bytes, filename: str, 
             raise ValueError("Der Materialspeicher dieses Kindes ist voll.")
         material_id = conn.execute(
             "INSERT INTO materials(account_id,kind,subject_name,title,content_text,captured_at,"
-            "created_by,filename,mime_type,file_bytes,page_count,analysis_state,created_at,updated_at) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,'pending',?,?)",
+            "created_by,filename,mime_type,file_bytes,page_count,analysis_state,created_at,updated_at,"
+            "source_label,source_page) VALUES(?,?,?,?,?,?,?,?,?,?,?,'pending',?,?,?,?)",
             (account_id, hints.get("kind") or "other", hints.get("subject_name"),
              (hints.get("title") or filename or "Material")[:200], text,
              captured or stamp, user_id, (filename or "Material")[:200], mime, content,
-             page_count, stamp, stamp),
+             page_count, stamp, stamp, hints.get("source_label") or None, hints.get("source_page") or None),
         ).lastrowid
         for kind in LINK_KINDS:
             target = hints.get(f"{kind}_id")
@@ -231,7 +253,7 @@ def listing(account_id: int, *, subject: str | None = None, kind: str | None = N
             "SELECT id,account_id,kind,subject_name,title,summary,document_date,period_start,period_end,"
             "captured_at,created_by,filename,mime_type,page_count,verified,contains_solutions,hidden,"
             "locked_fields,analysis_state,analysis_model,analysis_version,analyzed_at,analysis_error,"
-            "confidence,created_at,updated_at,origin,source_book,source_page, length(file_bytes) AS file_size "
+            "confidence,created_at,updated_at,origin,source_book,source_page,source_label, length(file_bytes) AS file_size "
             "FROM materials WHERE " + " AND ".join(where) +
             " ORDER BY COALESCE(document_date,substr(created_at,1,10)) DESC, id DESC LIMIT ? OFFSET ?",
             tuple(args)).fetchall()
@@ -344,6 +366,8 @@ def for_context(account_id: int, *, subject: str | None = None, task_id: int | N
         return (
             0 if row["id"] in related else 1,
             0 if row["id"] in topic_hits else 1,
+            # Der Zettel mit dem Klausurstoff steht vor jedem Arbeitsblatt.
+            0 if row["kind"] == "exam_notice" and subject and (row["subject_name"] or "").casefold() == subject.casefold() else 1,
             0 if (subject and (row["subject_name"] or "").casefold() == subject.casefold()) else 1,
             0 if in_window else 1,
             row["created_at"],
