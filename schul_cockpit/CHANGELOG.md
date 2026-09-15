@@ -1,3 +1,7 @@
+## 0.57.3
+
+- Ein Teil ohne Nummer im Inhaltsverzeichnis („Gefahr im Circus Maximus“, Lektionen 1–3) ist eine Überschrift über mehreren Lektionen, kein Kapitel: Er kommt nicht mehr als Ganzes auf die Einkaufsliste, nur die angeschnittene Lektion.
+
 ## 0.57.2
 
 - Das fotografierte Inhaltsverzeichnis eines Papierbuchs wird mit bis zu sechs Aufnahmen in einem Aufruf gelesen, jede für sich: Die Schnittstelle verkleinert jedes Bild auf 1600 Pixel und ließ bisher nur zwei Bilder zu; zwei Handyfotos übereinander wären unlesbar, fünf Seiten scheiterten mit 413.
