@@ -9,6 +9,7 @@
   import PackingChecklist from '../lib/PackingChecklist.svelte';
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskEditor from '../lib/TaskEditor.svelte';
+  import TaskDetail from '../lib/TaskDetail.svelte';
 
   let { accountId } = $props();
   let data = $state(null), tasks = $state([]), plan = $state(null);
@@ -135,7 +136,7 @@
   </section>{/if}
   {#if work.done.length}<section class="day-section"><button class="text-action" aria-expanded={showDone} onclick={() => showDone = !showDone}>{showDone ? 'Erledigte Aufgaben schließen' : 'Erledigte Aufgaben ansehen'}</button>{#if showDone}{#each work.done as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}{/if}</section>{/if}
 {/if}
-{#if editing}<TaskEditor {accountId} task={editing} onclose={() => editing = null} onsaved={taskSaved} />{/if}
+{#if editing}<TaskDetail {accountId} task={editing} onclose={() => editing = null} onsaved={taskSaved} />{/if}
 {#if creating}<TaskEditor {accountId} task={null} onclose={() => creating = false} onsaved={taskSaved} />{/if}
 
 <style>

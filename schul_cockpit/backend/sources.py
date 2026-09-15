@@ -435,3 +435,177 @@ def photo_requests(account_id: int, exams: list[dict], day: str, days_ahead: int
     for group in sorted(groups.values(), key=lambda g: (g["exam_date"], -len(g["pages"]))):
         out.append({**group, "pages": sorted(group["pages"]), "pages_label": page_list(sorted(group["pages"]))})
     return out[:limit]
+
+
+# --- Quellen im Text sichtbar machen -------------------------------------------
+# Überall, wo ein Untis-Text steht, soll die genannte Stelle ein Link zum
+# Material sein, in der Farbe ihres Stands: ready (liegt vor und ist
+# ausgewertet), pending (wird geholt oder gelesen), missing (liegt nicht vor).
+
+_TAG = re.compile(r"\[([A-Za-zÄÖÜäöüß]{1,5})(\d+)\]")
+
+
+def segments(text: str) -> list[dict]:
+    """Den Text in Stücke zerlegen: Fließtext und Seitenangaben mit Buchteil."""
+    text = text or ""
+    out: list[dict] = []
+    pos = 0
+    for hit in PAGE.finditer(text):
+        if hit.start() > pos:
+            out.append({"text": text[pos:hit.start()]})
+        first = int(hit.group(1))
+        last = int(hit.group(2)) if hit.group(2) else first
+        if last < first or last - first > 30:
+            last = first
+        label, kind = part_of(text[:hit.start()])
+        out.append({"text": text[hit.start():hit.end()], "pages": list(range(first, last + 1)),
+                    "label": label or "Unbekannte Quelle", "kind": kind or "unknown"})
+        pos = hit.end()
+    if pos < len(text):
+        out.append({"text": text[pos:]})
+    return out
+
+
+def _state_of(link: dict | None, analysis: dict[int, str]) -> str | None:
+    if not link:
+        return None
+    if link["status"] in ("digital", "scanned"):
+        return "ready" if analysis.get(link["material_id"]) == "ready" else "pending"
+    if link["status"] == "pending":
+        return "pending"
+    return "missing"
+
+
+def _worst(states: list[str | None]) -> str | None:
+    for state in ("missing", "pending", "ready"):
+        if state in states:
+            return state
+    return None
+
+
+def _decorate(text: str, links: list[dict], analysis: dict[int, str]) -> tuple[list[dict], str | None, list[int]]:
+    """Segmente mit Stand und Material versehen; dazu der Gesamtstand."""
+    by_page: dict[tuple[str, int], dict] = {}
+    for link in links:
+        by_page.setdefault((link["part_kind"], link["page"]), link)
+    states: list[str | None] = []
+    materials: list[int] = []
+    out = []
+    for seg in segments(text):
+        if "pages" not in seg:
+            out.append(seg)
+            continue
+        page_states = []
+        page_materials = []
+        for page in seg["pages"]:
+            link = by_page.get((seg["kind"], page)) or by_page.get(("unknown", page)) or by_page.get(("book", page))
+            state = _state_of(link, analysis)
+            page_states.append(state)
+            if link and link.get("material_id"):
+                page_materials.append(link["material_id"])
+        seg["state"] = _worst(page_states)
+        seg["material_id"] = page_materials[0] if page_materials else None
+        seg["material_ids"] = page_materials
+        materials.extend(m for m in page_materials if m not in materials)
+        states.append(seg["state"])
+        out.append(seg)
+    return out, _worst(states), materials
+
+
+def _analysis_states(conn, material_ids: list[int]) -> dict[int, str]:
+    if not material_ids:
+        return {}
+    marks = ",".join("?" * len(material_ids))
+    return {r["id"]: r["analysis_state"] for r in conn.execute(
+        f"SELECT id,analysis_state FROM materials WHERE id IN ({marks})", tuple(material_ids))}
+
+
+def annotate_lessons(account_id: int, lessons: list[dict], key: str = "lstext", id_key: str = "id") -> None:
+    """Jeder Stunde ihre Textsegmente mit Quellenstand anhängen."""
+    ids = [l[id_key] for l in lessons if l.get(key)]
+    if not ids:
+        return
+    marks = ",".join("?" * len(ids))
+    with closing(webapp_conn()) as conn:
+        links = [dict(r) for r in conn.execute(
+            f"SELECT entry_id,part_kind,page,status,detail,material_id FROM source_links "
+            f"WHERE account_id=? AND entry_kind='lesson' AND entry_id IN ({marks})", (account_id, *ids))]
+        analysis = _analysis_states(conn, [l["material_id"] for l in links if l["material_id"]])
+    by_lesson: dict[int, list[dict]] = {}
+    for link in links:
+        by_lesson.setdefault(link["entry_id"], []).append(link)
+    for lesson in lessons:
+        if not lesson.get(key):
+            continue
+        segs, state, _ = _decorate(lesson[key], by_lesson.get(lesson[id_key], []), analysis)
+        lesson[f"{key}_segments"] = segs
+        lesson["source_state"] = state
+
+
+def homework_for_task(conn, account_id: int, task: dict) -> int | None:
+    """Die Untis-Hausaufgabe hinter einer Aufgabe: über die Kennung in den
+    Notizen, sonst über denselben Wortlaut."""
+    tag = _TAG.search(task.get("notes") or "")
+    columns = {r[1] for r in conn.execute("PRAGMA table_info(homework)")}
+    if tag and "untis_homework_id" in columns:
+        row = conn.execute("SELECT id FROM homework WHERE account_id=? AND untis_homework_id=?",
+                           (account_id, int(tag.group(2)))).fetchone()
+        if row:
+            return row["id"]
+    if "text" not in columns:
+        return None
+    title = " ".join((task.get("title") or "").split()).casefold()
+    if not title:
+        return None
+    for row in conn.execute("SELECT id,text FROM homework WHERE account_id=? ORDER BY assigned_date DESC LIMIT 400",
+                            (account_id,)):
+        if " ".join((row["text"] or "").split()).casefold() == title:
+            return row["id"]
+    return None
+
+
+def annotate_tasks(account_id: int, tasks: list[dict]) -> None:
+    """Jeder Aufgabe ihre Textsegmente, den Quellenstand und die Materialien
+    anhängen: die Buchseiten und Fotos zu den genannten Stellen sowie alles,
+    was ausdrücklich an die Aufgabe gehängt wurde."""
+    if not tasks:
+        return
+    with closing(history_conn()) as hconn:
+        homework_ids = {t["id"]: homework_for_task(hconn, account_id, t) for t in tasks}
+    with closing(webapp_conn()) as conn:
+        hw_ids = [h for h in homework_ids.values() if h]
+        links: list[dict] = []
+        if hw_ids:
+            marks = ",".join("?" * len(hw_ids))
+            links = [dict(r) for r in conn.execute(
+                f"SELECT entry_id,part_kind,page,status,detail,material_id FROM source_links "
+                f"WHERE account_id=? AND entry_kind='homework' AND entry_id IN ({marks})", (account_id, *hw_ids))]
+        task_ids = [t["id"] for t in tasks]
+        marks = ",".join("?" * len(task_ids))
+        attached: dict[int, list[int]] = {}
+        for r in conn.execute(
+                f"SELECT l.material_id,l.target_id FROM material_links l JOIN materials m ON m.id=l.material_id "
+                f"WHERE l.kind='task' AND l.target_id IN ({marks}) AND m.account_id=? AND m.hidden=0",
+                (*task_ids, account_id)):
+            attached.setdefault(r["target_id"], []).append(r["material_id"])
+        wanted = {l["material_id"] for l in links if l["material_id"]} | {m for ms in attached.values() for m in ms}
+        analysis = _analysis_states(conn, list(wanted))
+        details = {}
+        if wanted:
+            marks = ",".join("?" * len(wanted))
+            details = {r["id"]: dict(r) for r in conn.execute(
+                f"SELECT id,title,kind,mime_type,analysis_state,summary,source_book,source_page,origin FROM materials "
+                f"WHERE id IN ({marks})", tuple(wanted))}
+    by_homework: dict[int, list[dict]] = {}
+    for link in links:
+        by_homework.setdefault(link["entry_id"], []).append(link)
+    for task in tasks:
+        hw = homework_ids.get(task["id"])
+        segs, state, materials = _decorate(task.get("title") or "", by_homework.get(hw, []) if hw else [], analysis)
+        for extra in attached.get(task["id"], []):
+            if extra not in materials:
+                materials.append(extra)
+        task["title_segments"] = segs
+        task["source_state"] = state
+        task["homework_id"] = hw
+        task["materials"] = [details[m] for m in materials if m in details]

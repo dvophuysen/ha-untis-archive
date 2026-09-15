@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -9,6 +11,8 @@ from ..audit import is_demo, log as audit_log, snapshot_task
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..db import history_conn, webapp_conn
 from ..sync_worker import sync_account
+
+_LOGGER = logging.getLogger("schul_cockpit.tasks")
 
 router = APIRouter()
 
@@ -74,6 +78,7 @@ def _row_to_task(row) -> dict:
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "completed_at": row["completed_at"],
+        "intro": row["intro"] if "intro" in row.keys() else None,
     }
 
 
@@ -117,6 +122,12 @@ def list_tasks(
             t["subitems"] = sub_map.get(t["id"], [])
     finally:
         conn.close()
+    try:
+        # Die Quellen im Aufgabentext mit ihrem Stand, dazu das Material.
+        from .. import sources
+        sources.annotate_tasks(account_id, tasks)
+    except Exception:
+        _LOGGER.warning("Quellenstand der Aufgaben nicht bestimmbar", exc_info=True)
     return {"tasks": tasks}
 
 

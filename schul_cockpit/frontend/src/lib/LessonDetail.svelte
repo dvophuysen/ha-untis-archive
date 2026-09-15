@@ -1,4 +1,5 @@
 <script>
+  import SourceText from './SourceText.svelte';
   import { api } from './api.js';
   import { formatShortDate } from './format.js';
 
@@ -154,7 +155,7 @@
       {#if hasExam && lesson.exam?.name}
         <div style="color:var(--exam)">📝 {lesson.exam.name}</div>
       {/if}
-      {#if lesson.lstext}<div style="margin-top:0.4rem;">{lesson.lstext}</div>{/if}
+      {#if lesson.lstext}<div style="margin-top:0.4rem;"><SourceText segments={lesson.lstext_segments} text={lesson.lstext} subject={lesson.subject_name} /></div>{/if}
       {#if lesson.subst_text && lesson.subst_text !== lesson.lstext}
         <div class="dim" style="margin-top:0.3rem;">ℹ️ {lesson.subst_text}</div>
       {/if}

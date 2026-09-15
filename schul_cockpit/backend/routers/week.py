@@ -63,6 +63,11 @@ def week(
         finally:
             wconn.close()
 
+    try:
+        from .. import sources
+        sources.annotate_lessons(account_id, lessons)
+    except Exception:
+        pass
     for lesson in lessons:
         ck = checkins.get(lesson["id"])
         # `rating` is what the grid colour-codes; full `checkin` lets the

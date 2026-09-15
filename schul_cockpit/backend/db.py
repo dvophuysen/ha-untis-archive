@@ -681,6 +681,11 @@ _MIGRATIONS.append(("ai_config_sources_budget",
 # eine Regel (die Lektionsnummer im Text), dann das Modell mit dem
 # Inhaltsverzeichnis. Eine Hypothese, als solche gekennzeichnet; auch ein
 # „kein Kapitel" wird gespeichert, damit nicht jede Nacht neu gefragt wird.
+# Die Einstiegshilfe zu einer Hausaufgabe: zwei, drei Sätze, worum es geht
+# und womit man anfängt. Im Hintergrund erzeugt, sobald die Quellen da sind.
+_MIGRATIONS.append(("tasks_intro_001", "ALTER TABLE tasks ADD COLUMN intro TEXT"))
+_MIGRATIONS.append(("tasks_intro_002", "ALTER TABLE tasks ADD COLUMN intro_at TEXT"))
+
 _MIGRATIONS.append(("entry_chapters_001", """
 CREATE TABLE IF NOT EXISTS entry_chapters (
  id INTEGER PRIMARY KEY AUTOINCREMENT,

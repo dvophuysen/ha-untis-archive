@@ -4,6 +4,7 @@
   import { api } from '../lib/api.js';
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskEditor from '../lib/TaskEditor.svelte';
+  import TaskDetail from '../lib/TaskDetail.svelte';
 
   let { accountId } = $props();
 
@@ -109,5 +110,5 @@
   <TaskEditor {accountId} task={null} onclose={() => (creating = false)} onsaved={load} />
 {/if}
 {#if editing}
-  <TaskEditor {accountId} task={editing} onclose={() => (editing = null)} onsaved={load} />
+  <TaskDetail {accountId} task={editing} onclose={() => (editing = null)} onsaved={load} />
 {/if}

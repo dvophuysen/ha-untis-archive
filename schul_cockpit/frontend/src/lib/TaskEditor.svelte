@@ -1,25 +1,14 @@
 <script>
+  // Eigene Aufgaben anlegen und ändern: Titel, Fälligkeit, Notiz. Mehr
+  // braucht es nicht; Untis-Aufgaben kommen fertig und werden hier nicht
+  // verändert.
   import { api } from './api.js';
-  import ActionLabel from './ActionLabel.svelte';
 
   let { accountId, task = null, onclose, onsaved } = $props();
 
-  const TYPES = [
-    { v: 'homework', label: 'Hausaufgabe' },
-    { v: 'exam_prep', label: 'Klausur-Vorbereitung' },
-    { v: 'practice', label: 'Üben / Festigen' },
-    { v: 'catch_up', label: 'Stoff nachholen' },
-    { v: 'project', label: 'Projekt' },
-  ];
-  const MINUTES = [5, 15, 30, 45, 60, 90, 120, 180];
-
   let title = $state(task?.title ?? '');
-  let taskType = $state(task?.task_type ?? 'homework');
-  let minutes = $state(task?.estimated_minutes ?? null);
   let dueDate = $state(task?.due_date ?? '');
   let notes = $state(task?.notes ?? '');
-  let subitems = $state(task?.subitems ?? []);
-  let newSub = $state('');
   let busy = $state(false);
   let error = $state(null);
 
@@ -31,20 +20,11 @@
     busy = true;
     error = null;
     try {
-      const body = {
-        title,
-        task_type: taskType,
-        estimated_minutes: minutes,
-        due_date: dueDate || null,
-        notes: notes || null,
-      };
+      const body = { title, task_type: task?.task_type ?? 'homework', due_date: dueDate || null, notes: notes || null };
       if (isExisting) {
         await api.patch(`/api/tasks/${task.id}`, body);
       } else {
-        const created = await api.post(`/api/accounts/${accountId}/tasks`, body);
-        for (const s of subitems.filter((x) => !x.id)) {
-          await api.post(`/api/tasks/${created.id}/subitems`, { title: s.title });
-        }
+        await api.post(`/api/accounts/${accountId}/tasks`, body);
       }
       onsaved?.();
       onclose?.();
@@ -69,98 +49,33 @@
       busy = false;
     }
   }
-
-  async function addSubitem() {
-    if (!newSub.trim()) return;
-    if (isExisting) {
-      const s = await api.post(`/api/tasks/${task.id}/subitems`, { title: newSub });
-      subitems = [...subitems, s];
-    } else {
-      subitems = [...subitems, { title: newSub, done: false }];
-    }
-    newSub = '';
-  }
-
-  async function toggleSub(s) {
-    if (s.id) {
-      await api.patch(`/api/subitems/${s.id}`, { done: !s.done });
-    }
-    s.done = !s.done;
-    subitems = [...subitems];
-  }
 </script>
 
 <div class="modal-backdrop" onclick={onclose} role="presentation">
   <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog">
     <div class="row between" style="margin-bottom:0.6rem;">
-      <h2 style="margin:0; font-size:1.1rem;">{isExisting ? 'Aufgabe' : 'Neue Aufgabe'}</h2>
-      <button class="ghost" onclick={onclose}>✕</button>
+      <h2 style="margin:0; font-size:1.1rem;">{isExisting ? 'Aufgabe bearbeiten' : 'Neue Aufgabe'}</h2>
+      <button class="ghost" onclick={onclose} aria-label="Schließen">✕</button>
     </div>
 
     {#if error}<div class="error-box">{error}</div>{/if}
-
     {#if isHaTask}
-      <div class="banner">Diese Aufgabe stammt aus der HA-ToDo-Liste. Titel und Fälligkeit werden beim nächsten Sync ggf. überschrieben.</div>
+      <div class="banner">Diese Aufgabe stammt aus Untis. Titel und Fälligkeit setzt der nächste Abgleich wieder zurück.</div>
     {/if}
 
     <div class="form-grid">
       <div>
-        <label>Titel {#if isHaTask}<span class="dim">(aus Untis)</span>{/if}</label>
+        <label>Aufgabe</label>
         <input bind:value={title} placeholder="z.B. Mathe S. 42 Nr. 1-5" disabled={isHaTask} />
       </div>
-
       <div>
-        <label>Typ</label>
-        <select bind:value={taskType}>
-          {#each TYPES as t}<option value={t.v}>{t.label}</option>{/each}
-        </select>
-      </div>
-
-      <div>
-        <label>Aufwand (Min)</label>
-        <div class="effort-picker">
-          {#each MINUTES as m}
-            <button type="button" class:active={minutes === m} onclick={() => (minutes = minutes === m ? null : m)}>{m}</button>
-          {/each}
-        </div>
-      </div>
-
-      <div>
-        <label>Fällig am {#if isHaTask}<span class="dim">(aus Untis — nicht änderbar)</span>{/if}</label>
+        <label>Fällig am</label>
         <input type="date" bind:value={dueDate} disabled={isHaTask} />
       </div>
-
       <div>
-        <label>Sub-Aufgaben</label>
-        <div class="col" style="gap:0.2rem;">
-          {#each subitems as s, i (s.id ?? i)}
-            <div class="subitem-row">
-              <button class="task-checkbox" class:done={s.done} onclick={() => toggleSub(s)}>{s.done ? '✓' : ''}</button>
-              <span class="task-title" class:done={s.done} style="flex:1;">{s.title}</span>
-            </div>
-          {/each}
-          <div class="row gap-sm" style="margin-top:0.3rem;">
-            <input bind:value={newSub} placeholder="+ Sub-Aufgabe…" onkeydown={(e) => e.key === 'Enter' && (addSubitem(), e.preventDefault())} />
-            <button onclick={addSubitem}>+</button>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <label>Notizen</label>
+        <label>Notiz</label>
         <textarea bind:value={notes} rows="3"></textarea>
       </div>
-
-      {#if isExisting}
-        <div class="material-row">
-          <a href={`#/materialien/${encodeURIComponent(task.subject_name ?? '')}/${task.id}`}
-             onclick={() => onclose?.()}>
-            <ActionLabel label="Material zu dieser Aufgabe hinzufügen" />
-          </a>
-          <small>Arbeitsblatt, Heftseite oder PDF fotografieren. Es gehört dann zu dieser Aufgabe.</small>
-        </div>
-      {/if}
-
       <div class="row gap-sm" style="margin-top:0.4rem;">
         <button class="primary" disabled={busy || !title.trim()} onclick={save} style="flex:1;">{isExisting ? 'Speichern' : 'Anlegen'}</button>
         {#if isExisting && !isHaTask}
@@ -170,8 +85,3 @@
     </div>
   </div>
 </div>
-
-<style>
-  .material-row { display: grid; gap: 0.15rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--border); }
-  .material-row small { color: var(--fg-dim); }
-</style>
