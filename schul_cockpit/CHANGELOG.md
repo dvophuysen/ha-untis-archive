@@ -1,5 +1,6 @@
 ## 0.57.1
 
+- Fotos von Buch- und Heftseiten, Inhaltsverzeichnisse und Klausurzettel werden im Quellen-Rahmen gelesen, nicht im Tagesrahmen des Kontos: 26 Latein-Uploads an einem Nachmittag blieben sonst mit 429 liegen.
 - Fünf Handyfotos eines Inhaltsverzeichnisses in voller Größe wies der KI-Dienst mit 413 ab; die Aufnahmen werden vor dem Lesen auf 1800 Pixel Kante verkleinert. Ein gescheitertes Lesen löscht das zuvor gelesene Verzeichnis nicht.
 
 ## 0.57.0
