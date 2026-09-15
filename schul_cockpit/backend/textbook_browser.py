@@ -1220,7 +1220,10 @@ def _capture_pages_sync(
     survey: bool = False,
     budget: float = 240.0,
 ) -> CaptureResult:
-    driver = _driver("--window-size=1440,1100")
+    # Gerätefaktor 2: Eine Doppelseite hat sonst rund 650 Pixel je Seite und
+    # ist im Bestand unscharf. Die Seitenbereiche werden mit dem Faktor
+    # zugeschnitten, das Bild ist also doppelt so fein bei gleichem Fenster.
+    driver = _driver("--window-size=1440,1100", "--force-device-scale-factor=2")
     deadline = time.monotonic() + budget
     stage = "IServ-Anmeldung"
     try:

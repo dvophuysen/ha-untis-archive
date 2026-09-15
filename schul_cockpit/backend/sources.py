@@ -288,6 +288,27 @@ def _sheet_near(sheets: dict, subject: str, entry_date: str, days: int = 5) -> i
     return None
 
 
+def claim(account_id: int, subject: str, label: str, page: int, material_id: int) -> None:
+    """Ein Foto einer Stelle zuordnen und die Stelle sofort als belegt führen."""
+    with closing(webapp_conn()) as conn, conn:
+        conn.execute(
+            "INSERT INTO source_claims(account_id,subject_key,part_label,page,material_id,created_at) VALUES(?,?,?,?,?,?) "
+            "ON CONFLICT(account_id,subject_key,part_label,page) DO UPDATE SET material_id=excluded.material_id,"
+            "created_at=excluded.created_at",
+            (account_id, subject.strip().casefold(), label, page, material_id, now_iso()))
+        conn.execute(
+            "UPDATE source_links SET status='scanned',detail='foto',material_id=?,updated_at=? "
+            "WHERE account_id=? AND lower(subject_name)=lower(?) AND part_label=? AND page=?",
+            (material_id, now_iso(), account_id, subject.strip(), label, page))
+
+
+def _claims(account_id: int) -> dict[tuple, int]:
+    with closing(webapp_conn()) as conn:
+        return {(r["subject_key"], r["part_label"], r["page"]): r["material_id"] for r in conn.execute(
+            "SELECT c.subject_key,c.part_label,c.page,c.material_id FROM source_claims c "
+            "JOIN materials m ON m.id=c.material_id AND m.hidden=0 WHERE c.account_id=?", (account_id,))}
+
+
 def subject_habits(links: list[dict]) -> dict[str, str]:
     """Welchen Buchteil eine Lehrkraft nennt, wenn sie einen nennt.
 
@@ -319,6 +340,7 @@ def refresh_status(account_id: int) -> None:
     """
     scanned, books, shelf = _scanned_pages(account_id), _book_pages(account_id), _shelf(account_id)
     sheets = _sheet_photos(account_id)
+    claims = _claims(account_id)
     stamp = now_iso()
     with closing(webapp_conn()) as conn, conn:
         links = [dict(r) for r in conn.execute("SELECT * FROM source_links WHERE account_id=?", (account_id,))]
@@ -327,6 +349,13 @@ def refresh_status(account_id: int) -> None:
             folded = link["subject_name"].casefold()
             page = link["page"]
             status, detail, material = "paper", None, None
+            claimed = claims.get((folded, link["part_label"], page))
+            if claimed:
+                # Von Hand zugeordnet schlägt jede Herleitung.
+                if ("scanned", "foto", claimed) != (link["status"], link["detail"], link["material_id"]):
+                    conn.execute("UPDATE source_links SET status='scanned',detail='foto',material_id=?,updated_at=? WHERE id=?",
+                                 (claimed, stamp, link["id"]))
+                continue
             book = shelf.get(folded)
             stored = books.get(folded, {}).get(page)
             photo = scanned.get(folded, {}).get(page)
@@ -417,6 +446,9 @@ def ledger(account_id: int) -> dict:
                 "pages_label": page_list([e["page"] for e in gaps]),
                 "quote": newest["quote"], "last_date": newest["quote_date"],
                 "mentions": sum(len(e["dates"]) for e in gaps),
+                # Je Seite ein Eintrag zum Abhaken: antippen, fotografieren, fertig.
+                "items": [{"page": e["page"], "label": page_list([e["page"]]), "quote": e["quote"], "date": e["quote_date"]}
+                          for e in sorted(gaps, key=lambda e: e["page"])],
             })
         book = shelf.get(bucket["subject"].casefold())
         missing_count = sum(len(m["pages"]) for m in missing)

@@ -150,3 +150,33 @@ def test_a_worksheet_without_a_page_is_a_missing_source_until_a_photo_hangs_on_t
     sources.annotate_tasks(1, [task])
     assert task["source_state"] == "ready" and task["text_segments"][0]["material_id"] == mid
     assert sources.ledger(1)["missing_total"] == 0
+
+
+def test_a_photo_taken_from_the_checklist_settles_exactly_that_entry(env):
+    """Antippen, fotografieren, fertig: das Foto gehört zur Stelle, auch bevor
+    die Auswertung eine Seitenzahl gelesen hat."""
+    client, state, _ = env
+    from backend.routers import materials as material_routes
+    client.app.include_router(material_routes.router, prefix="/api")
+    history(homework=[(1, 'SN', '#cda, p. 26-28', '2026-09-10')])
+    shelf()
+    book = sources.ledger(1)["subjects"][0]
+    need = book["missing"][0]
+    assert [i["label"] for i in need["items"]] == ["S. 26", "S. 27", "S. 28"], "je Seite ein Eintrag zum Abhaken"
+    from PIL import Image
+    import io
+    out = io.BytesIO(); Image.new("RGB", (40, 40), (200, 100, 50)).save(out, "JPEG")
+    answer = client.post("/api/accounts/1/materials", files={"file": ("s27.jpg", out.getvalue(), "image/jpeg")},
+                         data={"subject_name": "SPANISCH", "source_label": "Arbeitsheft", "source_page": "27"})
+    assert answer.status_code == 200
+    created = answer.json()
+    assert created["kind"] == "workbook" and created["title"] == "Arbeitsheft S. 27"
+    book = sources.ledger(1)["subjects"][0]
+    assert book["missing"][0]["pages"] == [26, 28] and book["scanned"] == 1
+    with closing(db.webapp_conn()) as conn:
+        row = conn.execute("SELECT status,detail,material_id FROM source_links WHERE page=27").fetchone()
+    assert tuple(row) == ("scanned", "foto", created["id"])
+    # Der Stand überlebt jeden neuen Abgleich, auch wenn die Auswertung nichts liest.
+    sources.ledger(1)
+    with closing(db.webapp_conn()) as conn:
+        assert conn.execute("SELECT status FROM source_links WHERE page=27").fetchone()[0] == "scanned"

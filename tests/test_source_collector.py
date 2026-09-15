@@ -13,11 +13,12 @@ from backend.textbook_browser import CaptureResult, PageShot, looks_blank
 def png(marker, blank=False):
     from PIL import Image, ImageDraw
     import io
-    image = Image.new("RGB", (400, 300), (245, 245, 245))
+    # Breit genug, um als scharf zu gelten; sonst holt der Lauf sie gleich neu.
+    image = Image.new("RGB", (1900, 300), (245, 245, 245))
     if not blank:
         draw = ImageDraw.Draw(image)
         for y in range(20, 280, 12):
-            draw.rectangle((30, y, 370, y + 5), fill=(marker % 200, 30, 30))
+            draw.rectangle((30, y, 1870, y + 5), fill=(marker % 200, 30, 30))
     out = io.BytesIO()
     image.save(out, "PNG")
     return out.getvalue()
@@ -226,3 +227,27 @@ async def test_two_runs_for_the_same_child_do_not_overlap(env, monkeypatch):
     gate.set()
     assert (await first)["skipped"] is None
     assert (await collector.collect(1))["skipped"] is None, "nach dem Ende ist der Weg wieder frei"
+
+
+async def test_blurry_pages_from_earlier_runs_get_a_sharper_image_without_a_new_analysis(env, monkeypatch):
+    shelf()
+    from PIL import Image
+    import io
+    small = io.BytesIO(); Image.new("RGB", (640, 900), (250, 250, 250)).save(small, "JPEG")
+    with closing(db.webapp_conn()) as conn:
+        conn.execute("INSERT INTO materials(account_id,kind,subject_name,title,origin,source_book,source_page,page_check,analysis_state,"
+                     "content_text,file_bytes,mime_type,created_at,updated_at) VALUES(1,'book_page','SPANISCH','S. 50','book_fetch','¡Apúntate! 2',50,"
+                     "'ok','ready','Text bleibt',?, 'image/jpeg','now','now')", (small.getvalue(),))
+
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False, budget=240.0):
+        big = io.BytesIO(); img = Image.new("RGB", (2600, 1800), (250, 250, 250))
+        from PIL import ImageDraw
+        ImageDraw.Draw(img).rectangle((100, 100, 2400, 1600), fill=(40, 40, 40)); img.save(big, "PNG")
+        return CaptureResult(shots=[PageShot(p, big.getvalue()) for p in pages])
+    monkeypatch.setattr(ctx, "capture_pages", capture)
+    _, credentials = ctx.book_and_credentials(1, subject="")
+    assert await collector.resharpen(1, credentials, 20) == 1
+    with closing(db.webapp_conn()) as conn:
+        row = conn.execute("SELECT file_bytes,analysis_state,content_text FROM materials").fetchone()
+    assert Image.open(io.BytesIO(row["file_bytes"])).width == 2400 and row["analysis_state"] == "ready" and row["content_text"] == "Text bleibt"
+    assert await collector.resharpen(1, credentials, 20) == 0, "einmal scharf bleibt scharf"

@@ -1,6 +1,7 @@
 <script>
   import { api } from '../lib/api.js';
   import ActionLabel from '../lib/ActionLabel.svelte';
+  import { subjectStyle } from '../lib/subjectStyle.js';
 
   let { accountId, initialSubject = '', taskId = null } = $props();
 
@@ -65,9 +66,40 @@
     }
   }
   const waiting = $derived((data?.materials ?? []).some((m) => m.analysis_state === 'pending'));
+  const waitingBudget = $derived((data?.materials ?? []).filter((m) => m.analysis_state === 'failed' && m.analysis_error === '429').length);
+  const openSubject = $derived(open?.subject_name ?? '');
+
+  function shortBook(title) {
+    return (title || '').split(' - ')[0].split(' · ')[0].split(':')[0]
+      .replace(/\b(ab|von)\s+\d{4}\b|\(\d{4}\)|\bG9\b|\bE-Book\b|\bAusgabe\b|\bBiBox\b|\bGymnasium\b|\bNiedersachsen\b|\bBremen\b/g, ' ')
+      .split(/\s+/).filter(Boolean).slice(0, 5).join(' ').replace(/[ ,]+$/, '') || title;
+  }
+
+  // Je Fach eine Gruppe; darin Fotos und Scans nach Datum, Buchseiten je Buch
+  // nach Seitenzahl.
+  const groups = $derived.by(() => {
+    const bySubject = new Map();
+    for (const m of data?.materials ?? []) {
+      const key = m.subject_name || '';
+      if (!bySubject.has(key)) bySubject.set(key, { subject: key, items: [], bookPages: [], books: [], waiting: 0 });
+      const g = bySubject.get(key);
+      if (m.analysis_state === 'failed' && m.analysis_error === '429') g.waiting += 1;
+      if (m.origin === 'book_fetch') g.bookPages.push(m); else g.items.push(m);
+    }
+    for (const g of bySubject.values()) {
+      const byBook = new Map();
+      for (const m of g.bookPages) {
+        if (!byBook.has(m.source_book)) byBook.set(m.source_book, { title: m.source_book, short: shortBook(m.source_book), pages: [] });
+        byBook.get(m.source_book).pages.push(m);
+      }
+      g.books = [...byBook.values()];
+      for (const b of g.books) b.pages.sort((a, c) => (a.source_page ?? 0) - (c.source_page ?? 0));
+    }
+    return [...bySubject.values()].sort((a, b) => a.subject.localeCompare(b.subject, 'de'));
+  });
 
   let offset = $state(0);
-  const PAGE = 60;
+  const PAGE = 300;
 
   async function load(more = false) {
     if (!accountId) return;
@@ -130,15 +162,30 @@
     return () => clearInterval(timer);
   });
 
+  // Ein Eintrag der Einkaufsliste wurde angetippt: das nächste Foto oder die
+  // nächste Datei gehört genau zu dieser Stelle.
+  let claim = $state(null);
+
+  function photoFor(subject, need, item, viaCamera) {
+    claim = { subject, label: need.label, page: item.page };
+    (viaCamera ? camera : picker)?.click();
+  }
+
   async function send(files) {
     const list = [...(files ?? [])];
+    const target = claim;
+    claim = null;
     if (!list.length) return;
     uploading = list.length;
     message = null;
     for (const file of list) {
       const body = new FormData();
       body.append('file', file);
-      if (filterSubject) body.append('subject_name', filterSubject);
+      if (target) {
+        body.append('subject_name', target.subject);
+        body.append('source_label', target.label);
+        body.append('source_page', String(target.page));
+      } else if (filterSubject) body.append('subject_name', filterSubject);
       if (taskId) body.append('task_id', String(taskId));
       try {
         await api.post(base, body);
@@ -147,7 +194,9 @@
       }
       uploading -= 1;
     }
-    message = list.length === 1 ? 'Gespeichert. Ich lese es gerade.' : `${list.length} Seiten gespeichert.`;
+    message = target
+      ? `${target.label} ${target.page ? `S. ${target.page}` : ''} abgehakt. Ich lese es gerade.`
+      : list.length === 1 ? 'Gespeichert. Ich lese es gerade.' : `${list.length} Seiten gespeichert.`;
     await load();
   }
 
@@ -232,8 +281,23 @@
           <div class="need">
             <p class="what"><strong>{need.label} {need.pages_label}</strong>
               <span class="muted">· {REASON_HINT[need.reason] ?? KIND_HINT[need.kind] ?? need.kind}</span></p>
-            <p class="quote">„{need.quote}"</p>
-            <p class="muted">zuletzt genannt am {new Date(need.last_date).toLocaleDateString('de-DE')}{#if need.mentions > 1} · {need.mentions}× erwähnt{/if}</p>
+            <!-- Checkliste mit Auto-Bezug: Eintrag antippen, Foto oder Datei
+                 wählen, und die Stelle ist belegt. -->
+            <ul class="checklist">
+              {#each need.items as item (item.page)}
+                <li>
+                  <span class="box" aria-hidden="true"></span>
+                  <span class="entry">
+                    <strong>{item.page ? `${need.label} ${item.label}` : need.label}</strong>
+                    <small class="muted">„{item.quote}" · {new Date(item.date).toLocaleDateString('de-DE')}</small>
+                  </span>
+                  <span class="take">
+                    <button class="quiet" disabled={busy || uploading > 0} onclick={() => photoFor(subject.subject, need, item, true)} aria-label={`${need.label} ${item.label} fotografieren`}>📷</button>
+                    <button class="quiet" disabled={busy || uploading > 0} onclick={() => photoFor(subject.subject, need, item, false)} aria-label={`Datei für ${need.label} ${item.label} wählen`}>📎</button>
+                  </span>
+                </li>
+              {/each}
+            </ul>
           </div>
         {/each}
       </details>
@@ -262,67 +326,32 @@
   </details>
 {/if}
 
-{#if data}
-  <div class="row gap-sm filters">
-    <label>Fach
-      <select bind:value={filterSubject}>
-        <option value="">alle</option>
-        {#each [...new Set(data.materials.map((m) => m.subject_name).filter(Boolean))] as s}
-          <option>{s}</option>
-        {/each}
-      </select>
-    </label>
-    <label>Art
-      <select bind:value={filterKind}>
-        <option value="">alle</option>
-        {#each data.kinds as k}<option value={k}>{KIND_NAMES[k] ?? k}</option>{/each}
-      </select>
-    </label>
-    <label class="grow">Suche
-      <input type="search" bind:value={search} placeholder="Titel oder Inhalt"
-             onchange={() => load()} />
-    </label>
-  </div>
-
-  {#if taskId}
-    <div class="banner">Alles, was du hier ablegst, gehört zu dieser Hausaufgabe.</div>
-  {/if}
-
-  {#if data.can_manage && data.needs_check > 0}
-    <div class="banner">{data.needs_check} Eintrag/Einträge warten auf deinen Blick. Du kannst sie unten öffnen und korrigieren.</div>
-  {/if}
-
-  <div class="list">
-    {#each data.materials as m}
-      <button class="item" onclick={() => act(() => show(m))}>
-        {#if m.mime_type?.startsWith('image/')}
-          <img src={`.${base}/${m.id}/file`} alt="" loading="lazy" />
-        {:else}
-          <span class="doc" aria-hidden="true">📄</span>
-        {/if}
-        <span class="text">
-          <strong>{m.title || 'Ohne Titel'}</strong>
-          <small>
-            {[m.subject_name, KIND_NAMES[m.kind] ?? m.kind, m.source_book ? `aus dem Buch` : null, dateOf(m)].filter(Boolean).join(' · ')}
-          </small>
-          {#if m.summary}<small class="dim">{m.summary}</small>{/if}
-        </span>
-        <span class="state" class:warn={m.analysis_state === 'failed'}>
-          {m.analysis_state === 'ready' && !m.verified && data.can_manage
-            ? 'bitte prüfen'
-            : STATE_NAMES[m.analysis_state] ?? ''}
-        </span>
-      </button>
+{#snippet materialRow(m)}
+  <button class="item" class:active={open?.id === m.id} onclick={() => act(() => (open?.id === m.id ? (open = null, form = null) : show(m)))}>
+    {#if m.mime_type?.startsWith('image/')}
+      <img src={`.${base}/${m.id}/file`} alt="" loading="lazy" />
     {:else}
-      <p class="empty">Noch nichts abgelegt. Das erste Foto genügt.</p>
-    {/each}
-  </div>
-  {#if data.has_more}
-    <button class="quiet more" disabled={busy} onclick={() => act(() => load(true))}>Mehr laden</button>
+      <span class="doc" aria-hidden="true">📄</span>
+    {/if}
+    <span class="text">
+      <strong>{m.title || 'Ohne Titel'}</strong>
+      <small>{[KIND_NAMES[m.kind] ?? m.kind, dateOf(m)].filter(Boolean).join(' · ')}</small>
+      {#if m.summary}<small class="dim">{m.summary}</small>{/if}
+    </span>
+    <span class="state" class:warn={m.analysis_state === 'failed' && m.analysis_error !== '429'} class:wait={m.analysis_error === '429'}>
+      {m.analysis_state === 'ready' && !m.verified && data.can_manage
+        ? 'bitte prüfen'
+        : m.analysis_state === 'failed' && m.analysis_error === '429' ? 'wartet auf KI-Rahmen'
+        : STATE_NAMES[m.analysis_state] ?? ''}
+    </span>
+  </button>
+  {#if open?.id === m.id}
+    <!-- Das Detail steht direkt unter der Zeile, nicht am Seitenende. -->
+    {@render materialDetail()}
   {/if}
-{/if}
+{/snippet}
 
-{#if open}
+{#snippet materialDetail()}
   <div class="card detail">
     <div class="row between">
       <h2>{open.title || 'Material'}</h2>
@@ -389,6 +418,67 @@
               })}>Aus meiner Liste nehmen</button>
     {/if}
   </div>
+{/snippet}
+
+{#if data}
+  <div class="row gap-sm filters">
+    <label>Fach
+      <select bind:value={filterSubject}>
+        <option value="">alle</option>
+        {#each [...new Set(data.materials.map((m) => m.subject_name).filter(Boolean))] as s}
+          <option>{s}</option>
+        {/each}
+      </select>
+    </label>
+    <label>Art
+      <select bind:value={filterKind}>
+        <option value="">alle</option>
+        {#each data.kinds as k}<option value={k}>{KIND_NAMES[k] ?? k}</option>{/each}
+      </select>
+    </label>
+    <label class="grow">Suche
+      <input type="search" bind:value={search} placeholder="Titel oder Inhalt"
+             onchange={() => load()} />
+    </label>
+  </div>
+
+  {#if taskId}
+    <div class="banner">Alles, was du hier ablegst, gehört zu dieser Hausaufgabe.</div>
+  {/if}
+
+  {#if data.can_manage && data.needs_check > 0}
+    <div class="banner">{data.needs_check} Eintrag/Einträge warten auf deinen Blick. Du kannst sie unten öffnen und korrigieren.</div>
+  {/if}
+  {#if waitingBudget}
+    <p class="muted">{waitingBudget} {waitingBudget === 1 ? 'Seite wartet' : 'Seiten warten'} auf den KI-Rahmen und werden im nächsten Lauf gelesen.</p>
+  {/if}
+
+  <!-- Je Fach eine aufklappbare Gruppe: Fotos und Scans direkt, Buchseiten je Buch
+       darunter noch einmal eingeklappt. Sonst ist es eine Tapete. -->
+  <div class="groups">
+    {#each groups as group (group.subject)}
+      <details class="card group" open={groups.length === 1 || !!filterSubject || group.subject === openSubject}>
+        <summary>
+          <span class="name">{subjectStyle(group.subject).emoji} {group.subject || 'Ohne Fach'}</span>
+          <span class="count">{group.items.length + group.bookPages.length} {group.items.length + group.bookPages.length === 1 ? 'Eintrag' : 'Einträge'}{#if group.waiting} · {group.waiting} warten{/if}</span>
+        </summary>
+        <div class="list">
+          {#each group.items as m (m.id)}{@render materialRow(m)}{/each}
+          {#each group.books as book (book.title)}
+            <details class="book" open={book.pages.some((m) => m.id === open?.id)}>
+              <summary><span class="name">📘 {book.short}</span><span class="count">{book.pages.length} {book.pages.length === 1 ? 'Seite' : 'Seiten'}</span></summary>
+              {#each book.pages as m (m.id)}{@render materialRow(m)}{/each}
+            </details>
+          {/each}
+        </div>
+      </details>
+    {:else}
+      <p class="empty">Noch nichts abgelegt. Das erste Foto genügt.</p>
+    {/each}
+  </div>
+  {#if data.has_more}
+    <button class="quiet more" disabled={busy} onclick={() => act(() => load(true))}>Mehr laden</button>
+  {/if}
 {/if}
 
 <style>
@@ -403,6 +493,13 @@
   .need{padding:8px 0;border-top:1px solid var(--border)}
   .need .what{margin:0 0 4px}
   .need .quote{margin:0 0 4px;font-style:italic;overflow-wrap:anywhere}
+  .checklist{list-style:none;margin:4px 0 0;padding:0;display:grid;gap:2px}
+  .checklist li{display:grid;grid-template-columns:1.4rem minmax(0,1fr) auto;align-items:center;gap:6px;min-height:44px}
+  .checklist .box{width:18px;height:18px;border:2px solid var(--fg-muted);border-radius:5px}
+  .checklist .entry{display:grid;min-width:0}
+  .checklist .entry small{overflow-wrap:anywhere}
+  .checklist .take{display:flex;gap:2px}
+  .checklist .take button{min-width:44px;min-height:44px;font-size:1.2rem}
   .wanted .foot{margin-top:12px}
 
   .head h1 { margin: 0; font-size: 1.3rem; }
@@ -413,7 +510,16 @@
   .filters { flex-wrap: wrap; margin-top: 0.8rem; align-items: flex-end; }
   .filters label { margin: 0; }
   .grow { flex: 1 1 10rem; }
-  .list { margin-top: 0.6rem; display: grid; gap: 0.4rem; }
+  .list { margin-top: 0.4rem; display: grid; gap: 0.4rem; }
+  .groups { margin-top: 0.6rem; display: grid; gap: 0.5rem; }
+  .group > summary, .book > summary { cursor: pointer; min-height: 44px; display: flex; justify-content: space-between; align-items: center; gap: 12px; list-style: none; }
+  .group > summary::-webkit-details-marker, .book > summary::-webkit-details-marker { display: none; }
+  .group .name { font-weight: 600; }
+  .group .count, .book .count { color: var(--fg-muted); font-size: .9rem; white-space: nowrap; }
+  .book { border: 1px solid var(--border); border-radius: 10px; padding: 4px 10px; }
+  .book > summary { min-height: 40px; }
+  .item.active { outline: 2px solid var(--accent); }
+  .state.wait { color: var(--warm, #b26a00); }
   .more { margin: 0.6rem auto; display: block; min-height: 44px; }
   .item {
     display: grid; grid-template-columns: 3.2rem minmax(0, 1fr) auto; gap: 0.7rem;
@@ -427,7 +533,7 @@
   .state { font-size: 0.78rem; color: var(--text-dim); white-space: nowrap; }
   .state.warn { color: var(--danger, #b3261e); }
   .preview { display: block; max-width: 100%; border: 1px solid var(--border); border-radius: 6px; margin: 0.5rem 0; }
-  .detail { margin-top: 0.8rem; }
+  .detail { margin: 0.2rem 0 0.6rem; }
   .detail h2 { margin: 0; font-size: 1.1rem; }
   @media (max-width: 560px) {
     .item { grid-template-columns: 2.6rem minmax(0, 1fr); }
