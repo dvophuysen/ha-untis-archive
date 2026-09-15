@@ -1,3 +1,9 @@
+## 0.52.0
+
+- Die Materialseite führt eine Einkaufsliste: „Was mir noch fehlt", je Fach aufklappbar. Sie sammelt aus Stunden- und Hausaufgabentexten die genannten Buchstellen („TB S. 13 Aufg. C, AH S. 7", „#cda, p. 28") und zeigt, welche davon weder digital im Regal liegen noch fotografiert wurden. Mit Zitat und Datum, damit erkennbar ist, worum es geht.
+- Gezählt wird nur eine ausdrückliche Seitenangabe. „#libro, p. 50 vocabulario 4 b" ergibt Seite 50, nicht Seite 4; die 4 b ist die Aufgabe.
+- Angefordert oder abgerufen wird nichts. Die Liste ist zum Ansehen da.
+
 ## 0.51.2
 
 - Der Knopf zum Tagesabschluss ist wieder weg. Er verlangte ein Ritual, das es nicht gibt: Aufgaben bleiben offen oder sind erledigt, niemand schließt einen Tag ab. Ein Abend gilt jetzt als erledigt, sobald nichts mehr offen ist — keine Aufgabe mehr fällig, die Tasche für morgen bestätigt, die Stunden zurückgemeldet. Zu sehen gibt es dazu nichts Neues; daran hängt nur, wer am Morgen noch eine Mitteilung bekommt.
