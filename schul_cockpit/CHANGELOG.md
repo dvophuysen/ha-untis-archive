@@ -1,3 +1,8 @@
+## 0.52.3
+
+- Die BiBox-Bücher (Mathematik, Erdkunde) liefern ihre Seiten. Der Betrachter zeichnet mit WebGL, und das war im Browser des Add-ons abgeschaltet; er meldete „geladen" und zeigte eine weiße Fläche. WebGL läuft jetzt in Software. Eine Seite, die nach dem Blättern noch leer ist, bekommt bis zu 15 Sekunden Zeit, bevor sie als leer gilt.
+- Der Sprung vom IServ-Portal ins Medienregal scheiterte gelegentlich, weil die Kachel noch nicht gezeichnet war („Das Medienregal wurde nicht gefunden"). Der Klick wartet jetzt auf die Kachel und lädt die Seite bei Bedarf neu.
+
 ## 0.52.2
 
 - Der Seitentest in den Eltern-Einstellungen sagt jetzt, warum ein Betrachter nichts zeigt. Zwei BiBox-Bücher melden „geladen", liefern aber eine leere Fläche; bisher war nicht zu sehen, ob die Seite nie gezeichnet wurde oder eine Anfrage scheiterte. Der Test wartet bei leerer Seite bis zu 15 Sekunden auf Inhalt und hält fest, was die Seitenbereiche enthalten, welche Anfragen fehlschlugen, was die Konsole meldet und ob WebGL verfügbar ist. Bricht der Abruf früher ab, kommt dieselbe Auskunft von der Stelle, an der er stand.
