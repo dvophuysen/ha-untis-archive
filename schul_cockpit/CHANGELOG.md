@@ -1,3 +1,7 @@
+## 0.56.11
+
+- Fenster 3000 mal 2100 Pixel: eine Doppelseite kommt mit rund 2300 Pixeln Breite an, gemessen 1970 bei 2600.
+
 ## 0.56.10
 
 - Schärfe, dritter Anlauf: Der Gerätefaktor kam auch über DevTools nicht im Screenshot an. Der Browser läuft jetzt in einem 2600 mal 1900 Pixel großen Fenster, der Betrachter zeichnet die Seiten entsprechend größer. Der Seitentest meldet die Rohgröße des gelieferten Bildes.
