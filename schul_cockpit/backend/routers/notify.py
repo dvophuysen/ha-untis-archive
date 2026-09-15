@@ -176,9 +176,12 @@ def notify_summary(
 
     # Real lessons today the kid attended and that have already ended —
     # those are the ones a check-in reminder applies to.
+    # Ausgeblendete Kurse gehören nicht dazu; das Kind besucht sie nicht.
+    from ..courses import hidden_keys, lesson_is_hidden
+    hidden = hidden_keys(account_id)
     real_lessons_today = [
         l for l in lessons_today
-        if (l["code"] or "").lower() != "cancelled" and not l["was_absent"]
+        if (l["code"] or "").lower() != "cancelled" and not l["was_absent"] and not lesson_is_hidden(dict(l), hidden)
     ]
     real_lesson_ids = [l["id"] for l in real_lessons_today]
     already_ended_ids = [

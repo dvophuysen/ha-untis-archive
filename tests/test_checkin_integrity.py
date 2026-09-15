@@ -108,3 +108,16 @@ def test_upgrade_preserves_all_rows_ids_and_is_idempotent(env):
         assert [tuple(r) for r in c.execute('SELECT * FROM lesson_checkins ORDER BY id')] == before
         assert c.execute('PRAGMA foreign_key_check').fetchall() == []
     assert post(client, 2, note='Only a note').json()['rating'] is None
+
+
+def test_hidden_courses_do_not_count_as_open_feedback(env):
+    # Kind A Französisch und Religion sind ausgeblendet, weil er sie nicht
+    # besucht. Sie standen trotzdem als „zwei Rückmeldungen offen" auf dem
+    # Dashboard, ohne im Stundenplan zu erscheinen.
+    client, _, _ = install(env)
+    from backend.courses import course_key
+    assert dashboard._feedback_gap(1, date.today())['total_lessons'] == 5
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO hidden_courses(account_id,course_key,created_at) VALUES(1,?,'now')",
+                  (course_key(7, None, 'Testfach', None),))
+    assert dashboard._feedback_gap(1, date.today()) == {'unrated_lessons': 0, 'total_lessons': 0}
