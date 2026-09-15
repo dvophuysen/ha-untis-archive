@@ -609,8 +609,28 @@ def _analysis_states(conn, material_ids: list[int]) -> dict[int, str]:
         f"SELECT id,analysis_state FROM materials WHERE id IN ({marks})", tuple(material_ids))}
 
 
+# Die Verknüpfungen werden im Sammellauf und beim Aufruf der Bilanz erneuert.
+# Eine Ansicht, die dazwischen einen neuen Untis-Eintrag zeigt, zieht sie
+# selbst nach, höchstens alle zehn Minuten je Kind.
+_SYNCED: dict[int, float] = {}
+
+
+def ensure_synced(account_id: int, max_age: float = 600.0) -> None:
+    import time
+    now = time.monotonic()
+    if now - _SYNCED.get(account_id, -1e9) < max_age:
+        return
+    _SYNCED[account_id] = now
+    try:
+        sync_links(account_id)
+        refresh_status(account_id)
+    except Exception:
+        log.warning("Quellen für Konto %s nicht nachgezogen", account_id, exc_info=True)
+
+
 def annotate_lessons(account_id: int, lessons: list[dict], key: str = "lstext", id_key: str = "id") -> None:
     """Jeder Stunde ihre Textsegmente mit Quellenstand anhängen."""
+    ensure_synced(account_id)
     ids = [l[id_key] for l in lessons if l.get(key)]
     if not ids:
         return
@@ -679,6 +699,7 @@ def annotate_tasks(account_id: int, tasks: list[dict]) -> None:
     was ausdrücklich an die Aufgabe gehängt wurde."""
     if not tasks:
         return
+    ensure_synced(account_id)
     with closing(history_conn()) as hconn:
         homework_ids = {t["id"]: homework_for_task(hconn, account_id, t) for t in tasks}
     with closing(webapp_conn()) as conn:
