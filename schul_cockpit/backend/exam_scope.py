@@ -71,8 +71,15 @@ async def collect(account,body):
     for chapter in chapters:
         span=f"S. {chapter['start_page']}" + (f"–{chapter['end_page']}" if chapter.get('end_page') else '')
         extras=''.join(f"; dazu {e['title']} S. {e['start_page']}" + (f"–{e['end_page']}" if e.get('end_page') else '') for e in chapter['companions'])
-        text=f"Buchkapitel {chapter['number']} {chapter['title']} ({span}{extras}); im Unterricht genannt: S. {', '.join(map(str,chapter['cited_pages']))}".replace('Buchkapitel  ','Buchkapitel ')
+        where=f"{chapter['part_label']}, " if chapter.get('part_label') else 'Buch'
+        text=f"{where}Kapitel {chapter['number']} {chapter['title']} ({span}{extras}); im Unterricht genannt: S. {', '.join(map(str,chapter['cited_pages']))}".replace('Kapitel  ','Kapitel ').replace('Buch','Buchkapitel',1) if not chapter.get('part_label') else f"{where}Kapitel {chapter['number']} {chapter['title']} ({span}{extras}); genannt: S. {', '.join(map(str,chapter['cited_pages']))}".replace('Kapitel  ','Kapitel ')
         units.append(dict(id=len(units),kind='chapter',text=text,refs=[dict(id=chapter['id'],date=chapter['first_date'],text=text)]))
+    # Der Zettel der Lehrkraft, was in der Arbeit vorkommt: die verlässlichste Quelle.
+    if not body.demo:
+        from .sources import exam_notices
+        for note in exam_notices(account):
+            if mc.same_subject(note['subject_name'],body.subject) and start<=note['date']<=day.isoformat():
+                units.append(dict(id=len(units),kind='notice',text='Ankündigung der Lehrkraft zum Stoff der Arbeit: '+note['text'],refs=[dict(id=note['id'],date=note['date'],text=note['text'])]))
     if not units:raise HTTPException(422,'Für dieses Fach und diesen Zeitraum fehlen verwertbare Themen. Du kannst eigene Themen eintragen.')
     if len(units)>400:raise HTTPException(422,'Dieser Zeitraum enthält sehr viel Stoff. Bitte einen kürzeren Zeitraum wählen.')
     source=dict(subject=body.subject,demo=body.demo,start_date=start,end_date=day.isoformat(),grade=s['profile']['grade'],units=units,missing=missing,chapters=chapters)
@@ -83,12 +90,18 @@ def book_chapters(account,subject,start,end):
     """Die im Zeitraum angeschnittenen Kapitel des Schulbuchs dieses Fachs."""
     from .book_structure import overview
     from .textbook_context import book_and_credentials
+    from .book_structure import paper_books
+    out=[]
     try:
         book,_=book_and_credentials(account,subject=subject)
-        if not book:return []
-        return [c for c in overview(account,book['title'],subject) if start<=c['first_date']<=end]
+        if book:out+=[c for c in overview(account,book['title'],subject) if start<=c['first_date']<=end]
     except Exception:
-        return []
+        pass
+    # Papierbücher (Latein: Textband und Begleitband) mit fotografiertem Verzeichnis.
+    for paper in paper_books(account,subject):
+        try:out+=[c for c in overview(account,paper['title'],subject,paper['part_label']) if start<=c['first_date']<=end]
+        except Exception:continue
+    return out
 
 async def group_units(account, items, demo=False):
     chunk_key='chunk-v2:'+mc.fingerprint([demo,items,ai.ai_settings()['model']])

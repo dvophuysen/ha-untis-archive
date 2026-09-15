@@ -711,6 +711,27 @@ _MIGRATIONS.append(("ai_config_background_ten",
 _MIGRATIONS.append(("tasks_intro_001", "ALTER TABLE tasks ADD COLUMN intro TEXT"))
 _MIGRATIONS.append(("tasks_intro_002", "ALTER TABLE tasks ADD COLUMN intro_at TEXT"))
 
+# Ein Foto oder Scan weiß, welche Seite welchen Buchteils es zeigt: aus der
+# Einkaufsliste mitgegeben oder von der Auswertung abgelesen. Ohne das steht
+# eine von Hand gescannte Seite 19 weiter auf der Liste. Der Buchteil zählt,
+# weil Latein zwei Bücher hat (Textband, Begleitband) und Seite 13 in beiden.
+_MIGRATIONS.append(("materials_010_source_label", "ALTER TABLE materials ADD COLUMN source_label TEXT"))
+# Bücher, die nur auf Papier existieren, bekommen ihr Inhaltsverzeichnis aus
+# Fotos; danach gilt für sie dieselbe Kapitelregel wie für digitale Bücher.
+_MIGRATIONS.append(("paper_books_001", """
+CREATE TABLE IF NOT EXISTS paper_books (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ account_id INTEGER NOT NULL,
+ subject_name TEXT NOT NULL,
+ part_label TEXT NOT NULL,
+ title TEXT NOT NULL,
+ toc_state TEXT,
+ toc_pages INTEGER NOT NULL DEFAULT 0,
+ updated_at TEXT NOT NULL,
+ UNIQUE(account_id,subject_name,part_label)
+);
+"""))
+
 _MIGRATIONS.append(("entry_chapters_001", """
 CREATE TABLE IF NOT EXISTS entry_chapters (
  id INTEGER PRIMARY KEY AUTOINCREMENT,

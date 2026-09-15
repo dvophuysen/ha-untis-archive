@@ -18,13 +18,13 @@ def page_numbers(text: str) -> list[int]:
     """Die Schulbuchseiten einer Aufgabe, mit demselben Erkenner wie die
     Quellenbilanz: „p. 50" zählt wie „S. 50", Arbeitsheftseiten bleiben
     draußen, eine Spanne über zehn Seiten ist ein Tippfehler."""
-    from .sources import PAGE, part_of
-    pages=[]
-    for hit in PAGE.finditer(text or ""):
-        first=int(hit.group(1));last=int(hit.group(2)) if hit.group(2) else first
-        if last<first or last-first>10: continue
-        _,kind=part_of(text[:hit.start()])
-        if kind in ("","book"): pages.extend(range(first,last+1))
+    from .sources import page_hits, wide_spans, part_of, book_serves
+    pages=[];wide=wide_spans(text or "")
+    for start,_,found in page_hits(text or ""):
+        if len(found)>10 or start in wide: continue
+        label,kind=part_of(text[:start])
+        # Der Begleitband ist ein anderes Buch als das digitale im Regal.
+        if kind in ("","book") and book_serves("",label): pages.extend(found)
     return list(dict.fromkeys(pages))[:6]
 
 def _now() -> str:

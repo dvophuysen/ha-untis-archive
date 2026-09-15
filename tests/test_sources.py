@@ -46,7 +46,7 @@ def test_only_an_explicit_page_marker_counts_as_a_page():
 def test_each_page_keeps_the_book_part_it_was_named_with():
     got = sources.citations('Wortschatztraining Lektion 1, Übungen zu debere und Infinitiven '
                             '(TB S. 13 Aufg. C, AH S. 7 Aufg. C und Z)')
-    assert [(c['label'], c['pages']) for c in got] == [('Schulbuch', [13]), ('Arbeitsheft', [7])]
+    assert [(c['label'], c['pages']) for c in got] == [('Textband', [13]), ('Arbeitsheft', [7])]
     # Der zuletzt genannte Teil gilt weiter, auch über einen Satz hinweg.
     got = sources.citations('Buch, S.30-32. lest M6 und den Infokasten. Bearbeitet Aufgabe 1 auf S. 34')
     assert [(c['label'], c['pages']) for c in got] == [('Schulbuch', [30, 31, 32]), ('Schulbuch', [34])]
@@ -68,7 +68,7 @@ def test_the_ledger_joins_the_short_subject_of_a_homework_to_its_lessons(env):
     book = sources.ledger(1)
     assert [s['subject'] for s in book['subjects']] == ['LATEIN'], 'Kürzel und Langform sind dasselbe Fach'
     missing = {m['label']: m['pages'] for m in book['subjects'][0]['missing']}
-    assert missing == {'Schulbuch': [15, 19], 'Arbeitsheft': [7]}
+    assert missing == {'Textband': [15, 19], 'Arbeitsheft': [7]}
     assert book['missing_total'] == 3
 
 

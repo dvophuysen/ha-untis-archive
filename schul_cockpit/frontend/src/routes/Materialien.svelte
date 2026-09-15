@@ -14,8 +14,12 @@
     own_work: 'Meine Bearbeitung',
     exam: 'Klassenarbeit',
     handout: 'Merkblatt',
+    exam_notice: 'Ankündigung einer Arbeit',
+    toc: 'Inhaltsverzeichnis (Papierbuch)',
     other: 'Sonstiges',
   };
+  // Die Buchteile der Quellenbilanz; Latein hat Textband und Begleitband.
+  const BOOK_PARTS = ['Textband', 'Begleitband', 'Schulbuch', 'Arbeitsheft', 'Grammatikheft', 'Arbeitsblatt'];
   const STATE_NAMES = {
     pending: 'wird gelesen …',
     ready: 'gelesen',
@@ -45,7 +49,18 @@
     passt_nicht: 'die Schulbuchseite passt nicht zum Zitat, vermutlich ein anderes Heft',
     gewohnheit: 'in diesem Fach ist sonst immer das Arbeitsheft gemeint',
   };
-  const ACCESS_NAMES = { unknown: 'noch nicht geprüft', proven: 'Abruf nachgewiesen', readable: 'Seite lesbar', blank: 'liefert leere Seiten', viewer_error: 'nicht erreichbar' };
+  const ACCESS_NAMES = { unknown: 'noch nicht geprüft', proven: 'Abruf nachgewiesen', readable: 'Seite lesbar', blank: 'liefert leere Seiten', viewer_error: 'nicht erreichbar', paper: 'nur auf Papier, Verzeichnis aus Fotos' };
+  // Das Fach kommt aus dem Stundenplan, nicht aus dem Tippfeld: sonst steht
+  // „Latein" neben „LATEIN" und die Quellen finden ihr Material nicht.
+  let catalog = $state([]);
+  const subjectOptions = $derived.by(() => {
+    const seen = new Map();
+    for (const s of catalog) if (s.untis_name) seen.set(s.untis_name, s.name);
+    for (const m of data?.materials ?? []) if (m.subject_name && !seen.has(m.subject_name)) seen.set(m.subject_name, subjectStyle(m.subject_name).name + ' (nicht im Stundenplan)');
+    return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, 'de'));
+  });
+  // Was das nächste Foto ist, wenn man es vorher sagen will; sonst erkenne ich es selbst.
+  let upload = $state({ subject: '', kind: '', part: '', page: '' });
   let collecting = $state(null);
 
   async function collectNow() {
@@ -109,6 +124,13 @@
     if (search.trim()) query.set('q', search.trim());
     query.set('limit', String(PAGE));
     query.set('offset', String(more ? offset + PAGE : 0));
+    if (!catalog.length) {
+      try {
+        catalog = (await api.get(`/api/accounts/${accountId}/subjects`)).subjects ?? [];
+      } catch {
+        catalog = [];
+      }
+    }
     try {
       const page = await api.get(`${base}?${query}`);
       // Alles ist sichtbar, Buchseiten eingeschlossen; wer weiter unten sucht,
@@ -185,7 +207,12 @@
         body.append('subject_name', target.subject);
         body.append('source_label', target.label);
         body.append('source_page', String(target.page));
-      } else if (filterSubject) body.append('subject_name', filterSubject);
+      } else {
+        if (upload.subject || filterSubject) body.append('subject_name', upload.subject || filterSubject);
+        if (upload.kind) body.append('kind', upload.kind);
+        if (upload.part) body.append('source_label', upload.part);
+        if (upload.page) body.append('source_page', String(Number(upload.page)));
+      }
       if (taskId) body.append('task_id', String(taskId));
       try {
         await api.post(base, body);
@@ -196,7 +223,10 @@
     }
     message = target
       ? `${target.label} ${target.page ? `S. ${target.page}` : ''} abgehakt. Ich lese es gerade.`
+      : upload.kind === 'toc' ? 'Inhaltsverzeichnis gespeichert. Ich lese die Kapitel daraus, sobald alle Seiten da sind.'
+      : upload.kind === 'exam_notice' ? 'Ankündigung gespeichert. Jede genannte Stelle kommt auf die Liste und wird vorgezogen.'
       : list.length === 1 ? 'Gespeichert. Ich lese es gerade.' : `${list.length} Seiten gespeichert.`;
+    upload.page = '';
     await load();
   }
 
@@ -216,12 +246,15 @@
           summary: open.summary ?? '',
           content_text: open.content_text ?? '',
           contains_solutions: !!open.contains_solutions,
+          source_label: open.source_label ?? '',
+          source_page: open.source_page ?? '',
         }
       : null;
   }
 
   async function save() {
-    open = await api.patch(`${base}/${open.id}`, form);
+    // Eine leere Seite heißt „keine Seite"; 0 räumt sie serverseitig aus.
+    open = await api.patch(`${base}/${open.id}`, { ...form, source_page: form.source_page ? Number(form.source_page) : 0 });
     message = 'Korrektur gespeichert. Sie bleibt auch bei einer neuen Auswertung erhalten.';
     await load();
   }
@@ -233,7 +266,31 @@
 </div>
 
 <div class="card drop">
-  <p class="lead">Fotografiere ein Arbeitsblatt, eine Heftseite oder eine Aufgabe. Mehr brauchst du nicht — Fach, Thema und Text erkenne ich selbst.</p>
+  <p class="lead">Fotografiere ein Arbeitsblatt, eine Heftseite oder eine Aufgabe. Mehr brauchst du nicht — Fach, Thema und Text erkenne ich selbst.
+    Den Zettel mit dem Stoff für eine Arbeit oder das Inhaltsverzeichnis eines Buchs, das nur auf Papier existiert, sagst du mir vorher.</p>
+  <div class="row gap-sm options">
+    <label>Fach
+      <select bind:value={upload.subject}>
+        <option value="">erkenne ich</option>
+        {#each subjectOptions as s}<option value={s.value}>{s.label}</option>{/each}
+      </select>
+    </label>
+    <label>Was ist es?
+      <select bind:value={upload.kind}>
+        <option value="">erkenne ich</option>
+        {#each data?.kinds ?? Object.keys(KIND_NAMES) as k}<option value={k}>{KIND_NAMES[k] ?? k}</option>{/each}
+      </select>
+    </label>
+    <label>Buchteil
+      <select bind:value={upload.part}>
+        <option value="">erkenne ich</option>
+        {#each BOOK_PARTS as part}<option value={part}>{part}</option>{/each}
+      </select>
+    </label>
+    {#if upload.kind && upload.kind !== 'toc' && upload.kind !== 'exam_notice'}
+      <label>Seite<input type="number" min="1" max="1999" bind:value={upload.page} placeholder="lese ich ab" /></label>
+    {/if}
+  </div>
   <div class="row gap-sm">
     <button class="primary big" disabled={busy || uploading > 0} onclick={() => camera?.click()}>
       📷 Foto aufnehmen
@@ -264,7 +321,7 @@
     {#each ledger.subjects.filter((s) => s.missing_count || s.pending) as subject (subject.subject)}
       <details class="subject">
         <summary>
-          <span class="name">{subject.subject}</span>
+          <span class="name">{subjectStyle(subject.subject).emoji} {subjectStyle(subject.subject).name}</span>
           <span class="count">
             {#if subject.missing_count}{subject.missing_count} {subject.missing_count === 1 ? 'Seite' : 'Seiten'} fehlen{/if}
             {#if subject.missing_count && subject.pending} · {/if}
@@ -274,7 +331,7 @@
         {#if subject.digital}<p class="muted">{subject.digital} Buchseiten liegen digital vor.</p>{/if}
         {#if subject.pending}<p class="muted">Buchseiten, die ich noch hole: {subject.pending_pages.join(', ')}.</p>{/if}
         {#each subject.chapters ?? [] as chapter}
-          <p class="muted">Kapitel {chapter.number} {chapter.title} (S. {chapter.start_page}{chapter.end_page ? `–${chapter.end_page}` : ''}):
+          <p class="muted">{chapter.part_label ? `${chapter.part_label}, ` : ''}Kapitel {chapter.number} {chapter.title} (S. {chapter.start_page}{chapter.end_page ? `–${chapter.end_page}` : ''}):
             {chapter.pages_stored} von {chapter.pages} Seiten da{#if chapter.companions?.length}, dazu {chapter.companions.map((c) => c.title).join(', ')}{/if}{#if chapter.inferred}; aus dem Stundenthema erschlossen, nicht aus einer Seitenangabe{/if}.</p>
         {/each}
         {#each subject.missing as need}
@@ -303,8 +360,8 @@
       </details>
     {/each}
     {#if ledger.books?.length}
-      <p class="muted foot">Digitale Bücher:
-        {#each ledger.books as book, i}{i ? ' · ' : ''}{book.subject}: {book.pages_stored} {book.pages_stored === 1 ? 'Seite' : 'Seiten'} gespeichert{#if book.access} ({ACCESS_NAMES[book.access.status] ?? book.access.status}){/if}{/each}
+      <p class="muted foot">Bücher:
+        {#each ledger.books as book, i}{i ? ' · ' : ''}{subjectStyle(book.subject).name}, {book.title}: {book.pages_stored} {book.pages_stored === 1 ? 'Seite' : 'Seiten'} gespeichert{#if book.access} ({ACCESS_NAMES[book.access.status] ?? book.access.status}){/if}{/each}
       </p>
     {/if}
     {#if data?.can_manage}
@@ -321,7 +378,7 @@
         {/if}
       </p>
     {/if}
-    <p class="muted foot">Die Zuordnung der Kürzel ist eine Annahme aus dem Wortlaut: „TB" als Schulbuch, „AH" und „cda" als Arbeitsheft.
+    <p class="muted foot">Die Zuordnung der Kürzel ist eine Annahme aus dem Wortlaut: „TB" als Textband, „BB" als Begleitband, „AH" und „cda" als Arbeitsheft.
       Wo im Text kein Buchteil steht, nehme ich zuerst das Schulbuch an und prüfe die Seite am Inhalt.</p>
   </details>
 {/if}
@@ -374,13 +431,30 @@
         <p class="dim">Was du hier änderst, bleibt bei jeder späteren Auswertung erhalten.</p>
         <label>Titel<input bind:value={form.title} maxlength="200" /></label>
         <div class="row gap-sm">
-          <label class="grow">Fach<input bind:value={form.subject_name} maxlength="120" /></label>
+          <label class="grow">Fach
+            <select bind:value={form.subject_name}>
+              <option value="">ohne Fach</option>
+              {#if form.subject_name && !subjectOptions.some((s) => s.value === form.subject_name)}
+                <option value={form.subject_name}>{form.subject_name} (nicht im Stundenplan)</option>
+              {/if}
+              {#each subjectOptions as s}<option value={s.value}>{s.label}</option>{/each}
+            </select>
+          </label>
           <label>Art
             <select bind:value={form.kind}>
               {#each data.kinds as k}<option value={k}>{KIND_NAMES[k] ?? k}</option>{/each}
             </select>
           </label>
           <label>Datum<input type="date" bind:value={form.document_date} /></label>
+        </div>
+        <div class="row gap-sm">
+          <label>Buchteil
+            <select bind:value={form.source_label}>
+              <option value="">unbekannt</option>
+              {#each BOOK_PARTS as part}<option value={part}>{part}</option>{/each}
+            </select>
+          </label>
+          <label>Gedruckte Seite<input type="number" min="1" max="1999" bind:value={form.source_page} placeholder="keine" /></label>
         </div>
         <label>Kurzbeschreibung<textarea bind:value={form.summary} maxlength="600" rows="2"></textarea></label>
         <label>Erkannter Text<textarea bind:value={form.content_text} maxlength="30000" rows="6"></textarea></label>
@@ -425,9 +499,7 @@
     <label>Fach
       <select bind:value={filterSubject}>
         <option value="">alle</option>
-        {#each [...new Set(data.materials.map((m) => m.subject_name).filter(Boolean))] as s}
-          <option>{s}</option>
-        {/each}
+        {#each subjectOptions as s}<option value={s.value}>{s.label}</option>{/each}
       </select>
     </label>
     <label>Art
@@ -459,7 +531,7 @@
     {#each groups as group (group.subject)}
       <details class="card group" open={groups.length === 1 || !!filterSubject || group.subject === openSubject}>
         <summary>
-          <span class="name">{subjectStyle(group.subject).emoji} {group.subject || 'Ohne Fach'}</span>
+          <span class="name">{subjectStyle(group.subject).emoji} {group.subject ? subjectStyle(group.subject).name : 'Ohne Fach'}</span>
           <span class="count">{group.items.length + group.bookPages.length} {group.items.length + group.bookPages.length === 1 ? 'Eintrag' : 'Einträge'}{#if group.waiting} · {group.waiting} warten{/if}</span>
         </summary>
         <div class="list">
@@ -485,6 +557,9 @@
   .wanted{border-left:4px solid var(--accent)}
   .wanted>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;list-style:none}
   .wanted>summary::-webkit-details-marker{display:none}
+  .options label{display:grid;gap:2px;font-size:0.85rem;color:var(--fg-muted)}
+  .options select,.options input{min-height:40px}
+  .options input[type=number]{width:7rem}
   .wanted .subject{border:1px solid var(--border);border-radius:10px;padding:8px 10px;margin:8px 0}
   .wanted .subject>summary{cursor:pointer;min-height:40px;display:flex;justify-content:space-between;align-items:center;gap:12px;list-style:none}
   .wanted .subject>summary::-webkit-details-marker{display:none}

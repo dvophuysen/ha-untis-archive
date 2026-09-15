@@ -12,7 +12,7 @@ from backend import db, sources, source_collector as collector
 def test_a_text_is_split_into_prose_and_page_references():
     segs = sources.segments("Wortschatz (TB S. 13 Aufg. C, AH S. 7) lernen")
     assert [s["text"] for s in segs] == ["Wortschatz (TB ", "S. 13", " Aufg. C, AH ", "S. 7", ") lernen"]
-    assert (segs[1]["label"], segs[1]["pages"]) == ("Schulbuch", [13])
+    assert (segs[1]["label"], segs[1]["pages"]) == ("Textband", [13])
     assert (segs[3]["label"], segs[3]["kind"]) == ("Arbeitsheft", "workbook")
     assert sources.segments("") == [] and sources.segments("Klassenfahrt") == [{"text": "Klassenfahrt"}]
 

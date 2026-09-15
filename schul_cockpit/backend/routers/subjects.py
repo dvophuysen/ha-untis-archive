@@ -74,6 +74,8 @@ def list_subjects(
             {
                 "subject_id": r["subject_untis_id"],
                 "name": label(r["subject_name"]),
+                # Die Schreibweise, unter der Materialien und Quellen laufen.
+                "untis_name": r["subject_name"],
                 "short": shorts.get(r["subject_untis_id"]),
                 "lessons_total": r["lessons_total"],
                 "last_date": r["last_date"],
