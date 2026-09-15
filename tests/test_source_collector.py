@@ -173,3 +173,18 @@ def test_short_titles_are_readable():
     assert collector.short_title("BiBox Mathematik Neue Wege 8 Gymnasium G9 Niedersachsen") == "Mathematik Neue Wege 8"
     assert collector.short_title("Deutschbuch Gymnasium - Niedersachsen - Ausgabe 2019 · 8. Schuljahr - E-Book") == "Deutschbuch"
     assert collector.short_title("¡Apúntate! - Spanisch als 2. Fremdsprache - Ausgabe 2016 · Band 2 - E-Book") == "¡Apúntate!"
+
+
+async def test_book_pages_stop_before_the_storage_of_the_child_is_full(env, monkeypatch):
+    history(homework=[(1, 'SN', 'libro p. 50-52', '2026-09-10')])
+    shelf()
+    capture, calls = fake_capture({50, 51, 52})
+    monkeypatch.setattr(ctx, "capture_pages", capture)
+    fake_analysis(monkeypatch)
+    monkeypatch.setattr(collector, "to_jpeg", lambda blob, max_side=1600: b"x" * 60_000)
+    from backend import materials
+    monkeypatch.setattr(materials, "MAX_ACCOUNT_FILES", 150_000)
+    summary = await collector.collect(1)
+    assert summary["stored"] == 2 and summary["skipped"] == "Materialspeicher voll", "90 Prozent von 150 KB: zwei Seiten passen, die dritte nicht"
+    with closing(db.webapp_conn()) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM materials").fetchone()[0] == 2
