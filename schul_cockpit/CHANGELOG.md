@@ -1,3 +1,8 @@
+## 0.74.0
+
+- Wochenrückblick für Eltern: In der Elternübersicht steht je Kind „Diese Woche“ mit wenigen Sätzen aus gespeicherten Zahlen: an wie vielen Abenden vor einem Schultag vor der Erinnerung alles erledigt war (mit Vorwoche), welche Themen eine Stufe weiter oder zurück sind, bestandene Kurzprüfungen, Einheiten mit dem Mentor und ihre Dauer, Vokabelabfragen, erledigte und überfällige Aufgaben, die Antworten nach der Schule, fehlendes Material für Arbeiten in den nächsten zwei Wochen und die KI-Kosten der Woche. Kein Modellaufruf, keine Note, kein Vergleich zwischen Kindern. Zuerst drei Zeilen, aufklappbar alle.
+- Dieselben Zahlen liefert `GET /api/accounts/{id}/week-review` für Kind und Eltern.
+
 ## 0.73.0
 
 - Fächerübersicht auf dem Lernstand: Der Balken je Fach zeigt jetzt die Stufen der Themen dieses Schuljahrs (gefestigt, sitzt, wackelt, angefangen, neu), so wie die App sie aus den Antworten abliest, nicht mehr die Anteile der Selbsteinschätzungen. Darunter steht, was es heißt („2 von 5 sitzen · 1 wackelt“). Rechts stehen die Stufenwechsel der letzten vier Wochen („↑ 2 Themen besser“); ohne Wechsel steht das so da, ein Verlauf wird nicht erfunden.
