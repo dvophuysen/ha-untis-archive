@@ -457,3 +457,20 @@ def test_a_second_photo_of_the_same_page_is_reported_and_blur_is_measured(env):
     with closing(db.webapp_conn()) as c:
         rows = {r[0]: (r[1], r[2]) for r in c.execute("SELECT id,phash,sharpness FROM materials")}
     assert rows[first["id"]][0] == rows[second["id"]][0] and rows[first["id"]][1] > store.BLURRY_BELOW > rows[soft["id"]][1]
+
+
+def test_the_exam_card_says_why_a_place_is_still_pending(env):
+    """Ein Foto liegt da, aber das Lesen scheiterte: kein „unterwegs", sondern der Grund."""
+    history(lessons=[(1, "2026-09-11", "LATEIN", LA, "Lektion 1")],
+            homework=[(1, "LA", "BB S. 13 lernen", "2026-09-07")])
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,source_label,source_page,analysis_state,created_at,updated_at) "
+                  "VALUES(1,'book_page','LATEIN','BB S. 13','Begleitband',13,'failed','now','now')")
+    sources._SYNCED.clear()
+    got = sources.exam_sources(1, "LATEIN", "2026-08-01", "2026-09-30")
+    assert got["pending"] == 1 and got["ready"] == 0
+    assert got["pending_items"][0]["kind"] == "failed" and got["pending_items"][0]["label"] == "Begleitband" and got["pending_items"][0]["page"] == 13
+    with closing(db.webapp_conn()) as c:
+        c.execute("UPDATE materials SET analysis_state='pending'")
+    sources._SYNCED.clear()
+    assert sources.exam_sources(1, "LATEIN", "2026-08-01", "2026-09-30")["pending_items"][0]["kind"] == "unread"

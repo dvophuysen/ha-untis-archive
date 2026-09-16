@@ -1,7 +1,7 @@
 """Vokabeltrainer: Einheiten, Karten, Antworten, Spracheingabe."""
 from __future__ import annotations
 from contextlib import closing
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from pydantic import Field
 from ..auth import CurrentUser, get_current_user
 from ..db import webapp_conn
@@ -17,10 +17,16 @@ class ExtractIn(InputModel):
 
 
 @router.get('/{subject}/units')
-def units(account_id: int, subject: str, user: CurrentUser = Depends(get_current_user)):
+def units(account_id: int, subject: str, background: BackgroundTasks, user: CurrentUser = Depends(get_current_user)):
+    """Die Einheiten des Fachs. Ungelesene Wortseiten werden dabei im Hintergrund
+    zerlegt; die Antwort sagt, wie viele noch laufen, damit die Ansicht nachlädt."""
     access(user, account_id)
     lang = vocab.language_of(subject)
-    return {'subject': subject, 'language': lang, 'units': vocab.units(account_id, subject),
+    found = vocab.units(account_id, subject)
+    reading = sum(u['unread'] for u in found)
+    if reading and lang:
+        background.add_task(vocab.read_unread, account_id, subject)
+    return {'subject': subject, 'language': lang, 'units': found, 'reading': reading,
             'speech': bool(ai.transcribe_url()), 'hesitation_seconds': vocab.HESITATION_SECONDS}
 
 

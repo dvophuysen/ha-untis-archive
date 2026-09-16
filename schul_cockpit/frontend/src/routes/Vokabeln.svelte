@@ -20,24 +20,19 @@
   const askForeign = $derived(direction === 'from');
   const currentUnit = $derived((data?.units || []).find((u) => u.unit === unit));
 
+  // Wortseiten werden beim Öffnen automatisch in Wörter zerlegt; solange das
+  // läuft, lädt die Ansicht alle paar Sekunden nach.
+  let pollTimer = null, polls = 0;
   async function load() {
     error = '';
     try {
       data = await api.get(`${base}/${encodeURIComponent(subject)}/units`);
       if (!unit && data.units.length) unit = data.units[0].unit;
+      clearTimeout(pollTimer);
+      if (data.reading && polls < 20) { polls += 1; pollTimer = setTimeout(load, 4000); } else polls = 0;
     } catch (e) { error = e.message; }
   }
-  $effect(() => { void accountId; void subject; load(); });
-
-  async function readPages(u) {
-    busy = true; error = '';
-    try {
-      const ids = u.pages.filter((p) => !p.extracted && p.readable).map((p) => p.material_id);
-      if (!ids.length) return;
-      const r = await api.post(`${base}/${encodeURIComponent(subject)}/extract`, { material_ids: ids });
-      data = { ...data, units: r.units };
-    } catch (e) { error = e.message; } finally { busy = false; }
-  }
+  $effect(() => { void accountId; void subject; polls = 0; load(); return () => clearTimeout(pollTimer); });
   async function begin(s, d) {
     stage = s; direction = d; busy = true; error = ''; done = false; verdict = null; pending = null;
     tally = { correct: 0, slow: 0, wrong: 0 };
@@ -121,7 +116,7 @@
           {#each data.units as u (u.unit)}
             <button class="unit" class:chosen={unit === u.unit} onclick={() => (unit = u.unit)}>
               <strong>{u.unit}</strong>
-              <span>{u.words ? `${u.words} Wörter · Bedeutung: ${unitSummary(u, 's1')}` : `${u.pages.length} ${u.pages.length === 1 ? 'Seite' : 'Seiten'}, noch nicht gelesen`}</span>
+              <span>{u.words ? `${u.words} Wörter · Bedeutung: ${unitSummary(u, 's1')}` : u.unread ? 'wird gerade gelesen …' : 'keine Lernwörter auf diesen Seiten'}</span>
               {#if u.words && lang.into}<span>Schreibweise: {unitSummary(u, 's2')}</span>{/if}
             </button>
           {/each}
@@ -129,10 +124,7 @@
       </section>
       {#if currentUnit}
         {#if currentUnit.unread}
-          <section class="card">
-            <p>{currentUnit.unread} {currentUnit.unread === 1 ? 'Seite' : 'Seiten'} dieser Einheit {currentUnit.unread === 1 ? 'ist' : 'sind'} noch nicht in Wörter zerlegt.</p>
-            <button class="primary" disabled={busy} onclick={() => readPages(currentUnit)}>Wörter von den Seiten lesen</button>
-          </section>
+          <p class="muted reading" role="status">Ich lese gerade noch {currentUnit.unread === 1 ? 'eine Seite' : `${currentUnit.unread} Seiten`} dieser Einheit … Die Wörter kommen gleich dazu.</p>
         {/if}
         {#if currentUnit.words}
           <section class="card">
@@ -213,6 +205,7 @@
   .card h2 { font-size: 1.05rem; margin: 0 0 0.4rem; }
   .muted { font-size: 0.85rem; opacity: 0.8; }
   .small { margin-top: 0.8rem; }
+  .reading { margin: 0.2rem 0.4rem 0.6rem; }
   .notice { padding: 0.8rem; background: #fff0cf; color: #493a12; border-radius: 12px; }
   .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.6rem 0 0; }
   button { min-height: 44px; padding: 0.6rem 0.9rem; border: 1px solid var(--border, #d4e0da); border-radius: 12px; background: var(--bg-card, #fff); color: inherit; font: inherit; cursor: pointer; }

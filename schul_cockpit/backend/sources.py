@@ -989,18 +989,30 @@ def exam_sources(account_id: int, subject: str, since: str, until: str) -> dict 
                 "notice": bool(notices), "subject": subject, **_notice_summary(notices)} if notices else None
     # Dieselbe Seite aus Stunde, Hausaufgabe und Kapitelregel ist eine Stelle.
     best: dict[tuple[str, int], str] = {}
+    why: dict[tuple[str, int], dict] = {}
     rank = {"missing": 0, "pending": 1, "ready": 2}
     for link in links:
         state = _state_of(link, analysis) or "missing"
         key = (link["part_label"], link["page"])
         if key not in best or rank[state] > rank[best[key]]:
             best[key] = state
+            if state == "pending":
+                # Liegt die Seite schon da (Foto oder Abruf), fehlt nur das Lesen;
+                # sonst wird sie noch aus dem digitalen Buch geholt.
+                present = link["status"] in ("scanned", "digital") and link["material_id"]
+                kind = "unread" if present else "fetching"
+                if present and analysis.get(link["material_id"]) == "failed":
+                    kind = "failed"
+                why[key] = {"label": label_or_book(link), "page": link["page"], "kind": kind, "material_id": link["material_id"]}
     counts = {"ready": 0, "pending": 0, "missing": 0}
     gaps: dict[str, list[int]] = {}
+    pending_items = []
     for (label, page), state in best.items():
         counts[state] += 1
         if state == "missing":
             gaps.setdefault(label, []).append(page)
+        elif state == "pending" and (label, page) in why:
+            pending_items.append(why[(label, page)])
     missing_items = [{"label": label, "pages": sorted(pages), "pages_label": page_list(pages)}
                      for label, pages in sorted(gaps.items(), key=lambda kv: -len(kv[1]))]
     chapters = []
@@ -1019,8 +1031,12 @@ def exam_sources(account_id: int, subject: str, since: str, until: str) -> dict 
                 for c in chapters if since <= c["first_date"] <= until]
     notices = [n for n in exam_notices(account_id) if n["subject_name"] and n["subject_name"].casefold() == subject.casefold()
                and since <= n["date"] <= until]
-    return {"total": len(best), **counts, "missing_items": missing_items, "chapters": chapters,
+    return {"total": len(best), **counts, "missing_items": missing_items, "pending_items": pending_items, "chapters": chapters,
             "notice": bool(notices), "subject": subject, **_notice_summary(notices)}
+
+
+def label_or_book(link: dict) -> str:
+    return (link.get("part_label") or "").strip() or "Schulbuch"
 
 
 def _notice_summary(notices: list[dict]) -> dict:
