@@ -252,3 +252,53 @@ def test_without_a_notice_the_taught_topics_become_exam_topics_with_places(exam_
     exam = client.get("/api/accounts/1/exams/all").json()["upcoming"][0]
     live = [t for t in exam["topics"] if not t["stale"]]
     assert {t["origin"] for t in live} == {"notice"} and any(t["stale"] for t in exam["topics"] if t["origin"] == "assumed")
+
+
+def test_subject_overview_counts_stages_and_stage_changes_per_subject(env):
+    client, state, patch = env
+    with closing(db.webapp_conn()) as c, c:
+        rows = [
+            ("LATEIN", "cal:latein-2026-09-21", "a-/o-Deklination", "sitzt", "3 Aufgaben in 2 Arten"),
+            ("LATEIN", "cal:latein-2026-09-21", "Konjugation", "wackelt", "1× erst mit Hinweis richtig"),
+            ("LATEIN", "cal:latein-2026-09-21", "Ablativ", "neu", ""),
+            ("Mathematik", "cal:mathe-2026-10-01", "Brüche kürzen", "gefestigt", "Prüfung nach 7 Tagen bestanden"),
+            ("Mathematik", "cal:mathe-2026-10-01", "Brüche addieren", "angefangen", "zweimal falsch"),
+        ]
+        for i, (subject, key, title, stage, reason) in enumerate(rows, start=1):
+            c.execute("INSERT INTO exam_topics(id,account_id,subject,exam_key,position,title,stage,reason,created_at,updated_at) "
+                      "VALUES(?,1,?,?,?,?,?,?,'2026-09-10T10:00:00','2026-09-10T10:00:00')", (i, subject, key, i, title, stage, reason))
+        # Ein altes Thema aus dem Vorjahr zählt nicht, ein veraltetes auch nicht.
+        c.execute("INSERT INTO exam_topics(id,account_id,subject,exam_key,position,title,stage,created_at,updated_at) "
+                  "VALUES(9,1,'LATEIN','cal:alt',9,'Vorjahr','sitzt','2026-05-01T10:00:00','2026-05-01T10:00:00')")
+        c.execute("INSERT INTO exam_topics(id,account_id,subject,exam_key,position,title,stage,stale,created_at,updated_at) "
+                  "VALUES(10,1,'LATEIN','cal:latein-2026-09-21',10,'Gestrichen','sitzt',1,'2026-09-10T10:00:00','2026-09-10T10:00:00')")
+        events = [(1, "neu", "wackelt", "2026-09-12T15:00:00"), (1, "wackelt", "sitzt", "2026-09-14T15:00:00"),
+                  (2, "sitzt", "wackelt", "2026-09-15T15:00:00"), (4, "sitzt", "gefestigt", "2026-09-15T15:00:00"),
+                  (9, "neu", "sitzt", "2026-06-01T15:00:00"), (5, "neu", "angefangen", "2026-08-01T15:00:00")]
+        for topic, before, after, at in events:
+            c.execute("INSERT INTO topic_events(account_id,topic_id,stage_before,stage_after,reason,created_at) VALUES(1,?,?,?,'',?)",
+                      (topic, before, after, at))
+    view = lernstand.subject_overview(1, date(2026, 9, 16))
+    assert view["since"] == "2026-08-01"
+    mathe, latein = view["subjects"]
+    # Stärken zuerst: Mathematik hat die Hälfte sicher, Latein ein Drittel.
+    assert mathe["label"] == "Mathematik" and mathe["secure"] == 1 and mathe["total"] == 2
+    assert mathe["counts"] == {"neu": 0, "angefangen": 1, "wackelt": 0, "sitzt": 0, "gefestigt": 1}
+    assert mathe["trend"] == {"ups": 1, "downs": 0, "label": "aufwärts"}   # der Wechsel vom 01.08. liegt außerhalb der vier Wochen
+    assert latein["label"] == "Latein" and latein["key"] == "latein" and latein["total"] == 3 and latein["secure"] == 1 and latein["wobbly"] == 1
+    assert latein["trend"] == {"ups": 2, "downs": 1, "label": "aufwärts"}
+    # Wackler zuerst in der Themenliste, jedes Thema mit Stufe, Grund und Arbeit.
+    assert [t["title"] for t in latein["topics"]] == ["Konjugation", "Ablativ", "a-/o-Deklination"]
+    assert latein["topics"][0]["label"] == "Richtig, aber nicht sicher" and latein["topics"][0]["exam_key"] == "cal:latein-2026-09-21"
+    assert all("Vorjahr" != t["title"] and "Gestrichen" != t["title"] for s in view["subjects"] for t in s["topics"])
+    # Ohne Wechsel im Zeitraum: kein behaupteter Verlauf.
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("DELETE FROM topic_events")
+    assert lernstand.subject_overview(1, date(2026, 9, 16))["subjects"][0]["trend"]["label"] == "kein Verlauf"
+    # Die Route liefert dasselbe, für Kind und Eltern.
+    from backend.routers import subjects as subjects_router
+    client.app.include_router(subjects_router.router, prefix="/api")
+    assert client.get("/api/accounts/1/subjects/stages").json()["subjects"][1]["label"] == "Latein"
+    child(state)
+    assert client.get("/api/accounts/1/subjects/stages").status_code == 200
+    assert client.get("/api/accounts/2/subjects/stages").status_code == 403
