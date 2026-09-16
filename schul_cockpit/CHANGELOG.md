@@ -1,3 +1,9 @@
+## 0.75.0
+
+- Der Mentor bricht keine Einheit mehr ab. Erreicht eine Übungseinheit ihre Zeit- oder Zuggrenze, fragt die App ohne KI-Aufruf: „Willst du für heute aufhören oder noch weitermachen?“ Beides ist eine Antwort zum Antippen; nach „Noch weitermachen“ geht es normal weiter, und die Frage kommt frühestens sechs Züge später wieder. Nur „Für heute fertig“ beendet.
+- Auch der Abschluss durch den Mentor ist jetzt ein Vorschlag: Er sagt, was gezeigt wurde (bei Themen der Themenliste mit Stufe und Termin der Kurzprüfung, bei Nachholen mit dem Satz zur Stunde) und fragt, ob das Kind aufhören oder noch eine Aufgabe will. Die Einheit bleibt offen, bis das Kind entscheidet.
+- Verstehen als Einstieg: Nach „nicht“ oder „teils verstanden“ an einer Stunde steht dort „Mit dem Mentor verstehen“. Der Mentor ordnet das Thema ein, fasst den Stoff aus dem Material zusammen und fragt, was unklar ist; eine Erklärung vor der ersten Aufgabe zählt nicht als Hilfe.
+
 ## 0.74.1
 
 - Fachansicht: Die Unterrichtsthemen unter einem Fach stehen jetzt mit der neuesten Stunde zuerst. Vorher galt die Reihenfolge des Lernplans (nach thematischem Feld, darin Aufbaufolge, Themen ohne Feld zuletzt); ohne sichtbares Feld wirkte das zufällig. Der Plan selbst sortiert unverändert.

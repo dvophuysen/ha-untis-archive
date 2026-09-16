@@ -137,6 +137,10 @@
 </div>
 
 {#if saveError}<p class="error-box" role="alert">{saveError}</p>{/if}
+{#if !preview && canRate && (rating === 1 || rating === 2)}
+  <!-- Nach „nicht“ oder „teils verstanden“: der Mentor erklärt den Stoff dieser Stunde (Lage „Verstehen“, D74). -->
+  <a class="mentor-link" href={`#/learning?${new URLSearchParams({ lesson_id: String(lesson.id), subject: lesson.subject_name || lesson.subject_short || '', title: lesson.lstext || lesson.lesson_topic || '' })}`}>Mit dem Mentor verstehen</a>
+{/if}
 
 {#if showDetail && !preview}
   <LessonDetail
@@ -148,6 +152,7 @@
 {/if}
 
 <style>
+  .mentor-link { display: inline-block; margin: 2px 0 6px 4px; font-size: 0.85rem; font-weight: 600; color: var(--accent); min-height: 32px; }
   .lesson {
     display: flex;
     gap: 0.5rem;
