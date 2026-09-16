@@ -1,3 +1,7 @@
+## 0.68.1
+
+- Vokabeltrainer direkt erreichbar: Unter Lernen steht die Karte „Vokabeln üben“. Sie führt zur Sprachauswahl mit allen Fremdsprachen aus dem Stundenplan (Englisch, Latein, Spanisch, Französisch) und dem Stand je Sprache; fehlt eine Wortseite, steht dort, was zu fotografieren ist.
+
 ## 0.68.0
 
 - Verarbeitung nach Änderung statt nach Uhrzeit: Ein neues Foto, ein neues Verzeichnis oder eine Themenliste, neue Aufgaben aus Home Assistant, ein geändertes Bücherregal oder ein berichtigtes Kapitel stoßen den Sammellauf des Kindes an; nach einer Sammelfrist von anderthalb Minuten läuft er (mehrere Fotos ergeben einen Lauf). Neue Untis-Einträge, die die Integration ohne Wissen des Add-ons schreibt, werden alle fünf Minuten auf neue Stellen abgehorcht. Gescheiterte Auswertungen werden nach einer Viertelstunde erneut versucht, höchstens dreimal. Die Läufe um zwei und um vierzehn Uhr bleiben als Netz.

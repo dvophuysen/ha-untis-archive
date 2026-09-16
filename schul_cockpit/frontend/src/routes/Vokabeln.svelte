@@ -23,9 +23,11 @@
   // Wortseiten werden beim Öffnen automatisch in Wörter zerlegt; solange das
   // läuft, lädt die Ansicht alle paar Sekunden nach.
   let pollTimer = null, polls = 0;
+  let languages = $state(null);
   async function load() {
     error = '';
     try {
+      if (!subject) { languages = (await api.get(`${base}/languages`)).languages; data = null; return; }
       data = await api.get(`${base}/${encodeURIComponent(subject)}/units`);
       if (!unit && data.units.length) unit = data.units[0].unit;
       clearTimeout(pollTimer);
@@ -88,12 +90,31 @@
 
 <div class="vokabeln">
   <header class="head">
-    <a class="back" href="#/klausuren">← zurück</a>
-    <h1>{style.emoji} Vokabeln {langName ? `· ${langName}` : ''}</h1>
+    <a class="back" href={subject ? '#/vokabeln' : '#/learning'}>← zurück</a>
+    <h1>{subject ? `${style.emoji} Vokabeln · ${langName}` : 'Vokabeln'}</h1>
   </header>
   {#if error}<p class="notice" role="alert">{error}</p>{/if}
 
-  {#if !data}
+  {#if !subject}
+    {#if languages === null}
+      <p role="status">Wird geladen …</p>
+    {:else if !languages.length}
+      <section class="card"><h2>Keine Fremdsprache gefunden</h2><p class="muted">Der Trainer zeigt die Fremdsprachen aus dem Stundenplan: Englisch, Latein, Spanisch, Französisch.</p></section>
+    {:else}
+      <section class="card">
+        <h2>Welche Sprache?</h2>
+        <div class="units">
+          {#each languages as l (l.subject)}
+            <a class="unit link" href={`#/vokabeln/${encodeURIComponent(l.subject)}`}>
+              <strong>{subjectStyle(l.subject).emoji} {l.language.name}</strong>
+              <span>{l.words ? `${l.words} Wörter in ${l.units} ${l.units === 1 ? 'Einheit' : 'Einheiten'}` : l.reading ? 'Wortseiten werden gerade gelesen …' : 'Noch keine Wortseite abgelegt. Fotografiere die Vokabelseite der Lektion, dann liest der Trainer die Wörter von dort.'}</span>
+              <span>{l.language.into ? `Beide Richtungen und Schreibweise` : `${l.language.name} → Deutsch, wie in der Arbeit`}</span>
+            </a>
+          {/each}
+        </div>
+      </section>
+    {/if}
+  {:else if !data}
     <p role="status">Wird geladen …</p>
   {:else if !lang}
     <p class="notice">Für {style.name} gibt es keinen Vokabeltrainer. Er ist für Fremdsprachen gedacht.</p>
@@ -214,6 +235,7 @@
   .units { display: grid; gap: 0.5rem; }
   .unit { text-align: left; display: grid; gap: 0.15rem; }
   .unit span { font-size: 0.8rem; opacity: 0.85; }
+  .unit.link { text-decoration: none; color: inherit; border: 1px solid var(--border, #d4e0da); border-radius: 12px; padding: 0.7rem 0.9rem; background: var(--bg-card, #fff); }
   .progress { display: flex; justify-content: space-between; font-size: 0.85rem; opacity: 0.8; }
   .ask { margin: 0.8rem 0 0.2rem; font-size: 0.95rem; }
   .word { margin: 0.2rem 0 0.8rem; }
