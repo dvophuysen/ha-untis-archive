@@ -91,6 +91,17 @@
   // Was das nächste Foto ist, wenn man es vorher sagen will; sonst erkenne ich es selbst.
   let upload = $state({ subject: '', kind: '', part: '', page: '' });
   let collecting = $state(null);
+  // Der Sammellauf startet von selbst bei neuen Quellen; hier steht, was zuletzt lief.
+  let auto = $state(null);
+  async function loadAuto() {
+    try { auto = (await api.get(`${base}/sources/collect`)).auto ?? null; } catch { auto = null; }
+  }
+  $effect(() => { void accountId; loadAuto(); });
+  function autoWhen(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return `${d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })} ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`;
+  }
 
   async function collectNow() {
     // Der Sammellauf dauert Minuten; anstoßen und nachfragen, bis er fertig ist.
@@ -104,7 +115,7 @@
         state = await api.get(`${base}/sources/collect`);
       }
       collecting = state.state === 'done' ? { state: 'done', ...state.result } : { state: 'timeout' };
-      await load();
+      await load(); await loadAuto();
     } catch (e) {
       collecting = { state: 'failed', detail: e.message };
     }
@@ -473,6 +484,9 @@
       </div>
     {/if}
     {#if data?.can_manage}
+      <p class="muted foot">Der Sammellauf startet von selbst, sobald neue Untis-Einträge, Fotos, Aufgaben oder Bücher dazukommen (kurze Sammelfrist, damit mehrere Fotos ein Lauf sind). Zusätzlich nachts um zwei und um vierzehn Uhr als Netz.
+        {#if auto?.pending} Vorgemerkt: läuft um {autoWhen(auto.pending.due)} ({auto.pending.reasons.join(', ')}).{/if}
+        {#if auto?.last} Zuletzt automatisch {autoWhen(auto.last.at)} ({auto.last.reasons.join(', ')}){#if auto.last.result}: {auto.last.result.stored ?? 0} Seiten abgelegt, {auto.last.result.verified ?? 0} bestätigt{#if auto.last.result.skipped}, {auto.last.result.skipped}{/if}{/if}{#if auto.last.error}: {auto.last.error}{/if}.{/if}</p>
       <p class="foot">
         <button disabled={collecting?.state === 'running'} onclick={collectNow}>
           {collecting?.state === 'running' ? `Sammle … ${collecting.seconds} s` : 'Jetzt einsammeln'}

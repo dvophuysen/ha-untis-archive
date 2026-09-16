@@ -376,7 +376,11 @@ async def sync_all() -> None:
     finally:
         conn.close()
     for account_id, entity_id in pairs:
-        await _sync_one(account_id, entity_id, sup)
+        stats = await _sync_one(account_id, entity_id, sup)
+        if (stats or {}).get("inserted"):
+            # Neue Aufgaben nennen oft neue Stellen: gleich nachholen, nicht erst um 14 Uhr.
+            from . import triggers
+            triggers.request(account_id, "neue Aufgaben")
 
 
 async def background_sync_loop() -> None:

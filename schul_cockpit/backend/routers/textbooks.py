@@ -229,6 +229,8 @@ async def scan_catalog(account_id: int, user: CurrentUser = Depends(get_current_
         await scan_account(account_id)
     except TextbookScanError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    from .. import triggers
+    triggers.request(account_id, "Bücherregal geändert", delay=30)
     return get_catalog(account_id, user)
 
 

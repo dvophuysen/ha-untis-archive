@@ -169,8 +169,9 @@ def missing_sources(account_id: int, user: CurrentUser = Depends(get_current_use
 
 @router.post("/sources/collect", status_code=202)
 async def collect_sources(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
-    """Den Sammellauf von Hand anstoßen. Er läuft sonst um 14 Uhr und nachts;
-    hier für den ersten Durchlauf und für die Kontrolle durch die Eltern."""
+    """Den Sammellauf von Hand anstoßen. Er läuft sonst von selbst nach jedem
+    Anstoß (neue Quellen) und als Netz um 14 Uhr und nachts; hier für die
+    Kontrolle durch die Eltern."""
     access(user, account_id)
     if not (user.is_admin or user.role == "parent"):
         raise HTTPException(403, "Nur in der Elternansicht verfügbar")
@@ -224,6 +225,8 @@ def correct_chapter(account_id: int, chapter_id: int, body: ChapterPatch,
         sources.refresh_status(account_id)
     except Exception:
         _LOGGER.warning("Stellen nach Kapitelkorrektur nicht neu gebunden", exc_info=True)
+    from .. import triggers
+    triggers.request(account_id, "Kapitel berichtigt")
     return fixed
 
 
@@ -231,7 +234,8 @@ def correct_chapter(account_id: int, chapter_id: int, body: ChapterPatch,
 def collect_sources_state(account_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
     access(user, account_id)
     from ..source_collector import collect_state
-    return collect_state(account_id)
+    from .. import triggers
+    return {**collect_state(account_id), "auto": triggers.state(account_id)}
 
 
 @router.get("/{material_id}")

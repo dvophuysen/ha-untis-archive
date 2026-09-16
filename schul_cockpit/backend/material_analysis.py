@@ -368,6 +368,9 @@ async def after_analysis(account_id: int, material_id: int) -> None:
             from . import sources
             sources.sync_links(account_id)
             sources.refresh_status(account_id)
+            # Neue Stellen oder neues Verzeichnis: der Sammellauf holt gleich nach.
+            from . import triggers
+            triggers.request(account_id, "neues Material")
         if row["kind"] == "exam_notice":
             # Die Themen der Arbeit aus der Themenliste ableiten oder nachziehen.
             from . import lernstand
