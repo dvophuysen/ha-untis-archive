@@ -34,7 +34,7 @@ KINDS = (
     "own_work",    # bearbeitete Lösung des Kindes
     "exam",        # geschriebene Arbeit
     "handout",     # Informations- oder Merkblatt
-    "exam_notice", # Ankündigung der Lehrkraft, was in der Arbeit vorkommt
+    "exam_notice", # offizielle Themenliste der Lehrkraft für eine Arbeit
     "toc",         # Inhaltsverzeichnis eines Buchs, das nur auf Papier existiert
     "other",
 )

@@ -199,8 +199,8 @@
           <div class="sources">
             <strong class={sourcesClass(e.sources)}>{sourcesLabel(e.sources)}</strong>
             {#if e.sources.notice}
-              <div class="dim">Die Ankündigung der Lehrkraft, was in der Arbeit vorkommt, liegt vor{#if e.sources.notice_verified} und ist gegengelesen.{:else}. <a href={`#/materialien?material=${e.sources.notice_id}`}>Bitte gegenlesen</a>, Handschrift lese ich nicht sicher.{/if}</div>
-              {#if e.sources.notice_text}<details class="scope"><summary>Ankündigung ansehen</summary><p class="preserve dim">{e.sources.notice_text}</p></details>{/if}
+              <div class="dim">Die offizielle Themenliste der Lehrkraft liegt vor{#if e.sources.notice_verified} und ist gegengelesen.{:else}. <a href={`#/materialien?material=${e.sources.notice_id}`}>Bitte gegenlesen</a>, Handschrift lese ich nicht sicher.{/if}</div>
+              {#if e.sources.notice_text}<details class="scope"><summary>Themenliste ansehen</summary><p class="preserve dim">{e.sources.notice_text}</p></details>{/if}
             {/if}
             {#each e.sources.chapters as chapter}
               <div class="dim">{chapter.part_label ? `${chapter.part_label}, ` : ''}Kapitel {chapter.number} {chapter.title} (S. {chapter.start_page}{chapter.end_page ? `–${chapter.end_page}` : ''}):
