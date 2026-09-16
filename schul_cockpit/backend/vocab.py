@@ -242,10 +242,14 @@ def looks_like_vocab(row: dict) -> bool:
     head = " ".join(str(row.get(k) or "") for k in ("title", "summary")).casefold()
     if any(k in head for k in ("wortschatz", "vokabel", "lernwörter", "lernwoerter", "vocabulary", "irregular verbs", "wordbank", "vocabulario")):
         return True
+    # Grammatikseiten haben ebenfalls viele „Form — Erklärung"-Zeilen; ohne
+    # Wortschatz-Hinweis im Titel zählen sie nicht als Wortseite.
+    if any(k in head for k in ("deklination", "konjugation", "grammatik", "infinitiv", "kasus", "satz", "übersetzen", "text")):
+        return False
     text = row.get("content_text") or ""
     dashes = len(re.findall(r"^\S[^\n]{0,40}\s[—–-]\s\S", text, re.M))
     pipes = len(re.findall(r"^[^\n|]+\|[^\n|]+\|[^\n]+$", text, re.M))
-    return dashes >= 8 or pipes >= 8
+    return dashes >= 12 or pipes >= 8
 
 
 def unit_label(account_id: int, subject: str, label: str, page: int | None) -> str:
