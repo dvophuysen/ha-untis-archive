@@ -133,7 +133,21 @@
       const gaps = s.missing_items.map((m) => `${m.label} ${m.pages_label}`).join(' · ');
       return { tone: 'bad', text: `${have} · fehlt ${gaps}`, action: { label: 'fotografieren', href: materialUrl(e) } };
     }
-    if (s.pending) return { tone: 'warn', text: `${have} · ${s.pending} unterwegs`, action: null };
+    if (s.pending) {
+      // Was noch fehlt, hat einen Grund: Foto da, aber noch nicht gelesen; Lesen
+      // gescheitert (wird nachts wiederholt); Seite wird aus dem Buch geholt.
+      const items = s.pending_items || [];
+      const failed = items.filter((i) => i.kind === 'failed');
+      const unread = items.filter((i) => i.kind === 'unread');
+      const fetching = items.filter((i) => i.kind === 'fetching');
+      const bits = [];
+      if (failed.length) bits.push(`${failed.map((i) => `${i.label} S. ${i.page}`).join(', ')} liegt da, Lesen ist gescheitert und wird wiederholt`);
+      if (unread.length) bits.push(`${unread.map((i) => `${i.label} S. ${i.page}`).join(', ')} liegt da, wird noch gelesen`);
+      if (fetching.length) bits.push(`${fetching.map((i) => `${i.label} S. ${i.page}`).join(', ')} wird aus dem Buch geholt`);
+      const first = failed[0] || unread[0];
+      return { tone: 'warn', text: `${have} · ${bits.join(' · ') || `${s.pending} noch nicht gelesen`}`,
+               action: first?.material_id ? { label: 'ansehen', href: `#/materialien?material=${first.material_id}` } : null };
+    }
     return { tone: 'ok', text: have, action: null };
   }
   function stagesText(e) {

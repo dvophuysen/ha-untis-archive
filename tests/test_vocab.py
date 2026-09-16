@@ -192,3 +192,29 @@ def test_vocab_topic_of_the_list_takes_its_stage_from_the_words(setup):
             c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,seconds,created_at) VALUES(1,?,1,'from','x','correct',3,'2026-09-11T16:00:00+02:00')", (ids[1],))
     assert lernstand.topics_for(1, "cal:latein", "LATEIN")[0]["stage"] == "sitzt"
     assert not lernstand.is_vocab_topic({"title": "Substantive: a/o-Deklination"}) and lernstand.is_vocab_topic({"title": "Voc. 1. Lektion"})
+
+
+def test_opening_the_trainer_reads_word_pages_by_itself_and_empty_pages_stay_quiet(setup):
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    mid = seed_page()
+    grammar = seed_page(text="servus — der Sklave\n" * 3 + "Die a-Deklination …", page=13, title="Substantive der a-/o-Deklination")
+    calls = []
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        calls.append(context["page"])
+        return json.dumps(WORDS if context["page"] == 10 else {"words": []}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    r = client.get(V + "/LATEIN/units")
+    assert r.status_code == 200 and r.json()["reading"] == 1
+    # Der Hintergrundlauf ist nach der Antwort durch: Seite 10 gelesen, die Grammatikseite gar nicht angeboten.
+    assert calls == [10]
+    r = client.get(V + "/LATEIN/units").json()
+    assert r["reading"] == 0 and r["units"][0]["words"] == 4 and r["units"][0]["unread"] == 0
+    # Eine gelesene Seite ohne Lernwörter gilt nicht als ungelesen.
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("UPDATE materials SET title='Wortschatz – Vokabeln sichern' WHERE id=?", (grammar,))
+    r = client.get(V + "/LATEIN/units").json()
+    assert r["reading"] == 1 and calls == [10, 13]
+    r = client.get(V + "/LATEIN/units").json()
+    assert r["reading"] == 0 and all(u["unread"] == 0 for u in r["units"])

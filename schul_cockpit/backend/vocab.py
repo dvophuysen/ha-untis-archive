@@ -275,6 +275,34 @@ def unit_label(account_id: int, subject: str, label: str, page: int | None) -> s
     return f"{label or 'Buch'} S. {page}" if page else (label or "Buch")
 
 
+_BUSY: set[int] = set()
+
+
+def unread_pages(account_id: int, subject: str) -> list[int]:
+    """Seiten des Fachs mit Lernwörtern, die noch nie zerlegt wurden."""
+    return [p["material_id"] for p in pages(account_id, subject)
+            if p["extracted"] is None and p["readable"] and not p["error"] and p["material_id"] not in _BUSY]
+
+
+async def read_unread(account_id: int, subject: str) -> int:
+    """Alle ungelesenen Wortseiten eines Fachs zerlegen; läuft im Hintergrund,
+    sobald der Trainer geöffnet wird. Fehler landen an der Seite, nicht beim Kind."""
+    done = 0
+    for mid in unread_pages(account_id, subject):
+        _BUSY.add(mid)
+        try:
+            await extract(account_id, mid)
+            done += 1
+        except Exception as exc:
+            LOG.warning("Wortseite %s nicht zerlegbar: %s", mid, exc)
+            with closing(webapp_conn()) as c, c:
+                c.execute("INSERT OR REPLACE INTO vocab_extractions(material_id,account_id,text_hash,words,error,updated_at) VALUES(?,?,?,?,?,?)",
+                          (mid, account_id, "", 0, str(getattr(exc, "detail", exc))[:200], now_iso()))
+        finally:
+            _BUSY.discard(mid)
+    return done
+
+
 async def extract(account_id: int, material_id: int) -> int:
     """Die Lernwörter einer Seite lesen und ablegen; einmal je Textstand."""
     from . import ai_gateway as ai
@@ -360,7 +388,8 @@ def units(account_id: int, subject: str) -> list[dict]:
     for p in found:
         u = by_unit.setdefault(p["unit"], {"unit": p["unit"], "pages": [], "words": 0, "s1": {s: 0 for s in STAGES}, "s2": {s: 0 for s in STAGES}, "unread": 0})
         u["pages"].append({k: p[k] for k in ("material_id", "label", "page", "extracted", "readable", "error")})
-        if not p["extracted"]:
+        # Ungelesen heißt: noch nie zerlegt. Eine gelesene Seite ohne Lernwörter zählt nicht.
+        if p["extracted"] is None and p["readable"] and not p["error"]:
             u["unread"] += 1
     for w in words:
         u = by_unit.setdefault(w["unit"], {"unit": w["unit"], "pages": [], "words": 0, "s1": {s: 0 for s in STAGES}, "s2": {s: 0 for s in STAGES}, "unread": 0})

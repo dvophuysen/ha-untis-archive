@@ -372,6 +372,14 @@ async def after_analysis(account_id: int, material_id: int) -> None:
             # Die Themen der Arbeit aus der Themenliste ableiten oder nachziehen.
             from . import lernstand
             await lernstand.sync_notice(account_id, material_id)
+        if row["kind"] in ("book_page", "workbook", "other") and row["subject_name"]:
+            # Eine Wortseite einer Fremdsprache wird gleich in Lernwörter zerlegt.
+            from . import vocab
+            if vocab.language_of(row["subject_name"]):
+                with closing(webapp_conn()) as conn:
+                    page = conn.execute("SELECT title,summary,content_text FROM materials WHERE id=?", (material_id,)).fetchone()
+                if page and vocab.looks_like_vocab(dict(page)):
+                    await vocab.extract(account_id, material_id)
     except Exception:
         _LOGGER.warning("Nacharbeit zu Material %s nicht möglich", material_id, exc_info=True)
 

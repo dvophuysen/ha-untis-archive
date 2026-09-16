@@ -1,3 +1,8 @@
+## 0.67.4
+
+- Vokabeltrainer: Wortseiten werden von selbst in Lernwörter zerlegt, sobald eine Seite gelesen ist oder der Trainer geöffnet wird. Der Knopf „Wörter von den Seiten lesen“ und der Satz „noch nicht in Wörter zerlegt“ sind weg; solange etwas läuft, steht dort „Ich lese gerade noch eine Seite …“ und die Ansicht lädt nach. Eine gelesene Seite ohne Lernwörter galt fälschlich als ungelesen, darum änderte der Knopf nichts.
+- Klausurkarte: „1 unterwegs“ beim Material sagt jetzt, was los ist: „Textband S. 22 liegt da, Lesen ist gescheitert und wird wiederholt“, „liegt da, wird noch gelesen“ oder „wird aus dem Buch geholt“, mit Link zur Seite. Anlass: Ein Foto von Textband S. 22 war während der Sicherung an der Datenbanksperre gescheitert.
+
 ## 0.67.3
 
 - Vokabeltrainer: Grammatikseiten des Begleitbands (Deklination, Konjugation, Infinitiv) galten wegen ihrer vielen „Form — Erklärung“-Zeilen als Wortseiten und wurden zum Zerlegen angeboten; jetzt nicht mehr. Ein Durchgang zeigt alle Wörter einer Einheit (bis 80), nicht nur die ersten 40.
