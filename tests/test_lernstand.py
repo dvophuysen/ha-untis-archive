@@ -229,13 +229,17 @@ def test_without_a_notice_the_taught_topics_become_exam_topics_with_places(exam_
         c.execute("DELETE FROM materials WHERE kind='exam_notice'")
         c.execute("INSERT INTO source_links(account_id,entry_kind,entry_id,entry_date,subject_name,part_label,part_kind,page,quote,synced_at,updated_at) "
                   "VALUES(1,'lesson',7,'2026-09-10','Latein','Begleitband','book',13,'BB S. 13','now','now')")
+        c.execute("INSERT INTO source_links(account_id,entry_kind,entry_id,entry_date,subject_name,part_label,part_kind,page,quote,synced_at,updated_at) "
+                  "VALUES(1,'homework',99,'2026-09-10','Latein','Arbeitsheft','workbook',26,'cda p. 26','now','now')")
+    with sqlite3.connect(db.SETTINGS.history_db_path) as h:
+        h.execute("INSERT INTO lessons(id,account_id,date,subject_name,lstext) VALUES(7,1,'2026-09-10','LATEIN','Adjektive')")
     scope = {"since": "2026-08-01", "parts": 2, "shown": 0, "verified": False, "topics": [
         {"id": 1, "title": "Adjektive und der Vergleich", "field": "Länder beschreiben", "shown": False, "lesson_ids": [7]},
         {"id": 2, "title": "Zahlen bis 1000", "field": None, "shown": False, "lesson_ids": []}]}
     patch.setattr(exams_router, "exam_scope", lambda *a, **k: scope)
     exam = client.get("/api/accounts/1/exams/all").json()["upcoming"][0]
     assert [(t["title"], t["origin"]) for t in exam["topics"]] == [("Adjektive und der Vergleich", "assumed"), ("Zahlen bis 1000", "assumed")]
-    assert exam["topics"][0]["places"] == [{"label": "Begleitband", "pages": [13]}] and exam["topics"][0]["stage"] == "neu"
+    assert sorted(exam["topics"][0]["places"], key=lambda p: p["label"]) == [{"label": "Arbeitsheft", "pages": [26]}, {"label": "Begleitband", "pages": [13]}]
     assert exam["stages"]["neu"] == 2
     # Eine Einheit dazu startet wie bei einem Thema der Themenliste.
     r = client.post(B + "/sessions", json={"topic_id": exam["topics"][0]["id"]})

@@ -1,3 +1,7 @@
+## 0.69.4
+
+- Angenommene Themen bekommen ihre Stellen auch aus den Hausaufgaben vom Tag der Stunde (viele Lehrkräfte nennen die Seiten dort, nicht im Stundentext), und die Stellen wachsen mit dem Unterricht nach.
+
 ## 0.69.3
 
 - Arbeiten ohne offizielle Themenliste (Spanisch, Deutsch, Mathe): Die aus dem Unterricht erschlossenen Themen werden jetzt wie Themen der Themenliste geführt, mit Stufe, Stellen aus ihren Stunden und Üben-Knopf. Vorher klappte nur eine Liste ohne Übungen auf. Kommt später eine Themenliste, treten die angenommenen Themen zurück.
