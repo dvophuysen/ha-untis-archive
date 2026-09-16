@@ -14,9 +14,12 @@ from contextlib import closing
 from datetime import date
 from urllib.parse import urlsplit
 import httpx
+import logging
 from fastapi import HTTPException
 from .db import webapp_conn
 from .learning import ai_settings, model_payload, model_output, now_iso, today_local, uses_responses
+
+LOG = logging.getLogger('schul_cockpit.ai')
 
 RATE_SOURCE = 'https://azure.microsoft.com/en-us/blog/gpt-5-6-now-available-in-microsoft-foundry/'
 RATE_UNTIL = date(2026, 12, 1)
@@ -194,8 +197,16 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
         raw=model_output(config['url'],result).strip()
         if raw.startswith('```'): raw=raw.split('\n',1)[1].rsplit('```',1)[0].strip()
         return raw,result,key
-    except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
-        if result is None: settle(key,error='provider_error')
+    except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError) as exc:
+        # Der Grund gehört ins Log, sonst heißt jeder Fehler nur „502": Status der
+        # Antwort, warum sie unvollständig blieb, was an Ausgabe kam.
+        if result is None:
+            settle(key,error='provider_error')
+            LOG.warning('KI-Aufruf (%s) ohne verwertbare Antwort: %s',purpose,f'{type(exc).__name__}: {str(exc)[:200]}')
+        else:
+            outputs=[(o.get('type'),o.get('status')) for o in (result.get('output') or []) if isinstance(o,dict)][:6]
+            LOG.warning('KI-Antwort (%s) nicht verwertbar: status=%s incomplete=%s output=%s fehler=%s',purpose,result.get('status'),
+                        result.get('incomplete_details'),outputs,f'{type(exc).__name__}: {str(exc)[:200]}')
         raise HTTPException(502,'Die Antwort konnte noch nicht verarbeitet werden. Dein Stand bleibt erhalten; es wird nicht automatisch erneut angefragt.') from None
 
 
