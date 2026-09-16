@@ -1,9 +1,20 @@
-# Quellenbestand 0.52.2–0.67.0
+# Quellenbestand 0.52.2–0.69.2
 
 Stand 16.09.2026, nachmittags. Bis 0.56.11 auf der laufenden Instanz installiert und
 mit echten Abrufen geprüft; 0.57.0 folgt in derselben Session.
 
 ## Was ausgeliefert ist
+
+**Anstöße und Einstieg (0.68.0 bis 0.69.2, D63, D64, D64a).** `triggers.py`:
+Sammellauf nach Änderung (Material, Aufgaben, Regal, Kapitel), Untis-Wächter
+alle fünf Minuten, Wiederholung gescheiterter Auswertungen. `mentor_opening.py`:
+Lage deterministisch, erster Zug vom Modell mit erster Aufgabe und Tipps aus
+dem Inhalt, Schlusssatz mit Stufe; Hilfe zählt nur bei offener Aufgabe.
+Eichung an zwei Themen: terra gleichwertig zu sol, luna erfand Vorgeschichte;
+`opening_model = gpt-5.6-terra` gesetzt. Vokabeltrainer: Einstieg unter Lernen
+mit Sprachauswahl, Rücksetzen je Sprache für Eltern, Vorlesen entfernt.
+Klausurkarte: Entfernen nur noch unter „Themen bearbeiten (Eltern)“.
+Konzept: MENTOR_EINSTIEG.md (Erklären, Nachholen, Kontrollieren noch offen).
 
 **Klausurseite neu (0.67.0, D62).** `Klausuren.svelte` komplett neu: drei
 Punkte mit Ampel, aufklappbare Themenliste mit Stufen, Gefühl je Arbeit und
