@@ -361,6 +361,12 @@ async def after_analysis(account_id: int, material_id: int) -> None:
         # Abgerufene Buchseiten gleicht der Sammellauf selbst ab.
         return
     try:
+        # Ein Foto nach der Schule: Fach, Titel und Termin an die vorläufige Aufgabe.
+        from . import afternoon_check
+        afternoon_check.refine(account_id, material_id)
+    except Exception:
+        _LOGGER.warning("Aufgabe zum Foto %s nicht nachgetragen", material_id, exc_info=True)
+    try:
         if row["kind"] == "toc" and row["subject_name"] and row["source_label"]:
             from .book_structure import read_paper_toc
             await read_paper_toc(account_id, row["subject_name"], row["source_label"])

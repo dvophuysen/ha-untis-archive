@@ -24,7 +24,8 @@ def opening_on(request, monkeypatch):
     monkeypatch.setattr(mopen, "today_local", lambda: date(2026, 9, 11))
 
 
-def test_situation_is_read_from_entry_point_and_signals():
+def test_situation_is_read_from_entry_point_and_signals(env):
+    # `situation` liest exam_topics; ohne eingerichtete Datenbank fehlte die Tabelle (CI-Fehler).
     ctx = {"lessons": [{"id": 1, "date": "2026-09-11", "text": "Adjektive", "rating": 2, "note": "", "catch_up_open": False, "missed_minutes": 0}], "topic": None}
     s = {"source_json": json.dumps({"mode": "topic"}), "topic_id": 5}
     assert mopen.situation(1, s, {**ctx, "topic": {"check": False}})["lage"] == "trainieren"

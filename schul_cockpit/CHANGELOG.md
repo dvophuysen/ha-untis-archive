@@ -1,3 +1,9 @@
+## 0.71.0
+
+- Die Frage nach der Schule: Kurz nach der letzten Stunde fragt die App einmal „Alles von heute notiert?“ Die Antwort ist ein Foto oder „nichts Neues“, sonst nichts. Aus dem Foto entsteht sofort eine Hausaufgabe in der Liste, vorläufig fällig zum nächsten Schultag; sobald das Foto gelesen ist, stehen Fach, Titel und der Termin der nächsten Stunde dieses Fachs daran. Die Karte steht nachmittags oben auf der Startseite bis zum Abend oder bis jemand „nichts Neues“ antwortet.
+- Die Mitteilung dazu läuft über die Home-Assistant-App, ab Werk aus, mit einstellbarem Abstand zur letzten Stunde (Eltern-Einstellungen, „Nach der Schule“). Einmal je Gerät und Tag, nicht an Tagen ohne Unterricht, nicht mehr, sobald geantwortet wurde. Ausgefallene Stunden zählen nicht als Schulende.
+- Ein Test, der in der Prüfumgebung ohne eingerichtete Datenbank scheiterte, nutzt jetzt die Testdatenbank.
+
 ## 0.70.0
 
 - Web-Push ist raus. Die Erinnerungen laufen seit 0.51 über die Home-Assistant-App; der alte Browser-Weg lief trotzdem noch mit, und jede Abendmitteilung hinterließ im Log einen Fehler über einen unlesbaren Schlüssel. Abonnements, Schlüssel, Route und der Abschnitt „Älterer Weg über den Browser“ in den Erinnerungs-Einstellungen sind entfernt.

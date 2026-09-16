@@ -835,6 +835,26 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
             (marker,),
         )
 
+# Der Moment nach dem Unterricht (VERANTWORTUNG.md Stufe 2, D69): eine
+# Nachfrage kurz nach der letzten Stunde, Antwort ist Foto oder „nichts Neues“.
+_MIGRATIONS.append(("afternoon_check_001", """
+ALTER TABLE reminder_settings ADD COLUMN afternoon_enabled INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE reminder_settings ADD COLUMN afternoon_delay INTEGER NOT NULL DEFAULT 20;
+CREATE TABLE IF NOT EXISTS afternoon_app_deliveries (
+ account_id INTEGER NOT NULL, school_day TEXT NOT NULL, service TEXT NOT NULL,
+ status TEXT NOT NULL, created_at TEXT NOT NULL,
+ PRIMARY KEY(account_id,school_day,service)
+);
+CREATE TABLE IF NOT EXISTS afternoon_checks (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ account_id INTEGER NOT NULL, school_day TEXT NOT NULL,
+ answer TEXT NOT NULL,            -- 'photo' | 'nothing'
+ material_id INTEGER, task_id INTEGER, user_id INTEGER,
+ created_at TEXT NOT NULL, refined_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_afternoon_checks_day ON afternoon_checks(account_id,school_day);
+"""))
+
 
 def init_webapp_db() -> None:
     """Apply base schema + pending migrations (idempotent)."""
