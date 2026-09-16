@@ -20,8 +20,12 @@
   async function act(fn){if(busy)return;busy=true;error='';try{await fn();await tick();}catch(e){error=e.message;}finally{busy=false;}}
   async function open(s){removeConfirm=false;running=await api.get(`${base}/sessions/${s.id}`);text='';attachment=null;}
   async function start(c){running=await api.post(`${base}/sessions`,{subject:c.subject,lesson_id:c.lesson_id||null,skill_id:c.skill_id||null,goal:c.title||goal,goal_key:c.key||null,minutes:c.minutes||10,voluntary:c.voluntary||false,demo});text='';}
+  // Signale fürs Zögern: Zeit von der gestellten Aufgabe bis zum Absenden, Löschungen beim Tippen.
+  let taskShownAt=$state(null),edits=$state(0);
+  $effect(()=>{const prompt=running?.task?.prompt;if(prompt){taskShownAt=Date.now();edits=0;}else{taskShownAt=null;}});
   async function send(kind='message',value=text){
-    const r=await api.post(`${base}/sessions/${running.id}/turn`,{request_key:crypto.randomUUID(),version:running.version,text:value,kind,attachment_id:attachment?.id||null});
+    const signals=kind==='answer'&&taskShownAt?{seconds:Math.min(36000,Math.round((Date.now()-taskShownAt)/1000)),edits}:{};
+    const r=await api.post(`${base}/sessions/${running.id}/turn`,{request_key:crypto.randomUUID(),version:running.version,text:value,kind,attachment_id:attachment?.id||null,...signals});
     running=r;text='';attachment=null;await tick();end?.scrollIntoView({behavior:'smooth',block:'end'});
   }
   async function upload(e){const file=e.target.files?.[0];if(!file)return;await act(async()=>{const f=new FormData();f.append('file',file);attachment=await api.post(`${base}/sessions/${running.id}/photos`,f);});e.target.value='';}
@@ -30,7 +34,7 @@
   const choices=$derived(running?.messages.filter(m=>m.role==='assistant').at(-1)?.payload?.choices||[]);
   const openSessions=$derived((data?.sessions||[]).filter(s=>!s.task_done));
   const filedSessions=$derived((data?.sessions||[]).filter(s=>s.task_done));
-  onMount(()=>{act(async()=>{await load();const q=new URLSearchParams(window.location.hash.split('?')[1]||'');if(q.get('session'))await open({id:Number(q.get('session'))});else if(q.get('help')){running=await api.post(`${base}/sessions`,{subject:'Hausaufgabe',homework_task_id:Number(q.get('help')),voluntary:true});}else if(q.get('subject')){subject=q.get('subject');goal=q.get('topic')||'';tab=q.get('mode')==='exam'?'exams':'today';}else if(q.get('goal')){const g=data.shared_plan?.goals.find(g=>g.key===q.get('goal')||g.previous_keys?.includes(q.get('goal')));if(g){focusKey=g.key;goal=g.title;subject=g.subject;if(!data.can_manage)await start({...g,voluntary:true});else if(g.session_id)await open({id:g.session_id});else tab='today';}}});const t=setInterval(()=>pause(document.hidden),30000);const v=()=>pause(document.hidden);document.addEventListener('visibilitychange',v);return()=>{clearInterval(t);document.removeEventListener('visibilitychange',v);};});
+  onMount(()=>{act(async()=>{await load();const q=new URLSearchParams(window.location.hash.split('?')[1]||'');if(q.get('session'))await open({id:Number(q.get('session'))});else if(q.get('topic_id')){running=await api.post(`${base}/sessions`,{topic_id:Number(q.get('topic_id'))});}else if(q.get('help')){running=await api.post(`${base}/sessions`,{subject:'Hausaufgabe',homework_task_id:Number(q.get('help')),voluntary:true});}else if(q.get('subject')){subject=q.get('subject');goal=q.get('topic')||'';tab=q.get('mode')==='exam'?'exams':'today';}else if(q.get('goal')){const g=data.shared_plan?.goals.find(g=>g.key===q.get('goal')||g.previous_keys?.includes(q.get('goal')));if(g){focusKey=g.key;goal=g.title;subject=g.subject;if(!data.can_manage)await start({...g,voluntary:true});else if(g.session_id)await open({id:g.session_id});else tab='today';}}});const t=setInterval(()=>pause(document.hidden),30000);const v=()=>pause(document.hidden);document.addEventListener('visibilitychange',v);return()=>{clearInterval(t);document.removeEventListener('visibilitychange',v);};});
 </script>
 <div class="mentor">
   {#if data?.can_manage}<nav class="mode-switch" aria-label="Mentor-Modus"><button aria-pressed={!demo} class:chosen={!demo} disabled={busy||examBusy} onclick={()=>act(()=>switchMode(false))}>Kinderstand</button><button aria-pressed={demo} class:chosen={demo} disabled={busy||examBusy} onclick={()=>act(()=>switchMode(true))}>Demo ausprobieren</button></nav>
@@ -39,10 +43,11 @@
   {#if error}<div class="notice" role="alert"><p>{error}</p>{#if running}<button disabled={busy} onclick={()=>act(()=>open(running))}>Aktuellen Stand laden</button>{/if}</div>{/if}
   {#if running && data?.can_manage}<button disabled={busy} onclick={()=>removeConfirm=!removeConfirm}>Diese Einheit entfernen</button>{#if removeConfirm}<p class="notice">Gespräch, Antworten und Anrechnung dieser Einheit löschen?</p><button disabled={busy} onclick={()=>act(removeSession)}>Einheit endgültig löschen</button>{/if}{/if}
   {#if running}
-    <header class="session-head"><button class="quiet" disabled={busy} onclick={()=>act(leave)}>← Lernen</button><span>{running.subject} · {running.mode==='homework_help'?'Hilfe bei deiner Aufgabe':`etwa ${running.max_minutes} Minuten`}</span></header>
+    <header class="session-head"><button class="quiet" disabled={busy} onclick={()=>act(leave)}>← Lernen</button><span>{running.subject} · {running.topic?`Thema ${running.topic.position??'–'} von ${running.topic.total} der offiziellen Themenliste · Stufe: ${running.topic.stage}`:running.mode==='homework_help'?'Hilfe bei deiner Aufgabe':`etwa ${running.max_minutes} Minuten`}</span></header>
     {#if running.is_test}<p class="notice">{running.is_demo?'Demo-Gespräch mit Beispieldaten. Kein Lernnachweis des Kindes.':'Als Testlauf gekennzeichnet: außerhalb des Lernstands und für das Kind nicht sichtbar.'}</p>{/if}
     {#if data?.can_manage&&!running.is_demo}<div class="actions"><button disabled={busy} onclick={()=>act(()=>setCounts(!!running.is_test))}>{running.is_test?'In den Kinderverlauf übernehmen':'War nur ein Test — nicht in den Lernstand'}</button></div>{/if}
     <h1>{running.goal}</h1>
+    {#if running.topic}<p class="hint">{running.topic.check?'Kurzprüfung: kurze Aufgaben ohne Erklärung vorweg. Sitzt es noch, gilt das Thema als gefestigt.':'Diese Einheit hat keine Uhr. Sie endet, wenn das Thema sitzt oder du aufhörst.'}{#if running.topic.places_label} · {running.topic.places_label}{/if}</p>{/if}
     {#if running.mode==='homework_help'}<p class="hint">{running.task_done?'Diese Hausaufgabe ist abgehakt. Das Gespräch liegt im Archiv und bleibt lesbar.':'Dieses Gespräch bleibt offen, bis du die Hausaufgabe abhakst.'}</p>{/if}
     {#if running.task && running.status==='active'}<details class="task"><summary>Deine aktuelle Aufgabe</summary><p class="preserve">{running.task.prompt}</p></details>{/if}
     <div class="messages" aria-live="polite">
@@ -56,12 +61,12 @@
       <div class="choices">{#each choices as c}<button disabled={busy||!data?.can_write} onclick={()=>act(()=>send(c==='Für heute fertig'?'finish':c.includes('Beispiel')?'example':'message',c))}>{c}</button>{/each}</div>
       <form class="composer" onsubmit={e=>{e.preventDefault();act(()=>send(running.task?'answer':'message'));}}>
         <label for="mentor-answer">{running.task?'Dein Versuch oder deine Frage':'Was möchtest du sagen?'}</label>
-        <textarea id="mentor-answer" bind:value={text} rows="3" maxlength="4000" disabled={busy||!data?.can_write} placeholder="Deine Antwort oder Frage …"></textarea>
+        <textarea id="mentor-answer" bind:value={text} rows="3" maxlength="4000" disabled={busy||!data?.can_write} placeholder="Deine Antwort oder Frage …" onbeforeinput={e=>{if((e.inputType||'').startsWith('delete'))edits++;}}></textarea>
         {#if attachment}<p>Foto angehängt. <button type="button" onclick={()=>attachment=null}>Entfernen</button></p>{/if}
         <div class="actions"><button class="primary" disabled={busy||(!text.trim()&&!attachment)||!data?.can_write}>Senden</button><button type="button" disabled={busy||!data?.can_write} onclick={()=>fileInput?.click()}>Foto zeigen</button><input class="file" type="file" accept="image/*" bind:this={fileInput} onchange={upload}/><a class="material-link" href={`#/materialien/${encodeURIComponent(running.subject||'')}${running.mode==='homework_help'&&running.task_id?`/${running.task_id}`:''}`} title="Arbeitsblatt, Heftseite oder PDF dauerhaft ablegen"><ActionLabel label="Material hinzufügen" /></a></div>
         <div class="actions"><button type="button" disabled={busy||!data?.can_write} onclick={()=>act(()=>send('hint','Bitte anders erklären.'))}>Anders erklären</button><button type="button" disabled={busy||!data?.can_write} onclick={()=>act(()=>send('finish','Für heute fertig.'))}>Für heute fertig</button></div>
       </form>
-    {:else}<section class="card"><h2>{running.status==='active'?'Gespeicherter Verlauf':running.untimed?'Unterbrochen':'Für heute geschafft'}</h2><p>{running.summary||'Dein Gespräch und deine Antworten bleiben gespeichert.'}</p>
+    {:else}<section class="card"><h2>{running.status==='active'?'Gespeicherter Verlauf':running.topic?'Einheit beendet':running.untimed?'Unterbrochen':'Für heute geschafft'}</h2><p>{running.summary||'Dein Gespräch und deine Antworten bleiben gespeichert.'}</p>{#if running.topic}<p><strong>Stufe: {running.topic.stage}</strong>{#if running.topic.reason&&running.topic.stage!=='neu'} · {running.topic.reason}{/if}{#if running.topic.next_check} · Kurzprüfung ab {formatShortDate(running.topic.next_check)}{/if}</p><a href="#/klausuren">Zur Arbeit und den anderen Themen</a>{/if}
       {#if running.status!=='active'&&data?.can_write}<button class="primary" disabled={busy} onclick={()=>act(resume)}><ActionLabel kind="chat" label="Hier weitermachen" /></button>{/if}
       <button onclick={()=>act(leave)}>Zur Übersicht</button><a href="#/plan"><ActionLabel label="Aktualisierten Lernplan ansehen" /></a></section>{/if}
     {#if busy}<p role="status" class="working">Einen Moment – deine Antwort wird vorbereitet …</p>{/if}

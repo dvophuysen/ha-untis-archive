@@ -368,6 +368,10 @@ async def after_analysis(account_id: int, material_id: int) -> None:
             from . import sources
             sources.sync_links(account_id)
             sources.refresh_status(account_id)
+        if row["kind"] == "exam_notice":
+            # Die Themen der Arbeit aus der Themenliste ableiten oder nachziehen.
+            from . import lernstand
+            await lernstand.sync_notice(account_id, material_id)
     except Exception:
         _LOGGER.warning("Nacharbeit zu Material %s nicht möglich", material_id, exc_info=True)
 

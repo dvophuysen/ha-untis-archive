@@ -125,7 +125,72 @@
   }
   function practiceUrl(e) {
     const q = new URLSearchParams({ subject: e.subject_name ?? '', topic: e.title ?? '', mode: 'exam' });
-    return `#/lernen?${q.toString()}`;
+    return `#/learning?${q.toString()}`;
+  }
+  // Lernstand je Thema der offiziellen Themenliste. Die Stufe liest die App aus
+  // den Antworten ab; das Gefühl des Kindes sortiert nur.
+  const STAGE = {
+    neu: 'neu', angefangen: 'angefangen', wackelt: 'wackelt', sitzt: 'sitzt', gefestigt: 'gefestigt',
+  };
+  const FEEL = [['unsicher', 'unsicher'], ['mittel', 'mittel'], ['sicher', 'sicher']];
+  let newTopic = $state({});
+  function stagesLabel(e) {
+    const st = e.stages || {};
+    const parts = [];
+    for (const k of ['gefestigt', 'sitzt', 'wackelt', 'angefangen', 'neu']) {
+      if (st[k]) parts.push(`${st[k]} ${k}`);
+    }
+    return parts.length ? parts.join(' · ') : 'noch nichts geübt';
+  }
+  function topicUrl(t) {
+    return `#/learning?topic_id=${t.id}`;
+  }
+  function topicAction(t) {
+    if (t.check_due) return 'Prüfen';
+    if (t.stage === 'gefestigt') return 'Noch einmal';
+    if (t.stage === 'sitzt') return 'Wiederholen';
+    return 'Üben';
+  }
+  async function setFeel(exam, topic, value) {
+    busyKey = `topic-${topic.id}`;
+    try {
+      const next = topic.self_view === value ? null : value;
+      const t = await api.post(`/api/accounts/${accountId}/exams/topics/${topic.id}/self-view`, { value: next });
+      topic.self_view = t.self_view;
+      data = { ...data };
+    } catch (e) {
+      error = e.message;
+    } finally {
+      busyKey = null;
+    }
+  }
+  async function addTopic(exam) {
+    const title = (newTopic[exam.exam_key] || '').trim();
+    if (title.length < 2) return;
+    busyKey = exam.exam_key;
+    try {
+      const t = await api.post(`/api/accounts/${accountId}/exams/topics`, {
+        exam_key: exam.exam_key, subject: exam.subject_name ?? exam.title ?? '', title,
+      });
+      exam.topics = [...(exam.topics || []), { ...t, material: null, check_due: false }];
+      exam.stages = { ...(exam.stages || {}), neu: (exam.stages?.neu || 0) + 1 };
+      newTopic[exam.exam_key] = '';
+      data = { ...data };
+    } catch (e) {
+      error = e.message;
+    } finally {
+      busyKey = null;
+    }
+  }
+  async function removeTopic(exam, topic) {
+    if (!confirm(`„${topic.title}“ von der Liste nehmen?`)) return;
+    try {
+      await api.delete(`/api/accounts/${accountId}/exams/topics/${topic.id}`);
+      exam.topics = exam.topics.filter((t) => t.id !== topic.id);
+      data = { ...data };
+    } catch (e) {
+      error = e.message;
+    }
   }
 </script>
 
@@ -215,11 +280,50 @@
         {:else if e.date >= today}
           <div class="dim sources">Aus diesem Zeitraum ist noch keine Buchstelle genannt; ich habe kein Material, das ich prüfen könnte.</div>
         {/if}
-        {#if e.subject_name}
+        <!-- Üben: je Thema der offiziellen Themenliste die Stufe. Wackler zuerst,
+             dann fällige Prüfungen; das Gefühl des Kindes zieht nur vor. -->
+        {#if e.topics?.length}
+          <div class="topics">
+            <strong>Üben: {stagesLabel(e)}</strong>
+            {#each e.topics as t (t.id)}
+              <div class="topic" class:stale={t.stale}>
+                <div class="topic-head">
+                  <span class="stage {t.stage}">{STAGE[t.stage] ?? t.stage}</span>
+                  <span class="topic-title">{t.title}{#if t.stale}<small> · nicht mehr auf der Liste</small>{/if}</span>
+                  <a class="topic-go" href={topicUrl(t)}>{topicAction(t)}</a>
+                </div>
+                {#if t.reason && t.stage !== 'neu'}<div class="dim topic-why">{t.reason}{#if t.note} · {t.note}{/if}</div>{/if}
+                {#if t.check_due}<div class="dim topic-why">Kurzprüfung fällig: sitzt es noch, gilt es als gefestigt.</div>{/if}
+                {#if t.places_label}
+                  <div class="dim topic-why">
+                    {t.places_label}{#if t.material?.total} · {t.material.have} von {t.material.total} Seiten da{/if}
+                    {#if t.material?.missing?.length}
+                      · <a class="missing" href={`#/materialien/${encodeURIComponent(e.subject_name ?? '')}`}>fehlt {t.material.missing_label}</a>
+                    {/if}
+                  </div>
+                {:else if t.origin === 'notice'}
+                  <div class="dim topic-why">Keine Stelle genannt; der Mentor arbeitet mit dem Kapitel zum Thema.</div>
+                {/if}
+                <div class="feel-row">
+                  <span class="dim">Dein Gefühl:</span>
+                  {#each FEEL as [v, label]}
+                    <button class="feel" class:active={t.self_view === v} disabled={busyKey === `topic-${t.id}`} onclick={() => setFeel(e, t, v)}>{label}</button>
+                  {/each}
+                  {#if canManage}<button class="feel ghost" title="Thema entfernen" onclick={() => removeTopic(e, t)}>✕</button>{/if}
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+        <form class="add-topic" onsubmit={(ev) => { ev.preventDefault(); addTopic(e); }}>
+          <input type="text" maxlength="120" placeholder={e.topics?.length ? 'Thema ergänzen, das die Lehrkraft noch genannt hat' : 'Thema eintragen, das die Lehrkraft genannt hat'} bind:value={newTopic[e.exam_key]} />
+          <button class="ghost" disabled={busyKey === e.exam_key || (newTopic[e.exam_key] || '').trim().length < 2}>Hinzufügen</button>
+        </form>
+        {#if e.subject_name && !e.topics?.length}
           <a class="practice-link" href={practiceUrl(e)}>Für diese Arbeit üben</a>
         {/if}
 
-        <div class="muted" style="margin-top:0.5rem;">Wie sicher fühlst du dich?</div>
+        <div class="muted" style="margin-top:0.5rem;">Dein Gefühl zur ganzen Arbeit, hilft mir beim Sortieren:</div>
         <div class="learn-row">
           {#each LEARN as l}
             <button
@@ -336,4 +440,23 @@
   .grade-box { flex-shrink: 0; }
   .grade-input { width: 110px; text-align: center; font-weight: 600; min-height: 40px; }
   .edit-form { margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px dashed var(--border); }
+  .topics { margin-top: 0.6rem; font-size: 0.88rem; display: grid; gap: 0.35rem; }
+  .topic { padding: 0.45rem 0; border-top: 1px solid var(--border); }
+  .topic.stale { opacity: 0.6; }
+  .topic-head { display: flex; align-items: center; gap: 0.5rem; }
+  .topic-title { flex: 1; min-width: 0; font-weight: 600; }
+  .topic-title small { font-weight: 400; color: var(--fg-muted); }
+  .topic-go { flex-shrink: 0; font-weight: 600; text-decoration: none; padding: 0.35rem 0.7rem; border: 1px solid var(--accent); border-radius: 999px; min-height: 32px; display: inline-flex; align-items: center; }
+  .topic-why { font-size: 0.78rem; margin-top: 0.15rem; }
+  .stage { font-size: 0.72rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; }
+  .stage.neu { background: var(--bg); color: var(--fg-muted); }
+  .stage.angefangen { background: var(--bg); }
+  .stage.wackelt { background: var(--warm, #b26a00); color: #fff; border-color: transparent; }
+  .stage.sitzt { background: var(--rating-3); color: #fff; border-color: transparent; }
+  .stage.gefestigt { background: var(--accent); color: #fff; border-color: transparent; }
+  .feel-row { display: flex; align-items: center; gap: 0.3rem; margin-top: 0.3rem; font-size: 0.78rem; flex-wrap: wrap; }
+  .feel { font-size: 0.75rem; min-height: 30px; padding: 0.2rem 0.6rem; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-elevated); }
+  .feel.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .add-topic { display: flex; gap: 0.4rem; margin-top: 0.5rem; }
+  .add-topic input { flex: 1; min-width: 0; font-size: 16px; padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-elevated); color: inherit; }
 </style>
