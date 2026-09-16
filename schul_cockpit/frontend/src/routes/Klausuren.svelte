@@ -317,7 +317,7 @@
 
             {#if topics.length}
               <div class="row between" style="align-items:baseline; gap:0.5rem; flex-wrap:wrap;">
-                <strong>{e.sources?.notice ? 'Offizielle Themenliste' : 'Themen'}, {topics.length} {topics.length === 1 ? 'Thema' : 'Themen'}</strong>
+                <strong>{e.sources?.notice ? 'Offizielle Themenliste' : 'Angenommener Stoff aus dem Unterricht'}, {topics.length} {topics.length === 1 ? 'Thema' : 'Themen'}</strong>
                 <span class="dim">sortiert: Wackler zuerst · {stagesText(e)}</span>
               </div>
               <div class="topics">

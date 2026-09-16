@@ -221,3 +221,30 @@ def test_topic_instruction_and_check_mode(exam_env):
     assert "keine Uhr" in seen["instruction"] and "Kurzprüfung" in seen["instruction"]
     assert seen["instruction"].rstrip().endswith("}") and "re_explained" in seen["instruction"]
 
+
+
+def test_without_a_notice_the_taught_topics_become_exam_topics_with_places(exam_env):
+    client, state, patch, nid, extraction = exam_env
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("DELETE FROM materials WHERE kind='exam_notice'")
+        c.execute("INSERT INTO source_links(account_id,entry_kind,entry_id,entry_date,subject_name,part_label,part_kind,page,quote,synced_at,updated_at) "
+                  "VALUES(1,'lesson',7,'2026-09-10','Latein','Begleitband','book',13,'BB S. 13','now','now')")
+    scope = {"since": "2026-08-01", "parts": 2, "shown": 0, "verified": False, "topics": [
+        {"id": 1, "title": "Adjektive und der Vergleich", "field": "Länder beschreiben", "shown": False, "lesson_ids": [7]},
+        {"id": 2, "title": "Zahlen bis 1000", "field": None, "shown": False, "lesson_ids": []}]}
+    patch.setattr(exams_router, "exam_scope", lambda *a, **k: scope)
+    exam = client.get("/api/accounts/1/exams/all").json()["upcoming"][0]
+    assert [(t["title"], t["origin"]) for t in exam["topics"]] == [("Adjektive und der Vergleich", "assumed"), ("Zahlen bis 1000", "assumed")]
+    assert exam["topics"][0]["places"] == [{"label": "Begleitband", "pages": [13]}] and exam["topics"][0]["stage"] == "neu"
+    assert exam["stages"]["neu"] == 2
+    # Eine Einheit dazu startet wie bei einem Thema der Themenliste.
+    r = client.post(B + "/sessions", json={"topic_id": exam["topics"][0]["id"]})
+    assert r.status_code == 200 and r.json()["topic"]["title"] == "Adjektive und der Vergleich"
+    # Kommt die Themenliste, treten die angenommenen Themen zurück.
+    with closing(db.webapp_conn()) as c, c:
+        notice(c)
+    from test_mentor import mock
+    mock(patch, [extraction], [])
+    exam = client.get("/api/accounts/1/exams/all").json()["upcoming"][0]
+    live = [t for t in exam["topics"] if not t["stale"]]
+    assert {t["origin"] for t in live} == {"notice"} and any(t["stale"] for t in exam["topics"] if t["origin"] == "assumed")

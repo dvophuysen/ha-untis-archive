@@ -1,3 +1,7 @@
+## 0.69.3
+
+- Arbeiten ohne offizielle Themenliste (Spanisch, Deutsch, Mathe): Die aus dem Unterricht erschlossenen Themen werden jetzt wie Themen der Themenliste geführt, mit Stufe, Stellen aus ihren Stunden und Üben-Knopf. Vorher klappte nur eine Liste ohne Übungen auf. Kommt später eine Themenliste, treten die angenommenen Themen zurück.
+
 ## 0.69.2
 
 - Klausurkarte: Das „✕“ zum Entfernen eines Themas ist aus den Zeilen verschwunden. Eltern finden es unter „Themen bearbeiten (Eltern)“ mit Rückfrage; Kinder sehen es nicht.
