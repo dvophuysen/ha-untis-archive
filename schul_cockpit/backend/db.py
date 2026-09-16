@@ -776,9 +776,17 @@ def history_conn() -> sqlite3.Connection:
     return conn
 
 
+# Wartezeit auf einen anderen Schreiber, in Sekunden. Die Voreinstellung von
+# fünf Sekunden reichte nicht: Während einer Sicherung, eines Sammellaufs
+# oder einer Auswertung scheiterten Anfragen mit „database is locked".
+BUSY_TIMEOUT = 30.0
+
+
 def webapp_conn() -> sqlite3.Connection:
     """Read-write connection to the add-on's webapp.db."""
-    conn = sqlite3.connect(SETTINGS.webapp_db_path, isolation_level=None)
+    conn = sqlite3.connect(
+        SETTINGS.webapp_db_path, isolation_level=None, timeout=BUSY_TIMEOUT
+    )
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -820,6 +828,11 @@ def init_webapp_db() -> None:
     schema_sql = _SCHEMA_FILE.read_text()
     conn = webapp_conn()
     try:
+        # WAL: Leser sperren keine Schreiber und umgekehrt. Ohne WAL hielt
+        # jeder längere Leser (Schnappschuss, Auswertung) alle Anfragen an,
+        # denn jede Anfrage schreibt beim Anmelden „zuletzt gesehen".
+        # Die Einstellung bleibt in der Datei erhalten.
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript(schema_sql)
         _apply_migrations(conn)
     finally:

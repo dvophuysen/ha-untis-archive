@@ -14,6 +14,7 @@ logged-in HA user.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import sqlite3
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, Request
@@ -79,11 +80,16 @@ def get_current_user(request: Request) -> CurrentUser:
                     (ha_user_id, ha_user_name, role, is_admin, now, now),
                 )
             else:
-                conn.execute(
-                    "UPDATE users SET last_seen_at = ?, "
-                    "display_name = COALESCE(NULLIF(?, ''), display_name) WHERE id = ?",
-                    (now, ha_user_name, row["id"]),
-                )
+                # „Zuletzt gesehen" ist Beiwerk: Hält gerade ein anderer
+                # Schreiber die Datei, darf daran keine Anfrage scheitern.
+                try:
+                    conn.execute(
+                        "UPDATE users SET last_seen_at = ?, "
+                        "display_name = COALESCE(NULLIF(?, ''), display_name) WHERE id = ?",
+                        (now, ha_user_name, row["id"]),
+                    )
+                except sqlite3.OperationalError:
+                    pass
             row = conn.execute(
                 "SELECT id, ha_user_id, display_name, role, is_admin "
                 "FROM users WHERE ha_user_id = ?",

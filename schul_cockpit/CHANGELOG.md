@@ -1,3 +1,8 @@
+## 0.63.3
+
+- Während einer Sicherung schlugen Anfragen mit „database is locked" fehl (Vorschaubilder auf der Materialseite). Die Datenbank läuft jetzt im WAL-Modus, in dem Leser und Schreiber einander nicht anhalten, wartet bis zu dreißig Sekunden auf einen anderen Schreiber, und das Vermerken von „zuletzt gesehen" beim Anmelden darf nie eine Anfrage scheitern lassen.
+- Der Knopf „Jetzt in Home Assistant sichern“ hat funktioniert; die Sicherung entstand nach etwa zwei Minuten, nur die Antwort kam über Nabu Casa nicht mehr an (Zeitlimit des Proxys). Die Anzeige holt sich den Stand danach selbst.
+
 ## 0.63.2
 
 - Ein Wort für eine Sache: Was die Lehrkraft für eine Arbeit nennt, heißt überall „offizielle Themenliste“, egal ob Tafelabschrift, Zettel oder Nachricht. Die Wörter Ankündigung und Zettel sind aus Materialseite, Klausurkarte, Stoffplan und Lesehinweisen verschwunden. Ein Punkt darauf ist ein „Thema“, Buchteil plus Seite eine „Stelle“.
