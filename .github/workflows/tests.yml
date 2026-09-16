@@ -9,6 +9,11 @@ jobs:
   backend:
     name: Backend-Tests
     runs-on: ubuntu-latest
+    env:
+      # config.load() legt das Datenverzeichnis beim Import an; /data gehört
+      # dem Runner nicht.
+      WEBAPP_DATA_DIR: ${{ runner.temp }}/schul-cockpit-data
+      WEBAPP_HISTORY_DB: ${{ runner.temp }}/schul-cockpit-data/history.db
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
