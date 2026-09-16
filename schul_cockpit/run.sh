@@ -9,6 +9,8 @@ export WEBAPP_EXTERNAL_URL="${EXTERNAL_URL:-}"
 export LEARNING_AI_URL="$(bashio::config 'learning_ai_url')"
 export LEARNING_AI_KEY="$(bashio::config 'learning_ai_key')"
 export LEARNING_AI_MODEL="$(bashio::config 'learning_ai_model')"
+export LEARNING_AI_TRANSCRIBE_MODEL="$(bashio::config 'learning_ai_transcribe_model')"
+export LEARNING_AI_TRANSCRIBE_URL="$(bashio::config 'learning_ai_transcribe_url')"
 
 export LEARNING_READ_TOKEN="$(bashio::config 'learning_read_token')"
 export LEARNING_READ_ACCOUNTS="$(bashio::config 'learning_read_accounts')"

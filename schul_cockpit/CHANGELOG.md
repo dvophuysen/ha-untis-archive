@@ -1,3 +1,9 @@
+## 0.65.0
+
+- Spracheingabe im Mentor: Ein großer Knopf „Halten und antworten“ nimmt auf, die App erkennt den Text mit einem eigenen Modell (gpt-4o-transcribe in derselben Azure-Ressource) und zeigt ihn erst zum Prüfen im Textfeld; gesendet wird per Knopf. Tippen bleibt immer möglich. Die Erkennung bekommt Fach, Thema und die aktuelle Aufgabe als Hinweis, damit Fachbegriffe und lateinische Formen nicht zu Alltagswörtern werden; Englisch, Spanisch und Französisch werden in der Sprache des Fachs erkannt.
+- Der Mentor weiß, wenn ein Text gesprochen war: Groß-/Kleinschreibung und ähnlich klingende Wörter sind dann Hörfehler, keine Fehler des Kindes.
+- Neue Add-on-Optionen `learning_ai_transcribe_model` (Deployment-Name, Standard gpt-4o-transcribe) und `learning_ai_transcribe_url` (nur nötig, wenn die Adresse nicht aus `learning_ai_url` abgeleitet werden kann). Die Aufnahmen werden mit dem Kinderbudget verrechnet (rund 0,4 Cent je Minute) und nicht gespeichert.
+
 ## 0.64.0
 
 - Lernstand je Thema: Liegt die offizielle Themenliste der Lehrkraft vor, zerlegt die App sie in ihre Themen und zeigt zu jedem die Stufe: neu, angefangen, wackelt, sitzt, gefestigt. Die Stufe wird aus den Antworten abgelesen, nicht behauptet: „sitzt“ heißt drei Aufgaben hintereinander richtig ohne Hilfe, ohne Zögern (unter 40 Sekunden, kaum Umformulieren), in mindestens zwei Aufgabenarten. „gefestigt“ erst, wenn Kurzprüfungen nach drei und nach sieben Tagen ohne Hilfe bestanden sind; eine Prüfung mit Hilfe setzt zurück auf „wackelt“.

@@ -21,7 +21,13 @@ from .learning import ai_settings, model_payload, model_output, now_iso, today_l
 RATE_SOURCE = 'https://azure.microsoft.com/en-us/blog/gpt-5-6-now-available-in-microsoft-foundry/'
 RATE_UNTIL = date(2026, 12, 1)
 # EUR per million tokens, deliberately no prompt-cache discount.
-RATES = {'gpt-5.6-sol': (10.0, 45.0), 'gpt-5.6-terra': (5.0, 18.0), 'gpt-5.6-luna': (1.9, 9.0)}
+RATES = {'gpt-5.6-sol': (10.0, 45.0), 'gpt-5.6-terra': (5.0, 18.0), 'gpt-5.6-luna': (1.9, 9.0),
+         # Spracheingabe: Audio-Token (etwa 1000 je Minute) und Text; Listenpreis 6 $/M plus Puffer.
+         'gpt-4o-transcribe': (6.5, 11.0)}
+# Eine Minute Sprache sind rund tausend Audio-Token; die Schätzung rechnet großzügig.
+AUDIO_TOKENS_PER_SECOND = 20
+TRANSCRIBE_MAX_BYTES = 8 * 1024 * 1024
+TRANSCRIBE_MAX_SECONDS = 180
 BACKGROUND = {'discovery', 'background'}
 # Der Quellenbestand (Buchseiten lesen, Inhaltsverzeichnisse ablesen) hat
 # seinen eigenen Rahmen, damit er die Auswertung der Kinderfotos nicht
@@ -187,3 +193,50 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
     except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
         if result is None: settle(key,error='provider_error')
         raise HTTPException(502,'Die Antwort konnte noch nicht verarbeitet werden. Dein Stand bleibt erhalten; es wird nicht automatisch erneut angefragt.') from None
+
+
+def transcribe_url(config=None):
+    """Die Adresse des Transkriptionsmodells: angegeben oder aus der Ressource der
+    Hauptadresse abgeleitet (Azure-Pfad je Deployment)."""
+    config=config or ai_settings()
+    if config.get('transcribe_url'):return config['transcribe_url']
+    url=urlsplit(config['url'])
+    if not url.hostname:return ''
+    return f"{url.scheme}://{url.netloc}/openai/deployments/{config['transcribe_model']}/audio/transcriptions?api-version=2025-03-01-preview"
+
+
+async def transcribe(account_id, audio, mime, language=None, prompt='', session_id=None, seconds=None):
+    """Gesprochenes in Text, mit demselben Budget wie jede Kinderanfrage.
+
+    language ist ein Sprachhinweis (de, en, es, fr) oder None; prompt nennt Fach
+    und erwartete Wörter, damit Fachbegriffe und lateinische Formen nicht zu
+    Alltagswörtern werden. Zurück kommt der Text, den das Kind vor dem Senden
+    sieht und berichtigen kann."""
+    config=ai_settings();url=transcribe_url(config);parsed=urlsplit(url)
+    model=config['transcribe_model']
+    if not config['key'] or parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password:
+        raise HTTPException(503,'Die Spracheingabe ist noch nicht eingerichtet.')
+    if not audio or len(audio)>TRANSCRIBE_MAX_BYTES:raise HTTPException(413,'Die Aufnahme ist zu lang. Bitte in kürzeren Stücken sprechen.')
+    seconds=min(TRANSCRIBE_MAX_SECONDS,max(1,int(seconds or 0) or max(1,len(audio)//4000)))
+    prompt=(prompt or '')[:600]
+    upper_input=seconds*AUDIO_TOKENS_PER_SECOND+len(prompt.encode())//2+64
+    key=reserve(account_id,'mentor',session_id,upper_input,400,model=model)
+    ext={'audio/mp4':'m4a','audio/x-m4a':'m4a','audio/aac':'m4a','audio/webm':'webm','audio/ogg':'ogg','audio/wav':'wav','audio/x-wav':'wav','audio/mpeg':'mp3'}.get((mime or '').split(';')[0].strip(),'webm')
+    data={'model':model,'response_format':'json','temperature':'0'}
+    if prompt:data['prompt']=prompt
+    if language:data['language']=language
+    result=None
+    try:
+        async with httpx.AsyncClient(timeout=60,follow_redirects=False) as client:
+            response=await client.post(url,data=data,files={'file':(f'aufnahme.{ext}',audio,(mime or 'audio/webm').split(';')[0].strip())},headers={'api-key':config['key']})
+            response.raise_for_status();result=response.json()
+        if not isinstance(result,dict) or not isinstance(result.get('text'),str):raise ValueError('Invalid envelope')
+        usage=result.get('usage') or {}
+        # Ohne Verbrauchsangabe gilt die Schätzung als verbraucht; nie stillschweigend günstiger buchen.
+        if not isinstance(usage.get('input_tokens'),int):result['usage']={'input_tokens':upper_input,'output_tokens':min(400,len(result['text'])//2+1)}
+        settle(key,result)
+        return result['text'].strip()
+    except (httpx.HTTPError,ValueError,KeyError,TypeError):
+        if result is None:settle(key,error='provider_error')
+        raise HTTPException(502,'Die Aufnahme konnte nicht in Text umgewandelt werden. Du kannst deine Antwort tippen.') from None
+
