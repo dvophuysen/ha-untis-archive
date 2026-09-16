@@ -1,3 +1,34 @@
+# Nachholen als Lage 0.72.0
+
+Stand 16.09.2026, abends. Drittes Paket der Reihenfolge aus D67; Schritt 3
+aus MENTOR_EINSTIEG.md.
+
+**Gebaut (D70).** Die Lage „nachholen“ gab es seit 0.69.0 in
+`mentor_opening.situation`, aber ohne Einstieg außer dem Plan und ohne Ende.
+Jetzt: `mentor_context.context` gibt der versäumten Stunde ihre eigenen
+Quellen mit (`source_links` der Stunde → `materials.for_context(...,
+material_ids=…)`, Rang wie die Verknüpfung zur Aufgabe) und meldet
+`source.missed` samt Minuten. `routers/mentor.catch_up_done` setzt beim Ende
+einer Nachhol-Einheit (Knopf oder `action finish` des Modells) denselben
+`caught_up`-Eintrag wie der Haken in der Liste, Notiz „Mit dem Mentor
+nachgeholt“, und hängt den Satz „Die Stunde vom … gilt damit als nachgeholt“
+an. Eine nachgeholte Stunde ist keine Nachhol-Lage mehr (`caught_up` an den
+Stunden im Snapshot). Einstiege: Nachhol-Liste (`Absences.svelte`) und
+Stundenansicht (`LessonDetail.svelte`) verlinken `#/learning?lesson_id=…`;
+`Mentor.svelte` startet daraus eine freiwillige Einheit.
+
+**Geprüft.** Zwei neue Tests in `test_opening.py`: Einstieg aus einer
+versäumten Stunde mit Absenz (Instruktion der Lage, `situation.missed`,
+Quelle der Stunde vorn im Material mit Inhalt, Chip „Nachholen“), Ende per
+Knopf setzt `caught_up`; Abschluss durch das Modell ebenso, danach kein
+Nachholen mehr. Frontend-Build bestanden.
+
+**Offen.** Live an einer echten versäumten Stunde prüfen (Konto mit 14
+offenen Stunden). Schritte 2, 4 und 5 aus MENTOR_EINSTIEG.md (Erklären als
+eigener Einstieg, Kontrollieren mit Foto, Verfassung) bleiben offen.
+
+---
+
 # Die Frage nach der Schule 0.71.0
 
 Stand 16.09.2026, abends. Zweites Paket der Reihenfolge aus D67; Stufe 2 aus
@@ -85,7 +116,7 @@ Eichung an zwei Themen: terra gleichwertig zu sol, luna erfand Vorgeschichte;
 `opening_model = gpt-5.6-terra` gesetzt. Vokabeltrainer: Einstieg unter Lernen
 mit Sprachauswahl, Rücksetzen je Sprache für Eltern, Vorlesen entfernt.
 Klausurkarte: Entfernen nur noch unter „Themen bearbeiten (Eltern)“.
-Konzept: MENTOR_EINSTIEG.md (Erklären, Nachholen, Kontrollieren noch offen).
+Konzept: MENTOR_EINSTIEG.md (Nachholen in 0.72.0; Erklären, Kontrollieren noch offen).
 
 **Klausurseite neu (0.67.0, D62).** `Klausuren.svelte` komplett neu: drei
 Punkte mit Ampel, aufklappbare Themenliste mit Stufen, Gefühl je Arbeit und

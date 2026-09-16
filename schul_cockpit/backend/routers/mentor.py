@@ -202,6 +202,24 @@ async def open_unit(account_id,sid,model=None,persist=True):
 OPENING=True
 
 
+def catch_up_done(c,account_id,s,user):
+    """Endet eine Einheit in der Lage „nachholen“, ist die versäumte Stunde
+    nachgeholt: derselbe Eintrag, den der Haken in der Nachhol-Liste setzt.
+    Gibt den Satz für den Abschluss zurück, sonst ''."""
+    source=json.loads(s.get('source_json') or '{}')
+    if (source.get('situation') or {}).get('lage')!='nachholen' or not source.get('lesson_id'):return ''
+    lesson_id=source['lesson_id']
+    if c.execute('SELECT 1 FROM caught_up WHERE account_id=? AND lesson_id=?',(account_id,lesson_id)).fetchone():return ''
+    c.execute('INSERT INTO caught_up(account_id,lesson_id,user_id,caught_up_at,note,untis_period_id) VALUES(?,?,?,?,?,?)',
+              (account_id,lesson_id,user.id,now_iso(),'Mit dem Mentor nachgeholt',source.get('untis_period_id')))
+    day=source.get('date') or ''
+    try:
+        from datetime import date as _date
+        day=_date.fromisoformat(day).strftime('%d.%m.')
+    except ValueError:pass
+    return f'Die Stunde vom {day} gilt damit als nachgeholt.' if day else 'Die versäumte Stunde gilt damit als nachgeholt.'
+
+
 async def opened(account_id,sid):
     """Einstieg holen; scheitert er (Budget, Netz), bleibt die feste Begrüßung."""
     try:
@@ -599,6 +617,9 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
                 end=((s['summary'] or 'Gut, wir hören hier auf.')+' '+mopen.closing_sentence(tv)).strip()
             else:
                 end='Für heute schließen wir ab. '+(s['summary'] or 'Dein bisheriger Stand ist gespeichert. Beim nächsten Mal können wir hier anknüpfen.')
+            if not homework:
+                caught=catch_up_done(c,account_id,s,user)
+                if caught:end=(end.rstrip()+' '+caught).strip()
             add_message(c,sid,account_id,body.request_key,'assistant',end,{'choices':[]})
             c.execute("UPDATE mentor_sessions SET status=?,phase=?,version=version+1,elapsed_seconds=?,active_since=NULL,updated_at=? WHERE id=?",
                       ('active' if homework else 'completed','clarify' if homework else 'finished',seconds,now_iso(),sid))
@@ -685,6 +706,11 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
             # The mentor may wrap up a practice unit. A homework chat it may not
             # close; only the tick on the homework itself does that.
             closing_now=reply.action=='finish' and not homework
+            if closing_now:
+                caught=catch_up_done(c,account_id,s,user)
+                if caught:
+                    reply.message=(reply.message.rstrip()+' '+caught)[:1800]
+                    c.execute("UPDATE mentor_messages SET text=? WHERE session_id=? AND request_key=? AND role='assistant'",(reply.message,sid,body.request_key))
             if topic_mode and s.get('topic_id') and closing_now:
                 lernstand.set_note(c,s['topic_id'],reply.summary)
                 tv=topic_view(c,{**s,'account_id':account_id})

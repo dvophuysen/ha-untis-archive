@@ -47,6 +47,11 @@
     }
   }
 
+  function mentorLink(lesson) {
+    const q = new URLSearchParams({ lesson_id: String(lesson.lesson_id), subject: lesson.subject_name || lesson.subject_short || '', title: lesson.lstext || '' });
+    return `#/learning?${q}`;
+  }
+
   function blockRange(b) {
     if (b.start === b.end) return formatShortDate(b.start);
     return `${formatShortDate(b.start)} – ${formatShortDate(b.end)}`;
@@ -117,6 +122,10 @@
               {:else}
                 <div class="dim" style="font-size:0.8rem; margin-top:1px;">kein Lehrstoff erfasst</div>
               {/if}
+              {#if !lesson.caught_up && (lesson.subject_name || lesson.subject_short)}
+                <!-- Der Mentor fasst den Stoff der Stunde zusammen und stellt eine leichte Aufgabe; am Ende gilt die Stunde als nachgeholt. -->
+                <a class="mentor-link" href={mentorLink(lesson)}>Mit dem Mentor nachholen</a>
+              {/if}
             </div>
           </div>
         {/each}
@@ -135,5 +144,6 @@
   }
   .miss-row:first-child { border-top: none; }
   .struck { text-decoration: line-through; color: var(--fg-dim); }
+  .mentor-link { display: inline-block; margin-top: 4px; font-size: 0.85rem; font-weight: 600; }
   .done-badge { background: var(--rating-3); color: #fff; border-color: transparent; }
 </style>

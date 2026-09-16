@@ -191,7 +191,9 @@ jetzt sofort"). Keine Uhr, keine Minuten, keine Formulare.
 2. **Erklären** als Lage: Auslöser aus Stunden-Rückmeldung, Zusammenfassung
    aus dem Material, Umsteuern aus jeder Lage. Erklärung vor der ersten
    Aufgabe zählt nicht als Hilfe.
-3. **Nachholen** aus der Fehlzeit.
+3. **Nachholen** aus der Fehlzeit. Gebaut in 0.72.0 (D70): Einstieg aus
+   Nachhol-Liste und Stundenansicht, Quellen der Stunde im Kontext, Ende
+   setzt die Stunde auf nachgeholt.
 4. **Kontrollieren** als eigener Einstieg mit Foto.
 5. **Verfassung**: kürzere Einheiten bei Frust- und Müdigkeitssignalen,
    Erfolg zum Schluss.

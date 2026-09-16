@@ -412,7 +412,7 @@ def file_of(account_id: int, material_id: int):
 
 def for_context(account_id: int, *, subject: str | None = None, task_id: int | None = None,
                 topic_ids: list[int] | None = None, start: str | None = None, end: str | None = None,
-                budget: int = 6000, top: int = 4) -> list[dict]:
+                material_ids: list[int] | None = None, budget: int = 6000, top: int = 4) -> list[dict]:
     """Materials for a mentor or exam call, ranked by how closely they belong.
 
     Everything in reach contributes its short summary; only the closest few
@@ -428,6 +428,9 @@ def for_context(account_id: int, *, subject: str | None = None, task_id: int | N
         related = {r["material_id"]: r["kind"] for r in conn.execute(
             "SELECT material_id,kind,target_id FROM material_links WHERE kind='task' AND target_id=?",
             (task_id or -1,))}
+        # Die Quellen einer bestimmten Stunde (Nachholen) zählen wie die Verknüpfung zur Aufgabe.
+        for mid in material_ids or []:
+            related.setdefault(mid, "lesson")
         topic_hits = set()
         if topic_ids:
             marks = ",".join("?" * len(topic_ids))
