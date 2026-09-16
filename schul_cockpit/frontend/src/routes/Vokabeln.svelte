@@ -42,7 +42,7 @@
     stage = s; direction = d; busy = true; error = ''; done = false; verdict = null; pending = null;
     tally = { correct: 0, slow: 0, wrong: 0 };
     try {
-      const r = await api.get(`${base}/${encodeURIComponent(subject)}/cards?unit=${encodeURIComponent(unit)}&stage=${s}&direction=${d}`);
+      const r = await api.get(`${base}/${encodeURIComponent(subject)}/cards?unit=${encodeURIComponent(unit)}&stage=${s}&direction=${d}&limit=80`);
       cards = r.cards; index = 0; show();
       if (!cards.length) error = s === 2 ? 'Für die Schreibweise zuerst die Bedeutungen sichern: Stufe 2 fragt nur Wörter, deren Bedeutung sitzt.' : 'Keine Wörter in dieser Einheit.';
     } catch (e) { error = e.message; } finally { busy = false; }

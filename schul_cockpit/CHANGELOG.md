@@ -1,3 +1,7 @@
+## 0.67.3
+
+- Vokabeltrainer: Grammatikseiten des Begleitbands (Deklination, Konjugation, Infinitiv) galten wegen ihrer vielen „Form — Erklärung“-Zeilen als Wortseiten und wurden zum Zerlegen angeboten; jetzt nicht mehr. Ein Durchgang zeigt alle Wörter einer Einheit (bis 80), nicht nur die ersten 40.
+
 ## 0.67.2
 
 - Klausurkarte auf dem Telefon: Die drei Punkte nutzen die ganze Breite (Name und Text in einer Zeile, Knopf rechts), der Übungsknopf und die Gefühlsauswahl stehen untereinander. Geprüft an Kind B Karten mit echten Daten.
