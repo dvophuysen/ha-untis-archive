@@ -16,6 +16,13 @@ class ExtractIn(InputModel):
     material_ids: list[int] = Field(min_length=1, max_length=12)
 
 
+@router.get('/languages')
+def languages(account_id: int, user: CurrentUser = Depends(get_current_user)):
+    """Einstieg ohne Fach: alle Fremdsprachen des Kindes mit Trainerstand."""
+    access(user, account_id)
+    return {'languages': vocab.languages(account_id), 'speech': bool(ai.transcribe_url())}
+
+
 @router.get('/{subject}/units')
 def units(account_id: int, subject: str, background: BackgroundTasks, user: CurrentUser = Depends(get_current_user)):
     """Die Einheiten des Fachs. Ungelesene Wortseiten werden dabei im Hintergrund

@@ -532,3 +532,23 @@ def topic_stage(account_id: int, subject: str, places: list[dict]) -> dict | Non
         stage = "angefangen"
     reason = f"{counts['sitzt'] + counts['gefestigt']} von {total} Wörtern sitzen" + (f", {counts['wackelt']} wackeln" if counts["wackelt"] else "")
     return {"stage": stage, "reason": reason, "words": total, "counts": counts}
+
+
+def languages(account_id: int) -> list[dict]:
+    """Die Fremdsprachen dieses Kindes mit dem Stand des Trainers: Wörter,
+    Einheiten, ob schon eine Wortseite abgelegt ist."""
+    from . import mentor_context as mc
+    from .subject_names import SubjectCatalog
+    snap = mc.snapshot(account_id)
+    names = SubjectCatalog(account_id).choices(snap["lessons"], snap["tasks"])
+    out = []
+    for name in names:
+        lang = language_of(name)
+        if not lang:
+            continue
+        found = units(account_id, name)
+        out.append({"subject": name, "language": lang, "units": len([u for u in found if u["words"]]),
+                    "words": sum(u["words"] for u in found), "pages": sum(len(u["pages"]) for u in found),
+                    "reading": sum(u["unread"] for u in found)})
+    return out
+

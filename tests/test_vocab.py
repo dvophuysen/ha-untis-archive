@@ -218,3 +218,22 @@ def test_opening_the_trainer_reads_word_pages_by_itself_and_empty_pages_stay_qui
     assert r["reading"] == 1 and calls == [10, 13]
     r = client.get(V + "/LATEIN/units").json()
     assert r["reading"] == 0 and all(u["unread"] == 0 for u in r["units"])
+
+
+def test_language_overview_lists_only_foreign_languages_with_their_state(setup):
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    import sqlite3
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:
+        c.execute("INSERT INTO lessons(account_id,date,subject_name,lstext) VALUES(1,'2026-09-11','LATEIN','Lektion 1')")
+        c.execute("INSERT INTO lessons(account_id,date,subject_name,lstext) VALUES(1,'2026-09-11','Mathematik','Brüche')")
+    mid = seed_page()
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO vocab_extractions(material_id,account_id,text_hash,words,updated_at) VALUES(?,1,'x',4,'now')", (mid,))
+        for pos, w in enumerate(WORDS["words"][:4]):
+            c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,position,foreign_word,plain,meanings_json,created_at) VALUES(1,'LATEIN',?,'Begleitband',10,'Lektion 1',?,?,?,?,'now')",
+                      (mid, pos, w["foreign_word"], vocab.plain(w["foreign_word"]), json.dumps(w["meanings"])))
+    r = client.get(V + "/languages")
+    assert r.status_code == 200, r.text
+    langs = r.json()["languages"]
+    assert [l["subject"] for l in langs] == ["Latein"] and langs[0]["words"] == 4 and langs[0]["units"] == 1 and langs[0]["language"]["into"] is False
