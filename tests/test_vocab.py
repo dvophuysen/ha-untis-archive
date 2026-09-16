@@ -237,3 +237,17 @@ def test_language_overview_lists_only_foreign_languages_with_their_state(setup):
     assert r.status_code == 200, r.text
     langs = r.json()["languages"]
     assert [l["subject"] for l in langs] == ["Latein"] and langs[0]["words"] == 4 and langs[0]["units"] == 1 and langs[0]["language"]["into"] is False
+
+
+def test_parents_can_reset_a_language_and_children_cannot(setup):
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    mid = seed_page()
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,position,foreign_word,plain,meanings_json,created_at) VALUES(1,'LATEIN',?,'Begleitband',10,'Lektion 1',0,'ecce','ecce',?,'now')", (mid, json.dumps(["Schau!"])))
+        wid = c.execute("SELECT id FROM vocab_words").fetchone()[0]
+        c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,created_at) VALUES(1,?,1,'from','Schau','correct','now')", (wid,))
+    r = client.delete(V + "/LATEIN/attempts")
+    assert r.status_code == 200 and r.json()["removed"] == 1 and r.json()["units"][0]["s1"]["neu"] == 1
+    child(state)
+    assert client.delete(V + "/LATEIN/attempts").status_code == 403

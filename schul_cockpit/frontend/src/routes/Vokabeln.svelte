@@ -5,6 +5,7 @@
   import { api } from '../lib/api.js';
   import Speech from '../lib/Speech.svelte';
   import { subjectStyle } from '../lib/subjectStyle.js';
+  import { appState } from '../lib/store.svelte.js';
   let { accountId, subject = '', initialUnit = '' } = $props();
   const style = $derived(subjectStyle(subject));
   const base = $derived(`/api/accounts/${accountId}/learning/vocab`);
@@ -70,12 +71,13 @@
     if (index + 1 >= cards.length) { done = true; load(); return; }
     index += 1; show();
   }
-  function speak(text) {
-    try {
-      const u = new SpeechSynthesisUtterance(text.replace(/[ˈˌ]/g, ''));
-      u.lang = lang?.tts || 'de-DE'; u.rate = 0.9;
-      window.speechSynthesis?.cancel(); window.speechSynthesis?.speak(u);
-    } catch { /* keine Stimme */ }
+  // Eltern: Probeläufe wieder auf Null setzen.
+  const canManage = $derived(!!(appState.me && (appState.me.is_admin || appState.me.role === 'parent')));
+  async function resetAll() {
+    if (!confirm(`Alle Versuche in ${langName} löschen? Die Wörter bleiben, der Stand beginnt bei neu.`)) return;
+    busy = true;
+    try { const r = await api.delete(`${base}/${encodeURIComponent(subject)}/attempts`); data = { ...data, units: r.units }; }
+    catch (e) { error = e.message; } finally { busy = false; }
   }
   const STAGE_TEXT = { neu: 'neu', wackelt: 'wackelt', sitzt: 'sitzt', gefestigt: 'gefestigt' };
   function unitSummary(u, key) {
@@ -163,6 +165,9 @@
               <div class="actions"><button disabled={busy} onclick={() => begin(2, 'into')}>Schreibweise üben</button></div>
             </section>
           {/if}
+          {#if canManage}
+            <p class="muted"><button class="ghost" disabled={busy} onclick={resetAll}>Stand in {langName} zurücksetzen (Eltern)</button></p>
+          {/if}
         {/if}
       {/if}
     {/if}
@@ -173,7 +178,6 @@
       <div class="word">
         {#if askForeign}
           <strong>{card.foreign_word}</strong>{#if card.grammar}<small> {card.grammar}</small>{/if}
-          <button type="button" class="ghost say" onclick={() => speak(card.foreign_word)} title="Vorlesen">🔊 Vorlesen</button>
         {:else}
           <strong>{card.meanings.join(', ')}</strong>{#if card.grammar}<small> {card.grammar}</small>{/if}
         {/if}

@@ -1,3 +1,9 @@
+## 0.69.2
+
+- Klausurkarte: Das „✕“ zum Entfernen eines Themas ist aus den Zeilen verschwunden. Eltern finden es unter „Themen bearbeiten (Eltern)“ mit Rückfrage; Kinder sehen es nicht.
+- Vokabeltrainer: Eltern können den Stand einer Sprache zurücksetzen (Versuche löschen, Wörter bleiben), für Probeläufe. Der Knopf „Vorlesen“ ist entfernt.
+- Einstieg: Nach der Eichung an zwei echten Themen erzeugt das mittlere Modell den Einstieg (gleiche Qualität wie das Hauptmodell, halber Preis); das kleine Modell erfand ein „letztes Mal“ und fällt aus.
+
 ## 0.69.1
 
 - Einstieg: Der Termin der Arbeit wird beim Start der Einheit aus dem Kalender geholt, wenn die Klausurseite ihn noch nicht gemerkt hat. Fehlende Angaben nennt der Mentor nicht mehr („kein Termin angegeben“), und er erfindet kein „letztes Mal“.

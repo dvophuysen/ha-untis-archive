@@ -73,6 +73,18 @@ def attempts(account_id: int, body: vocab.AttemptIn, user: CurrentUser = Depends
     return vocab.attempt(account_id, body)
 
 
+@router.delete('/{subject}/attempts')
+def reset(account_id: int, subject: str, user: CurrentUser = Depends(get_current_user)):
+    """Eltern: den Stand des Trainers für eine Sprache auf Null setzen (Versuche
+    löschen, Wörter bleiben). Für Probeläufe der Eltern."""
+    access(user, account_id, write=True, parent=True)
+    with closing(webapp_conn()) as c, c:
+        gone = c.execute("DELETE FROM vocab_attempts WHERE account_id=? AND word_id IN "
+                         "(SELECT id FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?))",
+                         (account_id, account_id, subject)).rowcount
+    return {'removed': gone, 'units': vocab.units(account_id, subject)}
+
+
 @router.post('/{subject}/transcribe')
 async def transcribe(account_id: int, subject: str, file: UploadFile = File(...), unit: str = Form(''), direction: str = Form('from'),
                      seconds: int = Form(0), user: CurrentUser = Depends(get_current_user)):
