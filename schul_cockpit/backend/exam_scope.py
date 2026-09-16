@@ -27,13 +27,13 @@ class Groups(InputModel):
     groups:list[Group]=Field(min_length=1,max_length=8)
 
 
-# Liegt der Zettel der Lehrkraft vor, legt er den Stoff fest. Alles andere aus
+# Liegt die offizielle Themenliste der Lehrkraft vor, legt sie den Stoff fest. Alles andere aus
 # dem Unterricht bleibt sichtbar, aber als „nicht angekündigt" gekennzeichnet;
 # das gilt für jedes Fach, jeden Jahrgang und jedes Kind gleich.
-NOTICE_PREFIX='Ankündigung der Lehrkraft zum Stoff der Arbeit: '
-NOTICE_RULE=('Eine oder mehrere Einheiten beginnen mit „Ankündigung der Lehrkraft zum Stoff der Arbeit". Diese Ankündigung legt den Stoff fest: '
+NOTICE_PREFIX='Offizielle Themenliste der Lehrkraft für die Arbeit: '
+NOTICE_RULE=('Eine oder mehrere Einheiten beginnen mit „Offizielle Themenliste der Lehrkraft für die Arbeit". Diese Themenliste legt den Stoff fest: '
              'Bilde die learning-Gruppen entlang ihrer Punkte und ordne ihre ID der Gruppe zu, die sie am stärksten prägt. '
-             'Unterrichtseinträge, deren Inhalt in der Ankündigung nicht vorkommt, erhalten category=context (behandelt, aber nicht angekündigt), '
+             'Unterrichtseinträge, deren Inhalt auf der Themenliste nicht vorkommt, erhalten category=context (behandelt, aber nicht auf der Liste), '
              'auch wenn sie übbarer Lernstoff wären. ')
 
 
@@ -85,7 +85,7 @@ async def collect(account,body):
         where=f"{chapter['part_label']}, " if chapter.get('part_label') else 'Buch'
         text=f"{where}Kapitel {chapter['number']} {chapter['title']} ({span}{extras}); im Unterricht genannt: S. {', '.join(map(str,chapter['cited_pages']))}".replace('Kapitel  ','Kapitel ').replace('Buch','Buchkapitel',1) if not chapter.get('part_label') else f"{where}Kapitel {chapter['number']} {chapter['title']} ({span}{extras}); genannt: S. {', '.join(map(str,chapter['cited_pages']))}".replace('Kapitel  ','Kapitel ')
         units.append(dict(id=len(units),kind='chapter',text=text,refs=[dict(id=chapter['id'],date=chapter['first_date'],text=text)]))
-    # Der Zettel der Lehrkraft, was in der Arbeit vorkommt: die verlässlichste Quelle.
+    # Die offizielle Themenliste der Lehrkraft: die verlässlichste Quelle.
     if not body.demo:
         from .sources import exam_notices
         for note in exam_notices(account):

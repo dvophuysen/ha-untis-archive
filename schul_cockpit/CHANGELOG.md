@@ -1,3 +1,7 @@
+## 0.63.2
+
+- Ein Wort für eine Sache: Was die Lehrkraft für eine Arbeit nennt, heißt überall „offizielle Themenliste“, egal ob Tafelabschrift, Zettel oder Nachricht. Die Wörter Ankündigung und Zettel sind aus Materialseite, Klausurkarte, Stoffplan und Lesehinweisen verschwunden. Ein Punkt darauf ist ein „Thema“, Buchteil plus Seite eine „Stelle“.
+
 ## 0.63.1
 
 - Die App startete nach 0.63.0 nicht: Ein Syntaxfehler beim Beenden der Hintergrundaufgaben. Ein Test übersetzt jetzt jedes Backend-Modul vor der Auslieferung.

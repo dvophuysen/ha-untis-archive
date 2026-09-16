@@ -14,7 +14,7 @@
     own_work: 'Meine Bearbeitung',
     exam: 'Klassenarbeit',
     handout: 'Merkblatt',
-    exam_notice: 'Ankündigung einer Arbeit',
+    exam_notice: 'Offizielle Themenliste (Arbeit)',
     toc: 'Inhaltsverzeichnis (Papierbuch)',
     other: 'Sonstiges',
   };
@@ -258,7 +258,7 @@
     message = target
       ? `${target.label} ${target.page ? `S. ${target.page}` : ''} abgehakt. Ich lese es gerade.`
       : upload.kind === 'toc' ? 'Inhaltsverzeichnis gespeichert. Ich lese die Kapitel daraus, sobald alle Seiten da sind.'
-      : upload.kind === 'exam_notice' ? 'Ankündigung gespeichert. Jede genannte Stelle kommt auf die Liste und wird vorgezogen.'
+      : upload.kind === 'exam_notice' ? 'Offizielle Themenliste gespeichert. Jedes Thema kommt mit seinen Stellen auf die Liste und wird vorgezogen.'
       : list.length === 1 ? 'Gespeichert. Ich lese es gerade.' : `${list.length} Seiten gespeichert.`;
     upload.page = '';
     await load();
@@ -301,7 +301,7 @@
 
 <div class="card drop">
   <p class="lead">Fotografiere ein Arbeitsblatt, eine Heftseite oder eine Aufgabe. Mehr brauchst du nicht — Fach, Thema und Text erkenne ich selbst.
-    Den Zettel mit dem Stoff für eine Arbeit oder das Inhaltsverzeichnis eines Buchs, das nur auf Papier existiert, sagst du mir vorher.</p>
+    Die offizielle Themenliste der Lehrkraft für eine Arbeit (Tafelabschrift, Zettel oder Nachricht) oder das Inhaltsverzeichnis eines Buchs, das nur auf Papier existiert, sagst du mir vorher.</p>
   <div class="row gap-sm options">
     <label>Fach
       <select bind:value={upload.subject}>
@@ -353,7 +353,7 @@
   {#if error}<div class="error-box">{error}</div>{/if}
 </div>
 
-<!-- Lesungen mit Folgen gegenlesen: Ein Zettel bindet Stellen, ein Verzeichnis
+<!-- Lesungen mit Folgen gegenlesen: Eine Themenliste bindet Stellen, ein Verzeichnis
      Kapitel. Bis ein Elternteil bestätigt, steht die Lesung hier zur Kontrolle. -->
 {#if data?.can_manage && (data.materials ?? []).some((m) => m.needs_review)}
   <div class="card review">

@@ -294,7 +294,7 @@ def test_readings_with_consequences_ask_to_be_checked(env):
 def test_the_notice_rule_only_joins_the_grouping_when_a_notice_is_present():
     from backend import exam_scope
     assert exam_scope.Group(category="context", title="Nicht angekündigt", detail="Behandelt, nicht genannt", ids=[1])
-    assert exam_scope.NOTICE_PREFIX in exam_scope.NOTICE_RULE or "Ankündigung der Lehrkraft" in exam_scope.NOTICE_RULE
+    assert "Offizielle Themenliste" in exam_scope.NOTICE_RULE and "Zettel" not in exam_scope.NOTICE_PREFIX
 
 
 def test_photographed_contents_serve_the_digital_book_whose_contents_were_not_found(env, monkeypatch):
