@@ -1,3 +1,43 @@
+# Eichung der Reasoning-Tiefe, dritter Durchgang (0.76.0 live)
+
+Stand 17.09.2026, spät. Hauptmodell mit „medium“ gegen „low“ an fünf Seiten,
+gemessen mit dem neuen Werkzeug (Wörter, Zahlen, Zeilen). Kosten 1,08 €.
+
+| Seite | Tiefe | Seitenart erkannt | Zahlen | Befund |
+|---|---|---|---|---|
+| Themenblatt Latein, handschriftlich | low | handwriting, Handschrift ja | 0,27 | „S. 70, 71“ statt 10, 11; „TB S. 70, 71, 74, 75“ statt 10, 11, 14, 15; „BB S. 17“ statt 14 |
+| dito | medium | handwriting | 0,36 | „S. 70, 71“ und „TB S. 70, 71, 74, 75“ falsch; BB 13, 13–15, 14 richtig |
+| Mathe-Arbeitsblatt | low / medium | formula, Handschrift ja (Kreise) | 1,00 / 1,00 | alle 16 Gleichungen gleich; nur die durchgestrichene r) abweichend |
+| Physik-Schaltpläne | low / medium | mixed | 1,00 | alle Schaltungen richtig, nur Wortwahl der Beschreibungen anders |
+| Latein-Arbeitsheft S. 7 | low / medium | mixed, Handschrift ja | 1,00 | gleich; Buchstabenfolge im Staub einmal mit Makra |
+| Wimmelbild zur Antike | low / medium | figure | 1,00 | Beschreibung gleichwertig, andere Worte |
+
+**Befund 1: Die gespeicherte richtige Lesung des Themenblatts war eine
+menschliche Korrektur.** `content_text` ist gesperrt, `verified=1`,
+korrigiert am 16.09. um 11:22. Kein Modell, in keiner Tiefe, liest die
+handschriftliche 1 dieses Kindes als 1; alle lesen 7. Das Gegenlesen (D51)
+hat den Fehler abgefangen. Ohne Gegenlesen hätte die App Kapitel 7 statt
+Kapitel 1 als Klausurstoff geholt.
+
+**Befund 2: „medium“ bringt an diesen fünf Seiten nichts Messbares** und
+kostet 10 bis 50 Prozent mehr. Die Tiefe bleibt im Betrieb „low“ (D78).
+
+**Befund 3: Seitenart und Handschrift werden erkannt**, auch handschriftliche
+Kreise auf einem gedruckten Arbeitsblatt. Damit landen solche Seiten ab
+0.76.0 zum Gegenlesen; ob das bei Arbeitsblättern mit bloßen Markierungen zu
+oft ist, zeigt der Alltag.
+
+**Schluss.** Handschrift ist kein Modell- und kein Tiefenproblem, sondern ein
+Kontextproblem: Die 1 dieses Kindes sieht wie eine 7 aus, und nur der
+Zusammenhang (erste Arbeit, Lektion 1, Unterricht nennt S. 10 bis 15)
+entscheidet. Nächster Schritt (Vorschlag): Plausibilitätsprüfung
+handschriftlicher Themenlisten gegen die Stellen, die Unterricht und
+Hausaufgaben desselben Fachs seit der letzten Arbeit nennen, mit Hinweis in
+der Gegenlese-Karte („S. 70, 71 kommen im Unterricht nicht vor; gemeint
+S. 10, 11?“).
+
+---
+
 # Messwerkzeug und Handschrift 0.76.0
 
 Stand 17.09.2026. Folge der zweiten Eichung (0.75.1): Die Wortabdeckung war

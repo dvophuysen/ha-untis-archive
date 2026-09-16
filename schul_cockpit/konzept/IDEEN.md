@@ -2,6 +2,11 @@
 
 Stand: 16.09.2026. Backlog zur gemeinsamen Klärung, kein verbindlicher Bauauftrag für alle Einträge.
 
+## Vorgeschlagen am 17.09.2026 aus der Eichung
+
+- Plausibilitätsprüfung handschriftlicher Themenlisten: Seitenangaben des Zettels gegen die Stellen halten, die Unterricht und Hausaufgaben desselben Fachs seit der letzten Arbeit nennen; Abweichungen in der Gegenlese-Karte benennen („S. 70, 71 kommen im Unterricht nicht vor; gemeint S. 10, 11?“). Anlass: Jede Lesung las die handschriftliche 1 eines Kindes als 7 (D78).
+- Seitenart als Steuerung der Modellwahl erst, wenn je Seitenart eine Messung mit Zahlen- und Zeilenvergleich vorliegt (D75, D77).
+
 ## Zurückgestellt am 16.09.2026 (D67)
 
 - Gruppierung der Lerneinheiten nach Feld, Schuljahresgrenze 1. August, Doppelstunden als eine Behandlung, gemischte Einträge; Entwurf in [LERNEINHEITEN.md](LERNEINHEITEN.md). Offene Frage: Ist ein Oberthema selbst übbar?
