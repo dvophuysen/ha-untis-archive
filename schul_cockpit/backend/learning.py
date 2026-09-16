@@ -135,6 +135,9 @@ def ai_settings() -> dict:
         "url": os.environ.get("LEARNING_AI_URL", "").strip(),
         "key": os.environ.get("LEARNING_AI_KEY", "").strip(),
         "model": os.environ.get("LEARNING_AI_MODEL", "").strip(),
+        # Spracheingabe: eigenes Transkriptionsmodell in derselben Ressource.
+        "transcribe_model": os.environ.get("LEARNING_AI_TRANSCRIBE_MODEL", "").strip() or "gpt-4o-transcribe",
+        "transcribe_url": os.environ.get("LEARNING_AI_TRANSCRIBE_URL", "").strip(),
     }
 
 

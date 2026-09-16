@@ -5,6 +5,7 @@
   import {api} from '../lib/api.js';
   import SharedLearningPlan from '../lib/SharedLearningPlan.svelte';
   import MentorExams from '../lib/MentorExams.svelte';
+  import Speech from '../lib/Speech.svelte';
   let {accountId,onManage}= $props();
   const base=$derived(`/api/accounts/${accountId}/learning/mentor`);
   let data=$state(null),running=$state(null),tab=$state('today'),error=$state(''),busy=$state(false);
@@ -21,12 +22,16 @@
   async function open(s){removeConfirm=false;running=await api.get(`${base}/sessions/${s.id}`);text='';attachment=null;}
   async function start(c){running=await api.post(`${base}/sessions`,{subject:c.subject,lesson_id:c.lesson_id||null,skill_id:c.skill_id||null,goal:c.title||goal,goal_key:c.key||null,minutes:c.minutes||10,voluntary:c.voluntary||false,demo});text='';}
   // Signale fürs Zögern: Zeit von der gestellten Aufgabe bis zum Absenden, Löschungen beim Tippen.
-  let taskShownAt=$state(null),edits=$state(0);
+  let taskShownAt=$state(null),edits=$state(0),spoken=$state(false);
+  // Spracheingabe: Aufnahme → eigene Erkennung → Text ins Feld, erst dann Senden.
+  async function transcribe(blob,took){const f=new FormData();f.append('file',blob,'aufnahme');f.append('seconds',String(took));const r=await api.post(`${base}/sessions/${running.id}/transcribe`,f);return r.text;}
+  function heard(t){text=text.trim()?`${text.trim()} ${t}`:t;spoken=true;}
+  const speechLabel=$derived(running?`Aufnahme: ${/englisch/i.test(running.subject)?'Englisch oder Deutsch':/spanisch/i.test(running.subject)?'Spanisch oder Deutsch':/franz/i.test(running.subject)?'Französisch oder Deutsch':/latein/i.test(running.subject)?'Latein oder Deutsch':'Deutsch'} · eigene Erkennung`:'');
   $effect(()=>{const prompt=running?.task?.prompt;if(prompt){taskShownAt=Date.now();edits=0;}else{taskShownAt=null;}});
   async function send(kind='message',value=text){
     const signals=kind==='answer'&&taskShownAt?{seconds:Math.min(36000,Math.round((Date.now()-taskShownAt)/1000)),edits}:{};
-    const r=await api.post(`${base}/sessions/${running.id}/turn`,{request_key:crypto.randomUUID(),version:running.version,text:value,kind,attachment_id:attachment?.id||null,...signals});
-    running=r;text='';attachment=null;await tick();end?.scrollIntoView({behavior:'smooth',block:'end'});
+    const r=await api.post(`${base}/sessions/${running.id}/turn`,{request_key:crypto.randomUUID(),version:running.version,text:value,kind,attachment_id:attachment?.id||null,spoken:spoken&&value===text,...signals});
+    running=r;text='';attachment=null;spoken=false;await tick();end?.scrollIntoView({behavior:'smooth',block:'end'});
   }
   async function upload(e){const file=e.target.files?.[0];if(!file)return;await act(async()=>{const f=new FormData();f.append('file',file);attachment=await api.post(`${base}/sessions/${running.id}/photos`,f);});e.target.value='';}
   async function leave(){if(running?.status==='active'&&data?.can_write)await api.post(`${base}/sessions/${running.id}/pause`,{paused:true});running=null;await load();}
@@ -60,8 +65,9 @@
     {#if running.status==='active'&&data?.can_write}
       <div class="choices">{#each choices as c}<button disabled={busy||!data?.can_write} onclick={()=>act(()=>send(c==='Für heute fertig'?'finish':c.includes('Beispiel')?'example':'message',c))}>{c}</button>{/each}</div>
       <form class="composer" onsubmit={e=>{e.preventDefault();act(()=>send(running.task?'answer':'message'));}}>
-        <label for="mentor-answer">{running.task?'Dein Versuch oder deine Frage':'Was möchtest du sagen?'}</label>
-        <textarea id="mentor-answer" bind:value={text} rows="3" maxlength="4000" disabled={busy||!data?.can_write} placeholder="Deine Antwort oder Frage …" onbeforeinput={e=>{if((e.inputType||'').startsWith('delete'))edits++;}}></textarea>
+        {#if data?.speech}<Speech onText={heard} {transcribe} disabled={busy||!data?.can_write} label={speechLabel}/>{/if}
+        <label for="mentor-answer">{running.task?'Dein Versuch oder deine Frage':'Was möchtest du sagen?'}{#if spoken} · erkannt, bitte prüfen{/if}</label>
+        <textarea id="mentor-answer" bind:value={text} rows="3" maxlength="4000" disabled={busy||!data?.can_write} placeholder={data?.speech?'… oder tippen':'Deine Antwort oder Frage …'} onbeforeinput={e=>{if((e.inputType||'').startsWith('delete'))edits++;}}></textarea>
         {#if attachment}<p>Foto angehängt. <button type="button" onclick={()=>attachment=null}>Entfernen</button></p>{/if}
         <div class="actions"><button class="primary" disabled={busy||(!text.trim()&&!attachment)||!data?.can_write}>Senden</button><button type="button" disabled={busy||!data?.can_write} onclick={()=>fileInput?.click()}>Foto zeigen</button><input class="file" type="file" accept="image/*" bind:this={fileInput} onchange={upload}/><a class="material-link" href={`#/materialien/${encodeURIComponent(running.subject||'')}${running.mode==='homework_help'&&running.task_id?`/${running.task_id}`:''}`} title="Arbeitsblatt, Heftseite oder PDF dauerhaft ablegen"><ActionLabel label="Material hinzufügen" /></a></div>
         <div class="actions"><button type="button" disabled={busy||!data?.can_write} onclick={()=>act(()=>send('hint','Bitte anders erklären.'))}>Anders erklären</button><button type="button" disabled={busy||!data?.can_write} onclick={()=>act(()=>send('finish','Für heute fertig.'))}>Für heute fertig</button></div>
