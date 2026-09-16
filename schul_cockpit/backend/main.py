@@ -51,6 +51,7 @@ from .routers import (
     textbooks,
     today,
     week,
+    week_review as week_review_router,
     vocab as vocab_router,
 )
 from .sync_worker import background_sync_loop
@@ -198,6 +199,7 @@ app.include_router(me.router, prefix=API)
 app.include_router(setup.router, prefix=API)
 app.include_router(today.router, prefix=API)
 app.include_router(week.router, prefix=API)
+app.include_router(week_review_router.router, prefix=API)
 app.include_router(subjects.router, prefix=API)
 app.include_router(search.router, prefix=API)
 app.include_router(oral.router, prefix=API)

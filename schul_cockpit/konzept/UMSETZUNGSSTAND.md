@@ -1,3 +1,35 @@
+# Wochenrückblick 0.74.0
+
+Stand 16.09.2026, abends. Fünftes und letztes Paket der Reihenfolge aus D67;
+Masterplan Abschnitt 10 („knappe Wochenübersicht mit wenigen Aussagen“).
+
+**Gebaut (D72).** `week_review.review`: Montag bis Sonntag der laufenden
+Woche; Abende vor einem Schultag aus `day_close.reliability` (aktuell und
+Vorwoche), Stufenwechsel aus `topic_events` (auf/ab nach `PROGRESS`),
+bestandene Kurzprüfungen (Wechsel auf gefestigt), abgeschlossene
+Mentor-Einheiten ohne Test und Demo mit Minuten und Fächern,
+Vokabelabfragen, erledigte Aufgaben der Woche und überfällige jetzt,
+Antworten nach der Schule (`afternoon_checks`), fehlendes Material für
+Arbeiten in 14 Tagen (`sources.photo_requests`), Arbeiten mit vorhandenem
+Material, KI-Kosten des Kontos in der Woche (abgerechnet plus reserviert).
+Daraus deterministische Sätze (`lines`) und die Rohzahlen. Route
+`GET /accounts/{id}/week-review`. `WeekReview.svelte` in der
+Elternübersicht je Kind unter dem Tagescheck, drei Zeilen, aufklappbar.
+
+**Geprüft.** Drei Tests (`test_week_review.py`): Zahlen und Sätze einer
+gefüllten Woche (Vorwoche, Demo und anderes Konto zählen nicht), die leere
+Woche ohne erfundene Aussagen, Route mit Kontogrenze. Frontend-Build
+bestanden.
+
+**Offen.** Der vierwöchige Familienversuch aus Masterplan Abschnitt 10 kann
+jetzt beginnen; die Ausgangslage ist der erste Rückblick. Ob die Kinder
+ihren eigenen Rückblick sehen sollen, ist offen (die Route erlaubt es, die
+Kinderansicht zeigt ihn nicht). Die Verlässlichkeitszahl (D34) ist damit
+den Eltern sichtbar; ob und wie sie den Kindern gezeigt wird, bleibt zu
+verabreden.
+
+---
+
 # Fächerübersicht auf dem Lernstand 0.73.0
 
 Stand 16.09.2026, abends. Viertes Paket der Reihenfolge aus D67; löst die

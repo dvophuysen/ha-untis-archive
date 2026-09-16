@@ -49,7 +49,7 @@ erschienen trotzdem als Übungsaufgabe.
 
 ## Evaluation
 
-Vorgeschlagen: begrenzter Pilot mit Ausgangslage, verständlichen Beobachtungskriterien und gemeinsamer Rückschau. Dauer und Fächer offen. Interesse, Organisationszuverlässigkeit, selbstständige Leistung und Belastung getrennt betrachten. Kein automatischer Wirkungsnachweis und keine automatische Nachhilfeentscheidung.
+Seit 0.74.0 gibt es den Wochenrückblick für Eltern (D72) als Ausgangslage. Vorgeschlagen bleibt: begrenzter Pilot mit verständlichen Beobachtungskriterien und gemeinsamer Rückschau. Dauer und Fächer offen. Interesse, Organisationszuverlässigkeit, selbstständige Leistung und Belastung getrennt betrachten. Kein automatischer Wirkungsnachweis und keine automatische Nachhilfeentscheidung.
 
 ## Quellen für die Einordnung, nicht als Beweis des Gesamtprodukts
 
