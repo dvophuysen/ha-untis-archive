@@ -108,6 +108,8 @@ async def lifespan(app: FastAPI):
         reminder_task.cancel()
         try:
             await reminder_task
+        except asyncio.CancelledError:
+            pass
         backup_task.cancel()
         try:
             await backup_task
