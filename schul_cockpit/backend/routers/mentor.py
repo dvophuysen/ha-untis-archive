@@ -201,6 +201,18 @@ async def open_unit(account_id,sid,model=None,persist=True):
 # Der erste Zug vom Modell; Tests der übrigen Abläufe schalten ihn ab.
 OPENING=True
 
+# Das Ende einer Einheit ist ein Vorschlag, kein Abbruch (D73). Nur das Kind
+# beendet („Für heute fertig“). Zeit- und Zuggrenzen und das finish des Modells
+# führen zu einer Frage; frühestens nach PROPOSE_EVERY weiteren Zügen erneut.
+PROPOSE_EVERY=6
+CAP_TEXT='Wir sind jetzt schon eine ganze Weile dran. Willst du für heute aufhören oder noch weitermachen? Beides ist in Ordnung.'
+END_QUESTION=' Willst du hier aufhören oder noch weitermachen?'
+END_QUESTION_TOPIC=' Willst du hier aufhören oder noch eine Aufgabe?'
+END_CHOICES=['Für heute fertig','Noch weitermachen']
+END_CHOICES_TOPIC=['Für heute fertig','Noch eine Aufgabe']
+CONTINUE_RULE=('Du beendest die Einheit nie selbst: action finish heißt nur, dass du das Ende vorschlägst; die App fragt das Kind. '
+               'Sagt das Kind „Noch weitermachen“ oder „Noch eine Aufgabe“, machst du mit einer neuen Aufgabe oder Variante weiter, ohne das Ende erneut anzusprechen. ')
+
 
 def catch_up_done(c,account_id,s,user):
     """Endet eine Einheit in der Lage „nachholen“, ist die versäumte Stunde
@@ -607,7 +619,15 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
         mode=json.loads(s.get('source_json') or '{}').get('mode')
         homework=mode=='homework_help';topic_mode=mode=='topic'
         # Ein Thema der Themenliste hat keine Uhr: Es endet mit der Stufe oder wenn das Kind aufhört.
-        finish=body.kind=='finish' or (topic_mode and s['turns']>=lernstand.MAX_TURNS) or (not homework and not topic_mode and (s['turns']>=12 or seconds>=s['max_minutes']*60))
+        finish=body.kind=='finish'
+        # Grenze erreicht: kein Abbruch, eine Frage ohne Modellaufruf. Das Kind
+        # entscheidet; sagt es „weiter“, geht es normal weiter.
+        at_cap=not homework and ((topic_mode and s['turns']>=lernstand.MAX_TURNS) or (not topic_mode and (s['turns']>=12 or seconds>=s['max_minutes']*60)))
+        if not finish and at_cap and s['turns']>=(s.get('end_proposed_turn') or 0)+PROPOSE_EVERY:
+            add_message(c,sid,account_id,body.request_key,'user',text or ('Foto ansehen' if body.attachment_id else 'Weiter'),author=author_of(user))
+            add_message(c,sid,account_id,body.request_key,'assistant',CAP_TEXT,{'choices':END_CHOICES_TOPIC if topic_mode else END_CHOICES,'task':public_task(s['current_task']),'assessment':None})
+            c.execute('UPDATE mentor_sessions SET end_proposed_turn=?,version=version+1,elapsed_seconds=?,updated_at=? WHERE id=?',(s['turns'],seconds,now_iso(),sid))
+            return view(c,get_session(c,account_id,sid))
         if finish:
             add_message(c,sid,account_id,body.request_key,'user',text or 'Für heute fertig',author=author_of(user))
             if homework:
@@ -651,7 +671,7 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
             task_text=' '.join(str(task.get(k) or '') for k in ('title','notes'))
             book_images,book_context=await homework_page_images(account_id,s['subject'],task_text)
             images.extend(book_images);ctx['textbook']=book_context
-        instruction=HOMEWORK_INSTRUCTION if homework_help else INSTRUCTION.replace(SCHEMA_TAIL,TOPIC_RULE+SCHEMA_TAIL) if topic_mode else INSTRUCTION
+        instruction=HOMEWORK_INSTRUCTION if homework_help else INSTRUCTION.replace(SCHEMA_TAIL,(TOPIC_RULE if topic_mode else '')+CONTINUE_RULE+SCHEMA_TAIL)
         raw,_,call_id=await ai.complete(account_id,'mentor',instruction+json.dumps(Reply.model_json_schema()),ctx,images,max_output=4096,session_id=sid)
         try:
             reply=Reply.model_validate_json(raw)
@@ -703,23 +723,26 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
             # No endless loop: two hints on a task then an explicit break/finish choice.
             if help_count>=2 and reply.action!='finish':payload['choices']=['Anderes Beispiel','Für heute fertig']
             c.execute('UPDATE mentor_messages SET payload=? WHERE session_id=? AND request_key=? AND role=\'assistant\'',(json.dumps(payload,ensure_ascii=False),sid,body.request_key))
-            # The mentor may wrap up a practice unit. A homework chat it may not
-            # close; only the tick on the homework itself does that.
-            closing_now=reply.action=='finish' and not homework
-            if closing_now:
+            # Das Modell darf das Ende vorschlagen, nie setzen (D73): Stand und
+            # Grund kommen in die Nachricht, dazu die Frage; die Einheit bleibt
+            # offen, bis das Kind „Für heute fertig“ wählt. Hausaufgabenhilfe
+            # endet ohnehin nur mit dem Haken an der Aufgabe.
+            proposing=reply.action=='finish' and not homework
+            end_proposed=s.get('end_proposed_turn') or 0
+            if proposing:
                 caught=catch_up_done(c,account_id,s,user)
-                if caught:
-                    reply.message=(reply.message.rstrip()+' '+caught)[:1800]
-                    c.execute("UPDATE mentor_messages SET text=? WHERE session_id=? AND request_key=? AND role='assistant'",(reply.message,sid,body.request_key))
-            if topic_mode and s.get('topic_id') and closing_now:
-                lernstand.set_note(c,s['topic_id'],reply.summary)
-                tv=topic_view(c,{**s,'account_id':account_id})
-                tail=mopen.closing_sentence(tv)
-                if tail:
-                    reply.message=(reply.message.rstrip()+' '+tail)[:1800]
-                    c.execute("UPDATE mentor_messages SET text=? WHERE session_id=? AND request_key=? AND role='assistant'",(reply.message,sid,body.request_key))
-            c.execute('UPDATE mentor_sessions SET skill_id=?,phase=?,status=?,version=version+1,turns=turns+1,help_count=?,current_task=?,task_help=?,summary=?,context_hash=?,pending_key=NULL,pending_since=NULL,active_since=?,updated_at=? WHERE id=?',
-                      (skill,reply.action,'completed' if closing_now else 'active',help_count,task_data,task_help,reply.summary,context_hash,None if closing_now else now_iso(),now_iso(),sid))
+                if caught:reply.message=(reply.message.rstrip()+' '+caught)[:1700]
+                if topic_mode and s.get('topic_id'):
+                    lernstand.set_note(c,s['topic_id'],reply.summary)
+                    tail=mopen.closing_sentence(topic_view(c,{**s,'account_id':account_id}))
+                    if tail:reply.message=(reply.message.rstrip()+' '+tail)[:1700]
+                reply.message=(reply.message.rstrip()+(END_QUESTION_TOPIC if topic_mode else END_QUESTION))[:1800]
+                payload['choices']=END_CHOICES_TOPIC if topic_mode else END_CHOICES
+                payload['task']=None;task_data=None
+                end_proposed=s['turns']+1
+                c.execute("UPDATE mentor_messages SET text=?,payload=? WHERE session_id=? AND request_key=? AND role='assistant'",(reply.message,json.dumps(payload,ensure_ascii=False),sid,body.request_key))
+            c.execute('UPDATE mentor_sessions SET skill_id=?,phase=?,status=?,version=version+1,turns=turns+1,help_count=?,current_task=?,task_help=?,summary=?,context_hash=?,pending_key=NULL,pending_since=NULL,active_since=?,end_proposed_turn=?,updated_at=? WHERE id=?',
+                      (skill,'clarify' if proposing else reply.action,'active',help_count,task_data,task_help,reply.summary,context_hash,now_iso(),end_proposed,now_iso(),sid))
             return view(c,get_session(c,account_id,sid))
     finally:
         with closing(webapp_conn()) as c:

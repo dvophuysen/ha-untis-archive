@@ -276,12 +276,25 @@ def test_reported_usage_above_reservation_disables_new_calls(setup):
     with pytest.raises(Exception):ai.reserve(1,'mentor',None,100,256)
 
 
-def test_time_and_turn_limits_close_without_model(setup):
+def test_time_and_turn_limits_ask_instead_of_closing(setup):
     client,state,patch=setup;child(state);s=start(client)
     with closing(db.webapp_conn()) as c:c.execute('UPDATE mentor_sessions SET turns=12 WHERE id=?',(s['id'],))
     async def forbidden(*a,**kw):raise AssertionError('Limit must not call model')
     patch.setattr(ai,'complete',forbidden)
-    assert send(client,s).json()['status']=='completed'
+    # Die Grenze beendet nichts: eine Frage ohne Modellaufruf, das Kind entscheidet (D73).
+    s=send(client,s).json()
+    assert s['status']=='active' and s['messages'][-1]['text']==m.CAP_TEXT and s['messages'][-1]['payload']['choices']==['Für heute fertig','Noch weitermachen']
+    # „Noch weitermachen“: der nächste Zug läuft normal, ohne erneute Frage.
+    calls=[];mock(patch,[reply()],calls)
+    s=send(client,s,text='Noch weitermachen').json()
+    assert s['status']=='active' and len(calls)==1 and s['messages'][-1]['text']=='Schauen wir ein Beispiel an.'
+    # Sechs Züge später fragt die App wieder; „Für heute fertig“ beendet.
+    with closing(db.webapp_conn()) as c:c.execute('UPDATE mentor_sessions SET turns=18 WHERE id=?',(s['id'],))
+    s=client.get(B+f"/sessions/{s['id']}").json()
+    patch.setattr(ai,'complete',forbidden)
+    s=send(client,s).json()
+    assert s['messages'][-1]['text']==m.CAP_TEXT
+    assert send(client,s,kind='finish').json()['status']=='completed'
 
 
 def test_demo_is_synthetic_persistent_and_excluded_from_live_learning(setup):
@@ -630,8 +643,16 @@ def test_homework_chat_stays_open_until_the_task_is_ticked(setup):
     assert client.get(B).json()['sessions'][0]['task_done'] is False
 
 
-def test_a_practice_unit_may_still_be_closed_by_the_mentor(setup):
+def test_the_mentor_proposes_the_end_and_the_child_decides(setup):
     client,state,patch=setup;child(state)
     mock(patch,[reply(task=None,action='finish')])
     s=start(client)
-    assert send(client,s).json()['status']=='completed'
+    s=send(client,s).json()
+    # Das finish des Modells ist ein Vorschlag: Einheit offen, Frage und zwei Antworten, keine Aufgabe.
+    assert s['status']=='active' and s['task'] is None
+    assert s['messages'][-1]['text'].endswith('Willst du hier aufhören oder noch weitermachen?')
+    assert s['messages'][-1]['payload']['choices']==['Für heute fertig','Noch weitermachen']
+    mock(patch,[reply()])
+    s=send(client,s,text='Noch weitermachen').json()
+    assert s['status']=='active' and s['task'] is not None
+    assert send(client,s,kind='finish').json()['status']=='completed'

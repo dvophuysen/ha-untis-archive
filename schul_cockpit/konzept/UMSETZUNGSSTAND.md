@@ -1,3 +1,40 @@
+# Ende als Vorschlag, Verstehen als Einstieg 0.75.0
+
+Stand 17.09.2026. Nutzerwunsch vom 16.09.: Der Mentor soll eine Sitzung nie
+abbrechen, sondern höchstens vorschlagen, ob das Kind beenden oder
+weitermachen will. Dazu Schritt 2 aus MENTOR_EINSTIEG.md.
+
+**Gebaut (D73).** `routers/mentor.turn`: Nur `kind=finish` beendet. Zeit-
+und Zuggrenze (12 Züge oder `max_minutes` bei Übung, `MAX_TURNS` bei Themen)
+erzeugen ohne Modellaufruf die Frage `CAP_TEXT` mit den Antworten „Für heute
+fertig“ und „Noch weitermachen“ (Themen: „Noch eine Aufgabe“); die Aufgabe
+bleibt stehen. Erneut gefragt wird frühestens nach `PROPOSE_EVERY` (6)
+weiteren Zügen (`mentor_sessions.end_proposed_turn`, Migration
+`mentor_end_proposal_001`). Das `action finish` des Modells setzt die Einheit
+nicht mehr auf `completed`: Nachricht plus Stufensatz (Themen) plus Satz zur
+nachgeholten Stunde (Nachholen) plus Frage, Aufgabe geleert, Einheit offen.
+`CONTINUE_RULE` sagt dem Modell, dass finish ein Vorschlag ist und „Noch
+weitermachen“ eine neue Aufgabe verlangt. Hausaufgabenhilfe war schon ohne
+Grenze. Die Budgetgrenze je Einheit (`SESSION_MICRO`) bleibt als einzige
+harte Grenze; sie meldet sich als Fehler, nicht als Abschluss.
+
+**Gebaut (D74).** „Mit dem Mentor verstehen“ an jeder beendeten Stunde mit
+Rückmeldung 1 oder 2 (`LessonCard.svelte`, `LessonDetail.svelte`), derselbe
+Weg wie beim Nachholen (`#/learning?lesson_id=…`); `situation` erkennt aus
+der Rückmeldung die Lage „erklaeren“ (seit 0.69.0).
+
+**Geprüft.** Tests angepasst und ergänzt: Grenze fragt statt zu beenden,
+ohne Modellaufruf, erneut nach sechs Zügen; finish des Modells als Vorschlag
+mit Antworten, danach „Noch weitermachen“ mit neuer Aufgabe; Themen-Einheit
+bei „sitzt“ mit Stufensatz und Frage; Nachhol-Einheit setzt die Stunde beim
+Vorschlag auf nachgeholt und bleibt offen. 143 Mentor-Tests grün,
+Frontend-Build bestanden.
+
+**Offen.** Live-Prüfung der Wortwahl mit den Kindern. Schritte 4 und 5 aus
+MENTOR_EINSTIEG.md (Kontrollieren mit Foto, Verfassung).
+
+---
+
 # Wochenrückblick 0.74.0
 
 Stand 16.09.2026, abends. Fünftes und letztes Paket der Reihenfolge aus D67;

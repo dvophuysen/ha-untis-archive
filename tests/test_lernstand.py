@@ -188,7 +188,10 @@ def test_topic_unit_has_no_clock_and_ends_with_the_stage(exam_env):
     mock(patch, [topic_reply("", "correct", action="finish")], contexts)
     s = send(client, s, kind="answer", text="servorum", seconds=4).json()
     assert contexts[-1]["topic"]["reached"] == "sitzt"
-    assert s["status"] == "completed" and s["topic"]["stage"] == "sitzt" and s["topic"]["next_check"] == "2026-09-14"
+    # Der Mentor schlägt das Ende vor, beendet aber nicht: Stufe im Satz, Frage, Kind entscheidet (D73).
+    assert s["status"] == "active" and s["topic"]["stage"] == "sitzt" and s["topic"]["next_check"] == "2026-09-14"
+    assert "Stand jetzt: sitzt" in s["messages"][-1]["text"] and s["messages"][-1]["text"].endswith("Willst du hier aufhören oder noch eine Aufgabe?")
+    assert s["messages"][-1]["payload"]["choices"] == ["Für heute fertig", "Noch eine Aufgabe"] and s["task"] is None
     with closing(db.webapp_conn()) as c:
         topic = dict(c.execute("SELECT * FROM exam_topics WHERE id=?", (tid,)).fetchone())
         events = [tuple(r) for r in c.execute("SELECT stage_before,stage_after FROM topic_events WHERE topic_id=? ORDER BY id", (tid,))]

@@ -173,6 +173,9 @@
           <button class="ci r4" class:active={rating === 4} disabled={busy} onclick={() => setRating(4)} title="nur Aufsicht / kein neuer Stoff">👀</button>
         {/if}
       </div>
+      {#if rating === 1 || rating === 2}
+        <a class="primary mentor-link" style="display:block; text-align:center; margin-top:0.5rem;" href={`#/learning?${new URLSearchParams({ lesson_id: String(lesson.id), subject: lesson.subject_name || lesson.subject_short || '', title: lesson.lstext || lesson.lesson_topic || '' })}`}>Mit dem Mentor verstehen</a>
+      {/if}
 
       <label style="margin-top:0.6rem;">Kommentar</label>
       <textarea bind:value={note} rows="3" placeholder="z.B. Hausaufgabe nicht verstanden, nochmal fragen…"></textarea>

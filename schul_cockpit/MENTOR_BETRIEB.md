@@ -58,7 +58,7 @@ Unterrichtsüberblicke berücksichtigen Kursfilter, ausgefallene Stunden, Stoffk
 
 Fähigkeiten, Nachrichten, Aufgabenfassungen, Hinweise und Kriterienbewertungen liegen in eigenen mentor_-Tabellen. Eine eigene Antwort nach Hinweis wird als unterstützt erfasst. Wiederholungen nutzen neue Aufgabenvarianten. Die Anzeige „mit Abstand selbstständig gezeigt“ verlangt mindestens zwei unterschiedliche Varianten und mindestens sieben Tage zwischen selbstständigen erfolgreichen Beobachtungen. Das ist eine transparente Produktregel, kein wissenschaftlich normierter Kompetenztest. KI-Bewertungen können falsch sein und bleiben korrigierbar.
 
-Kurze Sitzungen haben ein Zeit- und Nachrichtenlimit. Browser-Pausen und periodische Aktivität werden erfasst; die Zeitmessung ist eine Näherung, keine Überwachung. Nach zwei Hilfen werden alternative Erklärung und Abschluss angeboten. Nach zwölf Modellschritten oder dem Zeitrahmen endet die Einheit ohne weiteren KI-Aufruf.
+Kurze Sitzungen haben ein Zeit- und Nachrichtenlimit. Browser-Pausen und periodische Aktivität werden erfasst; die Zeitmessung ist eine Näherung, keine Überwachung. Nach zwei Hilfen werden alternative Erklärung und Abschluss angeboten. Nach zwölf Modellschritten oder dem Zeitrahmen fragt die App ohne weiteren KI-Aufruf, ob das Kind aufhören oder weitermachen will; nur „Für heute fertig“ beendet (D73, ab 0.75.0).
 
 ## Übungsklausuren
 

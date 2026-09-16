@@ -855,6 +855,11 @@ CREATE TABLE IF NOT EXISTS afternoon_checks (
 CREATE INDEX IF NOT EXISTS idx_afternoon_checks_day ON afternoon_checks(account_id,school_day);
 """))
 
+# Das Ende einer Einheit ist ein Vorschlag, kein Abbruch (D73): merken, bei
+# welchem Zug zuletzt vorgeschlagen wurde, damit nicht jede Antwort fragt.
+_MIGRATIONS.append(("mentor_end_proposal_001",
+                    "ALTER TABLE mentor_sessions ADD COLUMN end_proposed_turn INTEGER NOT NULL DEFAULT 0"))
+
 
 def init_webapp_db() -> None:
     """Apply base schema + pending migrations (idempotent)."""

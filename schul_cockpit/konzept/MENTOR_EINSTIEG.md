@@ -190,7 +190,7 @@ jetzt sofort"). Keine Uhr, keine Minuten, keine Formulare.
    Vorschläge aus dem Inhalt. Schlusssatz mit Stufe und Termin.
 2. **Erklären** als Lage: Auslöser aus Stunden-Rückmeldung, Zusammenfassung
    aus dem Material, Umsteuern aus jeder Lage. Erklärung vor der ersten
-   Aufgabe zählt nicht als Hilfe.
+   Aufgabe zählt nicht als Hilfe. Einstieg an der Stunde gebaut in 0.75.0 (D74).
 3. **Nachholen** aus der Fehlzeit. Gebaut in 0.72.0 (D70): Einstieg aus
    Nachhol-Liste und Stundenansicht, Quellen der Stunde im Kontext, Ende
    setzt die Stunde auf nachgeholt.

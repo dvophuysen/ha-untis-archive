@@ -181,9 +181,12 @@ def test_the_mentor_closing_a_catch_up_unit_marks_the_lesson_too(exam_env):
     assert s["situation"]["lage"] == "nachholen"
     patch.setattr(ai, "complete", lambda *a, **kw: _reply({"message": "Das war es für heute.", "choices": [], "action": "finish", "task": None, "assessment": None, "summary": "Subjekt und Prädikat erkannt."}))
     done = send(client, s, text="Ich habe es verstanden").json()
-    assert done["status"] == "completed" and "gilt damit als nachgeholt" in done["messages"][-1]["text"]
+    # Vorschlag statt Abbruch: die Stunde gilt als nachgeholt, die Einheit bleibt offen, bis das Kind entscheidet.
+    assert done["status"] == "active" and "gilt damit als nachgeholt" in done["messages"][-1]["text"]
+    assert done["messages"][-1]["payload"]["choices"] == ["Für heute fertig", "Noch weitermachen"]
     with closing(db.webapp_conn()) as c:
         assert c.execute("SELECT COUNT(*) FROM caught_up WHERE account_id=1 AND lesson_id=2").fetchone()[0] == 1
+    assert send(client, done, kind="finish").json()["status"] == "completed"
     # Eine neue Einheit zu derselben Stunde ist kein Nachholen mehr: die Stunde ist erledigt.
     patch.setattr(ai, "complete", lambda *a, **kw: _reply({"message": "Weiter.", "choices": [], "action": "clarify", "task": None, "assessment": None, "summary": ""}))
     again = client.post(B + "/sessions", json={"subject": "Deutsch", "lesson_id": 2, "voluntary": True}).json()
