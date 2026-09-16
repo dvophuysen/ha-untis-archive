@@ -69,3 +69,16 @@ def test_failed_analyses_are_retried_after_a_while_and_only_three_times(env, mon
     for _ in range(5):
         asyncio.run(triggers.retry_failed())
     assert attempts == [mid] * triggers.RETRY_MAX
+
+
+def test_budget_failures_are_retried_without_a_cap(env, monkeypatch):
+    client, state, patch = env
+    seed(client, ai_enabled=True)
+    old = "2026-09-11T13:00:00+02:00"
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,analysis_state,analysis_error,created_at,updated_at) "
+                  "VALUES(1,'worksheet','MUSIK','Blatt','failed','429',?,?)", (old, old))
+        mid = c.execute("SELECT id FROM materials WHERE title='Blatt'").fetchone()[0]
+    monkeypatch.setattr(triggers, "now_iso", lambda: "2026-09-11T15:00:00+02:00")
+    triggers._RETRIES[mid] = triggers.RETRY_MAX + 5
+    assert triggers.failed_materials() == [(1, mid)]

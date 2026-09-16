@@ -1004,6 +1004,17 @@ def exam_sources(account_id: int, subject: str, since: str, until: str) -> dict 
                 if present and analysis.get(link["material_id"]) == "failed":
                     kind = "failed"
                 why[key] = {"label": label_or_book(link), "page": link["page"], "kind": kind, "material_id": link["material_id"]}
+    if any(w["kind"] == "failed" for w in why.values()):
+        # Der Grund des Scheiterns entscheidet, was die Karte sagt: 429 ist der KI-Rahmen.
+        ids = [w["material_id"] for w in why.values() if w["kind"] == "failed"]
+        with closing(webapp_conn()) as conn:
+            errors = {r[0]: r[1] for r in conn.execute(
+                f"SELECT id,analysis_error FROM materials WHERE id IN ({','.join('?' * len(ids))})", tuple(ids))}
+        for w in why.values():
+            if w["kind"] == "failed":
+                w["error"] = errors.get(w["material_id"]) or ""
+                if str(w["error"]).strip() == "429":
+                    w["kind"] = "budget"
     counts = {"ready": 0, "pending": 0, "missing": 0}
     gaps: dict[str, list[int]] = {}
     pending_items = []

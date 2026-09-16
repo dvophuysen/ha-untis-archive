@@ -89,13 +89,16 @@ def failed_materials(limit: int = RETRY_LIMIT) -> list[tuple[int, int]]:
     cutoff = (datetime.fromisoformat(now_iso()) - RETRY_AFTER).isoformat()
     with closing(webapp_conn()) as conn:
         rows = conn.execute(
-            "SELECT m.account_id,m.id FROM materials m "
+            "SELECT m.account_id,m.id,m.analysis_error FROM materials m "
             "JOIN learning_profiles p ON p.account_id=m.account_id AND p.active=1 AND p.ai_enabled=1 "
             "WHERE m.hidden=0 AND m.analysis_state='failed' AND m.updated_at<? ORDER BY m.updated_at LIMIT ?",
             (cutoff, limit * 3)).fetchall()
     out = []
     for r in rows:
-        if _RETRIES.get(r[1], 0) < RETRY_MAX:
+        # Ein erschöpfter KI-Rahmen (429) ist kein Fehler der Seite: so oft wieder
+        # versuchen, bis Rahmen frei ist; die Anfrage kostet vorher nichts.
+        budget = str(r[2] or "").strip() == "429"
+        if budget or _RETRIES.get(r[1], 0) < RETRY_MAX:
             out.append((r[0], r[1]))
         if len(out) >= limit:
             break
