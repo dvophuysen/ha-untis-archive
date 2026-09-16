@@ -146,8 +146,14 @@ def settle(key, result=None, error=None):
             c.execute("UPDATE mentor_ai_calls SET status='uncertain',finished_at=?,error=? WHERE id=?",(now_iso(),error or 'usage_missing',key))
 
 
-async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, model=None):
+EFFORTS=('low','medium','high')
+
+
+async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, model=None, effort=None):
     config=ai_settings();url=urlsplit(config['url'])
+    # Reasoning-Tiefe: bisher fest low; für die Eichung je Aufruf wählbar (D77).
+    effort=effort or 'low'
+    if effort not in EFFORTS: raise ValueError('Invalid reasoning effort')
     model=model_for(purpose,override=model)
     if not config['key'] or not config['model'] or url.scheme!='https' or not url.hostname or url.username or url.password:
         raise HTTPException(503,'Die KI-Verbindung ist noch nicht eingerichtet.')
@@ -182,10 +188,10 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
     payload=model_payload(config['url'],model,instruction,context,images)
     if uses_responses(config['url']):
         payload['max_output_tokens']=max_output
-        payload['reasoning']={'effort':'low'}
+        payload['reasoning']={'effort':effort}
     else:
         payload['max_completion_tokens']=max_output
-        payload['reasoning_effort']='low'
+        payload['reasoning_effort']=effort
     key=reserve(account_id,purpose,session_id,upper_input,max_output,model=model)
     result=None
     try:

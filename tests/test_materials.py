@@ -238,3 +238,35 @@ def test_the_repair_unlocks_empty_locked_texts_and_queues_a_new_reading(env):
         conn.execute("UPDATE materials SET content_text='Text da',analysis_state='ready',locked_fields='[\"content_text\"]' WHERE id=?", (other["id"],))
         conn.executescript(sql)
     assert client.get(f"{URL}/{other['id']}").json()["analysis_state"] == "ready"
+
+
+def test_compare_texts_sees_digit_and_line_errors_that_word_recall_misses():
+    stored = "2.\na) 12 − (5 − x) = 10\nd) 14x − (8 + 3x) · 5 = 0\nk) 85x − (5 + 9x) · 9 = 3x − 5\nVoc. 1. Lektion S. 10, 11"
+    read = "2.\na) 12 − (5 − x) = 10\nd) 14x − (8 + 3x) · 5 = 4\nk) 85x − (5 + 9x) · 9 = 3x\nVoc. 7. Lektion S. 70, 77"
+    m = analysis.compare_texts(stored, read)
+    # Die Wörter stimmen fast alle, die Zahlen nicht: genau das war das blinde Auge der ersten Eichung.
+    assert m["word_recall"] >= 0.8
+    assert m["number_recall"] < 0.8 and set(m["missing_numbers"]) >= {"0", "1", "10", "11"}
+    assert m["only_stored"] == ["d) 14x − (8 + 3x) · 5 = 0", "k) 85x − (5 + 9x) · 9 = 3x − 5", "Voc. 1. Lektion S. 10, 11"]
+    assert len(m["only_read"]) == 3 and m["formula_lines_stored"] == 3 == m["formula_lines_read"]
+    assert analysis.compare_texts("", "")["text_ratio"] == 1.0
+
+
+def test_handwriting_always_goes_to_review_and_page_type_is_stored(env):
+    client = client_for(env)
+    body = upload(client).json()
+    insight = analysis.Insight(kind="notes", subject_name="Latein", title="Zettel", summary="Kurz", content_text="BB S. 13",
+                               confidence=0.97, page_type="handwriting", handwritten=True)
+    with closing(db.webapp_conn()) as conn:
+        row = conn.execute("SELECT * FROM materials WHERE id=?", (body["id"],)).fetchone()
+        analysis._apply(conn, 1, row, insight)
+    after = client.get(f"{URL}/{body['id']}").json()
+    assert after["page_type"] == "handwriting" and after["handwritten"] == 1
+    # Vertrauen 0,97 hätte bisher kein Gegenlesen ausgelöst; Handschrift tut es immer.
+    assert after["needs_review"] is True
+    printed = upload(client).json()
+    with closing(db.webapp_conn()) as conn:
+        row = conn.execute("SELECT * FROM materials WHERE id=?", (printed["id"],)).fetchone()
+        analysis._apply(conn, 1, row, analysis.Insight(kind="worksheet", title="Blatt", content_text="Aufgabe 1", confidence=0.97, page_type="formula"))
+    other = client.get(f"{URL}/{printed['id']}").json()
+    assert other["page_type"] == "formula" and other["needs_review"] is False

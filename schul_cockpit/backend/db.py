@@ -871,6 +871,13 @@ WHERE content_text='' AND analysis_state='ready' AND hidden=0
   AND EXISTS (SELECT 1 FROM json_each(materials.locked_fields) WHERE value='content_text');
 """))
 
+# Seitenart und Handschrift je Material (D77): Handschrift geht immer zum
+# Gegenlesen, die Seitenart steuert später die Modellwahl.
+_MIGRATIONS.append(("materials_014_page_type", """
+ALTER TABLE materials ADD COLUMN page_type TEXT;
+ALTER TABLE materials ADD COLUMN handwritten INTEGER NOT NULL DEFAULT 0;
+"""))
+
 
 def init_webapp_db() -> None:
     """Apply base schema + pending migrations (idempotent)."""

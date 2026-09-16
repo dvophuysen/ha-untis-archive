@@ -275,6 +275,9 @@ def needs_review(row) -> bool:
         return False
     if row["kind"] in REVIEW_KINDS:
         return True
+    # Handschrift immer gegenlesen: Eine 1 wird zur 7, egal wie sicher sich das Modell fühlt (D77).
+    if "handwritten" in keys and row["handwritten"]:
+        return True
     confidence = row["confidence"] if "confidence" in keys else None
     return confidence is not None and confidence < REVIEW_CONFIDENCE
 
