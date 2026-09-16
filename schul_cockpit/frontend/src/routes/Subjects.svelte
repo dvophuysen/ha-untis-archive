@@ -57,6 +57,9 @@
     || subjectStyle(a.name).name.localeCompare(subjectStyle(b.name).name, 'de')));
   const measured = $derived(rows.some(s => s.st));
   const assessedOnly = $derived(rows.some(s => !s.st && s.known));
+  // In der Fachansicht ist das Fach schon gegeben; die Feld-Reihenfolge des Plans
+  // ist hier unsichtbar und wirkte zufällig. Eine Regel: neueste Stunde zuerst.
+  function newestFirst(topics) { return [...(topics || [])].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(a.lstext || '').localeCompare(String(b.lstext || ''), 'de')); }
   function points(history) { return history.map((p, i) => `${3 + i * 66 / Math.max(1, history.length - 1)},${23 - (p.rating - 1) * 10}`).join(' '); }
 </script>
 
@@ -116,7 +119,7 @@
                 {#each s.history as point}<p class="observation"><span>{formatShortDate(point.date)}{#if point.start_time} · {hour(point.start_time)}{/if}</span><span>{ratingText(point.rating)}</span></p>{/each}
               </details>
             {/if}
-            {#each s.group?.topics || s.group?.items || [] as topic (topic.lesson_id)}
+            {#each newestFirst(s.group?.topics || s.group?.items) as topic (topic.lesson_id)}
               <article class="topic"><h3>{topic.lstext}</h3><p class="topic-state">{ratingText(topic.rating)}</p>
                 <div class="topic-actions"><span class="dim">{topic.source_count} {topic.source_count === 1 ? 'Stunde' : 'Stunden'} · {formatShortDate(topic.date)}</span><a href={topic.url}><ActionLabel kind="chat" label="Üben" /></a></div>
                 <details><summary>Quellen ansehen</summary>{#each topic.sources as source}<p class="dim">{formatShortDate(source.date)}{#if source.start_time} · {hour(source.start_time)}{/if} · {ratingText(source.rating)}</p>{/each}</details>
