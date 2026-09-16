@@ -1,9 +1,21 @@
-# Quellenbestand 0.52.2–0.63.3
+# Quellenbestand 0.52.2–0.64.0
 
-Stand 16.09.2026, mittags. Bis 0.56.11 auf der laufenden Instanz installiert und
+Stand 16.09.2026, nachmittags. Bis 0.56.11 auf der laufenden Instanz installiert und
 mit echten Abrufen geprüft; 0.57.0 folgt in derselben Session.
 
 ## Was ausgeliefert ist
+
+**Lernstand je Thema (0.64.0, D59).** `exam_topics` aus der offiziellen
+Themenliste (Modell zerlegt, Text prüft, Hash schützt vor Doppelaufrufen),
+`topic_answers` mit Signalen (Sekunden, Löschungen, Hilfe, Umerklären,
+Aufgabenart), `lernstand.replay` liest die Stufe ab. Themen-Einheiten im Mentor
+(`mode: topic`) ohne Uhr, mit Kurzprüfung ab drei Tagen nach „sitzt“.
+Klausurkarte zeigt Themen sortiert mit Stelle, Materialstand und Gefühl.
+Live geprüft: Josias Lateinliste ergab fünf Themen mit allen Stellen belegt
+(Begleitband S. 13, 13–15, 14; Textband S. 10–11, 14–15; Vokabeln S. 10–11);
+Einheit startet und meldet „Thema 2 von 5 · Stufe: neu“. Offen: Themen ohne
+Themenliste kommen weiter aus dem erschlossenen Unterricht (`exam_scope`),
+noch ohne Stufe; Spracheingabe und Vokabeltrainer folgen (0.65, 0.66).
 
 **Sicherung und Betrieb (0.63.0 bis 0.63.3, D56 bis D58).** Die Backup-
 Anzeige zeigt, ob ein HA-Backup dieses Add-on enthält (Rolle `backup`, vorher
