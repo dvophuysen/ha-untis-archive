@@ -387,7 +387,7 @@ def cards(account_id: int, subject: str, unit: str, stage: int, direction: str, 
     deren Bedeutung schon sitzt oder gefestigt ist."""
     with closing(webapp_conn()) as c:
         words = [dict(r) for r in c.execute(
-            "SELECT * FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND unit=? AND hidden=0 ORDER BY position,id",
+            "SELECT * FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND unit=? AND hidden=0 ORDER BY page,position,id",
             (account_id, subject, unit))]
         states = word_states(c, account_id, [w["id"] for w in words])
     key = "s2" if stage == 2 else "s1"
