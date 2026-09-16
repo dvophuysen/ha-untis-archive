@@ -793,10 +793,10 @@
 
   <div class="section-title">Datensicherung</div>
   <div class="banner">
-    Das Add-on sichert sich jede Nacht zwischen drei und sechs Uhr selbst als
-    Home-Assistant-Backup (Einstellungen → System → Sicherungen, Name „Schul-Cockpit …“)
-    und behält die letzten sieben. Das automatische HA-Backup enthält nur die dort
-    ausgewählten Add-ons. Der ZIP-Download hier macht dich zusätzlich unabhängig.
+    Gesichert wird in Home Assistant (Einstellungen → System → Sicherungen). Enthält das
+    automatische HA-Backup dieses Add-on, ist nichts weiter nötig; fehlt eine Sicherung mit
+    dem Add-on länger als einen Tag, legt es nachts zwischen drei und sechs Uhr selbst eine an
+    („Schul-Cockpit …“, die letzten sieben bleiben). Der ZIP-Download macht dich zusätzlich unabhängig.
   </div>
   <div class="card">
     {#if backupStatus}
@@ -818,7 +818,7 @@
       {:else if !backupStatus.last_addon_backup}
         <div class="error-box" style="margin-bottom:0.5rem;">
           ⚠️ Kein Home-Assistant-Backup enthält bisher dieses Add-on. Die nächste
-          Nachtsicherung legt eines an; mit dem Knopf unten geht es sofort.
+          Nacht legt das Add-on selbst eines an; mit dem Knopf unten geht es sofort.
         </div>
       {:else if Date.now() - new Date(backupStatus.last_addon_backup).getTime() > 48 * 3600 * 1000}
         <div class="error-box" style="margin-bottom:0.5rem;">

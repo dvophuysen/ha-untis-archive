@@ -1,7 +1,12 @@
+## 0.63.1
+
+- Die App startete nach 0.63.0 nicht: Ein Syntaxfehler beim Beenden der Hintergrundaufgaben. Ein Test übersetzt jetzt jedes Backend-Modul vor der Auslieferung.
+- Korrektur zur Sicherung: Die automatischen HA-Backups enthalten das Add-on sehr wohl, die Anzeige hatte nur wegen der fehlenden Berechtigung nichts gesehen. Die Nachtsicherung des Add-ons springt nur ein, wenn länger als einen Tag kein HA-Backup mit dem Add-on entstanden ist.
+
 ## 0.63.0
 
-- Backup zuverlässig: Das Add-on sichert sich jede Nacht zwischen drei und sechs Uhr selbst als Home-Assistant-Teil-Backup und behält die letzten sieben. Die automatischen HA-Backups enthielten das Schul-Cockpit bisher nicht, nur ein Hand-Backup vom 14.09. Die Einstellungsseite zeigt jetzt die letzte Sicherung, die dieses Add-on enthält, warnt ab zwei Tagen und hat den Knopf „Jetzt in Home Assistant sichern“.
-- Die Backup-Anzeige meldete fälschlich „kein Backup vorhanden“: Dem Add-on fehlte die Berechtigung, Backups aufzulisten (403). Es hat jetzt die Rolle „backup“.
+- Backup-Anzeige: Sie meldete fälschlich „kein Backup vorhanden“, weil dem Add-on die Berechtigung fehlte, Backups aufzulisten (403). Es hat jetzt die Rolle „backup“ und zeigt die letzte Sicherung, die dieses Add-on enthält, warnt ab zwei Tagen und hat den Knopf „Jetzt in Home Assistant sichern“.
+- Fehlt länger als einen Tag ein HA-Backup mit dem Add-on, sichert es sich nachts zwischen drei und sechs Uhr selbst als Teil-Backup und behält die letzten sieben eigenen.
 - Der ZIP-Download scheiterte mit „database is locked“, weil der vollständige Checkpoint auf alle Schreiber wartete und den Server dabei anhielt. Der Schnappschuss läuft jetzt im Hintergrund, mit passivem Checkpoint und seitenweisem Kopieren.
 
 ## 0.62.0
