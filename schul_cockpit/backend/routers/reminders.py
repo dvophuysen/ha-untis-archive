@@ -17,6 +17,9 @@ class SettingsIn(InputModel):
     # Die Morgenmitteilung trifft nur, wer am Abend nicht abgeschlossen hat.
     morning_enabled: StrictBool = False
     morning_at: str | None = Field(default=None, pattern=r'^([01][0-9]|2[0-3]):[0-5][0-9]$')
+    # Die Frage nach der Schule: Foto oder „nichts Neues“, so viele Minuten nach der letzten Stunde.
+    afternoon_enabled: StrictBool = False
+    afternoon_delay: int = Field(default=20, ge=0, le=180)
 
 class TargetsIn(InputModel):
     services: list[str] = Field(default_factory=list, max_length=10)
@@ -25,7 +28,7 @@ class TargetsIn(InputModel):
 def get(account_id:int,user:CurrentUser=Depends(get_current_user)):
     access(user,account_id)
     with closing(webapp_conn()) as c:
-        row=c.execute('SELECT enabled,remind_at,morning_enabled,morning_at FROM reminder_settings WHERE account_id=?',(account_id,)).fetchone()
+        row=c.execute('SELECT enabled,remind_at,morning_enabled,morning_at,afternoon_enabled,afternoon_delay FROM reminder_settings WHERE account_id=?',(account_id,)).fetchone()
     try:
         access(user,account_id,write=True,parent=True);can_manage=True
     except HTTPException:
@@ -35,6 +38,8 @@ def get(account_id:int,user:CurrentUser=Depends(get_current_user)):
     return dict(enabled=bool(row and row['enabled']),remind_at=row['remind_at'] if row else None,
                 morning_enabled=bool(row['morning_enabled']) if row else False,
                 morning_at=(row['morning_at'] if row else None) or r.DEFAULT_MORNING,
+                afternoon_enabled=bool(row['afternoon_enabled']) if row else False,
+                afternoon_delay=(row['afternoon_delay'] if row else None) or 20,
                 can_manage=can_manage,
                 app_targets=app_notify.targets(account_id),
                 app_services=app_notify.services() if can_manage else [],
@@ -48,10 +53,11 @@ def put(account_id:int,body:SettingsIn,user:CurrentUser=Depends(get_current_user
     if body.morning_at and not '05:00' <= body.morning_at <= '09:00':
         raise HTTPException(422,'Bitte eine Morgenzeit zwischen 5 und 9 Uhr wählen.')
     with closing(webapp_conn()) as c:
-        c.execute('INSERT INTO reminder_settings(account_id,enabled,remind_at,morning_enabled,morning_at) VALUES(?,?,?,?,?) '
+        c.execute('INSERT INTO reminder_settings(account_id,enabled,remind_at,morning_enabled,morning_at,afternoon_enabled,afternoon_delay) VALUES(?,?,?,?,?,?,?) '
                   'ON CONFLICT(account_id) DO UPDATE SET enabled=excluded.enabled,remind_at=excluded.remind_at,'
-                  'morning_enabled=excluded.morning_enabled,morning_at=excluded.morning_at',
-                  (account_id,int(body.enabled),body.remind_at,int(body.morning_enabled),body.morning_at))
+                  'morning_enabled=excluded.morning_enabled,morning_at=excluded.morning_at,'
+                  'afternoon_enabled=excluded.afternoon_enabled,afternoon_delay=excluded.afternoon_delay',
+                  (account_id,int(body.enabled),body.remind_at,int(body.morning_enabled),body.morning_at,int(body.afternoon_enabled),body.afternoon_delay))
     return get(account_id,user)
 
 @router.put('/targets')

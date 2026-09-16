@@ -204,8 +204,10 @@ Rückschritt ist verabredet, nicht beschämend. Gerechnet wird in Monaten.
 
 ## Stand: was gebaut ist
 
-Stufe 0 und Stufe 1 stehen. Der Web-Push-Code ist mit 0.70.0 entfernt (D65);
-es gibt nur noch den Weg über die Home-Assistant-App.
+Stufe 0, 1 und 2 stehen. Der Web-Push-Code ist mit 0.70.0 entfernt (D65);
+es gibt nur noch den Weg über die Home-Assistant-App. Stufe 2 ist mit 0.71.0
+gebaut (D69): die Frage nach der Schule, Foto oder „nichts Neues“, Aufgabe
+mit Fach und Termin der nächsten Stunde aus der Lesung.
 
 Die App brauchte eine Unterscheidung, die ihr fehlte: „für morgen ist nichts
 mehr offen" gegen „niemand hat draufgeschaut". Ohne sie träfe die
@@ -238,15 +240,16 @@ Eine Einschränkung gehört dazu: Ein Abend ohne Aufgaben und mit schon
 bestätigter Tasche zählt als erledigt, auch wenn niemand die App geöffnet hat.
 Gemessen wird „nichts blieb offen", nicht „das Kind hat nachgesehen".
 
-## Nächstes Paket: der Nachmittag
+## Der Nachmittag (gebaut in 0.71.0)
 
-Der Nachmittag. Die Aufgabe wird oft gar nicht erst notiert, und dann kann auch
-niemand sie abends erledigen. Nach der letzten Stunde eine Mitteilung mit einer
-Frage: Fehlt eine Aufgabe? Ein Tippen öffnet eine Seite mit zwei Möglichkeiten,
-Kamera oder „nichts Neues". Die Materialablage wertet das Foto bereits aus und
-ordnet es Fach und Aufgabe zu; der Weg dorthin fehlt nur noch. Der
-Tagesabschluss zeigt, wie das aussehen kann: ein Knopf, ein Eintrag, kein
-Formular.
+Die Aufgabe wird oft gar nicht erst notiert, und dann kann auch niemand sie
+abends erledigen. Seit 0.71.0 fragt die App kurz nach der letzten Stunde
+einmal: Alles von heute notiert? Die Karte oben auf der Startseite hat zwei
+Möglichkeiten, Kamera oder „nichts Neues“. Aus dem Foto entsteht die Aufgabe
+sofort, vorläufig fällig zum nächsten Schultag; die Lesung trägt Fach, Titel
+und den Tag der nächsten Stunde des Fachs nach. Die Mitteilung dazu ist ab
+Werk aus und wird von den Eltern eingeschaltet (D69). Ein Knopf, ein Eintrag,
+kein Formular.
 
 Daneben zwei kleinere Korrekturen, die beim Bauen aufgefallen sind. Die
 Übungsmessung auf der Klausurkarte betrachtet ein Zeitfenster; ob sechzig Tage

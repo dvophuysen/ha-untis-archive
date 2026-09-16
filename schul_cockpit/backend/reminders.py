@@ -8,7 +8,7 @@ import logging
 from contextlib import closing
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from . import app_notify, day_close
+from . import afternoon_check, app_notify, day_close
 from .db import webapp_conn
 from .packing import packing_plan, view
 
@@ -157,6 +157,10 @@ def run_once(now=None):
             morning_fallback(setting, now)
         except Exception:
             LOG.warning('Morgenmitteilung nicht möglich für Konto %s', account, exc_info=True)
+        try:
+            afternoon_check.notify(setting, now)
+        except Exception:
+            LOG.warning('Nachmittagsfrage nicht möglich für Konto %s', account, exc_info=True)
         try:
             # Der Abend gilt als erledigt, sobald nichts mehr offen ist — ohne
             # dass jemand etwas bestätigen muss. Deshalb wird jede Runde

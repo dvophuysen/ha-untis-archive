@@ -19,6 +19,7 @@ from .reconcile import reconcile_all
 from .routers import (
     absences,
     afternoon,
+    afternoon_check as afternoon_check_router,
     audit,
     auth_router,
     backup as backup_router,
@@ -208,6 +209,7 @@ app.include_router(settings_router.router, prefix=API)
 app.include_router(textbooks.router, prefix=API)
 app.include_router(audit.router, prefix=API)
 app.include_router(reminders_router.router, prefix=API)
+app.include_router(afternoon_check_router.router, prefix=API)
 app.include_router(notify.router, prefix=API)
 app.include_router(exams.router, prefix=API)
 app.include_router(plan_router.router, prefix=API)

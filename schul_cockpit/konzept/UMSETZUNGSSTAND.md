@@ -1,3 +1,39 @@
+# Die Frage nach der Schule 0.71.0
+
+Stand 16.09.2026, abends. Zweites Paket der Reihenfolge aus D67; Stufe 2 aus
+VERANTWORTUNG.md.
+
+**Gebaut (D69).** `afternoon_check.py`: `last_lesson_end` aus dem Stundenplan
+des Tages (ohne ausgefallene und ausgeblendete Stunden), `notify` im
+Erinnerungsdienst (`reminders.run_once`) mit Fenster von 30 Minuten ab
+Schulende plus Abstand, einmal je Gerät und Tag (`afternoon_app_deliveries`),
+nicht mehr nach einer Antwort. `state` für die Karte: aktiv zwischen letzter
+Stunde und Abendzeit, geschlossen nach „nichts Neues“. `intake_photo` legt
+Material und Aufgabe sofort an (Titel vorläufig, fällig nächster Schultag,
+`material_links` Art `task`, Eintrag in `afternoon_checks`); `refine` trägt
+nach der Lesung Fach, Titel „Fach: Titel des Materials“ und den Tag der
+nächsten Stunde des Fachs nach, einmal, nur solange die Aufgabe offen ist.
+Aufgerufen aus `material_analysis.after_analysis`, damit auch der Nachtlauf
+eine gescheiterte Lesung nachträgt. Router `/accounts/{id}/afternoon-check`
+(GET, POST nothing, POST photo). Einstellungen `afternoon_enabled` (aus) und
+`afternoon_delay` (20 Minuten) in `reminder_settings`. Frontend:
+`AfternoonCheck.svelte` oben in der Heute-Ansicht, Abschnitt „Nach der
+Schule“ in den Erinnerungs-Einstellungen.
+
+**Geprüft.** Acht neue Tests (`test_afternoon_check.py`): Einstellungen,
+Zeitpunkt der Mitteilung, kein Versand ohne Einschalten oder nach Antwort,
+Karte aktiv nur zwischen Schulende und Abend, Foto legt die Aufgabe sofort an,
+Lesung trägt Fach/Titel/Termin nach, ohne Fach bleibt der vorläufige Termin,
+erledigte Aufgabe bleibt unangetastet. Frontend-Build bestanden.
+
+**Offen.** Live-Prüfung auf einem Kindergerät (Mitteilung, Kamera aus der
+Karte) steht aus; die Einstellung ist ab Werk aus. Ob es eine kleine
+Anerkennung für die Routine gibt, bleibt eine Entscheidung der Eltern
+(VERANTWORTUNG.md, offene Entscheidungen). Die Lesung eines Fotos kostet den
+üblichen Hintergrundrahmen.
+
+---
+
 # Betriebspaket 0.70.0
 
 Stand 16.09.2026, abends. Erstes von fünf Paketen der Reihenfolge aus D67.

@@ -10,6 +10,7 @@
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskEditor from '../lib/TaskEditor.svelte';
   import TaskDetail from '../lib/TaskDetail.svelte';
+  import AfternoonCheck from '../lib/AfternoonCheck.svelte';
 
   let { accountId } = $props();
   let data = $state(null), tasks = $state([]), plan = $state(null);
@@ -97,6 +98,7 @@
       {/if}
     </section>
   {/if}
+  {#if data && !evening}<AfternoonCheck {accountId} onchange={taskSaved} />{/if}
   {#if data}
     <section class="day-section school" class:school-done={!lessons.upcoming.length && !lessons.open.length}>
       <div class="section-head"><h3>{activeUpcoming.length ? 'In der Schule' : 'Dein Schultag'}</h3><a href="#/week"><ActionLabel label="Woche ansehen" /></a></div>
