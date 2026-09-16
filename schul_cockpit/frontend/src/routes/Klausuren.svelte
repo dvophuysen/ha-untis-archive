@@ -121,7 +121,7 @@
     const parts = e.scope?.parts || 0;
     return {
       tone: parts ? 'warn' : 'none',
-      text: `Keine offizielle Themenliste · angenommen: alles ${sinceLabel(e.scope)}${parts ? `, ${parts} ${parts === 1 ? 'Thema' : 'Themen'}` : ''}`,
+      text: `Keine Themenliste · angenommen: alles ${sinceLabel(e.scope)}${parts ? `, ${parts} ${parts === 1 ? 'Thema' : 'Themen'}` : ''}`,
       action: { label: 'ablegen', href: materialUrl(e), title: 'Zettel oder Tafelfoto der Lehrkraft fotografieren' },
     };
   }
@@ -269,8 +269,7 @@
             {#each [['Stoff', S], ['Material', M], ['Üben', U]] as [name, p]}
               <div class="point">
                 <span class="dot {p.tone}" aria-hidden="true"></span>
-                <span class="point-name">{name}</span>
-                <span class="point-text">{p.text}</span>
+                <span class="point-text"><strong class="point-name">{name}</strong> {p.text}</span>
                 {#if p.action?.open}
                   <button class="point-go" onclick={() => (openKey = e.exam_key)}>{p.action.label}</button>
                 {:else if p.action?.href}
@@ -281,10 +280,10 @@
           </div>
 
           {#if !open}
-            <div class="row between" style="align-items:center; margin-top:0.6rem; gap:0.6rem; flex-wrap:wrap;">
+            <div class="cta">
               <button class="primary go" onclick={() => (openKey = e.exam_key)}>Für {st.name} üben</button>
               <div class="feel-row">
-                <span class="dim">Dein Gefühl, hilft mir beim Sortieren</span>
+                <span class="dim feel-label">Dein Gefühl, hilft mir beim Sortieren:</span>
                 {#each FEEL as f}
                   <button class="feel" class:active={e.learn_state === f.v} disabled={busyKey === e.exam_key} onclick={() => saveProgress(e, { learn_state: f.v })}>{f.label}</button>
                 {/each}
@@ -449,15 +448,17 @@
   .when.mid { background: var(--bg); }
   .when.far { background: transparent; opacity: .75; }
   .points { display: grid; gap: 0.35rem; margin-top: 0.7rem; }
-  .point { display: grid; grid-template-columns: 12px 5.2rem 1fr auto; gap: 0.5rem; align-items: center; font-size: 0.88rem; }
-  .point-name { font-weight: 650; }
+  .point { display: grid; grid-template-columns: 12px 1fr auto; gap: 0.5rem; align-items: center; font-size: 0.88rem; }
+  .point-name { font-weight: 650; margin-right: 0.15rem; }
+  .cta { display: grid; gap: 0.5rem; margin-top: 0.7rem; }
+  .cta .feel-label { flex-basis: 100%; }
   .point-text { min-width: 0; overflow-wrap: anywhere; }
   .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--border); }
   .dot.ok { background: var(--rating-3); }
   .dot.warn { background: var(--rating-2); }
   .dot.bad { background: var(--rating-1); }
   .point-go { font-size: 0.8rem; font-weight: 600; text-decoration: none; padding: 0.2rem 0.6rem; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-elevated); color: inherit; min-height: 30px; display: inline-flex; align-items: center; cursor: pointer; font-family: inherit; white-space: nowrap; }
-  .go { min-height: 44px; padding: 0.5rem 1rem; border-radius: 12px; font-weight: 650; }
+  .go { min-height: 44px; padding: 0.5rem 1rem; border-radius: 12px; font-weight: 650; justify-self: start; }
   .feel-row { display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; flex-wrap: wrap; }
   .feel { font-size: 0.75rem; min-height: 30px; padding: 0.2rem 0.6rem; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-elevated); color: inherit; }
   .feel.active { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
