@@ -28,6 +28,7 @@ _LOGGER = logging.getLogger("schul_cockpit.materials")
 # Buchseiten bleiben davon ausgenommen: ihre Felder haben sich nicht geändert,
 # und 84 Seiten neu zu lesen kostete rund elf Euro.
 ANALYSIS_VERSION = 3
+PAGE_TYPES = ("text", "table", "handwriting", "figure", "formula", "mixed")
 
 
 class Insight(InputModel):
@@ -48,6 +49,10 @@ class Insight(InputModel):
     fits_quote: str = Field(default="", max_length=10)
     # Für Fotos von Buch- und Heftseiten: welcher Buchteil zu sehen ist.
     book_part: str = Field(default="", max_length=20)
+    # Seitenart (text, table, handwriting, figure, formula, mixed) und ob
+    # Handschrift zu lesen war: steuert Gegenlesen und Eichung (D77).
+    page_type: str = Field(default="", max_length=20)
+    handwritten: bool = False
 
 
 INSTRUCTION = (
@@ -89,6 +94,10 @@ INSTRUCTION = (
     "Übungen mit Schreiblinien das Arbeitsheft); im Zweifel leer.\n"
     "Bei exam_notice gib in content_text jede Zeile wortgetreu wieder, Abkürzungen wie BB, TB, AH und S. "
     "unverändert, damit die genannten Stellen daraus gelesen werden können.\n"
+    "page_type ist genau einer dieser Werte: text (überwiegend Fließtext), table (Tabelle oder Liste), "
+    "handwriting (überwiegend handschriftlich), figure (Zeichnungen, Schaltpläne, Diagramme, Karten oder Bilder tragen den Inhalt), "
+    "formula (Gleichungen, Terme, Rechnungen), mixed. handwritten true, sobald handschriftliche Einträge zu lesen waren, "
+    "auch nur eingetragene Lösungen; bei Ziffern in Handschrift besonders sorgfältig zwischen 1 und 7 sowie 0 und 6 unterscheiden.\n"
     "JSON-Schema: "
 )
 
@@ -199,6 +208,9 @@ def _apply(conn, account_id: int, row, insight: Insight) -> None:
             pass
     if "contains_solutions" not in locked:
         values["contains_solutions"] = int(insight.contains_solutions)
+    if insight.page_type in PAGE_TYPES:
+        values["page_type"] = insight.page_type
+    values["handwritten"] = int(insight.handwritten or insight.page_type == "handwriting")
     if (row["origin"] if "origin" in row.keys() else "") == "book_fetch":
         # Die gedruckte Seitenzahl ist der einzige Beleg dafür, dass die
         # gelieferte Seite die bestellte ist; der Betrachter meldet die
@@ -263,7 +275,7 @@ def _purpose(row) -> str:
     return ai.SOURCES if source_like else "background"
 
 
-async def extract(account_id: int, row, model: str | None = None) -> tuple[Insight, str]:
+async def extract(account_id: int, row, model: str | None = None, effort: str | None = None) -> tuple[Insight, str]:
     """Das Material lesen, ohne etwas zu speichern. Gibt die Lesung und den
     Schlüssel des Aufrufs zurück; mit `model` lässt sich ein anderes Modell
     an derselben Seite messen (Eichung, D54)."""
@@ -276,30 +288,66 @@ async def extract(account_id: int, row, model: str | None = None) -> tuple[Insig
         context["dokumenttext"] = text[:20000]
     raw, _, key = await ai.complete(
         account_id, _purpose(row), INSTRUCTION + json.dumps(Insight.model_json_schema()),
-        context, images, max_output=8000, **({"model": model} if model else {}))
+        context, images, max_output=8000, **({"model": model} if model else {}), **({"effort": effort} if effort else {}))
     return Insight.model_validate_json(raw), key
 
 
-async def compare(account_id: int, material_id: int, model: str) -> dict:
-    """Eine bereits gelesene Seite mit einem anderen Modell lesen und gegen
-    den gespeicherten Stand halten: Seitenzahl, Buchteil, Art und wie viel
-    vom Wortlaut übereinstimmt. Gespeichert wird nichts."""
+NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
+WORD = re.compile(r"\w+")
+
+
+def _lines(text: str) -> list[str]:
+    return [" ".join(line.split()) for line in text.splitlines() if line.strip()]
+
+
+def compare_texts(stored: str, read: str) -> dict:
+    """Zwei Lesungen derselben Seite vergleichen: Wörter, Zahlen und Zeilen.
+
+    Die Wortabdeckung allein war blind für das, was auf Formel- und
+    Handschriftseiten zählt: Eine 7 statt einer 1 oder ein fehlendes „− 5“
+    fällt dort nicht auf, weil die Ziffern anderswo auf der Seite vorkommen.
+    Deshalb zusätzlich Zahlen als Vielfachmenge und Zeilen, die nur auf einer
+    Seite stehen."""
     import difflib
+    from collections import Counter
+    a, b = " ".join(stored.split()), " ".join(read.split())
+    ratio = difflib.SequenceMatcher(None, a, b).ratio() if (a or b) else 1.0
+    words_a, words_b = set(WORD.findall(stored.casefold())), set(WORD.findall(read.casefold()))
+    common = words_a & words_b
+    nums_a, nums_b = Counter(NUMBER.findall(stored)), Counter(NUMBER.findall(read))
+    shared = sum((nums_a & nums_b).values())
+    missing_numbers = sorted((nums_a - nums_b).elements(), key=lambda n: (len(n), n))
+    extra_numbers = sorted((nums_b - nums_a).elements(), key=lambda n: (len(n), n))
+    lines_a, lines_b = _lines(stored), _lines(read)
+    set_a, set_b = set(lines_a), set(lines_b)
+    only_stored = [l for l in lines_a if l not in set_b]
+    only_read = [l for l in lines_b if l not in set_a]
+    formula = lambda lines: sum(1 for l in lines if "=" in l)
+    return {
+        "text_ratio": round(ratio, 3),
+        "word_recall": round(len(common) / len(words_a), 3) if words_a else 0.0,
+        "word_precision": round(len(common) / len(words_b), 3) if words_b else 0.0,
+        "missing_words": sorted(words_a - words_b, key=lambda w: (-len(w), w))[:25],
+        "number_recall": round(shared / sum(nums_a.values()), 3) if nums_a else 1.0,
+        "number_precision": round(shared / sum(nums_b.values()), 3) if nums_b else 1.0,
+        "missing_numbers": missing_numbers[:40], "extra_numbers": extra_numbers[:40],
+        "lines_stored": len(lines_a), "lines_read": len(lines_b),
+        "formula_lines_stored": formula(lines_a), "formula_lines_read": formula(lines_b),
+        "only_stored": only_stored[:40], "only_read": only_read[:40],
+        "stored_chars": len(stored), "read_chars": len(read),
+    }
+
+
+async def compare(account_id: int, material_id: int, model: str, effort: str | None = None) -> dict:
+    """Eine bereits gelesene Seite mit einem anderen Modell oder einer anderen
+    Reasoning-Tiefe lesen und gegen den gespeicherten Stand halten: Seitenzahl,
+    Buchteil, Art, Wörter, Zahlen, Zeilen. Gespeichert wird nichts."""
     with closing(webapp_conn()) as conn:
         row = conn.execute("SELECT * FROM materials WHERE id=? AND account_id=?", (material_id, account_id)).fetchone()
     if not row:
         raise ValueError("Material nicht gefunden")
-    insight, key = await extract(account_id, row, model=model)
-    import re as _re
+    insight, key = await extract(account_id, row, model=model, effort=effort)
     stored = row["content_text"] or ""
-    ratio = difflib.SequenceMatcher(None, " ".join(stored.split()), " ".join(insight.content_text.split())).ratio()
-    # Die Reihenfolge einer Tabelle oder die Beschreibung eines Bildes darf
-    # abweichen; ob jedes Wort und jede Zahl der Seite da ist, nicht.
-    words_stored = set(_re.findall(r"\w+", stored.casefold()))
-    words_read = set(_re.findall(r"\w+", insight.content_text.casefold()))
-    recall = len(words_stored & words_read) / len(words_stored) if words_stored else 0.0
-    precision = len(words_stored & words_read) / len(words_read) if words_read else 0.0
-    missing_words = sorted(words_stored - words_read, key=lambda w: (-len(w), w))[:25]
     with closing(webapp_conn()) as conn:
         call = conn.execute("SELECT charged_micro,reserved_micro,status FROM mentor_ai_calls WHERE id=?", (key,)).fetchone()
     printed = [int(p) for p in insight.printed_pages if 0 < int(p) < 2000]
@@ -310,16 +358,19 @@ async def compare(account_id: int, material_id: int, model: str) -> dict:
         pass
     if not stored_pages and row["source_page"]:
         stored_pages = [row["source_page"]]
+    keys = row.keys()
     return {
-        "material_id": material_id, "model": model, "kind": row["kind"], "stored_kind": row["kind"], "read_kind": insight.kind,
+        "material_id": material_id, "model": model, "effort": effort or "low",
+        "kind": row["kind"], "stored_kind": row["kind"], "read_kind": insight.kind,
+        "stored_page_type": row["page_type"] if "page_type" in keys else None, "read_page_type": insight.page_type or None,
+        "stored_handwritten": bool(row["handwritten"]) if "handwritten" in keys else None, "read_handwritten": insight.handwritten,
         "stored_pages": stored_pages, "read_pages": printed, "pages_match": bool(stored_pages) and stored_pages[0] in printed,
         "stored_part": row["source_label"], "read_part": insight.book_part.strip() or None,
         "part_match": (row["source_label"] or None) == (insight.book_part.strip() or None),
-        "text_ratio": round(ratio, 3), "word_recall": round(recall, 3), "word_precision": round(precision, 3),
-        "missing_words": missing_words, "stored_chars": len(stored), "read_chars": len(insight.content_text),
+        **compare_texts(stored, insight.content_text),
         "confidence": insight.confidence, "unreadable": insight.unreadable,
         "cost_eur": round(((call["charged_micro"] if call and call["status"] == "settled" and call["charged_micro"] else (call["reserved_micro"] if call else 0)) or 0) / 1e6, 4),
-        "read_text": insight.content_text[:600],
+        "read_text": insight.content_text,
     }
 
 

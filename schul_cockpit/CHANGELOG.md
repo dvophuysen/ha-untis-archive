@@ -1,3 +1,9 @@
+## 0.76.0
+
+- Handschrift geht immer zum Gegenlesen. Jede Lesung sagt jetzt, welche Seitenart sie gesehen hat (Text, Tabelle, Handschrift, Zeichnung, Formeln, gemischt) und ob handschriftliche Einträge dabei waren; solche Materialien stehen auf der Materialseite zur Bestätigung, egal wie sicher sich das Modell fühlt. Anlass: Auf einem handschriftlichen Zettel wurde bei der Eichung aus jeder 1 eine 7.
+- Das Messwerkzeug der Eichung vergleicht neben Wörtern auch Zahlen und ganze Zeilen und liefert die volle Lesung statt eines Ausschnitts. Fehler wie „= 4“ statt „= 0“ auf einem Mathe-Arbeitsblatt waren vorher unsichtbar, weil die Ziffern anderswo auf der Seite vorkamen.
+- Die Reasoning-Tiefe lässt sich für die Eichung je Aufruf wählen (low, medium, high). Im Betrieb bleibt sie unverändert.
+
 ## 0.75.1
 
 - Eine Korrektur der Eltern sperrte auch leere Textfelder: Das Formular schickte alle Felder mit, und ein noch ungelesenes Material bekam einen leeren, gesperrten Text, den keine Lesung mehr füllen durfte. So stand die Latein-Doppelseite 10/11 seit dem 15.09. als „gelesen“ ohne ein Wort Text da. Leere Textfelder gelten jetzt nicht als Korrektur, das Formular schickt nur Geändertes, und betroffene Materialien werden einmal neu gelesen.

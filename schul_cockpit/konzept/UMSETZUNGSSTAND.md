@@ -1,3 +1,32 @@
+# Messwerkzeug und Handschrift 0.76.0
+
+Stand 17.09.2026. Folge der zweiten Eichung (0.75.1): Die Wortabdeckung war
+blind für Ziffern und Zeilen, Handschrift wurde nur über den Vertrauenswert
+zum Gegenlesen geschickt, die Reasoning-Tiefe war nicht messbar.
+
+**Gebaut (D77).** `material_analysis.compare_texts`: Wortabdeckung wie bisher,
+dazu Zahlen als Vielfachmenge (`number_recall`, `missing_numbers`,
+`extra_numbers`), Zeilen nur in der einen oder anderen Lesung (`only_stored`,
+`only_read`), Formelzeilen; `compare` gibt die volle Lesung zurück und nimmt
+`effort` an. `Insight.page_type` (text, table, handwriting, figure, formula,
+mixed) und `Insight.handwritten`, in der Instruktion mit dem Hinweis auf 1/7
+und 0/6; `_apply` speichert beides (Migration `materials_014_page_type`).
+`materials.needs_review`: Handschrift immer. `ai_gateway.complete(effort=…)`
+mit Voreinstellung low; nur die Eichung nutzt es. `ANALYSIS_VERSION` bleibt 3:
+ein Nachlesen aller 144 Materialien für die Seitenart kostete rund 14 €, die
+Seitenart füllt sich mit jeder neuen Lesung.
+
+**Geprüft.** Zwei Tests: Ziffern- und Zeilenfehler werden gemessen, wo die
+Wortabdeckung 0,8 meldet; Handschrift geht bei Vertrauen 0,97 zum Gegenlesen,
+Gedrucktes nicht. 155 Tests der betroffenen Module grün.
+
+**Nächste Messung (mit Ok des Nutzers).** Hauptmodell mit medium gegen low an
+fünf Seiten (Themenblatt handschriftlich, Mathe-Arbeitsblatt, Physik-
+Schaltpläne, Arbeitsheft mit handschriftlichen Einträgen, Wimmelbild), rund
+1 €. Braucht die Instanz auf 0.76.0.
+
+---
+
 # Eichung der Lesemodelle, zweiter Durchgang 0.75.1
 
 Stand 17.09.2026. Nutzerauftrag: sorgfältig an echten Seiten eichen, Qualität

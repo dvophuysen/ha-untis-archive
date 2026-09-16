@@ -181,6 +181,7 @@ async def collect_sources(account_id: int, user: CurrentUser = Depends(get_curre
 
 class CompareIn(InputModel):
     model: str = Field(min_length=1, max_length=60)
+    effort: str | None = Field(default=None, pattern=r"^(low|medium|high)$")
 
 
 @router.post("/{material_id}/analysis/compare")
@@ -193,7 +194,7 @@ async def compare_models(account_id: int, material_id: int, body: CompareIn,
     if body.model not in ai.RATES:
         raise HTTPException(422, "Unbekanntes Modell.")
     try:
-        return await analysis.compare(account_id, material_id, body.model)
+        return await analysis.compare(account_id, material_id, body.model, body.effort)
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from None
 
