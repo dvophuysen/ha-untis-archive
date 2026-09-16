@@ -148,7 +148,17 @@
         byBook.get(m.source_book).pages.push(m);
       }
       g.books = [...byBook.values()];
-      for (const b of g.books) b.pages.sort((a, c) => (a.source_page ?? 0) - (c.source_page ?? 0));
+      for (const b of g.books) b.pages.sort((a, c) => firstPage(a) - firstPage(c));
+      // Fotos mit Buchteil und Seite stehen nach Buchteil und Seitenzahl, alles
+      // andere nach Datum, neueste zuerst.
+      g.items.sort((a, c) => {
+        const pa = firstPage(a), pc = firstPage(c);
+        const la = a.source_label || '', lc = c.source_label || '';
+        if (pa !== Infinity && pc !== Infinity) return la.localeCompare(lc, 'de') || pa - pc;
+        if (pa !== Infinity) return -1;
+        if (pc !== Infinity) return 1;
+        return (c.document_date || c.created_at || '').localeCompare(a.document_date || a.created_at || '');
+      });
     }
     return [...bySubject.values()].sort((a, b) => a.subject.localeCompare(b.subject, 'de'));
   });
@@ -279,6 +289,26 @@
     const value = m.document_date || m.created_at?.slice(0, 10);
     return value ? new Date(value).toLocaleDateString('de-DE') : '';
   }
+  // Welche Seite eines Buchs das ist: gedruckte Seitenzahlen zuerst, sonst die
+  // erkannte Seite. Eine Doppelseite heißt „S. 48–49“.
+  function pagesOf(m) {
+    let printed = [];
+    try { printed = (Array.isArray(m.printed_pages) ? m.printed_pages : JSON.parse(m.printed_pages || '[]')).map(Number).filter(Boolean); } catch { printed = []; }
+    const all = [...new Set([...(m.source_page ? [Number(m.source_page)] : []), ...printed])].sort((a, b) => a - b);
+    return all;
+  }
+  function pageLabel(m) {
+    const pages = pagesOf(m);
+    if (!pages.length) return '';
+    if (pages.length === 2 && pages[1] === pages[0] + 1) return `S. ${pages[0]}–${pages[1]}`;
+    return `S. ${pages.join(', ')}`;
+  }
+  function placeOf(m) {
+    const book = m.origin === 'book_fetch' ? shortBook(m.source_book) : (m.source_label || '');
+    const page = pageLabel(m);
+    return [book, page].filter(Boolean).join(' ');
+  }
+  function firstPage(m) { return pagesOf(m)[0] ?? Infinity; }
 
   async function show(m) {
     open = await api.get(`${base}/${m.id}`);
@@ -514,7 +544,7 @@
     {/if}
     <span class="text">
       <strong>{m.title || 'Ohne Titel'}</strong>
-      <small>{[KIND_NAMES[m.kind] ?? m.kind, dateOf(m), m.blurry ? 'unscharf' : ''].filter(Boolean).join(' · ')}</small>
+      <small>{#if placeOf(m)}<b class="place">{placeOf(m)}</b> · {/if}{[KIND_NAMES[m.kind] ?? m.kind, dateOf(m), m.blurry ? 'unscharf' : ''].filter(Boolean).join(' · ')}</small>
       {#if m.summary}<small class="dim">{m.summary}</small>{/if}
     </span>
     <span class="state" class:warn={m.analysis_state === 'failed' && m.analysis_error !== '429'} class:wait={m.analysis_error === '429'}>
@@ -676,6 +706,7 @@
 {/if}
 
 <style>
+  .place { font-weight: 650; color: var(--fg); }
   .wanted{border-left:4px solid var(--accent)}
   .wanted>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;list-style:none}
   .wanted>summary::-webkit-details-marker{display:none}
