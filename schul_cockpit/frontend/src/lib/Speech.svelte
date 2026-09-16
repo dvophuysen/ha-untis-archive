@@ -5,6 +5,10 @@
   let { onText, transcribe, disabled = false, label = 'Aufnahme: Deutsch · eigene Erkennung', compact = false } = $props();
   let recorder = $state(null), recording = $state(false), working = $state(false), seconds = $state(0), error = $state('');
   let chunks = [], timer = null, startedAt = 0, stream = null, mime = '';
+  // Lautstärke mitmessen: Aus Stille oder Rauschen erfindet die Erkennung Text,
+  // der zum Hinweis passt („Mit der a-Deklination.“). Leise Aufnahmen bleiben hier.
+  let audioCtx = null, analyser = null, loudest = 0;
+  const MIN_LOUDNESS = 0.02;
   const supported = typeof window !== 'undefined' && !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
 
   function pickMime() {
@@ -22,6 +26,12 @@
       error = 'Kein Zugriff auf das Mikrofon. Bitte in den Einstellungen erlauben oder tippen.';
       return;
     }
+    loudest = 0;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser(); analyser.fftSize = 1024;
+      audioCtx.createMediaStreamSource(stream).connect(analyser);
+    } catch { analyser = null; }
     mime = pickMime();
     recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
     chunks = [];
@@ -29,7 +39,15 @@
     recorder.onstop = finish;
     recorder.start();
     recording = true; seconds = 0; startedAt = Date.now();
-    timer = setInterval(() => { seconds = Math.round((Date.now() - startedAt) / 1000); if (seconds >= 120) stop(); }, 250);
+    timer = setInterval(() => {
+      seconds = Math.round((Date.now() - startedAt) / 1000);
+      if (analyser) {
+        const buf = new Uint8Array(analyser.fftSize); analyser.getByteTimeDomainData(buf);
+        let sum = 0; for (const v of buf) { const x = (v - 128) / 128; sum += x * x; }
+        loudest = Math.max(loudest, Math.sqrt(sum / buf.length));
+      }
+      if (seconds >= 120) stop();
+    }, 120);
   }
   function stop() {
     if (!recording) return;
@@ -39,10 +57,13 @@
   }
   async function finish() {
     stream?.getTracks().forEach((t) => t.stop());
+    try { await audioCtx?.close(); } catch { /* egal */ }
+    audioCtx = null;
     const type = recorder?.mimeType || mime || 'audio/webm';
     const blob = new Blob(chunks, { type });
     const took = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
     if (blob.size < 800 || took < 1) { error = 'Zu kurz. Halte den Knopf, während du sprichst.'; return; }
+    if (analyser && loudest < MIN_LOUDNESS) { error = 'Ich habe nichts gehört. Sprich etwas lauter oder näher am Gerät.'; return; }
     working = true;
     try {
       const text = await transcribe(blob, took);

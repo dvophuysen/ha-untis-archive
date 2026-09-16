@@ -1,3 +1,7 @@
+## 0.65.1
+
+- Spracheingabe: Aus Stille oder Rauschen erfand die Erkennung Text, der zum Hinweis passt („Mit der a-Deklination.“). Der Browser misst jetzt die Lautstärke mit; leise Aufnahmen werden gar nicht gesendet, mit der Bitte, näher am Gerät zu sprechen.
+
 ## 0.65.0
 
 - Spracheingabe im Mentor: Ein großer Knopf „Halten und antworten“ nimmt auf, die App erkennt den Text mit einem eigenen Modell (gpt-4o-transcribe in derselben Azure-Ressource) und zeigt ihn erst zum Prüfen im Textfeld; gesendet wird per Knopf. Tippen bleibt immer möglich. Die Erkennung bekommt Fach, Thema und die aktuelle Aufgabe als Hinweis, damit Fachbegriffe und lateinische Formen nicht zu Alltagswörtern werden; Englisch, Spanisch und Französisch werden in der Sprache des Fachs erkannt.
