@@ -1,3 +1,8 @@
+## 0.69.5
+
+- Klausurkarte: Scheitert das Lesen eines Materials am erschöpften KI-Rahmen, steht das jetzt so da („wartet auf freien KI-Rahmen“) statt „Lesen ist gescheitert“. Ein Arbeitsblatt ohne Seitenzahl heißt „Arbeitsblatt“, nicht „Arbeitsblatt S. 0“.
+- Ein am KI-Rahmen gescheitertes Material wird so lange alle fünfzehn Minuten erneut versucht, bis wieder Rahmen frei ist; die Höchstzahl von drei Anläufen gilt nur für echte Lesefehler.
+
 ## 0.69.4
 
 - Angenommene Themen bekommen ihre Stellen auch aus den Hausaufgaben vom Tag der Stunde (viele Lehrkräfte nennen die Seiten dort, nicht im Stundentext), und die Stellen wachsen mit dem Unterricht nach.

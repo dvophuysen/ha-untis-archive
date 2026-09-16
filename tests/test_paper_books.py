@@ -474,3 +474,14 @@ def test_the_exam_card_says_why_a_place_is_still_pending(env):
         c.execute("UPDATE materials SET analysis_state='pending'")
     sources._SYNCED.clear()
     assert sources.exam_sources(1, "LATEIN", "2026-08-01", "2026-09-30")["pending_items"][0]["kind"] == "unread"
+
+
+def test_a_budget_stop_is_named_as_such_on_the_exam_card(env):
+    history(lessons=[(1, "2026-09-11", "LATEIN", LA, "Lektion 1")],
+            homework=[(1, "LA", "BB S. 13 lernen", "2026-09-07")])
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,source_label,source_page,analysis_state,analysis_error,created_at,updated_at) "
+                  "VALUES(1,'book_page','LATEIN','BB S. 13','Begleitband',13,'failed','429','now','now')")
+    sources._SYNCED.clear()
+    got = sources.exam_sources(1, "LATEIN", "2026-08-01", "2026-09-30")
+    assert got["pending_items"][0]["kind"] == "budget" and got["pending_items"][0]["error"] == "429"
