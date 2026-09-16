@@ -279,6 +279,8 @@ def _store(account_id: int, exam_key: str, subject: str, notice_id: int | None, 
                           "VALUES(?,?,?,?,?,?,?,'notice',?,?,?,?)",
                           (account_id, subject, exam_key, pos, t["title"], t["detail"],
                            json.dumps(t["places"], ensure_ascii=False), notice_id, notice_hash, now_iso(), now_iso()))
+        c.execute("UPDATE exam_topics SET stale=1,updated_at=? WHERE account_id=? AND exam_key=? AND origin='assumed' AND stale=0",
+                  (now_iso(), account_id, exam_key))
         for old in existing:
             if old["title"].casefold() in seen:
                 continue
@@ -321,6 +323,47 @@ async def ensure_topics(account_id: int, exam_key: str, subject: str | None, sin
         LOG.warning("Themen aus der Themenliste für %s nicht ableitbar", subject, exc_info=True)
     finally:
         _BUSY.discard((account_id, exam_key))
+
+
+def ensure_assumed_topics(account_id: int, exam_key: str, subject: str | None, scope: dict | None) -> None:
+    """Ohne offizielle Themenliste: die aus dem Unterricht erschlossenen Themen als
+    Themen der Arbeit anlegen (origin assumed), mit den Stellen ihrer Stunden.
+    Liegt eine Themenliste vor, treten sie zurück (stale)."""
+    if not subject or not scope or not scope.get("topics"):
+        return
+    with closing(webapp_conn()) as c, c:
+        c.execute("BEGIN IMMEDIATE")
+        has_notice = c.execute("SELECT 1 FROM exam_topics WHERE account_id=? AND exam_key=? AND origin='notice' AND stale=0 LIMIT 1",
+                               (account_id, exam_key)).fetchone()
+        if has_notice:
+            c.execute("UPDATE exam_topics SET stale=1,updated_at=? WHERE account_id=? AND exam_key=? AND origin='assumed' AND stale=0",
+                      (now_iso(), account_id, exam_key))
+            return
+        existing = {r[0].casefold() for r in c.execute("SELECT title FROM exam_topics WHERE account_id=? AND exam_key=?", (account_id, exam_key))}
+        pos = c.execute("SELECT COALESCE(MAX(position),-1)+1 FROM exam_topics WHERE account_id=? AND exam_key=?", (account_id, exam_key)).fetchone()[0]
+        for t in scope["topics"]:
+            title = (t.get("title") or "").strip()
+            if not title or title.casefold() in existing:
+                continue
+            places: dict[str, set] = {}
+            lesson_ids = [int(x) for x in t.get("lesson_ids") or []]
+            if lesson_ids:
+                marks = ",".join("?" * len(lesson_ids))
+                for r in c.execute(f"SELECT part_label,page FROM source_links WHERE account_id=? AND entry_kind='lesson' AND entry_id IN ({marks}) AND page>0",
+                                   (account_id, *lesson_ids)):
+                    label = r[0] if r[0] and r[0] != "Unbekannte Quelle" else ""
+                    places.setdefault(label, set()).add(int(r[1]))
+            places_json = json.dumps([{"label": k, "pages": sorted(v)} for k, v in places.items()], ensure_ascii=False)
+            c.execute("INSERT OR IGNORE INTO exam_topics(account_id,subject,exam_key,position,title,detail,places_json,origin,created_at,updated_at) "
+                      "VALUES(?,?,?,?,?,?,?,'assumed',?,?)",
+                      (account_id, subject, exam_key, pos, title, (t.get("field") or "")[:400], places_json, now_iso(), now_iso()))
+            pos += 1
+            existing.add(title.casefold())
+        # Angenommene Themen, die der Unterricht nicht mehr hergibt, ohne Antworten: weg.
+        titles = {(t.get("title") or "").strip().casefold() for t in scope["topics"]}
+        for r in c.execute("SELECT id,title FROM exam_topics WHERE account_id=? AND exam_key=? AND origin='assumed'", (account_id, exam_key)).fetchall():
+            if r[1].casefold() not in titles and not c.execute("SELECT 1 FROM topic_answers WHERE topic_id=? LIMIT 1", (r[0],)).fetchone():
+                c.execute("DELETE FROM exam_topics WHERE id=?", (r[0],))
 
 
 async def sync_notice(account_id: int, material_id: int) -> None:

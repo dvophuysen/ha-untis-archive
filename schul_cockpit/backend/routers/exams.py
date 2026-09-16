@@ -164,10 +164,16 @@ def exam_scope(account_id: int, subject: str | None, since: str, until: str) -> 
             f"WHERE i.account_id=? AND i.lesson_id IN ({marks})", (account_id, *lessons)).fetchall()
         topics = [dict(r) for r in rows]
         shown = _shown_topics(conn, account_id, {r["id"] for r in topics})
+        by_topic: dict[int, list[int]] = {}
+        for r in conn.execute(
+                f"SELECT topic_id, lesson_id FROM learning_discovery_items WHERE account_id=? AND lesson_id IN ({marks}) AND topic_id IS NOT NULL",
+                (account_id, *lessons)):
+            by_topic.setdefault(r["topic_id"], []).append(r["lesson_id"])
     finally:
         conn.close()
     for entry in topics:
         entry["shown"] = entry["id"] in shown
+        entry["lesson_ids"] = by_topic.get(entry["id"], [])
     topics.sort(key=lambda e: ((e["field"] or "\uffff").casefold(), e["title"].casefold()))
     return {"since": since, "topics": topics, "parts": len(topics),
             "shown": sum(1 for e in topics if e["shown"]), "verified": False}
@@ -264,6 +270,9 @@ async def exams_all(
                 from .. import mentor_opening
                 mentor_opening.remember_exam(account_id, e["exam_key"], e["date"])
                 await lernstand.ensure_topics(account_id, e["exam_key"], e.get("subject_name"), since, e["date"])
+                # Ohne Themenliste werden die angenommenen Themen aus dem Unterricht
+                # genauso geführt: mit Stufe, Stellen und Üben-Knopf.
+                lernstand.ensure_assumed_topics(account_id, e["exam_key"], e.get("subject_name"), e.get("scope"))
                 e["topics"] = lernstand.topics_for(account_id, e["exam_key"], e.get("subject_name"))
                 e["stages"] = lernstand.stage_counts(e["topics"])
             except Exception:
