@@ -342,7 +342,6 @@
                       {#each TOPIC_FEEL as v}
                         <button class="feel" class:active={t.self_view === v} disabled={busyKey === `topic-${t.id}`} onclick={() => setFeel(t, v)}>{v}</button>
                       {/each}
-                      {#if canManage}<button class="feel ghost" title="Thema entfernen" onclick={() => removeTopic(e, t)}>✕</button>{/if}
                     </div>
                   </div>
                 {/each}
@@ -389,6 +388,12 @@
               <div class="dim" style="font-size:0.78rem;">
                 {#if e.source === 'manual'}nicht aus dem Klausurplan — unter <a href="#/exams">Verwalten</a> änderbar.{:else}kommt aus dem IServ-Klausurplan — geändert wird er dort.{/if}
               </div>
+              {#if topics.length}
+                <details class="also"><summary>Themen bearbeiten (Eltern)</summary>
+                  <p class="dim">Entfernen löscht auch den Lernstand des Themas. Aus der Themenliste gelesene Themen kämen beim nächsten Lesen wieder.</p>
+                  {#each topics as t (t.id)}<div class="also-row"><button class="feel ghost" onclick={() => removeTopic(e, t)}>Entfernen</button> {t.title}</div>{/each}
+                </details>
+              {/if}
             {/if}
             <button class="ghost close" onclick={() => (openKey = '')}>▴ zuklappen</button>
           </div>
