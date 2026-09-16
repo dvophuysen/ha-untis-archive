@@ -1,9 +1,17 @@
-# Quellenbestand 0.52.2–0.65.1
+# Quellenbestand 0.52.2–0.66.0
 
 Stand 16.09.2026, nachmittags. Bis 0.56.11 auf der laufenden Instanz installiert und
 mit echten Abrufen geprüft; 0.57.0 folgt in derselben Session.
 
 ## Was ausgeliefert ist
+
+**Vokabeltrainer (0.66.0, D61).** `vocab.py` mit `vocab_words` je Seite
+(Modell zerlegt, jedes Wort muss im Seitentext stehen), `vocab_attempts`,
+deterministische Bewertung (`judge_meaning`, `judge_foreign`), Stand je Wort
+und Stufe (`vocab.replay`), Karten Wackler zuerst. Route `#/vokabeln/<Fach>`,
+Klausurkarte verlinkt Vokabel-Themen dorthin und übernimmt deren Stufe aus den
+Wörtern (`lernstand.topics_for`). Offen: Kartenfoto für Stufe 2, Formen-Trainer
+Latein (Kandidatenabgleich), Spanisch-Wortseiten fehlen noch als Material.
 
 **Spracheingabe (0.65.0/0.65.1, D60).** `Speech.svelte` (halten, sprechen,
 loslassen; MediaRecorder mit mp4 auf iPhone, webm sonst; Lautstärkemessung
