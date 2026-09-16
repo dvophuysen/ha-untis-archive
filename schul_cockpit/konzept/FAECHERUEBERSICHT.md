@@ -1,3 +1,12 @@
+# Umsetzung 0.73.0: Balken aus dem Lernstand
+
+Seit 0.73.0 (D71) zeigt der Balken je Fach die Verteilung der Stufen der
+Themen dieses Schuljahrs (gefestigt, sitzt, wackelt, angefangen, neu), die
+App liest sie aus den Antworten ab (D59). Der Trend sind die gezählten
+Stufenwechsel der letzten vier Wochen; ohne Wechsel steht „kein Wechsel“.
+Fächer ohne Themenliste zeigen weiter die Selbsteinschätzung, so beschriftet.
+Damit ist die unten offen gelassene Datenbedeutung festgelegt.
+
 # Testbare Umsetzung 0.34.0
 
 Der Auftrag zur Fertigstellung und Bereitstellung umfasst jetzt die grafische Fächerliste. Umgesetzt sind die Balken, ein aufklappbares Fachdetail und der direkte Verlauf tatsächlicher Unterrichtsrückmeldungen. Balken = Anteile vorhandener Themen-Selbsteinschätzungen (inklusive unbekannt), kein neuer Kompetenzscore. Die Zeitlinie zeigt bis zu zwölf Beobachtungen ohne Glättung oder Trendbehauptung. Genaue Leistungs-/Trendbewertung und Elternintegration bleiben offen. Der folgende Abschnitt dokumentiert den vorausgegangenen Entwurf, dessen Vorschläge nicht sämtlich schon Funktionen sind.

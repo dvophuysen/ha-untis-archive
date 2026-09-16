@@ -16,6 +16,7 @@ from datetime import date, timedelta
 from pydantic import Field
 
 from .db import webapp_conn
+from .subject_names import key as subject_key, label as subject_label
 from .learning import InputModel, now_iso, today_local
 from . import mentor_context as mc
 
@@ -624,3 +625,72 @@ def context_for(account_id: int, topic_id: int, session_id: int | None = None) -
         "other_topics": [f"{s['title']} ({s['stage']})" for s in siblings if s["title"] != topic["title"]][:8],
         "material": material_for(account_id, topic["subject"], places),
     }
+
+
+# Fortschritt zählt aufwärts in dieser Reihenfolge; RANK oben sortiert die
+# Klausurkarte (Wackler zuerst) und taugt deshalb nicht als Maß.
+PROGRESS = {"neu": 0, "angefangen": 1, "wackelt": 2, "sitzt": 3, "gefestigt": 4}
+
+
+def school_year_start(day: date) -> str:
+    return date(day.year - (day.month < 8), 8, 1).isoformat()
+
+
+def subject_overview(account_id: int, day: date | None = None, weeks: int = 4) -> dict:
+    """Die Fächerübersicht aus dem Lernstand (D71): je Fach die Verteilung der
+    Stufen über die Themen des laufenden Schuljahrs und die Stufenwechsel der
+    letzten Wochen. Keine Note, kein Mittelwert, kein erfundener Verlauf."""
+    day = day or today_local()
+    start = school_year_start(day)
+    since = (day - timedelta(weeks=weeks)).isoformat()
+    with closing(webapp_conn()) as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT id,subject,exam_key,title,stage,reason,note,self_view,next_check,position,places_json,updated_at "
+            "FROM exam_topics WHERE account_id=? AND stale=0 AND created_at>=? ORDER BY subject,position,id",
+            (account_id, start))]
+        answered = {r[0] for r in c.execute("SELECT DISTINCT topic_id FROM topic_answers WHERE account_id=?", (account_id,))}
+        events = [dict(r) for r in c.execute(
+            "SELECT e.topic_id,e.stage_before,e.stage_after,e.created_at,t.subject FROM topic_events e "
+            "JOIN exam_topics t ON t.id=e.topic_id WHERE e.account_id=? AND e.created_at>=?", (account_id, since))]
+    subjects: dict[str, dict] = {}
+    for row in rows:
+        entry = subjects.setdefault(subject_key(row["subject"]), {
+            "subject": row["subject"], "label": subject_label(row["subject"]), "key": subject_key(row["subject"]),
+            "counts": {s: 0 for s in STAGES}, "total": 0, "topics": [], "trend": {"ups": 0, "downs": 0, "label": "kein Verlauf"}})
+        stage, reason = row["stage"], row["reason"]
+        if is_vocab_topic(row) and row["id"] not in answered:
+            # Ein Vokabel-Thema übt im Trainer; seine Stufe kommt aus den Wörtern.
+            try:
+                from . import vocab
+                derived = vocab.topic_stage(account_id, row["subject"], json.loads(row["places_json"] or "[]"))
+                if derived:
+                    stage, reason = derived["stage"], derived["reason"]
+            except Exception:
+                LOG.debug("Vokabelstand für %s nicht lesbar", row["title"], exc_info=True)
+        entry["counts"][stage] = entry["counts"].get(stage, 0) + 1
+        entry["total"] += 1
+        entry["topics"].append({"id": row["id"], "exam_key": row["exam_key"], "title": row["title"], "stage": stage,
+                                "label": LABELS.get(stage, ""), "reason": reason, "self_view": row["self_view"],
+                                "next_check": row["next_check"], "position": row["position"]})
+    for event in events:
+        entry = subjects.get(subject_key(event["subject"]))
+        if not entry:
+            continue
+        before, after = PROGRESS.get(event["stage_before"], 0), PROGRESS.get(event["stage_after"], 0)
+        if after > before:
+            entry["trend"]["ups"] += 1
+        elif after < before:
+            entry["trend"]["downs"] += 1
+    out = []
+    for entry in subjects.values():
+        entry["secure"] = entry["counts"]["sitzt"] + entry["counts"]["gefestigt"]
+        entry["wobbly"] = entry["counts"]["wackelt"]
+        entry["untried"] = entry["counts"]["neu"]
+        entry["topics"].sort(key=lambda t: sort_key(t, day))
+        t = entry["trend"]
+        if t["ups"] or t["downs"]:
+            t["label"] = "aufwärts" if t["ups"] > t["downs"] else "abwärts" if t["downs"] > t["ups"] else "stabil"
+        out.append(entry)
+    # Stärken zuerst (D11): Anteil sicherer Themen, dann weniger Wackler, dann Name.
+    out.sort(key=lambda e: (-(e["secure"] / e["total"]), e["wobbly"], e["label"]))
+    return {"since": start, "weeks": weeks, "subjects": out}

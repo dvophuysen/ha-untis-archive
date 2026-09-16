@@ -1,3 +1,34 @@
+# Fächerübersicht auf dem Lernstand 0.73.0
+
+Stand 16.09.2026, abends. Viertes Paket der Reihenfolge aus D67; löst die
+offene Datenbedeutung aus FAECHERUEBERSICHT.md.
+
+**Gebaut (D71).** `lernstand.subject_overview`: je Fach die Verteilung der
+Stufen über die nicht veralteten Themen der offiziellen Themenlisten seit
+Schuljahresbeginn (1. August), Vokabel-Themen ohne Mentor-Antworten mit der
+Stufe aus den Wörtern, die Stufenwechsel der letzten vier Wochen aus
+`topic_events` als auf/ab gezählt (`PROGRESS`-Reihenfolge neu < angefangen <
+wackelt < sitzt < gefestigt) mit Kennzeichen aufwärts, abwärts, stabil oder
+kein Verlauf. Sortierung: Anteil sicherer Themen, dann weniger Wackler, dann
+Name. Route `GET /accounts/{id}/subjects/stages`; die Fachliste trägt
+zusätzlich `key` zum Zusammenführen. `Subjects.svelte`: Balken aus den fünf
+Stufen mit Klartext darunter, Trendtext rechts, Selbsteinschätzung als
+Rückfall für Fächer ohne Themenliste (so beschriftet), aufgeklappt die
+Themen mit Stufe, Grund, Gefühl, Üben/Prüfen und Weg zur Arbeit.
+
+**Geprüft.** `test_subject_overview_counts_stages_and_stage_changes_per_subject`:
+Zählung je Fach, Ausschluss von Vorjahr und veralteten Themen, Trend nur aus
+dem Zeitfenster, Reihenfolge Wackler zuerst, „kein Verlauf“ ohne Wechsel,
+Route für Kind und Eltern mit Kontogrenze. Frontend-Build bestanden.
+
+**Offen.** Live-Abnahme auf 320/390/430 px und im Dunkelmodus
+(Abnahmeliste in FAECHERUEBERSICHT.md). Elternstartseite bleibt
+Folgeentscheidung. Fächer ohne Themenliste (kein Klausurtermin) haben keinen
+gemessenen Stand; ob Übungsthemen aus dem Unterricht (learning_topics)
+später mitzählen, ist offen.
+
+---
+
 # Nachholen als Lage 0.72.0
 
 Stand 16.09.2026, abends. Drittes Paket der Reihenfolge aus D67; Schritt 3

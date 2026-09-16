@@ -14,7 +14,7 @@ Stand: 16.09.2026. Backlog zur gemeinsamen Klärung, kein verbindlicher Bauauftr
 
 ## Fachübersicht und Analyse
 
-- Verständliche Zustände statt einer 0–100-Zahl als erster Entwurf. Noch zu klären: welche Belege genügen für welchen Zustand, Zeitfenster, Themenabdeckung, Datenalter und Sortierung ungemessener Fächer.
+- Verständliche Zustände statt einer 0–100-Zahl: seit 0.73.0 die fünf Stufen des Lernstands je Fach (D71). Offen: ob Übungsthemen aus dem Unterricht ohne Themenliste mitzählen sollen.
 - Lernstand, subjektives Erleben und Organisation getrennt erfassen. Gewissenhaftes Abhaken darf kein Verständnis ersetzen.
 - Fachzeile: Fach, knapper Zustand, Trend. Detail: Gelungenes, Offenes, nächster Schritt. Tiefe: KI-Einordnung und Belege.
 - KI-Analysen anhand relevanter Datenänderungen zwischenspeichern; beim Öffnen nicht jedes Mal neu erzeugen. Modellwahl, Kostenobergrenzen und Aktualitätsanzeige definieren.

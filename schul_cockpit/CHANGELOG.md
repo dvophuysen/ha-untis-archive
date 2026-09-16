@@ -1,3 +1,9 @@
+## 0.73.0
+
+- Fächerübersicht auf dem Lernstand: Der Balken je Fach zeigt jetzt die Stufen der Themen dieses Schuljahrs (gefestigt, sitzt, wackelt, angefangen, neu), so wie die App sie aus den Antworten abliest, nicht mehr die Anteile der Selbsteinschätzungen. Darunter steht, was es heißt („2 von 5 sitzen · 1 wackelt“). Rechts stehen die Stufenwechsel der letzten vier Wochen („↑ 2 Themen besser“); ohne Wechsel steht das so da, ein Verlauf wird nicht erfunden.
+- Fächer mit gemessenem Stand stehen oben, sortiert nach Anteil sicherer Themen, dann Fächer mit bloßer Selbsteinschätzung (Balken wie bisher, jetzt so beschriftet), zuletzt Fächer ohne beides. Kein Fach fällt weg.
+- Aufgeklappt: die Themen mit Stufe, Grund und Gefühl, Wackler zuerst, mit „Üben“ oder „Prüfen“ und dem Weg zur Arbeit; die Selbsteinschätzungen aus dem Unterricht bleiben darunter erreichbar und heißen so.
+
 ## 0.72.0
 
 - Nachholen mit dem Mentor: In der Nachhol-Liste und in der Stundenansicht steht an jeder versäumten Stunde „Mit dem Mentor nachholen“. Der Mentor nennt die versäumte Stunde, fasst den Stoff aus dem Untis-Text und den Buchseiten dieser Stunde zusammen und stellt eine leichte Aufgabe. Die Seiten, die der Stundentext nennt, liegen ihm dabei vorn im Material.

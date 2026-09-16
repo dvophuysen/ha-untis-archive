@@ -9,7 +9,8 @@ from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..courses import hidden_keys, lesson_is_hidden, visible_subject_ids
 from ..db import history_conn, webapp_conn
 from ..queries import _fmt_hhmm
-from ..subject_names import label
+from ..subject_names import key as subject_key, label
+from .. import lernstand
 
 router = APIRouter()
 
@@ -76,6 +77,7 @@ def list_subjects(
                 "name": label(r["subject_name"]),
                 # Die Schreibweise, unter der Materialien und Quellen laufen.
                 "untis_name": r["subject_name"],
+                "key": subject_key(r["subject_name"]),
                 "short": shorts.get(r["subject_untis_id"]),
                 "lessons_total": r["lessons_total"],
                 "last_date": r["last_date"],
@@ -84,6 +86,16 @@ def list_subjects(
             if visible is None or r["subject_untis_id"] in visible
         ]
     }
+
+
+@router.get("/accounts/{account_id}/subjects/stages")
+def subject_stages(
+    account_id: int,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Die Fächerübersicht aus dem Lernstand: Stufen je Thema, Wechsel der letzten Wochen (D71)."""
+    assert_account_access(user, account_id)
+    return lernstand.subject_overview(account_id)
 
 
 @router.get("/accounts/{account_id}/subjects/{subject_id}")
