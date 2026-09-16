@@ -1,3 +1,7 @@
+## 0.67.1
+
+- Klausurkarte: Der Wochentag stand doppelt („Montag, Mo. 21.09.“), jetzt „Montag, 21.09.“; der lange Titel aus dem Klausurplan steht in einer eigenen, abgeschnittenen Zeile.
+
 ## 0.67.0
 
 - Klausurseite neu: Jede Arbeit zeigt drei Punkte mit Ampel: Stoff (offizielle Themenliste liegt vor oder angenommen), Material (Stellen da oder fehlt, mit Foto-Link) und Üben (wie viele Themen sitzen, wackeln, neu sind). „Für Latein üben“ klappt die Themenliste auf: sortiert, Wackler zuerst, je Thema Stufe, Grund, Stelle, Materialstand, Üben- oder Prüfen-Knopf und das Gefühl des Kindes. Darunter „Auch behandelt, nicht auf der Liste“, die Kapitel im Zeitraum und der Weg zur Übungsarbeit. Arbeiten in mehr als drei Wochen stehen kompakt in einer Zeile, vergangene Arbeiten hinter einem Aufklapper.
