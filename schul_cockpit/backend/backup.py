@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import logging
 import sqlite3
 import tempfile
 import time
@@ -34,6 +35,9 @@ EXPECTED_WEBAPP_TABLES = {
 }
 
 _KEEP_BAKS = 3
+
+
+LOG = logging.getLogger("schul_cockpit.backup")
 
 
 def _count(conn: sqlite3.Connection, table: str) -> int:
@@ -67,17 +71,27 @@ def _snapshot_db(conn: sqlite3.Connection) -> Path:
     os.close(fd)
     dest = sqlite3.connect(tmp)
     try:
-        conn.backup(dest)  # online backup API → coherent snapshot
+        # Seitenweise mit kurzen Pausen, damit Schreiber nicht minutenlang warten.
+        conn.backup(dest, pages=4096, sleep=0.02)
     finally:
         dest.close()
     return Path(tmp)
 
 
 def make_snapshot() -> Path:
-    """Consistent copy of webapp.db (caller deletes)."""
+    """Consistent copy of webapp.db (caller deletes).
+
+    Ein FULL-Checkpoint wartete auf alle Schreiber und scheiterte im Betrieb
+    mit „database is locked" (Sammellauf, Auswertungen). PASSIVE genügt: Die
+    Online-Backup-API kopiert auch ohne Checkpoint einen kohärenten Stand
+    und wiederholt bei zwischenzeitlichen Schreibern von sich aus."""
     src = webapp_conn()
     try:
-        src.execute("PRAGMA wal_checkpoint(FULL)")
+        src.execute("PRAGMA busy_timeout = 60000")
+        try:
+            src.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        except sqlite3.OperationalError:
+            pass
         return _snapshot_db(src)
     finally:
         src.close()
@@ -223,3 +237,106 @@ def _prune_baks(data_dir: Path) -> None:
             old.unlink()
         except OSError:
             pass
+
+
+# --- Nächtliche Sicherung über den Supervisor -----------------------------------
+# Die automatischen HA-Backups sichern nur die dort ausgewählten Add-ons; am
+# 16.09. enthielten sie das Schul-Cockpit nicht, nur ein Hand-Backup vom 14.09.
+# Deshalb sichert sich das Add-on selbst: jede Nacht ein Teil-Backup nur von
+# sich, die letzten sieben bleiben. Sichtbar in HA unter Einstellungen →
+# System → Sicherungen, wiederherstellbar wie jedes andere Backup.
+
+OWN_PREFIX = "Schul-Cockpit"
+KEEP_OWN = 7
+NIGHT_FROM, NIGHT_TO = 3, 6
+
+
+def own_backups(backups: list[dict], slug: str) -> list[dict]:
+    """Die Backups, die dieses Add-on enthalten, neueste zuerst."""
+    found = []
+    for b in backups or []:
+        addons = (b.get("content") or {}).get("addons") or []
+        names = [a.get("slug") if isinstance(a, dict) else a for a in addons]
+        if slug in names:
+            found.append(b)
+    return sorted(found, key=lambda b: b.get("date") or "", reverse=True)
+
+
+def to_prune(backups: list[dict], slug: str, keep: int = KEEP_OWN) -> list[dict]:
+    """Eigene Nachtsicherungen jenseits der letzten `keep`; Hand-Backups und
+    HA-Backups mit weiteren Add-ons bleiben unangetastet."""
+    import re
+    nightly = re.compile(r"^" + re.escape(OWN_PREFIX) + r" \S+ \d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
+    mine = [b for b in own_backups(backups, slug)
+            if nightly.match(str(b.get("name") or ""))
+            and len((b.get("content") or {}).get("addons") or []) == 1
+            and not (b.get("content") or {}).get("homeassistant")]
+    return mine[keep:]
+
+
+def backup_state(backups: list[dict], slug: str) -> dict:
+    mine = own_backups(backups, slug)
+    dates = [b.get("date") for b in backups or [] if b.get("date")]
+    return {
+        "last_ha_backup": max(dates) if dates else None,
+        "last_addon_backup": mine[0].get("date") if mine else None,
+        "last_addon_backup_name": mine[0].get("name") if mine else None,
+        "addon_backups": len(mine),
+        "nightly": {"from": NIGHT_FROM, "to": NIGHT_TO, "keep": KEEP_OWN},
+    }
+
+
+async def backup_now(reason: str = "nightly") -> dict:
+    """Ein Teil-Backup dieses Add-ons anlegen und alte eigene aufräumen."""
+    from .supervisor_client import get_supervisor
+    sup = get_supervisor()
+    if not sup.available:
+        raise RuntimeError("Supervisor nicht erreichbar")
+    info = await sup.self_info()
+    slug, version = info.get("slug"), info.get("version")
+    if not slug:
+        raise RuntimeError("Add-on-Slug unbekannt")
+    stamp = time.strftime("%Y-%m-%d %H:%M")
+    name = f"{OWN_PREFIX} {version} {stamp}"
+    result = await sup.create_partial_backup(name, [slug])
+    pruned = []
+    try:
+        listing = await sup.list_backups()
+        for old in to_prune(listing.get("backups", []) or [], slug):
+            await sup.delete_backup(old["slug"])
+            pruned.append(old.get("name"))
+    except Exception:
+        LOG.warning("Alte Sicherungen nicht aufgeräumt", exc_info=True)
+    LOG.info("Sicherung %s angelegt (%s), %s alte entfernt", name, reason, len(pruned))
+    return {"name": name, "slug": result.get("slug"), "pruned": pruned}
+
+
+async def nightly_backup_loop() -> None:
+    """Zwischen drei und sechs Uhr einmal sichern, wenn die letzte eigene
+    Sicherung älter als zwanzig Stunden ist. Prüft alle dreißig Minuten."""
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+    from zoneinfo import ZoneInfo
+    from .supervisor_client import get_supervisor
+    await asyncio.sleep(120)
+    while True:
+        try:
+            hour = datetime.now(ZoneInfo("Europe/Berlin")).hour
+            sup = get_supervisor()
+            if NIGHT_FROM <= hour < NIGHT_TO and sup.available:
+                info = await sup.self_info()
+                listing = await sup.list_backups()
+                state = backup_state(listing.get("backups", []) or [], info.get("slug") or "")
+                last = state["last_addon_backup"]
+                fresh = False
+                if last:
+                    try:
+                        when = datetime.fromisoformat(last.replace("Z", "+00:00"))
+                        fresh = datetime.now(timezone.utc) - when < timedelta(hours=20)
+                    except ValueError:
+                        fresh = False
+                if not fresh:
+                    await backup_now("nightly")
+        except Exception:
+            LOG.warning("Nächtliche Sicherung nicht möglich", exc_info=True)
+        await asyncio.sleep(1800)

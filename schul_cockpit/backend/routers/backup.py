@@ -11,7 +11,9 @@ from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 
 from ..auth import CurrentUser, get_current_user, require_admin
-from ..backup import make_combined_zip, restore_from_file, status
+import asyncio
+
+from ..backup import backup_now, backup_state, make_combined_zip, restore_from_file, status
 from ..db import history_conn
 from ..supervisor_client import SupervisorError, get_supervisor
 from ..webclip import build_webclip, external_url_or_none
@@ -22,33 +24,39 @@ router = APIRouter()
 @router.get("/admin/backup/status")
 async def backup_status(user: CurrentUser = Depends(get_current_user)) -> dict:
     require_admin(user)
-    st = status()
-    # Last HA backup + whether automatic backups are scheduled.
-    last_ha_backup = None
-    auto_backup = None
+    st = await asyncio.to_thread(status)
+    # Welche HA-Backups gibt es, und welche davon enthalten dieses Add-on?
+    # Das automatische HA-Backup sichert nur die dort gewählten Add-ons.
+    state = {"last_ha_backup": None, "last_addon_backup": None, "last_addon_backup_name": None,
+             "addon_backups": 0, "nightly": None, "supervisor_error": None}
     sup = get_supervisor()
     if sup.available:
         try:
+            info = await sup.self_info()
             data = await sup.list_backups()
-            backups = data.get("backups", []) or []
-            dates = [b.get("date") for b in backups if b.get("date")]
-            if dates:
-                last_ha_backup = max(dates)
-            # Supervisor exposes auto-backup config separately; if present.
-            auto_backup = data.get("auto_backups_configured")
-        except SupervisorError:
-            pass
-    return {
-        **st,
-        "last_ha_backup": last_ha_backup,
-        "auto_backup_configured": auto_backup,
-    }
+            state = {**state, **backup_state(data.get("backups", []) or [], info.get("slug") or "")}
+        except SupervisorError as exc:
+            state["supervisor_error"] = str(exc)
+    else:
+        state["supervisor_error"] = "Supervisor nicht erreichbar"
+    return {**st, **state}
+
+
+@router.post("/admin/backup/ha-now")
+async def backup_ha_now(user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Jetzt ein HA-Teil-Backup dieses Add-ons anlegen, wie es die Nacht tut."""
+    require_admin(user)
+    try:
+        return await backup_now("manual")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Sicherung nicht angelegt: {exc}") from None
 
 
 @router.get("/admin/backup/download")
 async def backup_download(user: CurrentUser = Depends(get_current_user)):
     require_admin(user)
-    archive = make_combined_zip()
+    # Im Thread: Der Schnappschuss darf den Server nicht anhalten.
+    archive = await asyncio.to_thread(make_combined_zip)
     fname = "schul-cockpit-backup-" + datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M") + ".zip"
     return FileResponse(
         archive,

@@ -1,3 +1,9 @@
+## 0.63.0
+
+- Backup zuverlässig: Das Add-on sichert sich jede Nacht zwischen drei und sechs Uhr selbst als Home-Assistant-Teil-Backup und behält die letzten sieben. Die automatischen HA-Backups enthielten das Schul-Cockpit bisher nicht, nur ein Hand-Backup vom 14.09. Die Einstellungsseite zeigt jetzt die letzte Sicherung, die dieses Add-on enthält, warnt ab zwei Tagen und hat den Knopf „Jetzt in Home Assistant sichern“.
+- Die Backup-Anzeige meldete fälschlich „kein Backup vorhanden“: Dem Add-on fehlte die Berechtigung, Backups aufzulisten (403). Es hat jetzt die Rolle „backup“.
+- Der ZIP-Download scheiterte mit „database is locked“, weil der vollständige Checkpoint auf alle Schreiber wartete und den Server dabei anhielt. Der Schnappschuss läuft jetzt im Hintergrund, mit passivem Checkpoint und seitenweisem Kopieren.
+
 ## 0.62.0
 
 - Der Einwilligungsdialog des Verlags im Medienregal wird erkannt und gemeldet statt als Bücher gespeichert; die App stimmt nicht an Stelle der Eltern zu. Ein Regaleintrag lässt sich in den Einstellungen entfernen.
