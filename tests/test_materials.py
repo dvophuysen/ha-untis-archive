@@ -204,3 +204,37 @@ def test_without_a_given_date_the_creation_day_is_used():
     task = {"lesson_id": None, "due_date": "2026-09-17", "created_at": "2026-09-11T10:00:00+00:00",
             "notes": "ohne Angabe"}
     assert analysis.task_given_date(task) == "2026-09-11"
+
+
+def test_an_empty_text_field_in_a_correction_is_not_a_correction(env):
+    """Textband S. 10/11: Das Formular schickte den leeren Text mit, die Sperre
+    verhinderte jede spätere Lesung. Leere Textfelder werden ignoriert."""
+    client = client_for(env)
+    body = upload(client).json()
+    fixed = client.patch(f"{URL}/{body['id']}", json={"source_label": "Textband", "source_page": 10, "content_text": "", "summary": "  ", "title": ""}).json()
+    assert set(fixed["locked_fields"]) == {"source_label", "source_page"}
+    insight = analysis.Insight(kind="book_page", subject_name="Latein", title="Gefahr im Circus Maximus",
+                               summary="Lektionstext", content_text="Die Freizeit der Kinder …", confidence=0.98)
+    with closing(db.webapp_conn()) as conn:
+        row = conn.execute("SELECT * FROM materials WHERE id=?", (body["id"],)).fetchone()
+        analysis._apply(conn, 1, row, insight)
+    after = client.get(f"{URL}/{body['id']}").json()
+    assert after["content_text"] == "Die Freizeit der Kinder …" and after["title"] == "Gefahr im Circus Maximus"
+
+
+def test_the_repair_unlocks_empty_locked_texts_and_queues_a_new_reading(env):
+    client = client_for(env)
+    body = upload(client).json()
+    with closing(db.webapp_conn()) as conn, conn:
+        conn.execute("UPDATE materials SET content_text='',summary='',analysis_state='ready',"
+                     "locked_fields='[\"content_text\",\"source_label\",\"summary\",\"title\"]' WHERE id=?", (body["id"],))
+        sql = dict(db._MIGRATIONS)["materials_013_unlock_empty_text"]
+        conn.executescript(sql)
+    after = client.get(f"{URL}/{body['id']}").json()
+    assert after["analysis_state"] == "pending" and set(after["locked_fields"]) == {"source_label", "title"}
+    # Ein gelesenes Material mit Text bleibt unangetastet.
+    other = upload(client).json()
+    with closing(db.webapp_conn()) as conn, conn:
+        conn.execute("UPDATE materials SET content_text='Text da',analysis_state='ready',locked_fields='[\"content_text\"]' WHERE id=?", (other["id"],))
+        conn.executescript(sql)
+    assert client.get(f"{URL}/{other['id']}").json()["analysis_state"] == "ready"

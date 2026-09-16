@@ -264,6 +264,12 @@ def correct(account_id: int, material_id: int, body: MaterialPatch, background: 
     """A parent correction wins and is protected against later analysis runs."""
     access(user, account_id, write=True, parent=True)
     changes = {k: v for k, v in body.model_dump(exclude_unset=True).items() if v is not None}
+    # Ein leeres Textfeld ist keine Korrektur. Das Formular schickte bisher
+    # alle Felder mit; ein noch ungelesenes Material bekam so einen leeren,
+    # gesperrten Text, den keine Lesung mehr füllen durfte (Textband S. 10/11).
+    for field in ("title", "summary", "content_text", "document_date", "period_start", "period_end"):
+        if field in changes and not str(changes[field]).strip():
+            changes.pop(field)
     if "kind" in changes and changes["kind"] not in store.KINDS:
         raise HTTPException(422, "Unbekannte Materialart.")
     if "source_label" in changes:
