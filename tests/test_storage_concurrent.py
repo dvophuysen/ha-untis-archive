@@ -82,11 +82,11 @@ def test_concurrent_master_upserts_do_not_deadlock(tmp_path: Path) -> None:
     store_b = UntisStorage(db_path)
 
     account_a = store_a.ensure_account(
-        entry_id="a", name="Kind B", server="s", school="x",
+        entry_id="a", name="Anna", server="s", school="x",
         username="ju", student_id=1, student_type=5,
     )
     account_b = store_b.ensure_account(
-        entry_id="b", name="Kind A", server="s", school="x",
+        entry_id="b", name="Ben", server="s", school="x",
         username="nu", student_id=2, student_type=5,
     )
 

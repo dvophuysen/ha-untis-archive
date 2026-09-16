@@ -1,7 +1,7 @@
 """Zwei Bücher in einem Fach, Papierbücher mit fotografiertem Verzeichnis und
 der Zettel der Lehrkraft mit dem Klausurstoff.
 
-Der Beispieltext ist Kind B Notiz zur ersten Lateinarbeit, wörtlich."""
+Der Beispieltext ist die Notiz eines Kindes zur ersten Lateinarbeit, wörtlich."""
 import asyncio
 import io
 import json

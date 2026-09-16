@@ -178,8 +178,8 @@
         {/each}
       </select>
     {:else}
-      <label>Kalender-Entity (z.B. calendar.klausuren_kind_a)</label>
-      <input bind:value={selectedEntity} placeholder="calendar.klausuren_kind_a" />
+      <label>Kalender-Entity (z.B. calendar.klausuren_anna)</label>
+      <input bind:value={selectedEntity} placeholder="calendar.klausuren_anna" />
     {/if}
 
     <label style="margin-top:0.6rem;">Ausschluss-Wörter (Komma-getrennt)</label>

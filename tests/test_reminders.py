@@ -3,7 +3,6 @@ from datetime import datetime
 from test_learning import env, child
 from backend import db, reminders as r
 from backend.routers import reminders as routes
-from backend.routers.push import SubscribeIn
 import pytest
 
 NOW=datetime(2026,9,14,18,0,tzinfo=r.ZONE)
@@ -14,9 +13,12 @@ def setup(env):
     client.app.include_router(routes.router,prefix='/api')
     return client,state,patch
 
-def subscribe(uid=2):
-    with closing(db.webapp_conn()) as c:
-        return c.execute("INSERT INTO push_subscriptions(user_id,endpoint,p256dh,auth,created_at,last_seen_at) VALUES(?,?,?,?,?,?)",(uid,f'https://web.push.apple.com/{uid}','key','auth','now','now')).lastrowid
+def app_device(patch, sent, service='mobile_app_kind_iphone'):
+    """Ein Kindergerät über die Home-Assistant-App; `sent` sammelt die Mitteilungen."""
+    from backend import app_notify
+    patch.setattr(app_notify,'own_panel',lambda:'/e54108c7_schul_cockpit')
+    app_notify.set_targets(1,[service])
+    patch.setattr(app_notify,'send',lambda service,title,message,url:(sent.append((service,title,message,url)) or True))
 
 def test_defaults_permissions_and_explicit_time(env):
     client,state,_=setup(env)
@@ -29,20 +31,18 @@ def test_defaults_permissions_and_explicit_time(env):
     assert client.put(URL,json={'enabled':False}).status_code==403
     assert client.get('/api/accounts/2/reminders').status_code==403
 
-def test_bundled_once_only_for_child_and_persistent_across_restart(env):
-    client,_,patch=setup(env);subscribe();subscribe(1)
+def test_bundled_once_and_persistent_across_restart(env):
+    client,_,patch=setup(env);sent=[];app_device(patch,sent)
     client.put(URL,json={'enabled':True,'remind_at':'18:00'})
     patch.setattr(r,'snapshot',lambda *a:dict(homework=2,material=3,feedback=1))
-    calls=[];patch.setattr(r,'send_push',lambda sub,payload,**kw:(calls.append((sub,payload,kw)) or (True,200)))
     r.run_once(NOW);db.init_webapp_db();r.run_once(NOW)
-    assert len(calls)==1 and calls[0][0]['endpoint'].endswith('/2')
-    assert calls[0][2]['ttl']==1800 and 'Hausaufgaben' in calls[0][1]['body'] and 'Fachmaterial' in calls[0][1]['body']
-    assert client.get(URL).json()['last_delivery']['status']=='accepted'
+    assert len(sent)==1
+    assert 'Hausaufgaben' in sent[0][2] and 'Schultasche' in sent[0][2]
+    assert client.get(URL).json()['last_app_delivery']['status']=='accepted'
 
-def test_no_push_when_done_outside_window_disabled_or_source_unavailable(env):
-    client,_,patch=setup(env);subscribe()
+def test_no_reminder_when_done_outside_window_disabled_or_source_unavailable(env):
+    client,_,patch=setup(env);sent=[];app_device(patch,sent)
     client.put(URL,json={'enabled':True,'remind_at':'18:00'})
-    calls=[];patch.setattr(r,'send_push',lambda *a,**kw:calls.append(1))
     patch.setattr(r,'snapshot',lambda *a:dict(homework=0,material=0,feedback=0))
     r.run_once(NOW)
     patch.setattr(r,'snapshot',lambda *a:dict(homework=1,material=0,feedback=0))
@@ -50,17 +50,27 @@ def test_no_push_when_done_outside_window_disabled_or_source_unavailable(env):
     def broken(*a):raise RuntimeError('source missing')
     patch.setattr(r,'snapshot',broken);r.run_once(NOW)
     client.put(URL,json={'enabled':False});r.run_once(NOW)
-    assert calls==[]
-    assert client.get(URL).json()['last_delivery'] is None
+    assert sent==[]
+    assert client.get(URL).json()['last_app_delivery'] is None
 
-def test_failed_push_not_replayed_and_dead_subscription_removed(env):
-    client,_,patch=setup(env);subscribe();client.put(URL,json={'enabled':True,'remind_at':'18:00'})
+def test_failed_delivery_is_recorded_and_not_replayed(env):
+    client,_,patch=setup(env);client.put(URL,json={'enabled':True,'remind_at':'18:00'})
+    from backend import app_notify
+    patch.setattr(app_notify,'own_panel',lambda:'/x');app_notify.set_targets(1,['mobile_app_kind_iphone'])
+    calls=[];patch.setattr(app_notify,'send',lambda *a:(calls.append(1) or False))
     patch.setattr(r,'snapshot',lambda *a:dict(homework=0,material=1,feedback=0))
-    calls=[];patch.setattr(r,'send_push',lambda *a,**kw:(calls.append(1) or (False,410)))
     r.run_once(NOW);r.run_once(NOW)
     assert calls==[1]
-    assert client.get(URL).json()['last_delivery']['status']=='failed'
-    assert client.get(URL).json()['devices']==0
+    assert client.get(URL).json()['last_app_delivery']['status']=='failed'
+
+def test_web_push_is_gone(env):
+    """D65: keine Abonnements, keine Schlüssel, keine Route."""
+    client,_,_=setup(env)
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT name FROM sqlite_master WHERE name='push_subscriptions'").fetchone() is None
+        assert c.execute("SELECT COUNT(*) FROM schema_meta WHERE key LIKE 'vapid:%'").fetchone()[0]==0
+    assert 'devices' not in client.get(URL).json()
+    assert client.get('/api/push/vapid-key').status_code==404
 
 def test_snapshot_uses_due_tasks_material_and_ended_feedback(env):
     _,_,patch=setup(env)
@@ -75,12 +85,6 @@ def test_snapshot_uses_due_tasks_material_and_ended_feedback(env):
         c.execute("UPDATE tasks SET status='done'")
         c.execute("INSERT INTO packing_items VALUES(1,'2026-09-15','subject:math',1,1,'now',2)")
     assert r.snapshot(1,NOW)==dict(homework=0,material=0,feedback=1,photos=0)
-
-def test_subscription_rejects_non_provider_endpoints():
-    for endpoint in ['http://localhost/push','https://127.0.0.1/push','https://web.push.apple.com.evil.test/push','https://user:pass@web.push.apple.com/push']:
-        with pytest.raises(ValueError):SubscribeIn(endpoint=endpoint,keys={'p256dh':'key','auth':'auth'})
-    assert SubscribeIn(endpoint='https://web.push.apple.com/a',keys={'p256dh':'key','auth':'auth'})
-
 
 def test_account_remap_keeps_settings_packing_and_delivery_with_child(env):
     from backend.reconcile import _reconcile_accounts

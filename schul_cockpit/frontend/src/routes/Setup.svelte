@@ -162,7 +162,7 @@
     <br><br>
     <strong>So funktioniert das pro Familienmitglied:</strong>
     <ol style="margin: 0.4rem 0 0 1.1rem; padding: 0;">
-      <li>In Home Assistant <em>mit dem eigenen HA-Login</em> einloggen (z.B. Kind A HA-Account).</li>
+      <li>In Home Assistant <em>mit dem eigenen HA-Login</em> einloggen (z.B. der HA-Account des Kindes).</li>
       <li>In der HA-Seitenleiste auf „Schul-Cockpit" tippen.</li>
       <li>Sobald die App geöffnet ist, ist der HA-User registriert — danach hier im Setup mit Rolle, Kind und PIN versorgen.</li>
     </ol>

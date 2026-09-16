@@ -6,7 +6,7 @@ Stand: 12. September 2026. Architekturentwurf; ausdrücklich kein Nachweis berei
 
 ## Ziel und Verantwortung
 
-Kind A und Kind B erhalten kurze, altersgerechte Lernbegleitung auf dem iPhone. Sie müssen eine Wissenslücke nicht selbst benennen können. Der Mentor hilft beim Verstehen, überprüft eigenständiges Anwenden, fördert Selbstorganisation und bereitet auf die Beteiligung im Unterricht vor. Noten sind ein ergänzendes Ergebnis. Lernzeit und Zufriedenheit sind gleichberechtigte Erfolgskriterien.
+Die Kinder erhalten kurze, altersgerechte Lernbegleitung auf dem iPhone. Sie müssen eine Wissenslücke nicht selbst benennen können. Der Mentor hilft beim Verstehen, überprüft eigenständiges Anwenden, fördert Selbstorganisation und bereitet auf die Beteiligung im Unterricht vor. Noten sind ein ergänzendes Ergebnis. Lernzeit und Zufriedenheit sind gleichberechtigte Erfolgskriterien.
 
 Ein Klassenunterricht kann nicht jederzeit individuelles Vorwissen, Tempo, Erklärungsbedarf und persönliche Rückmeldungen berücksichtigen. Daraus folgt keine pauschale Diagnose pädagogischer Defizite einer Lehrkraft. Der Mentor ergänzt Erklärungen und Übungsgelegenheiten. Er soll Beschwerden ernst nehmen, ohne Partei gegen Lehrkräfte zu ergreifen. Bei sozialen Problemen, Müdigkeit oder Belastung ist zusätzliche Fachübung nicht automatisch die passende Antwort.
 

@@ -21,7 +21,8 @@
   `e54108c7_schul_cockpit`. Die Sammelpfade `/api/hassio/addons` und
   `/api/hassio/app/...` antworten mit 401 — daraus folgt kein fehlender
   Zugang. In der Claude-Code-Sandbox blockt der Agent-Proxy Python-urllib
-  mit 403; dort dieselbe Adresse per `curl` abrufen.
+  mit 403; `ha_diagnose.py` fällt dann selbst auf `curl` zurück, andere
+  Aufrufe dort direkt per `curl` machen.
 - Den vollen Supervisor-Zugriff (Add-on-Info, Optionen, Neustart) gibt es
   über die HA-Websocket-API `$HA_URL/api/websocket` mit dem Kommando
   `{"type":"supervisor/api","endpoint":"/addons/<slug>/info","method":"get"}`.
@@ -36,6 +37,14 @@
 - Beide Variablen werden in der Claude-Code-Umgebung gepflegt
   (claude.ai/code → Umgebung → Environment variables) und gelten ab der
   nächsten Session. Der Token gehört niemals ins Repo.
+
+# Tests
+
+- `python3 -m pytest tests` aus dem Repo-Wurzelverzeichnis; `pyproject.toml`
+  setzt die Importpfade. Abhängigkeiten: `schul_cockpit/backend/requirements.txt`
+  plus `pytest pytest-asyncio`. Frontend: `cd schul_cockpit/frontend && npm ci
+  && npm run build`. Dasselbe läuft in `.github/workflows/tests.yml` bei jedem
+  Push auf `main`.
 
 # Repo-Workflow
 

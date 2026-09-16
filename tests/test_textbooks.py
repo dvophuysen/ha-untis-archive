@@ -36,7 +36,7 @@ def test_parent_can_store_update_and_delete_write_only_credentials(env):
         }
         saved = client.put(URL, json={
             "portal_url": "https://beispiel-iserv.de/",
-            "username": "kind_a",
+            "username": "kind",
             "password": "very-secret",
         })
         assert saved.status_code == 200
@@ -50,7 +50,7 @@ def test_parent_can_store_update_and_delete_write_only_credentials(env):
 
         changed = client.put(URL, json={
             "portal_url": "https://beispiel-iserv.de",
-            "username": "kind_a-neu",
+            "username": "kind-neu",
             "password": None,
         })
         assert changed.status_code == 200
@@ -76,7 +76,7 @@ def test_credentials_are_parent_only_and_validate_portal(env):
 def test_parent_can_verify_saved_access_without_exposing_secret(env):
     for client, _ in setup(env):
         assert client.put(URL, json={
-            "portal_url": "https://beispiel-iserv.de", "username": "kind_a", "password": "secret"
+            "portal_url": "https://beispiel-iserv.de", "username": "kind", "password": "secret"
         }).status_code == 200
         seen = {}
 
@@ -90,4 +90,4 @@ def test_parent_can_verify_saved_access_without_exposing_secret(env):
         assert response.json()["verification_status"] == "connected"
         assert response.json()["verified_at"]
         assert "secret" not in response.text
-        assert seen == {"portal": "https://beispiel-iserv.de", "username": "kind_a", "password": "secret"}
+        assert seen == {"portal": "https://beispiel-iserv.de", "username": "kind", "password": "secret"}

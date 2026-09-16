@@ -278,8 +278,8 @@ def _plan_for_account(account_id: int, today: date) -> dict:
 def _feedback_gap(account_id: int, today: date) -> dict:
     """Stunden der letzten 7 Tage, die tatsächlich stattgefunden haben
     (nicht cancelled, Kind nicht abwesend, kein ausgeblendeter Kurs) und
-    noch keinen Checkin haben. Ausgeblendete Kurse zählen nicht: Kind A
-    Französisch und Religion, die er nicht besucht, standen sonst als „zwei
+    noch keinen Checkin haben. Ausgeblendete Kurse zählen nicht: die
+    Französisch und Religion eines Kindes, das sie nicht besucht, standen sonst als „zwei
     Rückmeldungen offen" da, ohne im Stundenplan zu erscheinen."""
     horizon = (today - timedelta(days=FEEDBACK_GAP_DAYS)).isoformat()
     today_iso = today.isoformat()

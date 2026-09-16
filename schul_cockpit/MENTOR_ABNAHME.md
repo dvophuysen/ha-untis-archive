@@ -12,9 +12,9 @@ Wiederholungsregeln sind für gleiche Tage, bekannte Aufgaben, größere Abstän
 
 ## Live-Prüfung am 12.09.2026 und Ergänzung 0.27.1
 
-Die Gruppierung von Kind B Deutschunterricht seit 13.08.2026 hat 14 beschriebene Stunden berücksichtigt und zwei Stunden ohne Beschreibung ausdrücklich angezeigt. Die Druckansicht der vorhandenen Deutsch-Übungsklausur wurde angemeldet geöffnet und visuell geprüft: Aufgaben, Punkte und Antwortplatz vorhanden; keine Musterlösungen. Ab 0.27.1 bleiben unklare/organisatorische Gruppen sichtbar, sind aber von der automatischen Klausurthemenauswahl ausgeschlossen; eigener Integrationstest prüft auch die serverseitige Ablehnung.
+Die Gruppierung des Deutschunterrichts eines Kindes seit 13.08.2026 hat 14 beschriebene Stunden berücksichtigt und zwei Stunden ohne Beschreibung ausdrücklich angezeigt. Die Druckansicht der vorhandenen Deutsch-Übungsklausur wurde angemeldet geöffnet und visuell geprüft: Aufgaben, Punkte und Antwortplatz vorhanden; keine Musterlösungen. Ab 0.27.1 bleiben unklare/organisatorische Gruppen sichtbar, sind aber von der automatischen Klausurthemenauswahl ausgeschlossen; eigener Integrationstest prüft auch die serverseitige Ablehnung.
 
-Die Prüfung von Kind B Plan und Fächeransicht sowie die konzeptionellen Konsequenzen sind in [LERNPLAN_VERZAHNUNG.md](LERNPLAN_VERZAHNUNG.md) dokumentiert. Diese Integration ist ausdrücklich noch geplant.
+Die Prüfung von Plan und Fächeransicht dieses Kindes sowie die konzeptionellen Konsequenzen sind in [LERNPLAN_VERZAHNUNG.md](LERNPLAN_VERZAHNUNG.md) dokumentiert. Diese Integration ist ausdrücklich noch geplant.
 
 ## Ergänzung 0.27.0
 

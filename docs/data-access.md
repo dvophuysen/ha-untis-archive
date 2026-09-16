@@ -87,7 +87,7 @@ filtern bzw. joinen.
 | Spalte | Typ | Bedeutung |
 |---|---|---|
 | `id` | INT PK | account_id, überall als Fremdschlüssel |
-| `name` | TEXT | Anzeigename (z. B. „Kind B") |
+| `name` | TEXT | Anzeigename (z. B. „Anna") |
 | `server` | TEXT | WebUntis-Server |
 | `school` | TEXT | Schul-Login-Name |
 | `username` | TEXT | Untis-Benutzer |
@@ -309,7 +309,7 @@ Tageswerte. Pro Kind (`<name>` = slugifizierter Anzeigename):
 ### REST
 
 ```
-GET http://<ha-host>:8123/api/states/sensor.untis_archive_kind_b_lehrstoff_heute
+GET http://<ha-host>:8123/api/states/sensor.untis_archive_anna_lehrstoff_heute
 Authorization: Bearer <Long-Lived-Access-Token>
 ```
 

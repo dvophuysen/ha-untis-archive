@@ -1,6 +1,16 @@
 # Offene Ansätze und zu entscheidende Fragen
 
-Stand: 13.09.2026. Backlog zur gemeinsamen Klärung, kein verbindlicher Bauauftrag für alle Einträge.
+Stand: 16.09.2026. Backlog zur gemeinsamen Klärung, kein verbindlicher Bauauftrag für alle Einträge.
+
+## Zurückgestellt am 16.09.2026 (D67)
+
+- Gruppierung der Lerneinheiten nach Feld, Schuljahresgrenze 1. August, Doppelstunden als eine Behandlung, gemischte Einträge; Entwurf in [LERNEINHEITEN.md](LERNEINHEITEN.md). Offene Frage: Ist ein Oberthema selbst übbar?
+- Abschreibmodell umstellen (D54): Eichung ist gebaut, das günstigere Modell nie aktiviert. Kostenhebel, Entscheidung der Eltern nach Eichung an echten Seiten.
+- Kostensätze der Modelle laufen am 01.12.2026 ab; danach sperrt `ai_gateway` unbekannte Namen. Vorher prüfen und mit Datum neu hinterlegen.
+- Sensor „Hausaufgaben offen“ der Integration widerspricht den Todo-Listen (Untis `completed` unzuverlässig). Entweder aus dem Todo-Abgleich speisen oder umbenennen.
+- Vokabeltrainer: Kartenfoto für Stufe 2, Formen-Trainer Latein, Spanisch-Wortseiten als Material.
+- Klausurseite: Fahrplan mit Tagen, Übungsfenster 60 Tage gegen „seit Ankündigung“, Weg von der Arbeit zur Materialablage.
+- Materialablage Stufe 5: Chatanhänge übernehmen, Suche, Aufbewahrungsdauer, Benachrichtigung über neues Material.
 
 ## Fachübersicht und Analyse
 
