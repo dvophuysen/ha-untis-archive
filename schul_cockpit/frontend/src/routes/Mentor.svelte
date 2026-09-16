@@ -16,8 +16,8 @@
   async function setCounts(counts){running=await api.put(`${base}/sessions/${running.id}/counts`,{counts});await load();}
   let end=$state(null),demo=$state(false),examBusy=$state(false);
   async function switchMode(value){if(value===demo)return;await leave();demo=value;data=null;tab='today';text='';attachment=null;evidence=null;quality=null;subject='';goal='';await load();}
-  let limits=$state({monthly_eur:50,warning_eur:40,daily_eur:10,sources_eur:30,background_eur:10,sources_model:''}),limitsOpen=$state(false);
-  async function load(){data=await api.get(`${base}?demo=${demo}`);const b=data.budget||{};limits={monthly_eur:b.limit_eur??50,warning_eur:b.warning_eur??40,daily_eur:b.daily_limit_eur??10,sources_eur:b.sources_limit_eur??30,background_eur:b.background_limit_eur??10,sources_model:b.sources_model??''};}
+  let limits=$state({monthly_eur:50,warning_eur:40,daily_eur:10,sources_eur:30,background_eur:10,sources_model:'',opening_model:''}),limitsOpen=$state(false);
+  async function load(){data=await api.get(`${base}?demo=${demo}`);const b=data.budget||{};limits={monthly_eur:b.limit_eur??50,warning_eur:b.warning_eur??40,daily_eur:b.daily_limit_eur??10,sources_eur:b.sources_limit_eur??30,background_eur:b.background_limit_eur??10,sources_model:b.sources_model??'',opening_model:b.opening_model??''};}
   async function act(fn){if(busy)return;busy=true;error='';try{await fn();await tick();}catch(e){error=e.message;}finally{busy=false;}}
   async function open(s){removeConfirm=false;running=await api.get(`${base}/sessions/${s.id}`);text='';attachment=null;}
   async function start(c){running=await api.post(`${base}/sessions`,{subject:c.subject,lesson_id:c.lesson_id||null,skill_id:c.skill_id||null,goal:c.title||goal,goal_key:c.key||null,minutes:c.minutes||10,voluntary:c.voluntary||false,demo});text='';}
@@ -48,11 +48,11 @@
   {#if error}<div class="notice" role="alert"><p>{error}</p>{#if running}<button disabled={busy} onclick={()=>act(()=>open(running))}>Aktuellen Stand laden</button>{/if}</div>{/if}
   {#if running && data?.can_manage}<button disabled={busy} onclick={()=>removeConfirm=!removeConfirm}>Diese Einheit entfernen</button>{#if removeConfirm}<p class="notice">Gespräch, Antworten und Anrechnung dieser Einheit löschen?</p><button disabled={busy} onclick={()=>act(removeSession)}>Einheit endgültig löschen</button>{/if}{/if}
   {#if running}
-    <header class="session-head"><button class="quiet" disabled={busy} onclick={()=>act(leave)}>← Lernen</button><span>{running.subject} · {running.topic?`Thema ${running.topic.position??'–'} von ${running.topic.total} der offiziellen Themenliste · Stufe: ${running.topic.stage}`:running.mode==='homework_help'?'Hilfe bei deiner Aufgabe':`etwa ${running.max_minutes} Minuten`}</span></header>
+    <header class="session-head"><button class="quiet" disabled={busy} onclick={()=>act(leave)}>← Lernen</button><span>{running.subject}{#if running.situation} · {running.situation.label}{#if running.situation.exam} · Arbeit {running.situation.exam.days===0?'heute':running.situation.exam.days===1?'morgen':`in ${running.situation.exam.days} Tagen`}{/if}{/if}{#if running.topic} · Thema {running.topic.position??'–'} von {running.topic.total} · {running.topic.stage}{:else if running.mode==='homework_help'} · Hilfe bei deiner Aufgabe{/if}</span></header>
     {#if running.is_test}<p class="notice">{running.is_demo?'Demo-Gespräch mit Beispieldaten. Kein Lernnachweis des Kindes.':'Als Testlauf gekennzeichnet: außerhalb des Lernstands und für das Kind nicht sichtbar.'}</p>{/if}
     {#if data?.can_manage&&!running.is_demo}<div class="actions"><button disabled={busy} onclick={()=>act(()=>setCounts(!!running.is_test))}>{running.is_test?'In den Kinderverlauf übernehmen':'War nur ein Test — nicht in den Lernstand'}</button></div>{/if}
     <h1>{running.goal}</h1>
-    {#if running.topic}<p class="hint">{running.topic.check?'Kurzprüfung: kurze Aufgaben ohne Erklärung vorweg. Sitzt es noch, gilt das Thema als gefestigt.':'Diese Einheit hat keine Uhr. Sie endet, wenn das Thema sitzt oder du aufhörst.'}{#if running.topic.places_label} · {running.topic.places_label}{/if}</p>{/if}
+    {#if running.topic?.places_label}<p class="hint">{running.topic.places_label}</p>{/if}
     {#if running.mode==='homework_help'}<p class="hint">{running.task_done?'Diese Hausaufgabe ist abgehakt. Das Gespräch liegt im Archiv und bleibt lesbar.':'Dieses Gespräch bleibt offen, bis du die Hausaufgabe abhakst.'}</p>{/if}
     {#if running.task && running.status==='active'}<details class="task"><summary>Deine aktuelle Aufgabe</summary><p class="preserve">{running.task.prompt}</p></details>{/if}
     <div class="messages" aria-live="polite">
@@ -75,7 +75,7 @@
     {:else}<section class="card"><h2>{running.status==='active'?'Gespeicherter Verlauf':running.topic?'Einheit beendet':running.untimed?'Unterbrochen':'Für heute geschafft'}</h2><p>{running.summary||'Dein Gespräch und deine Antworten bleiben gespeichert.'}</p>{#if running.topic}<p><strong>Stufe: {running.topic.stage}</strong>{#if running.topic.reason&&running.topic.stage!=='neu'} · {running.topic.reason}{/if}{#if running.topic.next_check} · Kurzprüfung ab {formatShortDate(running.topic.next_check)}{/if}</p><a href="#/klausuren">Zur Arbeit und den anderen Themen</a>{/if}
       {#if running.status!=='active'&&data?.can_write}<button class="primary" disabled={busy} onclick={()=>act(resume)}><ActionLabel kind="chat" label="Hier weitermachen" /></button>{/if}
       <button onclick={()=>act(leave)}>Zur Übersicht</button><a href="#/plan"><ActionLabel label="Aktualisierten Lernplan ansehen" /></a></section>{/if}
-    {#if busy}<p role="status" class="working">Einen Moment – deine Antwort wird vorbereitet …</p>{/if}
+    {#if busy}<p role="status" class="working">{running.messages.length<=1?'Dein Coach schaut sich Thema und Material an …':'Einen Moment – deine Antwort wird vorbereitet …'}</p>{/if}
   {:else if data}
     <header><span class="eyebrow">Dein Lernbegleiter</span><h1>{data.can_manage&&!demo?'Der echte Lernverlauf.':'Was hast du vor?'}</h1><p>{data.can_manage&&!demo?'Wähle oben das Kind. Hier findest du seine gespeicherten Gespräche, Antworten und Lernbeobachtungen.':'Du wählst das Thema. Ich helfe dir beim Üben.'}</p></header>
     <nav aria-label="Lernbereiche">{#each [['today','Heute','🌱'],['history',data.can_manage&&!demo?'Gespräche':'Weitermachen','💬'],['progress','Was schon klappt','🌟'],['exams','Übungsklausur','📝']] as [key,label,icon]}<button class:chosen={tab===key} disabled={busy||examBusy} aria-pressed={tab===key} onclick={()=>tab=key}><span aria-hidden="true">{icon}</span> {label}</button>{/each}</nav>
@@ -107,12 +107,13 @@
       {#if !data.budget.opening_confirmed}<form onsubmit={e=>{e.preventDefault();act(async()=>{await api.put(`${base}/budget-opening`,{spent_eur:spent});await load();});}}><p>Vor der neuen Verbrauchserfassung gab es bereits KI-Aufrufe. Bitte den bisherigen Monatsverbrauch aus Azure berücksichtigen.</p><label>Bisherige Mentor-Kosten dieses Monats in Euro<input type="number" min="0" max="1000" step="0.01" required bind:value={spent}/></label><button disabled={busy}>Anfangsstand bestätigen</button></form>{/if}
       <details><summary>KI-Rahmen einstellen</summary>
         <p class="muted">Der Tagesrahmen zählt nur, was das Kind selbst übt und fragt. Quellen und Hintergrund haben eigene Monatsrahmen innerhalb des Monatsrahmens. Das Modell fürs Abschreiben wird nur nach Eichung an echten Seiten umgestellt; Erklären und Üben bleiben beim Hauptmodell.</p>
-        <form class="limits" onsubmit={e=>{e.preventDefault();act(async()=>{await api.put(`${base}/budget-limits`,{monthly_eur:Number(limits.monthly_eur),warning_eur:Number(limits.warning_eur),daily_eur:Number(limits.daily_eur),sources_eur:Number(limits.sources_eur),background_eur:Number(limits.background_eur),sources_model:limits.sources_model??''});await load();limitsOpen=false;});}}>
+        <form class="limits" onsubmit={e=>{e.preventDefault();act(async()=>{await api.put(`${base}/budget-limits`,{monthly_eur:Number(limits.monthly_eur),warning_eur:Number(limits.warning_eur),daily_eur:Number(limits.daily_eur),sources_eur:Number(limits.sources_eur),background_eur:Number(limits.background_eur),sources_model:limits.sources_model??'',opening_model:limits.opening_model??''});await load();limitsOpen=false;});}}>
           <label>Monat gesamt (€)<input type="number" min="1" max="1000" step="1" bind:value={limits.monthly_eur}/></label>
           <label>Warnung ab (€)<input type="number" min="1" max="1000" step="1" bind:value={limits.warning_eur}/></label>
           <label>Tag je Kind (€)<input type="number" min="0.5" max="200" step="0.5" bind:value={limits.daily_eur}/></label>
           <label>Quellenbestand im Monat (€)<input type="number" min="0" max="1000" step="1" bind:value={limits.sources_eur}/></label>
           <label>Hintergrund im Monat (€)<input type="number" min="0" max="1000" step="1" bind:value={limits.background_eur}/></label>
+          <label>Modell für den Einstieg in eine Einheit<select bind:value={limits.opening_model}><option value="">wie Hauptmodell ({data.budget.model})</option>{#each data.budget.models??[] as m}<option value={m}>{m}</option>{/each}</select></label>
           <label>Modell fürs Abschreiben<select bind:value={limits.sources_model}><option value="">wie Hauptmodell ({data.budget.model})</option>{#each data.budget.models??[] as m}<option value={m}>{m} · {data.budget.rates?.[m]?.input_per_m} / {data.budget.rates?.[m]?.output_per_m} € je Mio. Token</option>{/each}</select></label>
           <button disabled={busy}>Rahmen speichern</button>
         </form>

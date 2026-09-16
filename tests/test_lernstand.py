@@ -167,7 +167,7 @@ def test_topic_unit_has_no_clock_and_ends_with_the_stage(exam_env):
     s = r.json()
     assert s["untimed"] and s["mode"] == "topic" and s["topic"]["title"] == "a-/o-Deklination" and s["topic"]["stage"] == "neu"
     assert s["topic"]["position"] == 1 and s["topic"]["total"] == 1 and not s["topic"]["check"]
-    assert "bis es sitzt" in s["messages"][0]["text"]
+    assert s["messages"][0]["text"].startswith("Wir nehmen uns „a-/o-Deklination“ vor")
     # Dieselbe Themen-Einheit wird wieder aufgenommen, nicht verdoppelt.
     assert client.post(B + "/sessions", json={"subject": "Latein", "topic_id": tid}).json()["id"] == s["id"]
     # Erste Aufgabe stellen.

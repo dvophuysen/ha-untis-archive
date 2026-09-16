@@ -33,6 +33,8 @@ BACKGROUND = {'discovery', 'background'}
 # seinen eigenen Rahmen, damit er die Auswertung der Kinderfotos nicht
 # verdrängt und umgekehrt. Beides bleibt innerhalb des Monatsrahmens.
 SOURCES = 'sources'
+# Der erste Zug einer Einheit: eigener Zweck, damit sein Modell geeicht werden kann.
+OPENING = 'opening'
 # Eine Übungseinheit darf bis hierhin kosten; danach wird der Stand gesichert.
 SESSION_MICRO = 4_000_000
 
@@ -61,7 +63,7 @@ def status():
     model = ai_settings()['model']
     return dict(month=month,used_eur=round(used/1e6,4),limit_eur=cfg['monthly_micro']/1e6,daily_limit_eur=cfg['daily_micro']/1e6,
                 background_limit_eur=cfg['background_micro']/1e6,session_limit_eur=SESSION_MICRO/1e6,
-                model=model,sources_model=cfg.get('sources_model') or None,models=sorted(RATES),
+                model=model,sources_model=cfg.get('sources_model') or None,opening_model=cfg.get('opening_model') or None,models=sorted(RATES),
                 rates={m:{'input_per_m':r[0],'output_per_m':r[1]} for m,r in RATES.items()},
                 warning_eur=cfg['warning_micro']/1e6,background_eur=round(bg/1e6,4),
                 sources_eur=round(src/1e6,4),sources_limit_eur=cfg['sources_micro']/1e6,
@@ -78,14 +80,16 @@ def model_for(purpose, cfg=None, override=None):
     sonst das Hauptmodell. Erklären und Üben bleiben beim Hauptmodell."""
     if override: return override
     main=ai_settings()['model']
-    if purpose!=SOURCES and purpose not in BACKGROUND: return main
+    # Der Einstieg in eine Einheit hat sein eigenes, geeichtes Modell (opening_model).
+    column='opening_model' if purpose==OPENING else 'sources_model' if (purpose==SOURCES or purpose in BACKGROUND) else None
+    if not column: return main
     if cfg is None:
         # Nur lesen, keine Konfiguration anlegen: Das tut reserve() selbst.
         with closing(webapp_conn()) as c:
-            row=c.execute("SELECT sources_model FROM mentor_ai_config WHERE id=1").fetchone()
-        chosen=(row['sources_model'] or '').strip() if row else ''
+            row=c.execute(f"SELECT {column} FROM mentor_ai_config WHERE id=1").fetchone()
+        chosen=(row[column] or '').strip() if row else ''
     else:
-        chosen=(cfg.get('sources_model') or '').strip()
+        chosen=(cfg.get(column) or '').strip()
     return chosen or main
 
 
