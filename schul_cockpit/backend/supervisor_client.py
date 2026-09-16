@@ -95,13 +95,41 @@ class SupervisorClient:
 
     async def list_backups(self) -> dict[str, Any]:
         """Supervisor backups list (for 'last HA backup' status). This hits
-        the Supervisor root API, not the Core proxy."""
+        the Supervisor root API, not the Core proxy; it needs hassio_role
+        backup, the default role answers 403."""
         url = f"{SETTINGS.supervisor_url}/backups"
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(url, headers=self._headers())
         if resp.status_code >= 400:
             raise SupervisorError(f"GET /backups failed: {resp.status_code}")
         return resp.json().get("data", {}) or {}
+
+    async def self_info(self) -> dict[str, Any]:
+        """Slug and version of this add-on."""
+        url = f"{SETTINGS.supervisor_url}/addons/self/info"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, headers=self._headers())
+        if resp.status_code >= 400:
+            raise SupervisorError(f"GET /addons/self/info failed: {resp.status_code}")
+        return resp.json().get("data", {}) or {}
+
+    async def create_partial_backup(self, name: str, addons: list[str]) -> dict[str, Any]:
+        """Ein Teil-Backup nur dieser Add-ons anlegen. Läuft im Supervisor
+        synchron; bei 170 MB App-Datenbank dauert das eine Minute."""
+        url = f"{SETTINGS.supervisor_url}/backups/new/partial"
+        payload = {"name": name, "addons": addons, "compressed": True}
+        async with httpx.AsyncClient(timeout=1800.0) as client:
+            resp = await client.post(url, headers=self._headers(), json=payload)
+        if resp.status_code >= 400:
+            raise SupervisorError(f"POST /backups/new/partial failed: {resp.status_code} {resp.text[:200]}")
+        return resp.json().get("data", {}) or {}
+
+    async def delete_backup(self, slug: str) -> None:
+        url = f"{SETTINGS.supervisor_url}/backups/{slug}"
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.delete(url, headers=self._headers())
+        if resp.status_code >= 400:
+            raise SupervisorError(f"DELETE /backups/{slug} failed: {resp.status_code}")
 
     async def get_calendar_events(
         self, entity_id: str, start: str, end: str

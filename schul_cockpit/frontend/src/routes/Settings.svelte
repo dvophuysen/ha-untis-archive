@@ -259,6 +259,21 @@
 
   $effect(() => { void appState.me?.is_admin; loadBackupStatus(); });
 
+  let haBackupBusy = $state(false);
+  async function doHaBackup() {
+    haBackupBusy = true;
+    restoreMsg = null;
+    try {
+      const result = await api.post('/api/admin/backup/ha-now', {});
+      restoreMsg = { ok: true, text: `Gesichert als „${result.name}“${result.pruned?.length ? `, ${result.pruned.length} alte entfernt` : ''}.` };
+      await loadBackupStatus();
+    } catch (e) {
+      restoreMsg = { ok: false, text: e.message };
+    } finally {
+      haBackupBusy = false;
+    }
+  }
+
   async function doDownload() {
     // Fetch as blob so it works behind ingress, then trigger a save.
     restoreMsg = null;
@@ -778,10 +793,10 @@
 
   <div class="section-title">Datensicherung</div>
   <div class="banner">
-    Lade ein vollständiges Backup beider Datenbanken herunter (App-Daten +
-    UNTIS-Archiv, als ein ZIP). Das Add-on-Datenverzeichnis ist ohnehin in
-    jedem Home-Assistant-Backup enthalten — dieser Download macht dich
-    zusätzlich unabhängig.
+    Das Add-on sichert sich jede Nacht zwischen drei und sechs Uhr selbst als
+    Home-Assistant-Backup (Einstellungen → System → Sicherungen, Name „Schul-Cockpit …“)
+    und behält die letzten sieben. Das automatische HA-Backup enthält nur die dort
+    ausgewählten Add-ons. Der ZIP-Download hier macht dich zusätzlich unabhängig.
   </div>
   <div class="card">
     {#if backupStatus}
@@ -792,18 +807,28 @@
         <strong>{backupStatus.counts?.manual_exams ?? 0}</strong> man. Klausuren ·
         <strong>{backupStatus.counts?.exam_progress ?? 0}</strong> Noten/Lernstände
         <br>App-DB: {fmtBytes(backupStatus.db_size_bytes)} ·
-        letztes HA-Backup: {fmtDate(backupStatus.last_ha_backup)}
+        letzte Sicherung mit Schul-Cockpit: {backupStatus.last_addon_backup ? fmtDate(backupStatus.last_addon_backup) : 'keine'}
+        {#if backupStatus.addon_backups} ({backupStatus.addon_backups} vorhanden){/if}
+        · letztes HA-Backup überhaupt: {fmtDate(backupStatus.last_ha_backup)}
       </div>
-      {#if backupStatus.last_ha_backup === null}
+      {#if backupStatus.supervisor_error}
         <div class="error-box" style="margin-bottom:0.5rem;">
-          ⚠️ Es wurde noch kein Home-Assistant-Backup gefunden. Richte in HA
-          (Einstellungen → System → Sicherungen) ein automatisches Backup ein —
-          das ist deine wichtigste Absicherung.
+          ⚠️ Die Backups von Home Assistant sind nicht abfragbar: {backupStatus.supervisor_error}
+        </div>
+      {:else if !backupStatus.last_addon_backup}
+        <div class="error-box" style="margin-bottom:0.5rem;">
+          ⚠️ Kein Home-Assistant-Backup enthält bisher dieses Add-on. Die nächste
+          Nachtsicherung legt eines an; mit dem Knopf unten geht es sofort.
+        </div>
+      {:else if Date.now() - new Date(backupStatus.last_addon_backup).getTime() > 48 * 3600 * 1000}
+        <div class="error-box" style="margin-bottom:0.5rem;">
+          ⚠️ Die letzte Sicherung mit diesem Add-on ist älter als zwei Tage.
         </div>
       {/if}
     {/if}
 
-    <button class="primary" style="width:100%;" onclick={doDownload}>⬇︎ Backup herunterladen (ZIP)</button>
+    <button class="primary" style="width:100%;" disabled={haBackupBusy} onclick={doHaBackup}>{haBackupBusy ? 'Sichere in Home Assistant …' : '🛡 Jetzt in Home Assistant sichern'}</button>
+    <button style="width:100%; margin-top:0.5rem;" onclick={doDownload}>⬇︎ Backup herunterladen (ZIP)</button>
 
     <input type="file" accept=".zip,.db" bind:this={fileInput} onchange={doRestore} style="display:none;" />
     <button style="width:100%; margin-top:0.5rem;" disabled={restoreBusy} onclick={() => fileInput.click()}>
