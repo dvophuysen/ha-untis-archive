@@ -23,3 +23,7 @@ select = ["E", "F", "W", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Die Tests importieren einander (`from test_learning import env`) und das
+# Backend als Paket `backend`; beides liegt nicht am Repo-Wurzelpfad.
+pythonpath = ["tests", "schul_cockpit"]
+testpaths = ["tests"]

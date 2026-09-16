@@ -1,7 +1,42 @@
-# Quellenbestand 0.52.2–0.69.2
+# Betriebspaket 0.70.0
 
-Stand 16.09.2026, nachmittags. Bis 0.56.11 auf der laufenden Instanz installiert und
-mit echten Abrufen geprüft; 0.57.0 folgt in derselben Session.
+Stand 16.09.2026, abends. Erstes von fünf Paketen der Reihenfolge aus D67.
+
+**Web-Push entfernt (D65).** `reminders.run_once` versendet nur noch über
+`app_notify` (Home-Assistant-App). `routers/push.py`, `webpush_setup.py`,
+`pywebpush`, die Push-Handler in `sw.js` und der Browser-Abschnitt in
+`ReminderSettings.svelte` sind weg; Migration `push_002_drop_web_push` löscht
+`push_subscriptions` und die VAPID-Schlüssel aus `schema_meta`.
+`reminder_deliveries` bleibt als Verlauf. Anlass: Jede Abendmitteilung
+erzeugte im Add-on-Log einen Stacktrace „Could not deserialize key data“.
+
+**Testlauf (D66).** `.github/workflows/tests.yml` führt bei jedem Push auf
+`main` und in Pull Requests die Backend-Tests und den Frontend-Build aus.
+`pyproject.toml` setzt `pythonpath = ["tests", "schul_cockpit"]`, damit
+`python3 -m pytest tests` ohne Umgebungsvariablen läuft. Lokal: 398 Tests
+grün, Frontend-Build bestanden. Beobachtung: `test_opening.py::
+test_situation_is_read_from_entry_point_and_signals` schlug in einem von drei
+vollständigen Läufen fehl und allein immer durch; Ursache noch offen.
+
+**Doku-Hygiene (D68).** Kindernamen aus Konzepten, Changelog, Code-Kommentaren,
+Integrationsdoku (Beispielnamen Anna/Ben) und Testdaten entfernt;
+`docs/handover.md` (Stand 0.2.0, mit Zugangsnamen) gelöscht.
+`scripts/ha_diagnose.py` mit curl-Rückfall.
+
+## Bekannte Lücken
+
+- Sensor „Hausaufgaben offen“ der Integration zählt 39 bzw. 57 Einträge, die
+  Todo-Listen 3 bzw. 4 offene; Untis `completed` ist unzuverlässig. Anzeige
+  neben dem Dashboard irritiert. Zurückgestellt, siehe IDEEN.md.
+- Die Kostensätze der Modelle in `ai_gateway` laufen am 01.12.2026 ab.
+
+---
+
+# Quellenbestand 0.52.2–0.69.8
+
+Stand 16.09.2026, nachmittags. Bis 0.69.8 auf der laufenden Instanz installiert
+(Prüfung am Abend des 16.09.: Add-on 0.69.8, kein Update ausstehend, Watchdog
+und Auto-Update an).
 
 ## Was ausgeliefert ist
 
@@ -45,7 +80,7 @@ Themenliste (Modell zerlegt, Text prüft, Hash schützt vor Doppelaufrufen),
 Aufgabenart), `lernstand.replay` liest die Stufe ab. Themen-Einheiten im Mentor
 (`mode: topic`) ohne Uhr, mit Kurzprüfung ab drei Tagen nach „sitzt“.
 Klausurkarte zeigt Themen sortiert mit Stelle, Materialstand und Gefühl.
-Live geprüft: Josias Lateinliste ergab fünf Themen mit allen Stellen belegt
+Live geprüft: die Lateinliste eines Kontos ergab fünf Themen mit allen Stellen belegt
 (Begleitband S. 13, 13–15, 14; Textband S. 10–11, 14–15; Vokabeln S. 10–11);
 Einheit startet und meldet „Thema 2 von 5 · Stufe: neu“. Offen: Themen ohne
 Themenliste kommen weiter aus dem erschlossenen Unterricht (`exam_scope`),
@@ -199,11 +234,10 @@ die Zustände; Eltern stoßen den Lauf von Hand an.
 
 ## Bekannte Lücken
 
-- Der Regal-Scan des Kontos ohne Regal speichert Dialogschaltflächen als
-  Bücher; kein Löschweg.
 - Die Inhaltsverzeichnisse von Green Line 4 und Geschichte und Geschehen 3/4
-  liegen nicht auf den Seiten 2 bis 9; dort greift die Kapitelregel noch
-  nicht. Ein zweiter Versuch an anderer Stelle im Buch steht aus.
+  liegen nicht auf den Seiten 2 bis 9; dort greift die Kapitelregel nicht.
+  Ausweg seit 0.60.0: Verzeichnisfoto auch für digitale Bücher. Der
+  Regal-Dialog als Buch ist seit 0.62.0 erkannt und löschbar.
 - Ob die App auf dem älteren Kindergerät eine Bildschirmzeit-Auszeit übersteht,
   ist weiterhin nur vom Nutzer prüfbar.
 

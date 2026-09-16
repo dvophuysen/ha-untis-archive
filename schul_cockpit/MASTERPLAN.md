@@ -1,6 +1,6 @@
 > Ergänzung vom 12.09.2026: [Gemeinsamer Lernplan und Wiederholungen](LERNPLAN_VERZAHNUNG.md). Gemeinsame Planung ab 0.28.0 umgesetzt; Abdeckung und Grenzen stehen im verlinkten Dokument.
 
-# Schulmentor für Noah und Josia
+# Schulmentor für die Kinder der Familie
 
 ## Zielbild, Bedienkonzept und verbindlicher Entwicklungsplan
 
@@ -266,7 +266,7 @@ Die Reihenfolge trennt früh klärbare Architekturfragen von Fragen, die nur dur
 
 | Schritt | Konkretes Ergebnis | Voraussetzung für den nächsten Schritt |
 |---|---|---|
-| 0: Ziel- und Entwurfsfreigabe | Dieser Masterplan, Szenarien A–L und prototypisch durchgespielte Bildschirm-/Dialogabläufe | Dennis bestätigt die tragenden Entscheidungen; entscheidende Widersprüche sind geklärt. Noah und Josia beurteilen einen kurzen Ablauf jeweils selbst. |
+| 0: Ziel- und Entwurfsfreigabe | Dieser Masterplan, Szenarien A–L und prototypisch durchgespielte Bildschirm-/Dialogabläufe | Dennis bestätigt die tragenden Entscheidungen; entscheidende Widersprüche sind geklärt. Beide Kinder beurteilen einen kurzen Ablauf jeweils selbst. |
 | 1: Fundament | Zusammengeführter Code, saubere Datenbezüge, Fähigkeiten/Lernbelege, Kontextversionen, Job- und Verbrauchsbuch | Keine Verwechslung von Kindern/IDs; Kostenprüfung auch bei Parallelität und Neustart; Änderungen und Korrekturen nachvollziehbar. |
 | 2: Vollständiger kurzer Mentorablauf | Einstieg, gezielte Hilfe, eigene neue Antwort, begründeter Abschluss und späterer Abruf; Text, Schnellauswahl, Foto | Drei unterschiedliche Lernhandlungen funktionieren: mathematisches Verfahren, sprachliche Regel und quellenbezogene Erklärung. Gemeinsame Engine, keine drei Sonderlösungen. |
 | 3: Alltag über Fächer hinweg | Ereignisgestützte Aktualisierung, Nachholen, Wiederholungsrotation, Fortsetzen, Elternübersicht; bei Bedarf eigener Sprachweg | Szenarien A–G sowie J–L auf echten, korrekt zugeordneten Daten bestanden; kurze Nutzung bleibt verständlich und tragbar. |

@@ -111,7 +111,7 @@ def test_upgrade_preserves_all_rows_ids_and_is_idempotent(env):
 
 
 def test_hidden_courses_do_not_count_as_open_feedback(env):
-    # Noahs Französisch und Religion sind ausgeblendet, weil er sie nicht
+    # Französisch und Religion des Kindes sind ausgeblendet, weil es sie nicht
     # besucht. Sie standen trotzdem als „zwei Rückmeldungen offen" auf dem
     # Dashboard, ohne im Stundenplan zu erscheinen.
     client, _, _ = install(env)

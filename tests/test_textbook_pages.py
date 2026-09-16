@@ -24,7 +24,7 @@ def seed(title="Politik & Co. Niedersachsen 8", subject="Politik"):
         conn.execute(
             "INSERT INTO digital_textbook_credentials"
             "(account_id,portal_url,username,password_ciphertext,verification_status,created_at,updated_at)"
-            " VALUES(1,'https://gaw-iserv.de','noah',?,'catalog_ready','2026-09-01','2026-09-01')",
+            " VALUES(1,'https://gaw-iserv.de','kind',?,'catalog_ready','2026-09-01','2026-09-01')",
             (encrypt_secret("geheim"),),
         )
         return conn.execute("SELECT id FROM digital_textbook_catalog WHERE account_id=1").fetchone()[0]

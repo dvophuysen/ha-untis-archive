@@ -1,3 +1,10 @@
+## 0.70.0
+
+- Web-Push ist raus. Die Erinnerungen laufen seit 0.51 über die Home-Assistant-App; der alte Browser-Weg lief trotzdem noch mit, und jede Abendmitteilung hinterließ im Log einen Fehler über einen unlesbaren Schlüssel. Abonnements, Schlüssel, Route und der Abschnitt „Älterer Weg über den Browser“ in den Erinnerungs-Einstellungen sind entfernt.
+- Tests laufen bei jedem Push auf GitHub (Backend-Tests und Frontend-Build), nicht mehr nur von Hand. `python3 -m pytest tests` funktioniert jetzt aus dem Repo-Wurzelverzeichnis.
+- Diagnoseskript `scripts/ha_diagnose.py` fällt bei einem 403 des Sandbox-Proxys auf curl zurück statt abzubrechen.
+- Namen der Kinder aus den öffentlichen Dokumenten, Beispielen und Testdaten genommen; die veraltete Übergabenotiz `docs/handover.md` aus Version 0.2.0 ist gelöscht.
+
 ## 0.69.8
 
 - Materialliste: „Arbeitsheft S. 26 · Arbeitsheft“ stand doppelt; steht Buch und Seite da, entfällt die Art.
@@ -61,7 +68,7 @@
 
 ## 0.67.2
 
-- Klausurkarte auf dem Telefon: Die drei Punkte nutzen die ganze Breite (Name und Text in einer Zeile, Knopf rechts), der Übungsknopf und die Gefühlsauswahl stehen untereinander. Geprüft an Josias Karten mit echten Daten.
+- Klausurkarte auf dem Telefon: Die drei Punkte nutzen die ganze Breite (Name und Text in einer Zeile, Knopf rechts), der Übungsknopf und die Gefühlsauswahl stehen untereinander. Geprüft an echten Karten eines Kontos.
 
 ## 0.67.1
 
@@ -148,16 +155,16 @@
 
 ## 0.58.2
 
-- Ausgeblendete Kurse zählen nicht mehr als offene Rückmeldung. Noahs Französisch und Religion, die er nicht besucht, standen auf dem Dashboard als „zwei Rückmeldungen offen“, ohne im Stundenplan zu erscheinen. Das gilt auch für die Zählung in der abendlichen Mitteilung.
+- Ausgeblendete Kurse zählen nicht mehr als offene Rückmeldung. Französisch und Religion eines Kindes, das die Fächer nicht besucht, standen auf dem Dashboard als „zwei Rückmeldungen offen“, ohne im Stundenplan zu erscheinen. Das gilt auch für die Zählung in der abendlichen Mitteilung.
 
 ## 0.58.1
 
-- Der Tagesrahmen je Kind zählt nur noch, was das Kind selbst übt und fragt. Das Einlesen von Quellen, das Auswerten von Fotos und die Einstiegshilfen laufen im Hintergrund und hatten Josias Tagesrahmen am Nachmittag aufgebraucht, bevor er eine Frage gestellt hatte. Der Tagesrahmen steigt von 5 auf 10 Euro je Kind, der Rahmen einer einzelnen Übungseinheit von 2 auf 4 Euro. Der Monatsrahmen von 50 Euro bleibt.
+- Der Tagesrahmen je Kind zählt nur noch, was das Kind selbst übt und fragt. Das Einlesen von Quellen, das Auswerten von Fotos und die Einstiegshilfen laufen im Hintergrund und hatten den Tagesrahmen eines Kindes am Nachmittag aufgebraucht, bevor er eine Frage gestellt hatte. Der Tagesrahmen steigt von 5 auf 10 Euro je Kind, der Rahmen einer einzelnen Übungseinheit von 2 auf 4 Euro. Der Monatsrahmen von 50 Euro bleibt.
 
 ## 0.58.0
 
 - Die Klausurkarte unter „Arbeiten & Tests“ zeigt den Materialstand für den angenommenen Stoff: wie viele genannte Stellen gelesen vorliegen, was unterwegs ist und was fehlt, mit Link auf die Einkaufsliste des Fachs. Dazu je angeschnittenes Kapitel die fotografierten oder abgerufenen Seiten und ob die Ankündigung der Lehrkraft vorliegt.
-- Fotos und Scans, die vor 0.57.0 gelesen wurden, kennen ihre gedruckte Seite noch nicht; der Nachtlauf liest sie nach. Für Josias Englisch-Seite 206 wurde das von Hand angestoßen, die Hausaufgabe ist grün.
+- Fotos und Scans, die vor 0.57.0 gelesen wurden, kennen ihre gedruckte Seite noch nicht; der Nachtlauf liest sie nach. Für die Englisch-Seite 206 eines Kontos wurde das von Hand angestoßen, die Hausaufgabe ist grün.
 
 ## 0.57.5
 

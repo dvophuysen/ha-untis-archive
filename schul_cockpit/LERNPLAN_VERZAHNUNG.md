@@ -16,7 +16,7 @@ Gamification bleibt offen und ist nicht implementiert.
 
 # Gemeinsamer Lernplan statt paralleler Vorschlagslisten
 
-Stand: 12.09.2026. Konzeptionelle Ergänzung zum Masterplan nach Prüfung von Josias Live-Ansicht und des Codes. **Historischer Konzeptstand vor Umsetzung 0.28.0; aktuelle Abdeckung siehe oben.** Version 0.27.0 ergänzt Themenauswahl aus dem Unterricht sowie Druck- und Selbstkontrollfunktionen für Übungsklausuren; sie löst die hier beschriebenen Integrationslücken noch nicht.
+Stand: 12.09.2026. Konzeptionelle Ergänzung zum Masterplan nach Prüfung der Live-Ansicht eines Kindes und des Codes. **Historischer Konzeptstand vor Umsetzung 0.28.0; aktuelle Abdeckung siehe oben.** Version 0.27.0 ergänzt Themenauswahl aus dem Unterricht sowie Druck- und Selbstkontrollfunktionen für Übungsklausuren; sie löst die hier beschriebenen Integrationslücken noch nicht.
 
 ## Ziel
 
@@ -24,7 +24,7 @@ Ein Kind soll an einer einzigen Stelle erkennen: Was mache ich heute, weshalb ge
 
 Planung, Nachhilfe und Fortschrittsanzeige sind verschiedene Ansichten desselben Lernprozesses. Der Mentor führt eine begrenzte Lernaktion aus. Er erstellt keinen konkurrierenden Tagesplan im Chat. Fachübergreifende Organisation und wiederkehrende Termine benötigen normalerweise keinen Modellaufruf.
 
-## Tatsächlich beobachteter Stand bei Josia
+## Tatsächlich beobachteter Stand bei einem Kind
 
 Der Plan zeigt am Samstag gleichzeitig „Frei – Pause heute“ und unter „Sollte heute“ fünf offene Fehlstunden sowie Deutsch und Englisch mit jeweils vier unsicheren Rückmeldungen. Daneben stehen Mathematik-Hausaufgaben für Dienstag, zwölf unregelmäßige englische Verben für Mittwoch und eine Geschichtsaufgabe für Freitag. Die Zahlen im Plan sind die Angaben der App, keine neu diagnostizierten Defizite.
 

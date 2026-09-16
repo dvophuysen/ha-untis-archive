@@ -113,7 +113,7 @@ def reserve(account_id, purpose, session_id, input_max, output_max, model=None):
         # Die Tagesgrenze je Kind schützt das Üben und Fragen des Kindes. Was
         # die App selbst im Hintergrund tut (Quellen einlesen, Materialien
         # auswerten, Einstiegshilfen), zählt nicht dagegen: Am 15.09. hatten
-        # 26 Auswertungen Josias Tagesrahmen aufgebraucht, bevor er eine Frage
+        # 26 Auswertungen den Tagesrahmen eines Kindes aufgebraucht, bevor es eine Frage
         # gestellt hatte. Die Höhe steht in mentor_ai_config.daily_micro.
         own = purpose!=SOURCES and purpose not in BACKGROUND
         if own and effective_sum(c,"day=? AND account_id=? AND purpose NOT IN ('sources','background','discovery')",(day,account_id))+upper>cfg['daily_micro']:

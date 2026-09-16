@@ -29,7 +29,7 @@ Kind oder als Elternteil mehrere.
    den Setup-Screen: Andere HA-User den Rollen (Eltern / Kind) und
    Kindern zuordnen.
 3. Pro Kind die bestehende HA-ToDo-Liste auswählen (z.B.
-   `todo.josia_schule`). Der Sync läuft alle 2 Minuten automatisch.
+   `todo.anna_schule`). Der Sync läuft alle 2 Minuten automatisch.
 
 ## Datenablage
 

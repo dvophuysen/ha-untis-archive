@@ -1,6 +1,6 @@
 # Konzept und Projektgedächtnis
 
-Stand: 15.09.2026. Maßgeblicher Einstieg für die fachliche und produktbezogene Weiterentwicklung des Schul-Cockpits.
+Stand: 16.09.2026. Maßgeblicher Einstieg für die fachliche und produktbezogene Weiterentwicklung des Schul-Cockpits.
 
 ## Lesereihenfolge für jede Fortsetzung
 

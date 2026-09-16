@@ -41,7 +41,6 @@ from .routers import (
     oral,
     plan as plan_router,
     packing as packing_router,
-    push as push_router,
     reminders as reminders_router,
     search,
     settings_router,
@@ -208,7 +207,6 @@ app.include_router(afternoon.router, prefix=API)
 app.include_router(settings_router.router, prefix=API)
 app.include_router(textbooks.router, prefix=API)
 app.include_router(audit.router, prefix=API)
-app.include_router(push_router.router, prefix=API)
 app.include_router(reminders_router.router, prefix=API)
 app.include_router(notify.router, prefix=API)
 app.include_router(exams.router, prefix=API)

@@ -12,14 +12,14 @@
 #
 # Voraussetzungen (siehe docs/dashboard.md):
 #   • HACS-Karten: atomic-calendar-revive, mushroom.
-#   • Helper input_select.schul_cockpit_kind mit Optionen „Josia" / „Noah".
+#   • Helper input_select.schul_cockpit_kind mit Optionen „Anna" / „Ben".
 #   • Helper input_select.schul_cockpit_fach (Optionen werden per
 #     Automation aus dem Fach-Verlauf-Sensor des aktuellen Kindes
 #     dynamisch gefüllt).
 #
 # Entity-IDs gehen davon aus, dass die Untis-Config-Entries die Titel
-# „Josia" und „Noah" tragen (Device-Slugs `untis_archive_josia` /
-# `untis_archive_noah`). Bei anderen Anzeigenamen entsprechend ersetzen.
+# „Anna" und „Ben" tragen (Device-Slugs `untis_archive_anna` /
+# `untis_archive_ben`). Bei anderen Anzeigenamen entsprechend ersetzen.
 
 title: Schul-Cockpit
 views:
@@ -34,33 +34,33 @@ views:
       - type: horizontal-stack
         cards:
           - type: custom:mushroom-template-card
-            primary: Josia
+            primary: Anna
             secondary: >-
-              {% if is_state('input_select.schul_cockpit_kind', 'Josia') %}● aktiv{% else %}wechseln{% endif %}
+              {% if is_state('input_select.schul_cockpit_kind', 'Anna') %}● aktiv{% else %}wechseln{% endif %}
             icon: mdi:account-school
             icon_color: >-
-              {% if is_state('input_select.schul_cockpit_kind', 'Josia') %}blue{% else %}disabled{% endif %}
+              {% if is_state('input_select.schul_cockpit_kind', 'Anna') %}blue{% else %}disabled{% endif %}
             fill_container: true
             tap_action:
               action: call-service
               service: input_select.select_option
               service_data:
                 entity_id: input_select.schul_cockpit_kind
-                option: Josia
+                option: Anna
           - type: custom:mushroom-template-card
-            primary: Noah
+            primary: Ben
             secondary: >-
-              {% if is_state('input_select.schul_cockpit_kind', 'Noah') %}● aktiv{% else %}wechseln{% endif %}
+              {% if is_state('input_select.schul_cockpit_kind', 'Ben') %}● aktiv{% else %}wechseln{% endif %}
             icon: mdi:account-school
             icon_color: >-
-              {% if is_state('input_select.schul_cockpit_kind', 'Noah') %}blue{% else %}disabled{% endif %}
+              {% if is_state('input_select.schul_cockpit_kind', 'Ben') %}blue{% else %}disabled{% endif %}
             fill_container: true
             tap_action:
               action: call-service
               service: input_select.select_option
               service_data:
                 entity_id: input_select.schul_cockpit_kind
-                option: Noah
+                option: Ben
 
       # Stundenplan + Fehltage + Klassenarbeiten in einem Monatskalender.
       # atomic-calendar-revive akzeptiert mehrere Calendar-Entities und
@@ -69,10 +69,10 @@ views:
         conditions:
           - condition: state
             entity: input_select.schul_cockpit_kind
-            state: Josia
+            state: Anna
         card:
           type: custom:atomic-calendar-revive
-          name: Stundenplan – Josia
+          name: Stundenplan – Anna
           enableModeChange: true
           defaultMode: Calendar
           showMonth: true
@@ -85,19 +85,19 @@ views:
           dimFinishedEvents: true
           finishedEventOpacity: 0.5
           entities:
-            - entity: calendar.untis_archive_josia_stundenplan
+            - entity: calendar.untis_archive_anna_stundenplan
               color: "#1976d2"
-            - entity: calendar.untis_archive_josia_ereignisse
+            - entity: calendar.untis_archive_anna_ereignisse
               color: "#e53935"
 
       - type: conditional
         conditions:
           - condition: state
             entity: input_select.schul_cockpit_kind
-            state: Noah
+            state: Ben
         card:
           type: custom:atomic-calendar-revive
-          name: Stundenplan – Noah
+          name: Stundenplan – Ben
           enableModeChange: true
           defaultMode: Calendar
           showMonth: true
@@ -110,9 +110,9 @@ views:
           dimFinishedEvents: true
           finishedEventOpacity: 0.5
           entities:
-            - entity: calendar.untis_archive_noah_stundenplan
+            - entity: calendar.untis_archive_ben_stundenplan
               color: "#1976d2"
-            - entity: calendar.untis_archive_noah_ereignisse
+            - entity: calendar.untis_archive_ben_ereignisse
               color: "#e53935"
 
       - type: markdown
@@ -133,33 +133,33 @@ views:
       - type: horizontal-stack
         cards:
           - type: custom:mushroom-template-card
-            primary: Josia
+            primary: Anna
             secondary: >-
-              {% if is_state('input_select.schul_cockpit_kind', 'Josia') %}● aktiv{% else %}wechseln{% endif %}
+              {% if is_state('input_select.schul_cockpit_kind', 'Anna') %}● aktiv{% else %}wechseln{% endif %}
             icon: mdi:account-school
             icon_color: >-
-              {% if is_state('input_select.schul_cockpit_kind', 'Josia') %}blue{% else %}disabled{% endif %}
+              {% if is_state('input_select.schul_cockpit_kind', 'Anna') %}blue{% else %}disabled{% endif %}
             fill_container: true
             tap_action:
               action: call-service
               service: input_select.select_option
               service_data:
                 entity_id: input_select.schul_cockpit_kind
-                option: Josia
+                option: Anna
           - type: custom:mushroom-template-card
-            primary: Noah
+            primary: Ben
             secondary: >-
-              {% if is_state('input_select.schul_cockpit_kind', 'Noah') %}● aktiv{% else %}wechseln{% endif %}
+              {% if is_state('input_select.schul_cockpit_kind', 'Ben') %}● aktiv{% else %}wechseln{% endif %}
             icon: mdi:account-school
             icon_color: >-
-              {% if is_state('input_select.schul_cockpit_kind', 'Noah') %}blue{% else %}disabled{% endif %}
+              {% if is_state('input_select.schul_cockpit_kind', 'Ben') %}blue{% else %}disabled{% endif %}
             fill_container: true
             tap_action:
               action: call-service
               service: input_select.select_option
               service_data:
                 entity_id: input_select.schul_cockpit_kind
-                option: Noah
+                option: Ben
 
       - type: custom:mushroom-template-card
         primary: "Fach wählen"
@@ -174,19 +174,19 @@ views:
         conditions:
           - condition: state
             entity: input_select.schul_cockpit_kind
-            state: Josia
+            state: Anna
         card:
           type: markdown
           content: |
             {% set fach = states('input_select.schul_cockpit_fach') %}
-            {% set subjects = state_attr('sensor.untis_archive_josia_fach_verlauf', 'subjects') or {} %}
+            {% set subjects = state_attr('sensor.untis_archive_anna_fach_verlauf', 'subjects') or {} %}
             {% set items = subjects.get(fach, []) %}
             {% if items | count == 0 %}
             _Wähle oben ein Fach._
 
-            Verfügbar: {{ (state_attr('sensor.untis_archive_josia_fach_verlauf', 'subject_list') or []) | join(' · ') }}
+            Verfügbar: {{ (state_attr('sensor.untis_archive_anna_fach_verlauf', 'subject_list') or []) | join(' · ') }}
             {% else %}
-            ## {{ fach }} – Lehrstoff-Historie (Josia)
+            ## {{ fach }} – Lehrstoff-Historie (Anna)
             _Letzter Stoff zuerst. ↺ Vertretung, ❌ Ausfall, 🤒 versäumt._
 
             {% for it in items -%}
@@ -207,19 +207,19 @@ views:
         conditions:
           - condition: state
             entity: input_select.schul_cockpit_kind
-            state: Noah
+            state: Ben
         card:
           type: markdown
           content: |
             {% set fach = states('input_select.schul_cockpit_fach') %}
-            {% set subjects = state_attr('sensor.untis_archive_noah_fach_verlauf', 'subjects') or {} %}
+            {% set subjects = state_attr('sensor.untis_archive_ben_fach_verlauf', 'subjects') or {} %}
             {% set items = subjects.get(fach, []) %}
             {% if items | count == 0 %}
             _Wähle oben ein Fach._
 
-            Verfügbar: {{ (state_attr('sensor.untis_archive_noah_fach_verlauf', 'subject_list') or []) | join(' · ') }}
+            Verfügbar: {{ (state_attr('sensor.untis_archive_ben_fach_verlauf', 'subject_list') or []) | join(' · ') }}
             {% else %}
-            ## {{ fach }} – Lehrstoff-Historie (Noah)
+            ## {{ fach }} – Lehrstoff-Historie (Ben)
             _Letzter Stoff zuerst. ↺ Vertretung, ❌ Ausfall, 🤒 versäumt._
 
             {% for it in items -%}
@@ -247,47 +247,47 @@ views:
       - type: horizontal-stack
         cards:
           - type: custom:mushroom-template-card
-            primary: Josia
+            primary: Anna
             secondary: >-
-              {% if is_state('input_select.schul_cockpit_kind', 'Josia') %}● aktiv{% else %}wechseln{% endif %}
+              {% if is_state('input_select.schul_cockpit_kind', 'Anna') %}● aktiv{% else %}wechseln{% endif %}
             icon: mdi:account-school
             icon_color: >-
-              {% if is_state('input_select.schul_cockpit_kind', 'Josia') %}blue{% else %}disabled{% endif %}
+              {% if is_state('input_select.schul_cockpit_kind', 'Anna') %}blue{% else %}disabled{% endif %}
             fill_container: true
             tap_action:
               action: call-service
               service: input_select.select_option
               service_data:
                 entity_id: input_select.schul_cockpit_kind
-                option: Josia
+                option: Anna
           - type: custom:mushroom-template-card
-            primary: Noah
+            primary: Ben
             secondary: >-
-              {% if is_state('input_select.schul_cockpit_kind', 'Noah') %}● aktiv{% else %}wechseln{% endif %}
+              {% if is_state('input_select.schul_cockpit_kind', 'Ben') %}● aktiv{% else %}wechseln{% endif %}
             icon: mdi:account-school
             icon_color: >-
-              {% if is_state('input_select.schul_cockpit_kind', 'Noah') %}blue{% else %}disabled{% endif %}
+              {% if is_state('input_select.schul_cockpit_kind', 'Ben') %}blue{% else %}disabled{% endif %}
             fill_container: true
             tap_action:
               action: call-service
               service: input_select.select_option
               service_data:
                 entity_id: input_select.schul_cockpit_kind
-                option: Noah
+                option: Ben
 
       - type: conditional
         conditions:
           - condition: state
             entity: input_select.schul_cockpit_kind
-            state: Josia
+            state: Anna
         card:
           type: markdown
           content: |
-            {% set periods = state_attr('sensor.untis_archive_josia_krankheitsperioden', 'periods') or [] %}
+            {% set periods = state_attr('sensor.untis_archive_anna_krankheitsperioden', 'periods') or [] %}
             {% if periods | count == 0 %}
             ## Keine Krankheits-Ausfälle im laufenden Schuljahr 🎉
             {% else %}
-            ## Krankheits-Ausfälle – Josia
+            ## Krankheits-Ausfälle – Anna
             _{{ periods | count }} Periode{% if periods | count != 1 %}n{% endif %} im Schuljahr. Pro Periode der versäumte Stoff, gruppiert nach Fach — das ist die Liste, die das Kind sich von den Klassenkameraden besorgen muss._
 
             {% for p in periods %}
@@ -313,15 +313,15 @@ views:
         conditions:
           - condition: state
             entity: input_select.schul_cockpit_kind
-            state: Noah
+            state: Ben
         card:
           type: markdown
           content: |
-            {% set periods = state_attr('sensor.untis_archive_noah_krankheitsperioden', 'periods') or [] %}
+            {% set periods = state_attr('sensor.untis_archive_ben_krankheitsperioden', 'periods') or [] %}
             {% if periods | count == 0 %}
             ## Keine Krankheits-Ausfälle im laufenden Schuljahr 🎉
             {% else %}
-            ## Krankheits-Ausfälle – Noah
+            ## Krankheits-Ausfälle – Ben
             _{{ periods | count }} Periode{% if periods | count != 1 %}n{% endif %} im Schuljahr. Pro Periode der versäumte Stoff, gruppiert nach Fach — das ist die Liste, die das Kind sich von den Klassenkameraden besorgen muss._
 
             {% for p in periods %}

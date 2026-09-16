@@ -29,7 +29,7 @@ Integration unter Geräte & Dienste hinzufügen.
 
 | Feld | Beispiel |
 |---|---|
-| Anzeigename | "Josia" |
+| Anzeigename | "Anna" |
 | Server | `gymnasium-am-wall.webuntis.com` |
 | Schulname | `gymnasium-am-wall` (loginName mit Bindestrichen, NICHT der Anzeigename) |
 | Benutzer / Passwort | Zugangsdaten des Kindes |
@@ -63,7 +63,7 @@ Plus eine Calendar-Entity mit allen Stunden.
 
 ## Services
 
-- `untis_archive.refresh` — sofort pollen, optional `account: "Josia"`
+- `untis_archive.refresh` — sofort pollen, optional `account: "Anna"`
 - `untis_archive.export_markdown` — pro Fach eine Markdown-Datei nach
   `/config/untis_archive/docs/<kind>/<fach>.md`
 - `untis_archive.mark_lesson` — manuelle Korrektur einer einzelnen Stunde

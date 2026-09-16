@@ -119,14 +119,14 @@ def test_discovery_reads_names_and_skips_non_calendars(monkeypatch):
     answer = """<?xml version="1.0"?>
     <d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"
                    xmlns:a="http://apple.com/ns/ical/">
-      <d:response><d:href>/caldav/noah/</d:href><d:propstat><d:prop>
+      <d:response><d:href>/caldav/kind/</d:href><d:propstat><d:prop>
         <d:resourcetype><d:collection/></d:resourcetype><d:displayname>Home</d:displayname>
       </d:prop></d:propstat></d:response>
-      <d:response><d:href>/caldav/noah/klausuren-8d/</d:href><d:propstat><d:prop>
+      <d:response><d:href>/caldav/kind/klausuren-8d/</d:href><d:propstat><d:prop>
         <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
         <d:displayname>Klausuren 8D</d:displayname><a:calendar-color>#ff0000</a:calendar-color>
       </d:prop></d:propstat></d:response>
-      <d:response><d:href>/caldav/noah/aufgaben/</d:href><d:propstat><d:prop>
+      <d:response><d:href>/caldav/kind/aufgaben/</d:href><d:propstat><d:prop>
         <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
         <d:displayname>Aufgaben</d:displayname>
         <c:supported-calendar-component-set><c:comp name="VTODO"/></c:supported-calendar-component-set>
@@ -138,9 +138,9 @@ def test_discovery_reads_names_and_skips_non_calendars(monkeypatch):
         return ElementTree.fromstring(answer)
 
     monkeypatch.setattr(ical, "_propfind", propfind)
-    found = asyncio.run(ical.discover("https://gaw-iserv.de", "noah", "x"))
+    found = asyncio.run(ical.discover("https://gaw-iserv.de", "kind", "x"))
     assert [c["name"] for c in found] == ["Klausuren 8D"]
-    assert found[0]["url"].endswith("/caldav/noah/klausuren-8d/")
+    assert found[0]["url"].endswith("/caldav/kind/klausuren-8d/")
 
 
 def test_a_rebuilt_calendar_keeps_its_role(env):

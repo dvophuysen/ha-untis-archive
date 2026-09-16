@@ -1,4 +1,4 @@
-"""Parent-controlled reminder time; child devices opt in separately."""
+"""Parent-controlled reminder times and companion-app targets (D65: no web push)."""
 from contextlib import closing
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field, StrictBool
@@ -26,18 +26,16 @@ def get(account_id:int,user:CurrentUser=Depends(get_current_user)):
     access(user,account_id)
     with closing(webapp_conn()) as c:
         row=c.execute('SELECT enabled,remind_at,morning_enabled,morning_at FROM reminder_settings WHERE account_id=?',(account_id,)).fetchone()
-        devices=c.execute("SELECT COUNT(DISTINCT p.id) FROM push_subscriptions p JOIN users u ON u.id=p.user_id JOIN user_account_links l ON l.user_id=u.id WHERE l.account_id=? AND l.can_edit=1 AND u.role='child' AND u.demo_mode=0",(account_id,)).fetchone()[0]
-        latest=c.execute('SELECT status,created_at FROM reminder_deliveries WHERE account_id=? ORDER BY created_at DESC LIMIT 1',(account_id,)).fetchone()
     try:
         access(user,account_id,write=True,parent=True);can_manage=True
     except HTTPException:
         can_manage=False
     with closing(webapp_conn()) as c:
         app_latest=c.execute('SELECT service,status,created_at FROM reminder_app_deliveries WHERE account_id=? ORDER BY created_at DESC LIMIT 1',(account_id,)).fetchone()
-    return dict(enabled=bool(row and row['enabled']),remind_at=row['remind_at'] if row else None,devices=devices,
+    return dict(enabled=bool(row and row['enabled']),remind_at=row['remind_at'] if row else None,
                 morning_enabled=bool(row['morning_enabled']) if row else False,
                 morning_at=(row['morning_at'] if row else None) or r.DEFAULT_MORNING,
-                can_manage=can_manage,last_delivery=dict(latest) if latest else None,
+                can_manage=can_manage,
                 app_targets=app_notify.targets(account_id),
                 app_services=app_notify.services() if can_manage else [],
                 last_app_delivery=dict(app_latest) if app_latest else None)

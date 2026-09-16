@@ -204,7 +204,8 @@ Rückschritt ist verabredet, nicht beschämend. Gerechnet wird in Monaten.
 
 ## Stand: was gebaut ist
 
-Stufe 0 und Stufe 1 stehen.
+Stufe 0 und Stufe 1 stehen. Der Web-Push-Code ist mit 0.70.0 entfernt (D65);
+es gibt nur noch den Weg über die Home-Assistant-App.
 
 Die App brauchte eine Unterscheidung, die ihr fehlte: „für morgen ist nichts
 mehr offen" gegen „niemand hat draufgeschaut". Ohne sie träfe die

@@ -48,22 +48,22 @@ Custom-Card-JavaScript).
 ## 2. Sensoren und Kalender prüfen
 
 Pro Kind erzeugt die Integration zwei Calendar-Entities und sechs
-Sensoren (Beispiel für Anzeigename `Josia`, Device-Slug
-`untis_archive_josia`):
+Sensoren (Beispiel für Anzeigename `Anna`, Device-Slug
+`untis_archive_anna`):
 
 | Entity-ID | Inhalt |
 |---|---|
-| `calendar.untis_archive_josia_stundenplan` | Stundenplan mit Lehrstoff im Termin |
-| `calendar.untis_archive_josia_ereignisse` | Fehltage (ganztägig) + Klassenarbeiten |
-| `sensor.untis_archive_josia_fach_verlauf` | Lehrstoff-Historie gruppiert pro Fach |
-| `sensor.untis_archive_josia_krankheitsperioden` | Krankheits-Perioden mit versäumtem Stoff |
-| `sensor.untis_archive_josia_versaeumter_stoff` | Versäumter Stoff letzte 14 Tage |
-| `sensor.untis_archive_josia_fehlzeiten_schuljahr` | Fehlzeiten-Zähler |
-| `sensor.untis_archive_josia_stundenplan_aenderungen` | Vertretungs-/Ausfall-Zähler |
-| `sensor.untis_archive_josia_lehrstoff_heute` | Lehrstoff der heutigen Stunden |
+| `calendar.untis_archive_anna_stundenplan` | Stundenplan mit Lehrstoff im Termin |
+| `calendar.untis_archive_anna_ereignisse` | Fehltage (ganztägig) + Klassenarbeiten |
+| `sensor.untis_archive_anna_fach_verlauf` | Lehrstoff-Historie gruppiert pro Fach |
+| `sensor.untis_archive_anna_krankheitsperioden` | Krankheits-Perioden mit versäumtem Stoff |
+| `sensor.untis_archive_anna_versaeumter_stoff` | Versäumter Stoff letzte 14 Tage |
+| `sensor.untis_archive_anna_fehlzeiten_schuljahr` | Fehlzeiten-Zähler |
+| `sensor.untis_archive_anna_stundenplan_aenderungen` | Vertretungs-/Ausfall-Zähler |
+| `sensor.untis_archive_anna_lehrstoff_heute` | Lehrstoff der heutigen Stunden |
 
 Heißen die Untis-Config-Entries anders, in `schul-cockpit.yaml` die
-Slugs `untis_archive_josia` / `untis_archive_noah` durch deine
+Slugs `untis_archive_anna` / `untis_archive_ben` durch deine
 ersetzen (Entwicklertools → Zustände, nach `untis_archive` filtern).
 
 ## 3. Helper anlegen
@@ -73,7 +73,7 @@ Einstellungen → Geräte & Dienste → **Helfer** → Helfer hinzufügen →
 
 - Name: `Schul-Cockpit – Kind`
   Entity-ID: `input_select.schul_cockpit_kind`
-  Optionen: `Josia`, `Noah` — exakt wie die Anzeigenamen der
+  Optionen: `Anna`, `Ben` — exakt wie die Anzeigenamen der
   Untis-Konten.
 - Name: `Schul-Cockpit – Fach`
   Entity-ID: `input_select.schul_cockpit_fach`
@@ -95,8 +95,8 @@ trigger:
     entity_id: input_select.schul_cockpit_kind
   - platform: state
     entity_id:
-      - sensor.untis_archive_josia_fach_verlauf
-      - sensor.untis_archive_noah_fach_verlauf
+      - sensor.untis_archive_anna_fach_verlauf
+      - sensor.untis_archive_ben_fach_verlauf
     attribute: subject_list
   - platform: homeassistant
     event: start
@@ -137,7 +137,7 @@ Einstellungen → Hardware → Dienste → Konfiguration neu laden →
 ## 6. Verifikation
 
 - Sidebar zeigt „Schul-Cockpit" – Dashboard öffnet sich ohne Fehler.
-- Oben in jeder View stehen zwei große Mushroom-Karten „Josia" / „Noah";
+- Oben in jeder View stehen zwei große Mushroom-Karten „Anna" / „Ben";
   Antippen wechselt das Kind, die aktive Karte ist farbig hervorgehoben.
 - **Übersicht**: Monatskalender rendert. Sichtbar sind
   - normale Stunden,

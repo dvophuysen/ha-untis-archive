@@ -140,7 +140,7 @@ _MIGRATIONS: list[tuple[str, str]] = [
         """
         CREATE TABLE IF NOT EXISTS account_exam_calendars (
             account_id INTEGER PRIMARY KEY,
-            ha_entity_id TEXT NOT NULL,        -- e.g. 'calendar.klausuren_noah'
+            ha_entity_id TEXT NOT NULL,        -- e.g. 'calendar.klausuren_anna'
             exclude_keywords TEXT,             -- comma-separated, case-insensitive
             updated_at TEXT NOT NULL
         )
@@ -307,6 +307,14 @@ _MIGRATIONS.append((
     (Path(__file__).parent / "learning_schema.sql").read_text(),
 ))
 
+
+_MIGRATIONS.append(("push_002_drop_web_push", """
+-- D65: Erinnerungen laufen über die Home-Assistant-App; der Web-Push-Weg
+-- (Abonnements, VAPID-Schlüssel) ist entfernt. reminder_deliveries bleibt
+-- als Verlauf stehen.
+DROP TABLE IF EXISTS push_subscriptions;
+DELETE FROM schema_meta WHERE key LIKE 'vapid:%';
+"""))
 
 _MIGRATIONS.append(("learning_002", (Path(__file__).parent / "discovery_schema.sql").read_text()))
 
