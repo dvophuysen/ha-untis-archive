@@ -1,3 +1,7 @@
+## 0.74.1
+
+- Fachansicht: Die Unterrichtsthemen unter einem Fach stehen jetzt mit der neuesten Stunde zuerst. Vorher galt die Reihenfolge des Lernplans (nach thematischem Feld, darin Aufbaufolge, Themen ohne Feld zuletzt); ohne sichtbares Feld wirkte das zufällig. Der Plan selbst sortiert unverändert.
+
 ## 0.74.0
 
 - Wochenrückblick für Eltern: In der Elternübersicht steht je Kind „Diese Woche“ mit wenigen Sätzen aus gespeicherten Zahlen: an wie vielen Abenden vor einem Schultag vor der Erinnerung alles erledigt war (mit Vorwoche), welche Themen eine Stufe weiter oder zurück sind, bestandene Kurzprüfungen, Einheiten mit dem Mentor und ihre Dauer, Vokabelabfragen, erledigte und überfällige Aufgaben, die Antworten nach der Schule, fehlendes Material für Arbeiten in den nächsten zwei Wochen und die KI-Kosten der Woche. Kein Modellaufruf, keine Note, kein Vergleich zwischen Kindern. Zuerst drei Zeilen, aufklappbar alle.
