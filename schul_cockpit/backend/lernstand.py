@@ -325,6 +325,17 @@ async def ensure_topics(account_id: int, exam_key: str, subject: str | None, sin
         _BUSY.discard((account_id, exam_key))
 
 
+def _lesson_days(account_id: int, lesson_ids: list[int]) -> set[str]:
+    """Die Tage, an denen diese Stunden stattfanden (aus dem Archiv)."""
+    from .db import history_conn
+    try:
+        marks = ",".join("?" * len(lesson_ids))
+        with closing(history_conn()) as h:
+            return {r[0][:10] for r in h.execute(f"SELECT date FROM lessons WHERE account_id=? AND id IN ({marks})", (account_id, *lesson_ids)) if r[0]}
+    except Exception:
+        return set()
+
+
 def ensure_assumed_topics(account_id: int, exam_key: str, subject: str | None, scope: dict | None) -> None:
     """Ohne offizielle Themenliste: die aus dem Unterricht erschlossenen Themen als
     Themen der Arbeit anlegen (origin assumed), mit den Stellen ihrer Stunden.
@@ -339,26 +350,40 @@ def ensure_assumed_topics(account_id: int, exam_key: str, subject: str | None, s
             c.execute("UPDATE exam_topics SET stale=1,updated_at=? WHERE account_id=? AND exam_key=? AND origin='assumed' AND stale=0",
                       (now_iso(), account_id, exam_key))
             return
-        existing = {r[0].casefold() for r in c.execute("SELECT title FROM exam_topics WHERE account_id=? AND exam_key=?", (account_id, exam_key))}
+        existing = {r[1].casefold(): (r[0], r[2]) for r in c.execute("SELECT id,title,origin FROM exam_topics WHERE account_id=? AND exam_key=?", (account_id, exam_key))}
         pos = c.execute("SELECT COALESCE(MAX(position),-1)+1 FROM exam_topics WHERE account_id=? AND exam_key=?", (account_id, exam_key)).fetchone()[0]
         for t in scope["topics"]:
             title = (t.get("title") or "").strip()
-            if not title or title.casefold() in existing:
+            if not title:
                 continue
             places: dict[str, set] = {}
             lesson_ids = [int(x) for x in t.get("lesson_ids") or []]
             if lesson_ids:
                 marks = ",".join("?" * len(lesson_ids))
-                for r in c.execute(f"SELECT part_label,page FROM source_links WHERE account_id=? AND entry_kind='lesson' AND entry_id IN ({marks}) AND page>0",
-                                   (account_id, *lesson_ids)):
+                rows = list(c.execute(f"SELECT part_label,page FROM source_links WHERE account_id=? AND entry_kind='lesson' AND entry_id IN ({marks}) AND page>0",
+                                      (account_id, *lesson_ids)))
+                # Viele Lehrkräfte nennen die Seiten in der Hausaufgabe, nicht im
+                # Stundentext: Hausaufgaben vom Tag einer Stunde des Themas zählen dazu.
+                days = _lesson_days(account_id, lesson_ids)
+                if days:
+                    dmarks = ",".join("?" * len(days))
+                    rows += list(c.execute(f"SELECT part_label,page FROM source_links WHERE account_id=? AND entry_kind='homework' AND lower(subject_name)=lower(?) "
+                                           f"AND entry_date IN ({dmarks}) AND page>0", (account_id, subject, *sorted(days))))
+                for r in rows:
                     label = r[0] if r[0] and r[0] != "Unbekannte Quelle" else ""
                     places.setdefault(label, set()).add(int(r[1]))
             places_json = json.dumps([{"label": k, "pages": sorted(v)} for k, v in places.items()], ensure_ascii=False)
+            known = existing.get(title.casefold())
+            if known:
+                # Stellen angenommener Themen wachsen mit dem Unterricht nach.
+                if known[1] == "assumed":
+                    c.execute("UPDATE exam_topics SET places_json=?,updated_at=? WHERE id=? AND places_json!=?", (places_json, now_iso(), known[0], places_json))
+                continue
             c.execute("INSERT OR IGNORE INTO exam_topics(account_id,subject,exam_key,position,title,detail,places_json,origin,created_at,updated_at) "
                       "VALUES(?,?,?,?,?,?,?,'assumed',?,?)",
                       (account_id, subject, exam_key, pos, title, (t.get("field") or "")[:400], places_json, now_iso(), now_iso()))
             pos += 1
-            existing.add(title.casefold())
+            existing[title.casefold()] = (c.execute("SELECT last_insert_rowid()").fetchone()[0], "assumed")
         # Angenommene Themen, die der Unterricht nicht mehr hergibt, ohne Antworten: weg.
         titles = {(t.get("title") or "").strip().casefold() for t in scope["topics"]}
         for r in c.execute("SELECT id,title FROM exam_topics WHERE account_id=? AND exam_key=? AND origin='assumed'", (account_id, exam_key)).fetchall():
