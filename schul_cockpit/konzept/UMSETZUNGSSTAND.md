@@ -1,9 +1,18 @@
-# Quellenbestand 0.52.2–0.64.0
+# Quellenbestand 0.52.2–0.65.1
 
 Stand 16.09.2026, nachmittags. Bis 0.56.11 auf der laufenden Instanz installiert und
 mit echten Abrufen geprüft; 0.57.0 folgt in derselben Session.
 
 ## Was ausgeliefert ist
+
+**Spracheingabe (0.65.0/0.65.1, D60).** `Speech.svelte` (halten, sprechen,
+loslassen; MediaRecorder mit mp4 auf iPhone, webm sonst; Lautstärkemessung
+gegen erfundenen Text aus Stille), `POST /sessions/{sid}/transcribe`,
+`ai_gateway.transcribe` gegen `gpt-4o-transcribe` in der Hauptressource.
+Live geprüft am 16.09.: 2-Sekunden-Testton, Antwort 200 in 1,8 s; aus Rauschen
+erfand das Modell „Mit der a-Deklination.“ (Prompt-Bias), deshalb 0.65.1 mit
+Lautstärkegrenze im Browser. Kosten je Aufnahme im Cent-Bruchteil, gebucht als
+Kinderzweck.
 
 **Lernstand je Thema (0.64.0, D59).** `exam_topics` aus der offiziellen
 Themenliste (Modell zerlegt, Text prüft, Hash schützt vor Doppelaufrufen),
