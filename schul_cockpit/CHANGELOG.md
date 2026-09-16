@@ -1,3 +1,7 @@
+## 0.67.2
+
+- Klausurkarte auf dem Telefon: Die drei Punkte nutzen die ganze Breite (Name und Text in einer Zeile, Knopf rechts), der Übungsknopf und die Gefühlsauswahl stehen untereinander. Geprüft an Kind B Karten mit echten Daten.
+
 ## 0.67.1
 
 - Klausurkarte: Der Wochentag stand doppelt („Montag, Mo. 21.09.“), jetzt „Montag, 21.09.“; der lange Titel aus dem Klausurplan steht in einer eigenen, abgeschnittenen Zeile.
