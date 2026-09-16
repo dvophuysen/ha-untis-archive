@@ -1,9 +1,24 @@
-# Quellenbestand 0.52.2–0.62.0
+# Quellenbestand 0.52.2–0.63.3
 
-Stand 15.09.2026, abends. Bis 0.56.11 auf der laufenden Instanz installiert und
+Stand 16.09.2026, mittags. Bis 0.56.11 auf der laufenden Instanz installiert und
 mit echten Abrufen geprüft; 0.57.0 folgt in derselben Session.
 
 ## Was ausgeliefert ist
+
+**Sicherung und Betrieb (0.63.0 bis 0.63.3, D56 bis D58).** Die Backup-
+Anzeige zeigt, ob ein HA-Backup dieses Add-on enthält (Rolle `backup`, vorher
+403 und darum „kein Backup“); die automatischen HA-Backups enthalten es täglich
+(am 16.09.: 32 Sicherungen, letzte 03:26). Eigene Nachtsicherung nur als
+Rückfall. Der Knopf „Jetzt in Home Assistant sichern“ legt eine Teilsicherung
+an (live geprüft: „Schul-Cockpit 0.63.1 2026-09-16 13:16“); die Antwort dauert
+etwa zwei Minuten und kommt über Nabu Casa als 524 zurück, die Sicherung ist
+trotzdem da. ZIP-Download geprüft: 160 MB in 141 s. Dabei aufgefallen und in
+0.63.3 behoben: `webapp.db` lief ohne WAL, jede Anfrage schreibt beim Anmelden
+„zuletzt gesehen“, und die fünf Sekunden Wartezeit reichten während der
+Sicherung nicht; fünfzehn Vorschaubilder scheiterten mit „database is locked“.
+Lehre aus 0.63.0: Syntaxfehler in `main.py` ließ das Add-on nicht starten;
+`tests/test_imports.py` lädt seither jedes Modul. Vokabular vereinheitlicht
+(0.63.2, D57): „offizielle Themenliste“, „Thema“, „Stelle“, „Stufe“.
 
 **Pakete B bis D aus der Ideenliste (0.60.0 bis 0.62.0, D53 bis D55).**
 Verzeichnisfotos gelten auch für digitale Bücher ohne lesbares Verzeichnis
