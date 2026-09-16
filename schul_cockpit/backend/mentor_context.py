@@ -89,7 +89,7 @@ def snapshot(account_id, include_previous=False, include_all_homework=False):
             text=r.get('lstext_manual_override') or r.get('lstext') or ''
             n=missed_minutes(r,absence) if r.get('was_absent') else 0
             r.update(text=text[:1800],text_truncated=len(text)>1800,rating=ratings.get(r['id'],{}).get('rating'),note=(ratings.get(r['id'],{}).get('note') or '')[:500],
-                     missed_minutes=n,catch_up_open=bool(r.get('was_absent') and r['id'] not in caught and (n is None or n>=15)),future=r['date']>day.isoformat())
+                     missed_minutes=n,caught_up=r['id'] in caught,catch_up_open=bool(r.get('was_absent') and r['id'] not in caught and (n is None or n>=15)),future=r['date']>day.isoformat())
             r.pop('teacher_name',None);r.pop('lstext_manual_override',None);r.pop('lstext',None)
             stamp=fingerprint([r['date'],r.get('subject_name'),r['text']])
             topic=discovered.get(r['id'])
@@ -165,9 +165,17 @@ def context(account_id,session):
         with closing(webapp_conn()) as c:
             task=c.execute('SELECT id,title,notes,subject_name,status,due_date FROM tasks WHERE id=? AND account_id=?',(source.get('task_id'),account_id)).fetchone()
         source={**source,'task':dict(task)} if task else {**source,'unavailable':True}
+    lesson_materials=[]
     if source.get('lesson_id'):
         focus=next((r for r in s['lessons'] if (r.get('untis_period_id')==source['untis_period_id'] if source.get('untis_period_id') else r['id']==source['lesson_id'])),None)
-        source={'lesson_id':focus['id'],'date':focus['date'],'text':focus['text']} if focus else {'unavailable':True}
+        situation=source.get('situation')
+        source={'lesson_id':focus['id'],'date':focus['date'],'text':focus['text'],'missed':bool(focus.get('catch_up_open')),'missed_minutes':focus.get('missed_minutes')} if focus else {'unavailable':True}
+        if situation:source['situation']=situation
+        if focus:
+            # Nachholen arbeitet am Stoff der versäumten Stunde: die Stellen, die
+            # der Untis-Text nennt, liegen als Material vor und gehören nach vorn.
+            with closing(webapp_conn()) as c:
+                lesson_materials=[r[0] for r in c.execute("SELECT DISTINCT material_id FROM source_links WHERE account_id=? AND entry_kind='lesson' AND entry_id=? AND material_id IS NOT NULL",(account_id,focus['id']))]
     with closing(webapp_conn()) as c:
         msgs=[dict(r) for r in c.execute('SELECT role,text,payload FROM mentor_messages WHERE session_id=? ORDER BY id DESC LIMIT 8',(session['id'],))][::-1]
         for m in msgs: m.pop('payload',None)
@@ -175,9 +183,9 @@ def context(account_id,session):
     from .materials import for_context
     topic_ids=[lesson['topic']['id'] for lesson in lessons if lesson.get('topic',{}).get('id')]
     materials=for_context(account_id,subject=subject,task_id=(source.get('task') or {}).get('id'),
-                          topic_ids=topic_ids,budget=5000,top=3)
+                          topic_ids=topic_ids,material_ids=lesson_materials,budget=5000,top=3)
     state=dict(grade=(s['profile'] or {}).get('grade'),school_year=(s['profile'] or {}).get('school_year'),subject=subject,goal=session['goal'],
-               source=source,lessons=[{k:r.get(k) for k in ['id','date','text','rating','note','missed_minutes','catch_up_open']} for r in lessons],
+               source=source,lessons=[{k:r.get(k) for k in ['id','date','text','rating','note','missed_minutes','catch_up_open','caught_up']} for r in lessons],
                rating_meaning={'1':'nicht verstanden','2':'teilweise verstanden','3':'verstanden','4':'nur Aufsicht / kein neuer Stoff'},
                tasks=[r for r in s['tasks'] if same_subject(r.get('subject_name'),subject)][:10],
                homework=[r for r in s['homework'] if same_subject(r.get('subject_name'),subject)][:6],

@@ -147,7 +147,8 @@ def situation(account_id: int, session: dict, ctx: dict) -> dict:
     lesson_id = source.get("lesson_id")
     lesson = next((l for l in ctx.get("lessons", []) if l.get("id") == lesson_id), None) if lesson_id else None
     if lesson:
-        if lesson.get("catch_up_open") or (lesson.get("missed_minutes") or 0) >= 15:
+        # Eine nachgeholte Stunde ist erledigt, auch wenn sie versäumt war.
+        if lesson.get("catch_up_open") or ((lesson.get("missed_minutes") or 0) >= 15 and not lesson.get("caught_up")):
             return {"lage": "nachholen", "label": LAGEN["nachholen"], "why": "Stunde versäumt",
                     "missed": {"date": lesson.get("date"), "text": lesson.get("text")}}
         if lesson.get("rating") in (1, 2) or lesson.get("note"):

@@ -1,3 +1,8 @@
+## 0.72.0
+
+- Nachholen mit dem Mentor: In der Nachhol-Liste und in der Stundenansicht steht an jeder versäumten Stunde „Mit dem Mentor nachholen“. Der Mentor nennt die versäumte Stunde, fasst den Stoff aus dem Untis-Text und den Buchseiten dieser Stunde zusammen und stellt eine leichte Aufgabe. Die Seiten, die der Stundentext nennt, liegen ihm dabei vorn im Material.
+- Endet die Einheit (Knopf oder Abschluss durch den Mentor), gilt die Stunde als nachgeholt, mit demselben Eintrag wie der Haken in der Liste („Mit dem Mentor nachgeholt“); der Schlusssatz sagt es. Eine nachgeholte Stunde startet danach nicht mehr als Nachholen.
+
 ## 0.71.0
 
 - Die Frage nach der Schule: Kurz nach der letzten Stunde fragt die App einmal „Alles von heute notiert?“ Die Antwort ist ein Foto oder „nichts Neues“, sonst nichts. Aus dem Foto entsteht sofort eine Hausaufgabe in der Liste, vorläufig fällig zum nächsten Schultag; sobald das Foto gelesen ist, stehen Fach, Titel und der Termin der nächsten Stunde dieses Fachs daran. Die Karte steht nachmittags oben auf der Startseite bis zum Abend oder bis jemand „nichts Neues“ antwortet.

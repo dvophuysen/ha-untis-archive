@@ -184,6 +184,9 @@
     {/if}
 
     {#if canCatchUp}
+      {#if !lesson.caught_up}
+        <a class="primary mentor-link" style="display:block; text-align:center; margin-top:0.5rem;" href={`#/learning?${new URLSearchParams({ lesson_id: String(lesson.id), subject: lesson.subject_name || lesson.subject_short || '', title: lesson.lstext || lesson.lesson_topic || '' })}`}>Mit dem Mentor nachholen</a>
+      {/if}
       <button style="width:100%; margin-top:0.5rem;" disabled={busy} onclick={toggleCaughtUp}>
         {lesson.caught_up ? '✓ nachgeholt — rückgängig' : 'Versäumten Stoff als nachgeholt markieren'}
       </button>
