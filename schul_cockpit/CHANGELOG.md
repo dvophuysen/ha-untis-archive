@@ -1,3 +1,8 @@
+## 0.68.0
+
+- Verarbeitung nach Änderung statt nach Uhrzeit: Ein neues Foto, ein neues Verzeichnis oder eine Themenliste, neue Aufgaben aus Home Assistant, ein geändertes Bücherregal oder ein berichtigtes Kapitel stoßen den Sammellauf des Kindes an; nach einer Sammelfrist von anderthalb Minuten läuft er (mehrere Fotos ergeben einen Lauf). Neue Untis-Einträge, die die Integration ohne Wissen des Add-ons schreibt, werden alle fünf Minuten auf neue Stellen abgehorcht. Gescheiterte Auswertungen werden nach einer Viertelstunde erneut versucht, höchstens dreimal. Die Läufe um zwei und um vierzehn Uhr bleiben als Netz.
+- Materialseite: Unter „Jetzt einsammeln“ steht, was vorgemerkt ist und was zuletzt automatisch lief, mit Grund.
+
 ## 0.67.4
 
 - Vokabeltrainer: Wortseiten werden von selbst in Lernwörter zerlegt, sobald eine Seite gelesen ist oder der Trainer geöffnet wird. Der Knopf „Wörter von den Seiten lesen“ und der Satz „noch nicht in Wörter zerlegt“ sind weg; solange etwas läuft, steht dort „Ich lese gerade noch eine Seite …“ und die Ansicht lädt nach. Eine gelesene Seite ohne Lernwörter galt fälschlich als ungelesen, darum änderte der Knopf nichts.
