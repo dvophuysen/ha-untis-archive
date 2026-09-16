@@ -328,7 +328,7 @@ def listing(account_id: int, *, subject: str | None = None, kind: str | None = N
             "SELECT id,account_id,kind,subject_name,title,summary,document_date,period_start,period_end,"
             "captured_at,created_by,filename,mime_type,page_count,verified,contains_solutions,hidden,"
             "locked_fields,analysis_state,analysis_model,analysis_version,analyzed_at,analysis_error,"
-            "confidence,created_at,updated_at,origin,source_book,source_page,source_label, length(file_bytes) AS file_size "
+            "confidence,created_at,updated_at,origin,source_book,source_page,source_label,printed_pages, length(file_bytes) AS file_size "
             "FROM materials WHERE " + " AND ".join(where) +
             " ORDER BY COALESCE(document_date,substr(created_at,1,10)) DESC, id DESC LIMIT ? OFFSET ?",
             tuple(args)).fetchall()
