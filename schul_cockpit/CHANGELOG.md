@@ -1,3 +1,7 @@
+## 0.69.6
+
+- Scheitert die Verarbeitung einer KI-Antwort, steht der Grund im Add-on-Log (Status, warum unvollständig, was an Ausgabe kam) statt nur „502“.
+
 ## 0.69.5
 
 - Klausurkarte: Scheitert das Lesen eines Materials am erschöpften KI-Rahmen, steht das jetzt so da („wartet auf freien KI-Rahmen“) statt „Lesen ist gescheitert“. Ein Arbeitsblatt ohne Seitenzahl heißt „Arbeitsblatt“, nicht „Arbeitsblatt S. 0“.
