@@ -1,3 +1,11 @@
+## 0.69.0
+
+- Der Mentor beginnt wie ein Coach, nicht wie ein Formular. Die App erkennt die Lage selbst (Arbeit vorbereiten, Kurzprüfung, Verstehen nach schlechter Stunden-Rückmeldung, Nachholen nach Fehlzeit, Hausaufgabe, frei) und das Modell formuliert den ersten Zug daraus: Termin und Buchstelle, Erinnerung an das letzte Mal, dann sofort die erste Aufgabe (passend zur Stufe) oder bei „Verstehen“ eine Zusammenfassung aus dem Material mit der Frage, was unklar ist. Die Tipps zum Antippen kommen aus dem Inhalt. Kein Umschalter: Sagt das Kind, es versteht das Thema nicht, wechselt der Mentor im Gespräch zum Erklären.
+- Eine Erklärung vor der ersten Aufgabe ist Lernen, keine Hilfe; erst ein Hinweis während einer offenen Aufgabe zählt für die Stufe.
+- Jede Themen-Einheit endet mit einem konkreten Satz: Stand, Grund, wann die Kurzprüfung kommt. „Für heute schließen wir ab“ ist Geschichte.
+- Der Kopf der Einheit zeigt die Lage und den Abstand zur Arbeit. Scheitert der Einstieg vom Modell (Budget, Netz), bleibt eine kurze feste Begrüßung.
+- Eltern: Das Modell für den Einstieg ist eigens wählbar und wird geeicht (Vergleich derselben Einheit mit allen Modellen).
+
 ## 0.68.1
 
 - Vokabeltrainer direkt erreichbar: Unter Lernen steht die Karte „Vokabeln üben“. Sie führt zur Sprachauswahl mit allen Fremdsprachen aus dem Stundenplan (Englisch, Latein, Spanisch, Französisch) und dem Stand je Sprache; fehlt eine Wortseite, steht dort, was zu fotografieren ist.

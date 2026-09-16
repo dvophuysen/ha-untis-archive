@@ -261,6 +261,8 @@ async def exams_all(
             # Die Themen der offiziellen Themenliste mit ihrer Stufe. Ein Modellaufruf
             # entsteht nur, wenn sich der Text der Liste geändert hat.
             try:
+                from .. import mentor_opening
+                mentor_opening.remember_exam(account_id, e["exam_key"], e["date"])
                 await lernstand.ensure_topics(account_id, e["exam_key"], e.get("subject_name"), since, e["date"])
                 e["topics"] = lernstand.topics_for(account_id, e["exam_key"], e.get("subject_name"))
                 e["stages"] = lernstand.stage_counts(e["topics"])

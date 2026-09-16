@@ -19,6 +19,8 @@ def setup(env):
     client.app.include_router(m.router,prefix='/api');client.app.include_router(ex.router,prefix='/api')
     seed(client,ai_enabled=True,daily_minutes=30,max_sessions=3)
     patch.setattr(m,'now_iso',lambda:'2026-09-11T15:00:00+02:00')
+    # Der Einstieg vom Modell hat eigene Tests (test_opening); hier bleibt die feste Begrüßung.
+    patch.setattr(m,'OPENING',False)
     for mod in [m,mc,ai]:
         patch.setattr(mod,'today_local',lambda:date(2026,9,11)) if hasattr(mod,'today_local') else None
     patch.setitem(ai.RATES,'test',(10.,45.))
