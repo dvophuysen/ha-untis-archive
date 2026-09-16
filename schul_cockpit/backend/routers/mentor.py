@@ -175,6 +175,7 @@ async def open_unit(account_id,sid,model=None,persist=True):
     """Der erste Zug einer Einheit: Lage bestimmen, Einstieg vom Modell holen und
     als Begrüßung ablegen (mit erster Aufgabe, wenn die Lage eine will)."""
     with closing(webapp_conn()) as c:s=get_session(c,account_id,sid)
+    await mopen.ensure_exam_date(account_id,s.get('topic_id'))
     ctx,_,_=mc.context(account_id,s)
     if s.get('topic_id'):ctx['topic']=lernstand.context_for(account_id,s['topic_id'],sid)
     lage=mopen.situation(account_id,s,ctx);ctx['situation']=lage

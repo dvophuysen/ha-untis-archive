@@ -71,7 +71,9 @@ INSTRUCTION = (
     "Markdown, kurz: message höchstens 650 Zeichen. Nutze topic.material (Originalseiten) für Einordnung, Aufgaben und "
     "Vorschläge; erfinde keine Buchinhalte. Eine Aufgabe braucht fachlich richtige Musterlösung in task.solution und "
     "Kriterien; Lösungen nie in message. choices sind höchstens drei kurze, konkrete Tipps zum Antippen (unter 40 Zeichen). "
-    "Behaupte keine Stufe und versprich keine; die App misst den Stand. "
+    "Behaupte keine Stufe und versprich keine; die App misst den Stand. Fehlende Angaben (kein Termin, kein letztes Mal) erwähnst du nicht; "
+    "erfinde kein letztes Mal und keine früheren Übungen, wenn topic.note, topic.reason und previous leer sind. Ein Satz darf warm sein, "
+    "aber konkret: was das Kind heute schafft, nicht wie toll es ist. "
 )
 
 
@@ -100,6 +102,26 @@ def remember_exam(account_id: int, exam_key: str, exam_date: str) -> None:
                   "PRIMARY KEY(account_id, exam_key))")
         c.execute("INSERT INTO exam_dates(account_id,exam_key,exam_date) VALUES(?,?,?) ON CONFLICT(account_id,exam_key) DO UPDATE SET exam_date=excluded.exam_date",
                   (account_id, exam_key, exam_date))
+
+
+async def ensure_exam_date(account_id: int, topic_id: int | None) -> None:
+    """Den Termin der Arbeit zu einem Thema kennen, auch wenn die Klausurseite
+    seit dem letzten Start nicht geöffnet war: einmal den Kalender lesen."""
+    if not topic_id:
+        return
+    with closing(webapp_conn()) as c:
+        row = c.execute("SELECT exam_key FROM exam_topics WHERE id=? AND account_id=?", (topic_id, account_id)).fetchone()
+    if not row or _exam_for(account_id, {"exam_key": row[0]}):
+        return
+    try:
+        from .exams import resolve_exams
+        result = await resolve_exams(account_id, days_ahead=180)
+        for e in result.get("exams", []):
+            if e.get("exam_key") == row[0] and e.get("date"):
+                remember_exam(account_id, row[0], e["date"])
+                return
+    except Exception:
+        LOG.debug("Termin der Arbeit für Thema %s nicht lesbar", topic_id, exc_info=True)
 
 
 def situation(account_id: int, session: dict, ctx: dict) -> dict:

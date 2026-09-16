@@ -1,3 +1,7 @@
+## 0.69.1
+
+- Einstieg: Der Termin der Arbeit wird beim Start der Einheit aus dem Kalender geholt, wenn die Klausurseite ihn noch nicht gemerkt hat. Fehlende Angaben nennt der Mentor nicht mehr („kein Termin angegeben“), und er erfindet kein „letztes Mal“.
+
 ## 0.69.0
 
 - Der Mentor beginnt wie ein Coach, nicht wie ein Formular. Die App erkennt die Lage selbst (Arbeit vorbereiten, Kurzprüfung, Verstehen nach schlechter Stunden-Rückmeldung, Nachholen nach Fehlzeit, Hausaufgabe, frei) und das Modell formuliert den ersten Zug daraus: Termin und Buchstelle, Erinnerung an das letzte Mal, dann sofort die erste Aufgabe (passend zur Stufe) oder bei „Verstehen“ eine Zusammenfassung aus dem Material mit der Frage, was unklar ist. Die Tipps zum Antippen kommen aus dem Inhalt. Kein Umschalter: Sagt das Kind, es versteht das Thema nicht, wechselt der Mentor im Gespräch zum Erklären.
