@@ -51,6 +51,7 @@ from .routers import (
     textbooks,
     today,
     week,
+    vocab as vocab_router,
 )
 from .sync_worker import background_sync_loop
 from .mentor_worker import background_loop as mentor_loop
@@ -178,6 +179,7 @@ API = "/api"
 app.include_router(health.router, prefix=API)
 app.include_router(learning.router, prefix=API)
 app.include_router(mentor.router, prefix=API)
+app.include_router(vocab_router.router, prefix=API)
 app.include_router(materials_router.router, prefix=API)
 app.include_router(calendars_router.router, prefix=API)
 app.include_router(mentor_exams.router, prefix=API)

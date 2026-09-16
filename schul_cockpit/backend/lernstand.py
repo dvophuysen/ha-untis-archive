@@ -469,10 +469,31 @@ def public(topic: dict) -> dict:
         "label": LABELS.get(topic.get("stage"), ""), "places": places, "places_label": places_label(places)}
 
 
+VOCAB_TITLE = re.compile(r"vokabel|voc\b|voc\.|wortschatz|lernw[öo]rter|vocabulary|words|irregular verbs|vocabulario", re.I)
+
+
+def is_vocab_topic(topic: dict) -> bool:
+    return bool(VOCAB_TITLE.search(topic.get("title") or ""))
+
+
+def vocab_unit_for(account_id: int, subject: str, places: list[dict]) -> str | None:
+    """Die Einheit des Vokabeltrainers, die zu den Stellen dieses Themas gehört."""
+    from .sources import serves
+    with closing(webapp_conn()) as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT unit,source_label,page FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0", (account_id, subject))]
+    for r in rows:
+        if any(r["page"] in p.get("pages", []) and serves(r["source_label"], p.get("label") or "") for p in places):
+            return r["unit"]
+    return None
+
+
 def topics_for(account_id: int, exam_key: str, subject: str | None, with_material: bool = True) -> list[dict]:
     with closing(webapp_conn()) as c:
         rows = [dict(r) for r in c.execute(
             "SELECT * FROM exam_topics WHERE account_id=? AND exam_key=? ORDER BY stale,position,id", (account_id, exam_key))]
+        answered = {r[0] for r in c.execute(
+            "SELECT DISTINCT topic_id FROM topic_answers WHERE account_id=?", (account_id,))}
     day = today_local()
     out = []
     for row in rows:
@@ -480,6 +501,21 @@ def topics_for(account_id: int, exam_key: str, subject: str | None, with_materia
         item["check_due"] = bool(row["next_check"] and row["next_check"] <= day.isoformat() and row["stage"] == "sitzt")
         if with_material and subject:
             item["material"] = place_status(account_id, subject, item["places"])
+        # Ein Vokabel-Thema übt im Vokabeltrainer; seine Stufe kommt aus den Wörtern,
+        # solange keine Mentor-Einheit dazu Antworten hat.
+        if subject and is_vocab_topic(item):
+            item["vocab"] = True
+            try:
+                from . import vocab
+                item["vocab_unit"] = vocab_unit_for(account_id, subject, item["places"])
+                if row["id"] not in answered:
+                    derived = vocab.topic_stage(account_id, subject, item["places"])
+                    if derived:
+                        item["stage"], item["reason"] = derived["stage"], derived["reason"]
+                        item["label"] = LABELS.get(item["stage"], "")
+                        item["words"] = derived["words"]
+            except Exception:
+                LOG.debug("Vokabelstand für %s nicht lesbar", item["title"], exc_info=True)
         out.append(item)
     out.sort(key=lambda t: sort_key(t, day))
     return out

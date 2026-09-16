@@ -142,7 +142,9 @@
     }
     return parts.length ? parts.join(' · ') : 'noch nichts geübt';
   }
-  function topicUrl(t) {
+  function topicUrl(t, e) {
+    // Ein Vokabel-Thema übt im Vokabeltrainer, alles andere beim Mentor.
+    if (t.vocab) return `#/vokabeln/${encodeURIComponent(e.subject_name ?? '')}${t.vocab_unit ? `?unit=${encodeURIComponent(t.vocab_unit)}` : ''}`;
     return `#/learning?topic_id=${t.id}`;
   }
   function topicAction(t) {
@@ -290,9 +292,9 @@
                 <div class="topic-head">
                   <span class="stage {t.stage}">{STAGE[t.stage] ?? t.stage}</span>
                   <span class="topic-title">{t.title}{#if t.stale}<small> · nicht mehr auf der Liste</small>{/if}</span>
-                  <a class="topic-go" href={topicUrl(t)}>{topicAction(t)}</a>
+                  <a class="topic-go" href={topicUrl(t, e)}>{topicAction(t)}</a>
                 </div>
-                {#if t.reason && t.stage !== 'neu'}<div class="dim topic-why">{t.reason}{#if t.note} · {t.note}{/if}</div>{/if}
+                {#if t.reason && t.stage !== 'neu'}<div class="dim topic-why">{t.reason}{#if t.note} · {t.note}{/if}</div>{:else if t.vocab && t.words}<div class="dim topic-why">{t.words} Wörter im Trainer</div>{/if}
                 {#if t.check_due}<div class="dim topic-why">Kurzprüfung fällig: sitzt es noch, gilt es als gefestigt.</div>{/if}
                 {#if t.places_label}
                   <div class="dim topic-why">

@@ -12,6 +12,7 @@
   import SubjectDetail from './routes/SubjectDetail.svelte';
   import Absences from './routes/Absences.svelte';
   import Klausuren from './routes/Klausuren.svelte';
+  import Vokabeln from './routes/Vokabeln.svelte';
   import Setup from './routes/Setup.svelte';
   import Settings from './routes/Settings.svelte';
   import Courses from './routes/Courses.svelte';
@@ -245,6 +246,12 @@
       {/key}
     {:else if route.name === 'klausuren'}
       <Klausuren accountId={appState.activeAccountId} />
+    {:else if route.name === 'vokabeln'}
+      {#key `${appState.activeAccountId}:${(route.args ?? []).join('/')}`}
+        <Vokabeln accountId={appState.activeAccountId}
+                  subject={decodeURIComponent(route.args?.[0] ?? '')}
+                  initialUnit={decodeURIComponent((window.location.hash.split('?')[1] ? new URLSearchParams(window.location.hash.split('?')[1]).get('unit') : '') ?? '')} />
+      {/key}
     {:else if route.name === 'absences'}
       <Absences accountId={appState.activeAccountId} />
     {:else if route.name === 'subjects'}
