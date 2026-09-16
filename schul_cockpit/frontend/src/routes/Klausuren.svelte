@@ -69,8 +69,10 @@
   ];
   const TOPIC_FEEL = ['unsicher', 'mittel', 'sicher'];
 
-  function weekday(iso) {
-    return new Date(`${iso}T12:00:00`).toLocaleDateString('de-DE', { weekday: 'long' });
+  // „Montag, 21.09.“: der ganze Wochentag, dann Tag und Monat.
+  function longDay(iso) {
+    const d = new Date(`${iso}T12:00:00`);
+    return `${d.toLocaleDateString('de-DE', { weekday: 'long' })}, ${d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}`;
   }
   function whenLabel(dateIso) {
     const d = daysBetween(today, dateIso);
@@ -256,7 +258,8 @@
           <span class="icon" aria-hidden="true">{st.emoji}</span>
           <span class="who">
             <strong>{st.name}</strong>
-            <span class="dim">{weekday(e.date)}, {formatShortDate(e.date)}{#if far} · {whenLabel(e.date)}{/if}{#if e.title && e.subject_name && e.title !== e.subject_name} · {e.title}{/if}{#if e.source === 'manual'} · selbst eingetragen{/if}</span>
+            <span class="dim">{longDay(e.date)}{#if far} · {whenLabel(e.date)}{/if}{#if e.source === 'manual'} · selbst eingetragen{/if}</span>
+            {#if e.title && e.subject_name && e.title !== e.subject_name}<span class="dim ellipsis" title={e.title}>{e.title}</span>{/if}
           </span>
           {#if !far}<span class="badge when {urgencyClass(e.date)}">{whenLabel(e.date)}</span>{:else}<span class="chev" aria-hidden="true">▸</span>{/if}
         </button>
@@ -438,6 +441,7 @@
   .exam-head .icon { font-size: 1.5rem; }
   .exam-head .who { flex: 1; min-width: 0; display: grid; }
   .exam-head strong { font-size: 1.05rem; }
+  .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chev { opacity: 0.6; }
   .when { white-space: nowrap; }
   .when.now { background: var(--rating-1); color: #fff; border-color: transparent; }
