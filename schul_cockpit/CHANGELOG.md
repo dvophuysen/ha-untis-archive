@@ -1,3 +1,10 @@
+## 0.64.0
+
+- Lernstand je Thema: Liegt die offizielle Themenliste der Lehrkraft vor, zerlegt die App sie in ihre Themen und zeigt zu jedem die Stufe: neu, angefangen, wackelt, sitzt, gefestigt. Die Stufe wird aus den Antworten abgelesen, nicht behauptet: „sitzt“ heißt drei Aufgaben hintereinander richtig ohne Hilfe, ohne Zögern (unter 40 Sekunden, kaum Umformulieren), in mindestens zwei Aufgabenarten. „gefestigt“ erst, wenn Kurzprüfungen nach drei und nach sieben Tagen ohne Hilfe bestanden sind; eine Prüfung mit Hilfe setzt zurück auf „wackelt“.
+- Eine Einheit zu einem Thema hat keine Uhr mehr. Sie endet, wenn die Stufe erreicht ist oder das Kind aufhört; der Mentor wechselt die Aufgabenart, erklärt bei einer Kurzprüfung nicht vorweg und schreibt am Ende den fachlichen Grund ans Thema („Genitiv Plural zweimal falsch, dann mit Hinweis richtig“).
+- Klausurkarte: Die Themen stehen sortiert unter der Arbeit, Wackler und fällige Prüfungen zuerst, mit Stelle und Materialstand; „Üben“ startet die Einheit direkt zum Thema. Das Gefühl des Kindes je Thema (unsicher, mittel, sicher) sortiert nur, es zählt nie als Beleg. Themen, die die Lehrkraft mündlich genannt hat, lassen sich von Hand ergänzen.
+- Der Link „Für diese Arbeit üben“ führte auf eine nicht vorhandene Seite; behoben.
+
 ## 0.63.3
 
 - Während einer Sicherung schlugen Anfragen mit „database is locked" fehl (Vorschaubilder auf der Materialseite). Die Datenbank läuft jetzt im WAL-Modus, in dem Leser und Schreiber einander nicht anhalten, wartet bis zu dreißig Sekunden auf einen anderen Schreiber, und das Vermerken von „zuletzt gesehen" beim Anmelden darf nie eine Anfrage scheitern lassen.

@@ -318,6 +318,8 @@ _MIGRATIONS.append(("mentor_003", (Path(__file__).parent / "exam_scope_schema.sq
 
 _MIGRATIONS.append(("learning_plan_001", (Path(__file__).parent / "learning_plan_schema.sql").read_text()))
 
+_MIGRATIONS.append(("lernstand_001", (Path(__file__).parent / "lernstand_schema.sql").read_text()))
+
 # Preserve every existing value and stable ID. A comment can now stand on its
 # own; NULL is never interpreted as an understanding score.
 _MIGRATIONS.append(("checkins_030_optional_rating", """

@@ -24,6 +24,7 @@ from ..exams import (
     resolve_exams,
 )
 from ..supervisor_client import SupervisorError, get_supervisor
+from .. import lernstand
 
 router = APIRouter()
 _LOG = logging.getLogger("schul_cockpit.exams")
@@ -257,6 +258,15 @@ async def exams_all(
             except Exception:
                 _LOG.warning("Quellenstand für die Arbeit in %s nicht berechenbar", e.get("subject_name"), exc_info=True)
                 e["sources"] = None
+            # Die Themen der offiziellen Themenliste mit ihrer Stufe. Ein Modellaufruf
+            # entsteht nur, wenn sich der Text der Liste geändert hat.
+            try:
+                await lernstand.ensure_topics(account_id, e["exam_key"], e.get("subject_name"), since, e["date"])
+                e["topics"] = lernstand.topics_for(account_id, e["exam_key"], e.get("subject_name"))
+                e["stages"] = lernstand.stage_counts(e["topics"])
+            except Exception:
+                _LOG.warning("Themen der Arbeit in %s nicht lesbar", e.get("subject_name"), exc_info=True)
+                e["topics"], e["stages"] = [], None
         (upcoming if e["date"] >= today_iso else past).append(e)
 
     cutoff = archive_before(account_id)
@@ -331,6 +341,65 @@ def set_archive(
         raise HTTPException(status_code=422, detail="Datum nicht lesbar") from None
     _set_archive_before(account_id, before)
     return {"archive_before": before}
+
+
+class TopicIn(BaseModel):
+    exam_key: str = Field(min_length=1, max_length=120)
+    subject: str = Field(min_length=1, max_length=120)
+    title: str = Field(min_length=2, max_length=120)
+    detail: str = Field(default="", max_length=400)
+
+
+class SelfViewIn(BaseModel):
+    value: str | None = Field(default=None, pattern="^(unsicher|mittel|sicher)$")
+
+
+@router.post("/accounts/{account_id}/exams/topics", status_code=201)
+def add_topic(account_id: int, body: TopicIn, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Ein Thema von Hand ergänzen, etwa wenn die Lehrkraft es mündlich genannt hat."""
+    assert_account_access(user, account_id)
+    topic = lernstand.add_manual(account_id, body.exam_key, body.subject, body.title.strip(), body.detail.strip())
+    if not topic:
+        raise HTTPException(409, "Dieses Thema steht schon auf der Liste.")
+    return lernstand.public(topic)
+
+
+@router.delete("/accounts/{account_id}/exams/topics/{topic_id}")
+def delete_topic(account_id: int, topic_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
+    assert_account_access(user, account_id)
+    _require_parent(user)
+    with closing(webapp_conn()) as conn, conn:
+        gone = conn.execute("DELETE FROM exam_topics WHERE id=? AND account_id=?", (topic_id, account_id)).rowcount
+    if not gone:
+        raise HTTPException(404, "Thema nicht gefunden.")
+    return {"ok": True}
+
+
+@router.post("/accounts/{account_id}/exams/topics/{topic_id}/self-view")
+def set_self_view(account_id: int, topic_id: int, body: SelfViewIn, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Das Gefühl des Kindes zu einem Thema: sortiert, beweist nichts."""
+    assert_account_access(user, account_id)
+    with closing(webapp_conn()) as conn, conn:
+        changed = conn.execute("UPDATE exam_topics SET self_view=?,updated_at=? WHERE id=? AND account_id=?",
+                               (body.value, _now(), topic_id, account_id)).rowcount
+        row = conn.execute("SELECT * FROM exam_topics WHERE id=?", (topic_id,)).fetchone()
+    if not changed or not row:
+        raise HTTPException(404, "Thema nicht gefunden.")
+    return lernstand.public(dict(row))
+
+
+@router.get("/accounts/{account_id}/exams/topics/{topic_id}/events")
+def topic_events(account_id: int, topic_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
+    assert_account_access(user, account_id)
+    with closing(webapp_conn()) as conn:
+        row = conn.execute("SELECT * FROM exam_topics WHERE id=? AND account_id=?", (topic_id, account_id)).fetchone()
+        if not row:
+            raise HTTPException(404, "Thema nicht gefunden.")
+        events = [dict(r) for r in conn.execute(
+            "SELECT id,session_id,stage_before,stage_after,reason,created_at FROM topic_events WHERE topic_id=? ORDER BY id", (topic_id,))]
+        answers = [dict(r) for r in conn.execute(
+            "SELECT session_id,task_kind,result,help_used,seconds,edits,re_explained,created_at FROM topic_answers WHERE topic_id=? ORDER BY id", (topic_id,))]
+    return {"topic": lernstand.public(dict(row)), "events": events, "answers": answers}
 
 
 class ProgressIn(BaseModel):
