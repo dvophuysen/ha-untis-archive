@@ -329,7 +329,10 @@
 
   async function save() {
     // Eine leere Seite heißt „keine Seite"; 0 räumt sie serverseitig aus.
-    open = await api.patch(`${base}/${open.id}`, { ...form, source_page: form.source_page ? Number(form.source_page) : 0 });
+    // Nur schicken, was sich gegenüber dem Material geändert hat: Jedes gesendete Feld gilt als Korrektur und wird gesperrt.
+    const wanted = { ...form, source_page: form.source_page ? Number(form.source_page) : 0 };
+    const patch = Object.fromEntries(Object.entries(wanted).filter(([k, v]) => String(v ?? '') !== String(open[k] ?? (k === 'source_page' ? 0 : ''))));
+    open = await api.patch(`${base}/${open.id}`, patch);
     message = 'Korrektur gespeichert. Sie bleibt auch bei einer neuen Auswertung erhalten.';
     await load();
   }

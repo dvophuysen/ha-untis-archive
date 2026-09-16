@@ -1,3 +1,7 @@
+## 0.75.1
+
+- Eine Korrektur der Eltern sperrte auch leere Textfelder: Das Formular schickte alle Felder mit, und ein noch ungelesenes Material bekam einen leeren, gesperrten Text, den keine Lesung mehr füllen durfte. So stand die Latein-Doppelseite 10/11 seit dem 15.09. als „gelesen“ ohne ein Wort Text da. Leere Textfelder gelten jetzt nicht als Korrektur, das Formular schickt nur Geändertes, und betroffene Materialien werden einmal neu gelesen.
+
 ## 0.75.0
 
 - Der Mentor bricht keine Einheit mehr ab. Erreicht eine Übungseinheit ihre Zeit- oder Zuggrenze, fragt die App ohne KI-Aufruf: „Willst du für heute aufhören oder noch weitermachen?“ Beides ist eine Antwort zum Antippen; nach „Noch weitermachen“ geht es normal weiter, und die Frage kommt frühestens sechs Züge später wieder. Nur „Für heute fertig“ beendet.

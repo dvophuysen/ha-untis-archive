@@ -860,6 +860,17 @@ CREATE INDEX IF NOT EXISTS idx_afternoon_checks_day ON afternoon_checks(account_
 _MIGRATIONS.append(("mentor_end_proposal_001",
                     "ALTER TABLE mentor_sessions ADD COLUMN end_proposed_turn INTEGER NOT NULL DEFAULT 0"))
 
+# Reparatur zu 0.75.1: Materialien, deren leerer Text durch eine Korrektur
+# gesperrt wurde, geben Text und Kurzbeschreibung frei und werden neu gelesen.
+_MIGRATIONS.append(("materials_013_unlock_empty_text", """
+UPDATE materials SET
+ locked_fields=(SELECT COALESCE(json_group_array(value),'[]') FROM json_each(materials.locked_fields)
+                WHERE value NOT IN ('content_text','summary')),
+ analysis_state='pending', updated_at=strftime('%Y-%m-%dT%H:%M:%S','now')
+WHERE content_text='' AND analysis_state='ready' AND hidden=0
+  AND EXISTS (SELECT 1 FROM json_each(materials.locked_fields) WHERE value='content_text');
+"""))
+
 
 def init_webapp_db() -> None:
     """Apply base schema + pending migrations (idempotent)."""

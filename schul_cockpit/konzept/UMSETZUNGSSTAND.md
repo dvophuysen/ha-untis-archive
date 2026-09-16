@@ -1,3 +1,59 @@
+# Eichung der Lesemodelle, zweiter Durchgang 0.75.1
+
+Stand 17.09.2026. Nutzerauftrag: sorgfältig an echten Seiten eichen, Qualität
+vor Kosten, Kosten nicht unnötig. Zwölf gespeicherte Seiten wurden mit dem
+mittleren (terra) und dem kleinen Modell (luna) neu gelesen und gegen die
+gespeicherte Lesung des Hauptmodells (sol) gehalten, dazu vier Originalbilder
+selbst angesehen. Kosten der Messung 0,74 €, nichts gespeichert.
+
+**Befunde.**
+
+- Handschrift (Themenblatt zur Lateinarbeit): sol richtig (S. 10, 11; BB 13;
+  13–15; 14; TB 10, 11, 14, 15), von den Eltern gegengelesen. terra las jede
+  handschriftliche 1 als 7 (S. 70, 77; BB 73; 73–75; 74). luna traf 13, 13–15
+  und 14, aber zweimal 70/71 statt 10/11. Beide günstigen Modelle sind für
+  Handschrift unbrauchbar; ein falscher Zettel würde das falsche Kapitel holen.
+- Mathematik-Arbeitsblatt (Gleichungen mit Klammern): sol richtig (am Bild
+  geprüft). terra drei Fehler in sechzehn Gleichungen (d: „= 4“ statt „= 0“,
+  k: „3x“ statt „3x − 5“, l: „5(x − 4)“ statt „6(5x − 4)“). luna in den
+  geprüften Zeilen richtig. Die Wortabdeckung (0,94) sieht solche Fehler nicht,
+  weil Ziffern anderswo auf der Seite vorkommen.
+- Physik-Arbeitsblatt mit Schaltplänen: sol beschreibt alle sechs Schaltungen
+  richtig (am Bild geprüft). terra und luna beschreiben A2 ebenfalls richtig;
+  der Rest der Lesungen liegt nur gekürzt vor (Werkzeuggrenze).
+- Lernwörter (Begleitband S. 10): terra verlor „venīre“, ein Lernwort; luna
+  vollständig. Grammatik S. 13: terra verlor „masculinum“; luna vollständig.
+- Tabelle unregelmäßiger Verben: terra vollständig, luna verlor die
+  Lautschrift.
+- Fließtext (Deutsch-Doppelseite, Politik, Spanisch): beide 0,90 bis 0,97;
+  die fehlenden Wörter sind Bildbeschreibungen, kein Inhalt.
+
+**Schluss (D75).** Das Abschreiben bleibt beim Hauptmodell. Jedes günstigere
+Modell hat auf mindestens einer Seitenart inhaltlich tragende Fehler: Ziffern,
+Lernwörter, Handschrift. Ein Umstieg je Seitenart ist erst vertretbar, wenn
+das Messwerkzeug Ziffern und Zeilen vergleicht (offen, siehe unten).
+
+**Fehler gefunden und behoben.** Textband S. 10/11 (der Lektionstext der
+ersten Lateinarbeit) stand seit 15.09. als „gelesen“ mit leerem Text und
+leerer Kurzbeschreibung da, Vertrauen 0,98. Ursache: Das Korrekturformular
+schickte alle Felder mit, auch den damals noch leeren Text; `routers/
+materials.correct` sperrte jedes gesendete Feld, und `material_analysis._apply`
+durfte den Text danach nie füllen. Beide günstigen Modelle lasen die Seite
+fehlerfrei (2.400 Zeichen). Behoben in 0.75.1: leere Textfelder sind keine
+Korrektur, das Formular schickt nur Geändertes, Migration
+`materials_013_unlock_empty_text` gibt Text und Kurzbeschreibung frei und
+setzt betroffene Materialien auf `pending` (Nachtlauf liest sie). Von 144
+gelesenen Materialien war genau dieses eine betroffen. Zwei Tests.
+
+**Offen für das Messwerkzeug.** `material_analysis.compare` liefert nur 600
+Zeichen Lesung und misst Wörter, nicht Ziffern oder Zeilen. Vorschlag: volle
+Lesung zurückgeben, Zeilenvergleich für Formelseiten, Ziffernfolgen
+vergleichen, Seitenart aus dem Bild bestimmen. Reasoning-Tiefe ist heute für
+alle Aufrufe „low“ (`ai_gateway.complete`); ob „medium“ Handschrift beim
+Hauptmodell verbessert, ist ungemessen.
+
+---
+
 # Ende als Vorschlag, Verstehen als Einstieg 0.75.0
 
 Stand 17.09.2026. Nutzerwunsch vom 16.09.: Der Mentor soll eine Sitzung nie
