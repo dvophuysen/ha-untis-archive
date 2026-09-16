@@ -1,9 +1,15 @@
-# Quellenbestand 0.52.2–0.66.0
+# Quellenbestand 0.52.2–0.67.0
 
 Stand 16.09.2026, nachmittags. Bis 0.56.11 auf der laufenden Instanz installiert und
 mit echten Abrufen geprüft; 0.57.0 folgt in derselben Session.
 
 ## Was ausgeliefert ist
+
+**Klausurseite neu (0.67.0, D62).** `Klausuren.svelte` komplett neu: drei
+Punkte mit Ampel, aufklappbare Themenliste mit Stufen, Gefühl je Arbeit und
+Thema, „Auch behandelt“, Kapitel, Übungsarbeit. Nur Frontend; Daten kommen aus
+`exams/all` (`sources`, `topics`, `stages`, `scope`). Offen: Fahrplan mit Tagen
+(Option B) bewusst nicht gebaut.
 
 **Vokabeltrainer (0.66.0, D61).** `vocab.py` mit `vocab_words` je Seite
 (Modell zerlegt, jedes Wort muss im Seitentext stehen), `vocab_attempts`,

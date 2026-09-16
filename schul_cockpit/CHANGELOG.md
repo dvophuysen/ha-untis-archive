@@ -1,3 +1,8 @@
+## 0.67.0
+
+- Klausurseite neu: Jede Arbeit zeigt drei Punkte mit Ampel: Stoff (offizielle Themenliste liegt vor oder angenommen), Material (Stellen da oder fehlt, mit Foto-Link) und Üben (wie viele Themen sitzen, wackeln, neu sind). „Für Latein üben“ klappt die Themenliste auf: sortiert, Wackler zuerst, je Thema Stufe, Grund, Stelle, Materialstand, Üben- oder Prüfen-Knopf und das Gefühl des Kindes. Darunter „Auch behandelt, nicht auf der Liste“, die Kapitel im Zeitraum und der Weg zur Übungsarbeit. Arbeiten in mehr als drei Wochen stehen kompakt in einer Zeile, vergangene Arbeiten hinter einem Aufklapper.
+- Vokabeltrainer: Die Karten einer Einheit folgen jetzt der Seitenreihenfolge des Buchs statt sich zwischen zwei Seiten abzuwechseln.
+
 ## 0.66.0
 
 - Vokabeltrainer, zuerst für Latein und Englisch: Die Lernwörter kommen aus den abgelegten Originalseiten (Begleitband „Lernwörter der Lektion 1“, Green Line „Irregular verbs“), einmal je Seite gelesen und am Seitentext geprüft. Stufe 1 fragt die Bedeutung, gesprochen: Latein → Deutsch wie in der Arbeit, Englisch in beide Richtungen; eine Bedeutung genügt, wenn sie im Buch steht, bei unsicherem Verstehen fragt die App nach statt zu werten. Stufe 2 prüft die Schreibweise in die Fremdsprache, getippt ohne Autokorrektur; ein Buchstabe daneben heißt „fast“, nicht richtig. Kein Multiple Choice, kein Abschreiben.
