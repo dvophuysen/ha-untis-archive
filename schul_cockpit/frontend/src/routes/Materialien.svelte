@@ -544,7 +544,7 @@
     {/if}
     <span class="text">
       <strong>{m.title || 'Ohne Titel'}</strong>
-      <small>{#if placeOf(m)}<b class="place">{placeOf(m)}</b> · {/if}{[KIND_NAMES[m.kind] ?? m.kind, dateOf(m), m.blurry ? 'unscharf' : ''].filter(Boolean).join(' · ')}</small>
+      <small>{#if placeOf(m)}<b class="place">{placeOf(m)}</b> · {/if}{[placeOf(m) && ['workbook', 'book_page', 'worksheet'].includes(m.kind) ? '' : (KIND_NAMES[m.kind] ?? m.kind), dateOf(m), m.blurry ? 'unscharf' : ''].filter(Boolean).join(' · ')}</small>
       {#if m.summary}<small class="dim">{m.summary}</small>{/if}
     </span>
     <span class="state" class:warn={m.analysis_state === 'failed' && m.analysis_error !== '429'} class:wait={m.analysis_error === '429'}>

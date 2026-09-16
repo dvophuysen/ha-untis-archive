@@ -1,3 +1,7 @@
+## 0.69.8
+
+- Materialliste: „Arbeitsheft S. 26 · Arbeitsheft“ stand doppelt; steht Buch und Seite da, entfällt die Art.
+
 ## 0.69.7
 
 - Materialliste: Jede Zeile nennt zuerst Buch und Seite („Arbeitsheft S. 28“, „¡Apúntate! S. 48–49“). Fotos mit Buchteil und Seite stehen nach Buchteil und Seitenzahl, Buchseiten je Buch nach Seitenzahl, alles andere nach Datum.
