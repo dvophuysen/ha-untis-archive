@@ -1,3 +1,10 @@
+## 0.66.0
+
+- Vokabeltrainer, zuerst für Latein und Englisch: Die Lernwörter kommen aus den abgelegten Originalseiten (Begleitband „Lernwörter der Lektion 1“, Green Line „Irregular verbs“), einmal je Seite gelesen und am Seitentext geprüft. Stufe 1 fragt die Bedeutung, gesprochen: Latein → Deutsch wie in der Arbeit, Englisch in beide Richtungen; eine Bedeutung genügt, wenn sie im Buch steht, bei unsicherem Verstehen fragt die App nach statt zu werten. Stufe 2 prüft die Schreibweise in die Fremdsprache, getippt ohne Autokorrektur; ein Buchstabe daneben heißt „fast“, nicht richtig. Kein Multiple Choice, kein Abschreiben.
+- Je Wort und Stufe wird der Stand abgelesen: zweimal hintereinander richtig ohne Zögern (unter zwölf Sekunden) heißt sitzt, drei Tage später noch einmal richtig heißt gefestigt, ein Fehler setzt auf wackelt. Wackler und fällige Wörter kommen zuerst.
+- Die Klausurkarte verbindet ein Vokabel-Thema der offiziellen Themenliste („Voc. 1. Lektion“) mit dem Trainer: „Üben“ führt dorthin, und die Stufe des Themas ergibt sich aus den Wörtern seiner Stellen.
+- Die Spracheingabe im Trainer hört in der richtigen Sprache je Richtung (Deutsch, Englisch) und kennt als Hinweis alle Wörter der Lektion, nie nur das gefragte. Das Vorlesen der Fremdsprache übernimmt die Stimme des Geräts.
+
 ## 0.65.1
 
 - Spracheingabe: Aus Stille oder Rauschen erfand die Erkennung Text, der zum Hinweis passt („Mit der a-Deklination.“). Der Browser misst jetzt die Lautstärke mit; leise Aufnahmen werden gar nicht gesendet, mit der Bitte, näher am Gerät zu sprechen.
