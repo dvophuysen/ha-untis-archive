@@ -19,10 +19,13 @@ mit Eintragsbezug, Feld „Gedruckte Seite(n)“, Begriffe.
 Mitschrift zählt nicht; Nähe bindet nicht, Vorschlag richtig sortiert, Tipp
 bindet; Ledger je Eintrag; Doppelseite per Korrektur gesperrt gegen Lesung.
 
+**Live geprüft (0.81.0 eingespielt).** Fehlbindung an „Arbeitsblatt
+beenden“ weg, Doppelseite 10/11 gesetzt und gesperrt, Autor-Migration
+gelaufen, Verlaufsliste mit Wortlaut. Log ohne Fehler.
+
 **Offen.** Stufe 2 (Kandidaten beim Einwerfen, Kennung „AB Mathe 26.08.
 Lückentext“ in Listen), Stufe 3 (Mentor bittet um Foto statt fremdes Blatt).
-Live: die Geschichte-Doppelseite 10/11 nach dem Update im Formular auf
-„10-11“ setzen.
+Übergabe an die nächste Session: [UEBERGABE.md](UEBERGABE.md).
 
 ---
 
