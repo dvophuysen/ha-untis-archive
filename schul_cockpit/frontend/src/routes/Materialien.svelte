@@ -83,6 +83,16 @@
     }
     return [...groups.values()];
   });
+  // „Kapitel prüfen“ führt zum Buch weiter unten auf derselben Seite. Ein
+  // href="#buecher" ginge nicht: Der Router liest jeden Hash als Seitennamen
+  // und landete bei „Unbekannte Seite“. Deshalb selbst aufklappen und hinscrollen.
+  const bookAnchor = (book) => 'buch-' + `${book?.subject ?? ''}-${book?.title ?? ''}`.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  function showChapters(book) {
+    const el = document.getElementById(book ? bookAnchor(book) : 'buecher');
+    if (!el) return;
+    if (el.tagName === 'DETAILS') el.open = true;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   // Kapitel eines Buchs berichtigen: Anfangs- oder Endseite.
   async function fixChapter(unit, field, value) {
     const page = Number(value);
@@ -471,7 +481,7 @@
         {/if}
         <div class="row gap-sm">
           <button class="primary" disabled={busy} onclick={() => act(async () => { for (const m of group.items) await api.post(`${base}/${m.id}/verified`, { value: true }); message = 'Danke, das Verzeichnis gilt.'; await load(); })}>✓ Stimmt so</button>
-          <a class="quiet" href="#buecher">Kapitel prüfen</a>
+          <button class="quiet" onclick={() => showChapters(group.book)}>Kapitel prüfen</button>
         </div>
       </div>
     {/each}
@@ -540,7 +550,7 @@
       <div class="books" id="buecher">
         <p class="muted foot">Bücher</p>
         {#each ledger.books as book (book.title)}
-          <details class="book">
+          <details class="book" id={bookAnchor(book)}>
             <summary>{subjectStyle(book.subject).name}, {book.title}: {book.pages_stored} {book.pages_stored === 1 ? 'Seite' : 'Seiten'} gespeichert{#if book.units?.length}, Verzeichnis mit {book.units.filter((u) => u.kind === 'chapter').length} Kapiteln{/if}{#if book.access} ({ACCESS_NAMES[book.access.status] ?? book.access.status}){/if}</summary>
             {#if book.units?.length}
               <!-- Anfangs- und Endseite je Kapitel; eine Korrektur bleibt gesperrt gegen jedes neue Lesen. -->

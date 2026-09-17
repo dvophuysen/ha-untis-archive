@@ -1,3 +1,7 @@
+## 0.83.2
+
+- Fehler behoben: Unter „Materialien" führte „Kapitel prüfen" im Block „Bitte gegenlesen" auf eine leere Seite mit „Unbekannte Seite". Der Link zeigte auf einen Anker derselben Seite, und den hat die Seitensteuerung als Namen einer eigenen Seite gelesen. Jetzt springt der Knopf zum passenden Buch weiter unten und klappt dessen Kapitelliste gleich auf.
+
 ## 0.83.1
 
 - Fehler behoben: Mit 0.83.0 antwortete die Mentor-Übersicht mit einer Fehlermeldung, solange noch keine Foundry eingetragen war. Die Übersicht fragt dort nur, ob ein Mikrofon angeboten werden kann; diese Frage darf nicht scheitern. Jetzt bleibt die App ohne KI-Zugang bedienbar, und erst eine wirkliche Aufnahme oder Anfrage meldet, dass die Plattform fehlt.
