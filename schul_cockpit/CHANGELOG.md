@@ -1,3 +1,8 @@
+## 1.1.3
+
+- Ein Kapitel ist ein Bündel, auch wenn Buch und Vokabelliste es verschieden nennen. „Unidad 3" und „Unidad 3 De paseo por España" standen getrennt im Trainer, einmal mit Wörtern und einmal leer; jetzt sind sie eins, unter dem ausführlicheren Namen, und beim Üben kommen die Wörter beider Schreibweisen.
+- Ein Bündel ohne Wörter, an dem auch nichts mehr zu lesen ist, wird nicht mehr angeboten.
+
 ## 1.1.2
 
 - Der Vokabeltrainer holt jetzt die Lernwortlisten eines Sprachbuchs vollständig, nicht nur die Seiten, die der Unterricht zufällig genannt hat. Welche Seiten das sind, sagt das Inhaltsverzeichnis des Buchs. Damit stehen alle Unidads, Units und Lektionen einer Sprache zur Verfügung, auch die, die noch nicht dran waren. Alphabetische Verzeichnisse und Wörterbücher bleiben außen vor — die schlägt man nach, statt sie Einheit für Einheit zu lernen. Sachfächer bekommen diese Regel nicht.
