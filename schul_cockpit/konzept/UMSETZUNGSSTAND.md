@@ -1,3 +1,52 @@
+# Eichung: Vokabellisten auf dem kleinen Modell 1.0.1
+
+Stand 17.09.2026. Messung im Auftrag des Nutzers (D107).
+
+**Aufbau.** Dieselbe Seite zweimal lesen, nichts ablegen, die Wortlisten
+vergleichen: `POST /vocab/SPANISCH/compare` mit den Stufen niedrig
+(gpt-5.6-luna, Foundry 1) und klein (gpt-5-mini, Foundry 2). Zwei Seiten, beide
+echte Vokabellisten aus dem Anhang: S. 171 „Lista cronológica – Kleidung, Farben
+und Geografie" und S. 172 „Lista cronológica – Unidad 3".
+
+**Ergebnis: gleichwertig bei den Wörtern.**
+
+| Seite | niedrig | klein | nur bei einem |
+|---|---|---|---|
+| S. 172 | 60 von 60 | 60 von 60 | keins |
+| S. 171 | 61 von 61 | 61 von 61 | keins |
+
+Kein Wort fiel an der Seitenprüfung heraus, keines wurde erfunden, keines
+übersehen. Auch die Zuordnung zu Einheit und Abschnitt stimmte auf S. 172 exakt
+überein: 28 Wörter unter „Unidad 3 / Texto A", 26 unter „Texto B", 6 vor der
+ersten Überschrift.
+
+**Ergebnis: unterschiedlich sorgfältig bei den Feldern.** Drei Abweichungen, und
+zwei davon hätten geschadet:
+
+1. *Grammatische Marke im Stichwort.* klein schrieb „las gafas de sol pl.",
+   „los vaqueros pl.", „todo pron."; niedrig trennte die Marke ab. In Stufe 2
+   wird die Schreibweise getippt und Buchstabe für Buchstabe verglichen — das
+   Wort wäre nur richtig, wenn das Kind „pl." mitschreibt. Echter Fehler.
+2. *Seitenverweis in der Überschrift.* klein übernahm „Unidad 3 ¡Acércate!
+   ▶ p. 48" als Namen der Einheit, niedrig ließ den Verweis weg. Damit zerfiele
+   ein Kapitel in so viele Bündel, wie seine Liste Verweise trägt — genau das,
+   was D100 abschaffen sollte. Echter Fehler.
+3. *Trennung der Bedeutungen.* niedrig macht aus „etw. bekommen, erhalten" zwei
+   Einträge, klein lässt einen. Ohne Folge: `variants()` trennt beim Bewerten
+   ohnehin an Komma, Semikolon und Schrägstrich.
+
+**Entscheidung.** Nicht das Modell verantwortlich machen, sondern den Code: Die
+Anweisung war an diesen Stellen unterbestimmt, und dass niedrig es richtig
+macht, ist Glück, keine Garantie. `vocab.tidy()` bringt beide Felder nach dem
+Lesen in Form — `split_mark()` holt die Marke aus dem Stichwort, `clean_unit()`
+den Verweis aus dem Namen der Einheit. Damit hängt die Bündelung nicht mehr am
+Modell.
+
+**Offen.** Erst nach dieser Korrektur noch einmal messen, dann über das Umlegen
+entscheiden. Die zweite Messung — Reasoning-Tiefe beim Mentor-Zug, low gegen
+medium — steht noch aus; dafür fehlt bislang ein Weg, die Tiefe je Aufruf von
+außen zu wählen (`complete()` kann es, die Mentor-Route reicht es nicht durch).
+
 # Vorhandenes Material an eine Hausaufgabe hängen 1.0.0
 
 Stand 17.09.2026. Nutzerrückmeldung (D106) und vier Entscheidungen des Tages.

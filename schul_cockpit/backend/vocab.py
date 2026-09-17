@@ -322,6 +322,51 @@ def _page(account_id: int, material_id: int) -> dict:
     return dict(row)
 
 
+# Grammatische Marken, die hinter dem Stichwort stehen können. Sie gehören in
+# grammar, nicht ins Wort: „las gafas de sol pl." wäre in Stufe 2 nur zu tippen,
+# wenn das Kind auch „pl." schreibt.
+_MARKS = ("pl.", "sg.", "m.", "f.", "n.", "adj.", "adv.", "pron.", "sust.", "interj.", "conj.", "prep.")
+# Der Verweis, mit dem eine Vokabelliste ihre Überschrift schmückt: „Unidad 3
+# ¡Acércate! ▶ p. 48". Er gehört nicht in den Namen der Einheit, sonst zerfällt
+# ein Kapitel in so viele Bündel, wie es Verweise hat (D100).
+_POINTER = re.compile(r"\s*[▸▶►→>]?\s*(?:p\.|S\.|pág\.|page)\s*\d+(?:\s*[-–]\s*\d+)?\s*$", re.I)
+
+
+def clean_unit(name: str) -> str:
+    """„Unidad 3 ¡Acércate! ▶ p. 48" → „Unidad 3 ¡Acércate!"."""
+    name = re.sub(r"\s+", " ", (name or "").strip())
+    while True:
+        shorter = _POINTER.sub("", name).strip(" ·,;–-").strip()
+        if shorter == name:
+            return name
+        name = shorter
+
+
+def split_mark(word: str) -> tuple[str, str]:
+    """Eine nachgestellte grammatische Marke vom Stichwort trennen."""
+    word = re.sub(r"\s+", " ", (word or "").strip())
+    for mark in _MARKS:
+        if word.casefold().endswith(" " + mark) and len(word) > len(mark) + 1:
+            return word[: -len(mark)].strip(), mark
+    return word, ""
+
+
+def tidy(words: list) -> list:
+    """Die Felder in die Form bringen, auf die sich der Trainer verlässt.
+
+    Modelle halten sich unterschiedlich streng an die Anweisung: Das eine trennt
+    die grammatische Marke ab und lässt den Verweis aus der Überschrift weg, das
+    andere nicht. Darauf darf die Bündelung nicht ankommen (D107)."""
+    for w in words:
+        w.unit = clean_unit(w.unit)
+        w.section = clean_unit(w.section)
+        core, mark = split_mark(w.foreign_word)
+        if mark:
+            w.foreign_word = core
+            w.grammar = (w.grammar or "").strip() or mark
+    return words
+
+
 def survivors(row: dict, words: list) -> list:
     """Die Wörter, die wirklich auf der Seite stehen. Der Stamm muss im Text
     vorkommen; was ein Modell hinzudichtet, fällt hier heraus."""
@@ -341,7 +386,7 @@ async def read_words(account_id: int, row: dict, tier: str | None = None):
     raw, _, _ = await ai.complete(account_id, ai.VOCAB, EXTRACT + json.dumps(WordsOut.model_json_schema()),
                                   {"subject": row["subject_name"] or "", "page": row["source_page"],
                                    "text": (row["content_text"] or "")[:24000]}, max_output=6000, tier=tier)
-    return WordsOut.model_validate_json(raw).words
+    return tidy(WordsOut.model_validate_json(raw).words)
 
 
 async def compare(account_id: int, material_id: int, tiers: list[str]) -> dict:
