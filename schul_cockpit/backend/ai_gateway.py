@@ -126,6 +126,7 @@ def status():
     return dict(month=month,used_eur=round(used/1e6,4),limit_eur=cfg['monthly_micro']/1e6,daily_limit_eur=cfg['daily_micro']/1e6,
                 background_limit_eur=cfg['background_micro']/1e6,session_limit_eur=SESSION_MICRO/1e6,
                 model=model,sources_model=cfg.get('sources_model') or None,opening_model=cfg.get('opening_model') or None,
+                background_model=cfg.get('background_model') or None,
                 models=[t for t in TIERS if t!=SPEECH_TIER and tiers[t]['model']],
                 rates=rates,
                 warning_eur=cfg['warning_micro']/1e6,background_eur=round(bg/1e6,4),
@@ -147,8 +148,10 @@ def tier_for(purpose, cfg=None, override=None):
     laufen auf „hoch"; für den Einstieg in eine Einheit und fürs Abschreiben
     samt Hintergrundauswertung wählen die Eltern in der App eine Stufe."""
     if override: return override
-    # Der Einstieg hat seine eigene, geeichte Stufe (opening_model).
-    column='opening_model' if purpose==OPENING else 'sources_model' if (purpose==SOURCES or purpose in BACKGROUND) else None
+    # Der Einstieg hat seine eigene, geeichte Stufe; die Hintergrundauswertung
+    # ebenso, getrennt vom Abschreiben der Buchseiten (D94).
+    column=('opening_model' if purpose==OPENING else 'background_model' if purpose in BACKGROUND
+            else 'sources_model' if purpose==SOURCES else None)
     if not column: return MAIN_TIER
     if cfg is None:
         # Nur lesen, keine Konfiguration anlegen: Das tut reserve() selbst.

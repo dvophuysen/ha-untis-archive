@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS mentor_ai_config (
  id INTEGER PRIMARY KEY CHECK(id=1), monthly_micro INTEGER NOT NULL DEFAULT 50000000,
  warning_micro INTEGER NOT NULL DEFAULT 40000000, background_micro INTEGER NOT NULL DEFAULT 5000000,
  opening_month TEXT NOT NULL, opening_micro INTEGER NOT NULL DEFAULT 0,
- opening_confirmed INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL
+ opening_confirmed INTEGER NOT NULL DEFAULT 0, background_model TEXT DEFAULT 'niedrig', updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS mentor_ai_calls (
  id TEXT PRIMARY KEY, account_id INTEGER NOT NULL, session_id INTEGER, purpose TEXT NOT NULL,
