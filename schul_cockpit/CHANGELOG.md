@@ -1,3 +1,9 @@
+## 0.87.0
+
+- Arbeitsblätter, Stufe 2 und 3: Die Auswertung sieht beim Einlesen die möglichen Einträge des Fachs aus den letzten 14 Tagen und sortiert vor. Sie nennt den Beleg vom Blatt selbst — Überschrift, Aufgabennummern oder ein aufgedrucktes Datum — und ihr Vorschlag steht in der Liste oben, mit dem Grund darunter. Zugeordnet wird weiterhin nur per Tipp; geraten wird nichts.
+- Jedes Blatt trägt eine Kennung nach demselben Muster: „AB GE 16.09. Lückentext". Der Tag kommt vom zugeordneten Eintrag, sonst vom aufgedruckten Datum, sonst vom Tag der Aufnahme, dann ausdrücklich als „ca.".
+- Der Mentor bekommt ein Arbeitsblatt nur über den ausdrücklich gesetzten Bezug der Hausaufgabe. Ist keins hinterlegt, sagt er das und bittet um ein Foto, statt das nächstbeste Blatt des Fachs zu benutzen oder Aufgabennummern zu erfinden.
+
 ## 0.86.0
 
 - Der Bestand einer Abfrage wird jetzt von der App geführt, nicht mehr vom Mentor in einem Fließtext. Bisher schrumpfte der Merkzettel über ein langes Gespräch zusammen: Nach 36 Zügen mit unregelmäßigen Verben stand dort ein einziger Satz, und die Fehler der ersten Runde waren am Ende vergessen. Der Mentor meldet nur noch, was sich in dieser Runde geändert hat; die App führt die Liste, gibt sie jede Runde zurück und weiß, was offen ist. Ein Fehler gilt erst als erledigt, wenn das Kind die Reihe selbst richtig gesagt hat.

@@ -168,9 +168,23 @@ def index(
     # Ein loses Blatt bekommt Vorschläge, zu welchem Eintrag es gehören könnte;
     # zugeordnet wird mit einem Tipp, von Kind oder Eltern (D85).
     for m in items:
+        # Kennung für jedes Blatt, damit es in Listen und im Mentor unter
+        # demselben Namen auftaucht: „AB GE 16.09. Lückentext“ (D85, Stufe 2).
+        if m["kind"] in sources.SHEET_KINDS:
+            bound = next((l for l in m.get("links", []) if l["kind"] in ("task", "homework", "lesson")), None)
+            m["sheet_label"] = sources.sheet_label(m, (bound or {}).get("entry_date"))
         if m["kind"] in sources.SHEET_KINDS and not any(l["kind"] in ("task", "homework", "lesson") for l in m.get("links", [])):
             try:
-                m["sheet_candidates"] = sources.sheet_candidates(account_id, m)
+                found = sources.sheet_candidates(account_id, m)
+                # Die Auswertung hat das Blatt gesehen und vorsortiert; ihr
+                # Vorschlag steht oben und trägt den Beleg vom Blatt (D85, Stufe 2).
+                hint = json.loads(m.get("sheet_hint") or "null")
+                if hint:
+                    for c in found:
+                        if c["kind"] == hint["kind"] and c["id"] == hint["id"]:
+                            c["reason"] = hint.get("reason") or ""
+                    found.sort(key=lambda c: (c.get("reason") is None, not c.get("reason")))
+                m["sheet_candidates"] = found
             except Exception:
                 _LOGGER.debug("Blatt-Vorschläge für Material %s nicht berechenbar", m["id"], exc_info=True)
     pending = sum(1 for m in items if m["analysis_state"] in ("pending", "failed"))

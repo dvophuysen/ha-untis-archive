@@ -630,11 +630,16 @@
   {#if m.sheet_candidates?.length}
     <!-- Loses Blatt: zu welchem Eintrag gehört es? Ein Tipp ordnet zu, nichts wird geraten (D85). -->
     <div class="candidates">
-      <span class="muted">Gehört das Blatt zu …</span>
+      <span class="muted">{m.sheet_label ? `${m.sheet_label} – gehört zu …` : 'Gehört das Blatt zu …'}</span>
       {#each m.sheet_candidates as c (`${c.kind}-${c.id}`)}
         <button class="quiet" disabled={busy} onclick={() => act(() => assignSheet(m.id, c.kind, c.id, c.quote))}>{c.kind === 'homework' ? 'Hausaufgabe' : 'Stunde'} {new Date(c.date).toLocaleDateString('de-DE')}: „{c.quote.length > 60 ? c.quote.slice(0, 60) + '…' : c.quote}“</button>
       {/each}
     </div>
+    <!-- Die Auswertung hat das Blatt gesehen und nennt ihren Beleg dafür; der
+         Vorschlag steht oben in der Liste, zugeordnet wird trotzdem per Tipp. -->
+    {#each m.sheet_candidates.filter((c) => c.reason) as c (`grund-${c.kind}-${c.id}`)}
+      <p class="muted">Spricht dafür: {c.reason}</p>
+    {/each}
   {/if}
   {#if open?.id === m.id}
     <!-- Das Detail steht direkt unter der Zeile, nicht am Seitenende. -->

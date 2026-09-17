@@ -70,3 +70,41 @@ def test_a_nearby_sheet_is_a_suggestion_not_a_binding(env):
     subjects = {s["subject"]: s for s in sources.ledger(1)["subjects"]}
     items = [i for need in subjects["GESCHICHTE"]["missing"] for i in need["items"]]
     assert [(i["entry_kind"], i["entry_id"], i["quote"]) for i in items] == [("homework", 3, "Arbeitsblatt Brüche")]
+
+
+def test_the_sheet_reaches_the_mentor_only_through_a_set_reference(env):
+    """Der Mentor bekommt ein Blatt über den Bezug der Hausaufgabe, nie über
+    Nähe im Datum. Fehlt der Bezug, sagt er das (D85, Stufe 3)."""
+    from backend.sources import sheet_for_task
+    from contextlib import closing
+    from backend import db
+    with closing(db.webapp_conn()) as c, c:
+        tid = c.execute("INSERT INTO tasks(account_id,title,subject_name,status,source,created_at,updated_at) "
+                        "VALUES(1,'Arbeitsblatt beenden','GESCHICHTE','open','manual','now','now')").lastrowid
+        mid = c.execute("INSERT INTO materials(account_id,kind,subject_name,title,document_date,"
+                        "content_text,created_at,updated_at) "
+                        "VALUES(1,'worksheet','GESCHICHTE','Lückentext','2026-09-16','Aufgabe 1 …','now','now')").lastrowid
+        fremd = c.execute("INSERT INTO materials(account_id,kind,subject_name,title,document_date,"
+                          "created_at,updated_at) "
+                          "VALUES(1,'worksheet','GESCHICHTE','Anderes Blatt','2026-09-16','now','now')").lastrowid
+    # Ohne Bezug: nichts, auch wenn zwei Blätter desselben Fachs vom selben Tag da sind.
+    assert sheet_for_task(1, tid) is None
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO material_links(material_id,kind,target_id,relation,origin,created_at) "
+                  "VALUES(?,'task',?,'blatt','mensch','now')", (mid, tid))
+    found = sheet_for_task(1, tid)
+    assert found["id"] == mid and found["kennung"] == 'AB GE 16.09. Lückentext'
+    assert found["text"].startswith('Aufgabe 1')
+    assert sheet_for_task(1, 0) is None
+
+
+def test_the_label_names_subject_day_and_title():
+    from backend.sources import sheet_label
+    assert sheet_label({'subject_name': 'GESCHICHTE', 'document_date': '2026-09-16', 'title': 'Lückentext'}) \
+        == 'AB GE 16.09. Lückentext'
+    # Ohne aufgedrucktes Datum gilt der Aufnahmetag, ausdrücklich als ungefähr.
+    assert sheet_label({'subject_name': 'Latein', 'created_at': '2026-09-17T10:00:00', 'title': 'Mäusefutter'}) \
+        == 'AB LA ca. 17.09. Mäusefutter'
+    # Der Bezug schlägt beides: das Datum des verknüpften Eintrags.
+    assert sheet_label({'subject_name': 'Physik', 'document_date': '2026-09-01', 'title': ''},
+                       entry_date='2026-09-12') == 'AB PH 12.09.'

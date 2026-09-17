@@ -886,6 +886,10 @@ _MIGRATIONS.append(("mentor_message_author_002",
 # Eintrags), ergebnis (die Bearbeitung des Kindes dazu), stoff (Thema).
 _MIGRATIONS.append(("material_links_002_relation", "ALTER TABLE material_links ADD COLUMN relation TEXT"))
 
+# Die Vorsortierung der Auswertung für ein loses Blatt: welcher Eintrag am
+# ehesten gemeint ist und warum (D85, Stufe 2). Ein Vorschlag, keine Bindung.
+_MIGRATIONS.append(("materials_015_sheet_candidate", "ALTER TABLE materials ADD COLUMN sheet_hint TEXT"))
+
 # Der Bestand einer Abfrage, von der App geführt statt vom Modell jede Runde
 # neu geschrieben (D91). Vorher stand er im Fließtext von summary und ging
 # über ein langes Gespräch verloren.

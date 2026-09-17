@@ -53,6 +53,10 @@ class Insight(InputModel):
     # Handschrift zu lesen war: steuert Gegenlesen und Eichung (D77).
     page_type: str = Field(default="", max_length=20)
     handwritten: bool = False
+    # Vorsortierung für ein loses Blatt: die Nummer aus hinweise.blatt_kandidaten,
+    # die am besten passt, und warum. Ein Vorschlag zum Antippen, keine Bindung (D85).
+    sheet_candidate: int = Field(default=0, ge=0, le=9)
+    sheet_reason: str = Field(default="", max_length=200)
 
 
 INSTRUCTION = (
@@ -103,6 +107,11 @@ INSTRUCTION = (
     "handwriting (überwiegend handschriftlich), figure (Zeichnungen, Schaltpläne, Diagramme, Karten oder Bilder tragen den Inhalt), "
     "formula (Gleichungen, Terme, Rechnungen), mixed. handwritten true, sobald handschriftliche Einträge zu lesen waren, "
     "auch nur eingetragene Lösungen; bei Ziffern in Handschrift besonders sorgfältig zwischen 1 und 7 sowie 0 und 6 unterscheiden.\n"
+    "Stehen in hinweise.blatt_kandidaten Einträge, ist dies ein loses Blatt, und du sortierst vor: sheet_candidate ist die "
+    "Nummer des Eintrags, zu dem das Blatt am ehesten gehört, sheet_reason der Beleg dafür aus dem Blatt selbst, also "
+    "Überschrift, Aufgabennummern oder ein aufgedrucktes Datum. Ein aufgedrucktes Ausgabedatum wiegt am schwersten. "
+    "Findest du keinen belastbaren Beleg, bleibt sheet_candidate 0; rate nicht nach Datumsnähe, das kann die App selbst. "
+    "Die Zuordnung trifft ein Mensch mit einem Tipp, du bereitest sie nur vor.\n"
     "JSON-Schema: "
 )
 
@@ -173,6 +182,15 @@ def _context(conn, account_id: int, row) -> dict:
                                  (link["target_id"],)).fetchone()
             if topic:
                 hints["gehoert_zu_thema"] = {"fach": topic["subject"], "titel": topic["title"]}
+    # Ein loses Blatt: Welche Einträge könnten gemeint sein? Die Auswertung sieht
+    # das Blatt und kann vorsortieren, entscheiden darf sie nicht (D85, Stufe 2).
+    if not hints.get("gehoert_zu_hausaufgabe"):
+        from .sources import sheet_candidates
+        candidates = sheet_candidates(account_id, dict(row))
+        if candidates:
+            hints["blatt_kandidaten"] = [
+                {"nr": n, "art": c["kind"], "datum": c["date"], "wortlaut": (c["quote"] or "")[:200]}
+                for n, c in enumerate(candidates, 1)]
     return {"hinweise": hints, "bekannte_faecher": sorted(set(catalog)), "bekannte_themen": topics,
             "bekannte_buchteile": list(store.BOOK_PARTS)}
 
@@ -245,6 +263,17 @@ def _apply(conn, account_id: int, row, insight: Insight, tier_used: str | None =
         part = insight.book_part.strip()
         if part in store.BOOK_PARTS and "source_label" not in locked and not row["source_label"]:
             values["source_label"] = part
+    # Die Vorsortierung merken, damit die Liste den Vorschlag oben zeigt und der
+    # Grund am Blatt steht: „wegen des Datums 16.09. auf dem Blatt“.
+    if insight.sheet_candidate:
+        from .sources import sheet_candidates
+        picks = sheet_candidates(account_id, dict(row))
+        chosen = picks[insight.sheet_candidate - 1] if insight.sheet_candidate <= len(picks) else None
+        values["sheet_hint"] = json.dumps(
+            {"kind": chosen["kind"], "id": chosen["id"], "date": chosen["date"], "reason": insight.sheet_reason[:200]},
+            ensure_ascii=False) if chosen else None
+    else:
+        values["sheet_hint"] = None
     values.update(
         analysis_state="ready",
         analysis_model=ai.model_name(tier_used or ai.tier_for(_purpose(row))),
