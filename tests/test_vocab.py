@@ -400,3 +400,22 @@ def test_parents_can_compare_tiers_on_one_page_without_storing_anything(setup):
     # Kinder eichen nicht.
     child(state)
     assert client.post(V + "/LATEIN/compare", json={'material_id': mid, 'tiers': ['klein']}).status_code == 403
+
+
+def test_the_fields_are_tidied_so_the_bundling_does_not_depend_on_the_model():
+    """Die Eichung zeigte: Beide Stufen finden dieselben Wörter, halten sich aber
+    unterschiedlich streng an die Feldkonventionen. Das eine Modell schrieb
+    „las gafas de sol pl." als Stichwort — in Stufe 2 nur zu tippen, wenn das
+    Kind auch „pl." schreibt — und schleppte den Verweis „▶ p. 48" in den Namen
+    der Einheit, was ein Kapitel in mehrere Bündel zerfallen ließe (D107)."""
+    words = [vocab.WordIn(foreign_word='las gafas de sol pl.', meanings=['die Sonnenbrille'],
+                          unit='Unidad 3 ¡Acércate!  ▶ p. 48', section=''),
+             vocab.WordIn(foreign_word='el país', meanings=['das Land'], unit='Unidad 3', section='Texto A ▸ p. 51'),
+             vocab.WordIn(foreign_word='el/la siguiente (sust.)', meanings=['der folgende'], grammar='m/f', unit='Unidad 3')]
+    a, b, c = vocab.tidy(words)
+    assert (a.foreign_word, a.grammar, a.unit) == ('las gafas de sol', 'pl.', 'Unidad 3 ¡Acércate!')
+    assert (b.unit, b.section) == ('Unidad 3', 'Texto A')
+    # Eine Marke in Klammern ist schon getrennt; eine vorhandene Angabe bleibt.
+    assert (c.foreign_word, c.grammar) == ('el/la siguiente (sust.)', 'm/f')
+    # Beide Schreibweisen derselben Liste landen damit in einem Bündel.
+    assert vocab.clean_unit('Unidad 3 ¡Acércate!  ▶ p. 48') == vocab.clean_unit('Unidad 3 ¡Acércate!')

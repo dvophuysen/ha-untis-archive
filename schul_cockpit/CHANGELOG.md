@@ -1,3 +1,7 @@
+## 1.0.1
+
+- Die Felder einer gelesenen Vokabelliste werden nach dem Lesen in Form gebracht, statt sich auf das Modell zu verlassen. Eine grammatische Angabe, die hinter dem Stichwort steht, wandert dorthin, wo sie hingehört — sonst hätte „las gafas de sol pl." in der Schreibweise-Stufe nur gezählt, wenn das Kind auch „pl." tippt. Und der Seitenverweis einer Listenüberschrift („Unidad 3 ¡Acércate! ▶ p. 48") fällt aus dem Namen der Einheit heraus, damit ein Kapitel ein Bündel bleibt und nicht in so viele zerfällt, wie es Verweise hat.
+
 ## 1.0.0
 
 - In der Materialansicht zu einer Hausaufgabe lässt sich jetzt ein bereits abgelegtes Material anhängen, nicht nur ein neues hochladen. Darüber stehen Vorschläge aus demselben Fach, beste Treffer zuerst: zuerst, was eine im Auftrag genannte Stelle wirklich zeigt, dann Blätter aus den Tagen um die Aufgabe, dann der Rest. Jeder Vorschlag sagt, warum er dasteht, und angehängt wird nur, was du antippst.
