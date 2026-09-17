@@ -471,3 +471,33 @@ def test_pages_from_lessons_are_no_longer_offered_as_bundles(setup):
     client.post(V + "/SPANISCH/extract", json={"material_ids": [liste]})
     offered = [u["unit"] for u in vocab.units(1, "SPANISCH")]
     assert "Unidad 3" in offered and "Arbeitsheft S. 26" not in offered
+
+
+def test_one_unit_is_one_bundle_even_under_two_names(setup):
+    """Die Vokabelliste schreibt „Unidad 3", das Inhaltsverzeichnis „Unidad 3
+    De paseo por España". Dasselbe Kapitel stand dadurch zweimal im Trainer,
+    einmal mit Wörtern und einmal ohne. Jetzt ist es ein Bündel, unter dem
+    ausführlicheren Namen; ein Bündel ganz ohne Wörter entfällt (D100)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    liste = seed_page(subject="SPANISCH", text="el país — das Land\nel río — der Fluss", page=171,
+                      label="Schulbuch", title="Vocabulario")
+    heft = seed_page(subject="SPANISCH", text="la tienda — der Laden", page=18,
+                     label="Grammatikheft", title="Wortschatz")
+    answers = {171: {"words": [{"unit": "Unidad 3", "foreign_word": "el país", "meanings": ["das Land"]},
+                               {"unit": "Unidad 3", "foreign_word": "el río", "meanings": ["der Fluss"]}]},
+               18: {"words": [{"unit": "Unidad 3 De paseo por España", "foreign_word": "la tienda",
+                               "meanings": ["der Laden"]}]}}
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        return json.dumps(answers[context["page"]]), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    client.post(V + "/SPANISCH/extract", json={"material_ids": [liste, heft]})
+    found = vocab.units(1, "SPANISCH")
+    assert [u["unit"] for u in found] == ["Unidad 3 De paseo por España"], found
+    assert found[0]["words"] == 3, "die Wörter beider Schreibweisen zusammen"
+    # Und die Karten gehören alle dazu, egal unter welchem der beiden Namen
+    # das Bündel angetippt wird.
+    for name in ("Unidad 3", "Unidad 3 De paseo por España"):
+        assert len(vocab.cards(1, "SPANISCH", name, 1, "from")) == 3, name
+    assert "el país" in vocab.prompt_for(1, "SPANISCH", "Unidad 3 De paseo por España", "into")

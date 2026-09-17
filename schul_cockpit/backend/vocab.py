@@ -271,6 +271,23 @@ def looks_like_vocab(row: dict) -> bool:
 # Ein Bündel, dessen Name nur „Arbeitsheft S. 26" ist: keine Einheit des Buchs,
 # sondern eine Seite aus dem Unterricht.
 PAGE_UNIT = re.compile(r"^.{0,40}\sS\.\s\d+$")
+# Die Einheit an ihrer Nummer erkennen: Die Vokabelliste schreibt „Unidad 3",
+# das Inhaltsverzeichnis „Unidad 3 De paseo por España". Dasselbe Kapitel, also
+# ein Bündel — sonst stünde es zweimal da, einmal mit und einmal ohne Wörter.
+UNIT_KEY = re.compile(r"^(unidad|unit|lektion|lecci[oó]n|le[cç]on|m[oó]dulo|kapitel|chapter|module)\s*0*(\d{1,2})\b", re.I)
+
+
+def same_unit(stored: str, wanted: str) -> bool:
+    """Ob ein Wort zum gewählten Bündel gehört. „Unidad 3" und „Unidad 3 De paseo
+    por España" sind dasselbe Kapitel; ohne erkennbare Nummer zählt der Name."""
+    key = unit_key(wanted)
+    return unit_key(stored) == key if key else (stored or "") == (wanted or "")
+
+
+def unit_key(name: str) -> str:
+    """„Unidad 3 De paseo por España" und „Unidad 3" haben denselben Schlüssel."""
+    hit = UNIT_KEY.match((name or "").strip())
+    return f"{hit.group(1).casefold()} {int(hit.group(2))}" if hit else ""
 
 
 def unit_label(account_id: int, subject: str, label: str, page: int | None) -> str:
@@ -539,6 +556,27 @@ def units(account_id: int, subject: str) -> list[dict]:
         if (w.get("section") or "").strip():
             u.setdefault("sections", {}).setdefault(w["section"].strip(), 0)
             u["sections"][w["section"].strip()] += 1
+    # Dasselbe Kapitel unter zwei Namen zusammenführen; der ausführlichere Name
+    # gewinnt, weil er dem Kind mehr sagt.
+    merged: dict[str, dict] = {}
+    for name, u in by_unit.items():
+        key = unit_key(name) or f"={name}"
+        first = merged.get(key)
+        if not first:
+            merged[key] = u
+            continue
+        first["words"] += u["words"]
+        first["unread"] += u["unread"]
+        first["pages"] += u["pages"]
+        for stage in ("s1", "s2"):
+            for level in STAGES:
+                first[stage][level] += u[stage][level]
+        for part, n in (u.get("sections") or {}).items():
+            first.setdefault("sections", {})
+            first["sections"][part] = first["sections"].get(part, 0) + n
+        if len(u["unit"]) > len(first["unit"]):
+            first["unit"] = u["unit"]
+    by_unit = merged
     for u in by_unit.values():
         u["sections"] = [{"section": name, "words": n} for name, n in sorted((u.get("sections") or {}).items())]
         u["page_only"] = bool(PAGE_UNIT.match(u["unit"]))
@@ -548,6 +586,9 @@ def units(account_id: int, subject: str) -> list[dict]:
     # mit Wörtern gibt, damit der Trainer nicht leer dasteht.
     real = [u for u in by_unit.values() if not u["page_only"]]
     offered = real if any(u["words"] for u in real) else list(by_unit.values())
+    # Ein Bündel ohne Wörter, an dem auch nichts mehr zu lesen ist, hat keine
+    # hergegeben — es gehört nicht in die Auswahl.
+    offered = [u for u in offered if u["words"] or u["unread"]]
     return sorted(offered, key=lambda u: (u["pages"][0]["page"] if u["pages"] and u["pages"][0]["page"] else 9999, u["unit"]))
 
 
@@ -574,14 +615,14 @@ def cards(account_id: int, subject: str, unit: str, stage: int, direction: str, 
     Die Einheit ist das Standardbündel. `section` schränkt auf einen Abschnitt
     ein, den die Vokabelliste selbst nennt („Texto A"); leer heißt: die ganze
     Einheit, also alle Abschnitte zusammen (D100)."""
-    where = "account_id=? AND lower(subject)=lower(?) AND unit=? AND hidden=0"
-    args = [account_id, subject, unit]
-    if (section or "").strip():
-        where += " AND section=?"
-        args.append(section.strip())
     with closing(webapp_conn()) as c:
         words = [dict(r) for r in c.execute(
-            f"SELECT * FROM vocab_words WHERE {where} ORDER BY page,position,id", args)]
+            "SELECT * FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 "
+            "ORDER BY page,position,id", (account_id, subject))]
+    words = [w for w in words if same_unit(w["unit"], unit)]
+    if (section or "").strip():
+        words = [w for w in words if (w["section"] or "").strip() == section.strip()]
+    with closing(webapp_conn()) as c:
         states = word_states(c, account_id, [w["id"] for w in words])
     key = "s2" if stage == 2 else "s1"
     if stage == 2:
@@ -594,7 +635,9 @@ def prompt_for(account_id: int, subject: str, unit: str, direction: str) -> str:
     """Erwartete Wörter als Hinweis für die Erkennung: alle der Einheit, nie nur das gefragte."""
     with closing(webapp_conn()) as c:
         rows = [dict(r) for r in c.execute(
-            "SELECT foreign_word,meanings_json FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND unit=? AND hidden=0 ORDER BY position", (account_id, subject, unit))]
+            "SELECT unit,foreign_word,meanings_json FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 ORDER BY position",
+            (account_id, subject))]
+    rows = [r for r in rows if same_unit(r["unit"], unit)]
     lang = language_of(subject) or {"name": subject}
     if direction == "into":
         words = ", ".join(r["foreign_word"] for r in rows)[:450]
