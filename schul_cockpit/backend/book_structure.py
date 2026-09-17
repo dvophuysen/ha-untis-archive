@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 from contextlib import closing
 
 from pydantic import Field, ValidationError
@@ -534,14 +535,22 @@ def expand(account_id: int, stamp: str) -> int:
     return count
 
 
-def vocab_parts(chapters: list[dict]) -> list[dict]:
-    """Die Wortschatzteile eines Buchs: Vokabelverzeichnis, Lernwortlisten.
+# Wortschatzteile, die keine Lernlisten sind: Ein alphabetisches Verzeichnis und
+# ein Wörterbuch schlägt man nach, man lernt sie nicht Einheit für Einheit. Sie
+# tragen keine Lektionsüberschriften, ergäben also ohnehin kein Bündel — und das
+# Spanischbuch allein hätte dafür siebzehn Seiten abgerufen (D109).
+_REFERENCE = re.compile(r"alphabet|alfab[eé]t|w[öo]rterbuch|dictionary|diccionario|glossar|glossary|register|index", re.I)
 
-    Das Verzeichnis nennt sie selbst (`kind='vocab'`). Für eine Fremdsprache
-    werden sie zu Schuljahresbeginn vollständig geholt, nicht erst wenn der
+
+def vocab_parts(chapters: list[dict]) -> list[dict]:
+    """Die Lernwortlisten eines Buchs, nach Einheiten geordnet.
+
+    Das Verzeichnis nennt die Wortschatzteile selbst (`kind='vocab'`);
+    Nachschlagewerke darunter zählen nicht. Für eine Fremdsprache werden die
+    Lernlisten zu Schuljahresbeginn vollständig geholt, nicht erst wenn der
     Unterricht die Lektion anschneidet: Das Kind übt eine Unidad als Ganzes,
     und die steht im Anhang über mehrere Seiten (D109)."""
-    return [c for c in chapters if c["kind"] == "vocab"]
+    return [c for c in chapters if c["kind"] == "vocab" and not _REFERENCE.search(c["title"] or "")]
 
 
 def bind_vocab_parts(account_id: int, stamp: str) -> int:
@@ -611,7 +620,6 @@ def overview(account_id: int, title: str, subject: str, label: str | None = None
 # diesen Stoff behandelt. Eine Lektionsnummer im Text entscheidet ohne Modell.
 
 import hashlib
-import re
 
 _UNIT = re.compile(r"\b(?:lektion|unidad|unit|kapitel|lección|leccion|leçon|chapter|l\.)\s*(\d{1,2})\b"
                    r"(?:\s*(?:und|bis|,|-|–|/|\+)\s*(\d{1,2})\b)?", re.I)
