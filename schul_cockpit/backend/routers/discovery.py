@@ -157,7 +157,7 @@ async def scan_account(account_id):
     if not s['pending']: return dict(processed=0,cached=True)
     # Der Zugang gehört zum Deployment: die Auswertung läuft über das
     # Hintergrundmodell, das auf einer anderen Foundry liegen kann (D87).
-    url=urlsplit(ai_gateway.endpoint_for(ai_gateway.model_for('discovery'))[0])
+    url=urlsplit(ai_gateway.settings_for(ai_gateway.tier_for('discovery'))['url'])
     if not ai_status()['configured'] or url.scheme!='https' or not url.hostname or url.username or url.password:
         raise HTTPException(503,'KI-Verbindung ist noch nicht eingerichtet')
     subject=s['pending'][0]['subject_name']

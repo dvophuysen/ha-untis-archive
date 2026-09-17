@@ -10,7 +10,7 @@ from contextlib import closing
 
 from PIL import Image
 
-from test_learning import env, child
+from test_learning import env, child, ai_env
 from test_sources import history, LA
 from backend import db, sources, book_structure as bs, material_analysis as analysis
 from backend.routers import materials as materials_routes, subjects as subjects_routes
@@ -224,8 +224,7 @@ def test_background_work_does_not_eat_the_childs_daily_budget(env, monkeypatch):
     from backend import ai_gateway as ai
     from fastapi import HTTPException
     import pytest
-    for k, v in {'LEARNING_AI_MODEL': 'test', 'LEARNING_AI_URL': 'https://example.com/responses', 'LEARNING_AI_KEY': 'fake'}.items():
-        monkeypatch.setenv(k, v)
+    ai_env(monkeypatch)
     with closing(db.webapp_conn()) as c, c:
         ai.init_config(c)
         c.execute("UPDATE mentor_ai_config SET monthly_micro=50000000, sources_micro=30000000, background_micro=10000000, opening_confirmed=1")
@@ -357,49 +356,49 @@ def test_a_corrected_chapter_keeps_its_pages_through_a_new_reading(env):
     assert client.patch("/api/accounts/1/materials/sources/chapters/99999", json={"start_page": 5}).status_code == 404
 
 
-def test_the_transcription_model_is_chosen_per_purpose_and_set_by_parents(env, monkeypatch):
+def test_the_tier_is_chosen_per_purpose_and_set_by_parents(env, monkeypatch):
     from backend import ai_gateway as ai
     from backend.routers import mentor as mentor_routes
     client, state, _ = env
     client.app.include_router(mentor_routes.router, prefix="/api")
-    for k, v in {'LEARNING_AI_MODEL': 'test', 'LEARNING_AI_URL': 'https://example.com/responses', 'LEARNING_AI_KEY': 'fake'}.items():
-        monkeypatch.setenv(k, v)
-    assert ai.model_for("sources") == "test" and ai.model_for("mentor") == "test"
+    ai_env(monkeypatch)
+    assert ai.tier_for("sources") == "hoch" and ai.tier_for("mentor") == "hoch"
     reply = client.put("/api/accounts/1/learning/mentor/budget-limits",
-                       json={"monthly_eur": 80, "daily_eur": 12, "sources_model": "test-model"})
+                       json={"monthly_eur": 80, "daily_eur": 12, "sources_model": "niedrig"})
     assert reply.status_code == 200, reply.text
     body = reply.json()
-    assert (body["limit_eur"], body["daily_limit_eur"], body["sources_model"]) == (80.0, 12.0, "test-model")
-    # Abschreiben und Hintergrund nehmen das gewählte Modell, Üben bleibt beim Hauptmodell.
-    assert ai.model_for("sources") == "test-model" and ai.model_for("background") == "test-model"
-    assert ai.model_for("mentor") == "test" and ai.model_for("exam_scope") == "test"
+    assert (body["limit_eur"], body["daily_limit_eur"], body["sources_model"]) == (80.0, 12.0, "niedrig")
+    # Abschreiben und Hintergrund nehmen die gewählte Stufe, Üben bleibt beim Hauptgespräch.
+    assert ai.tier_for("sources") == "niedrig" and ai.tier_for("background") == "niedrig"
+    assert ai.tier_for("mentor") == "hoch" and ai.tier_for("exam_scope") == "hoch"
+    # Ein Modellname ist keine Stufe mehr, und die Spracheingabe ist nicht wählbar.
     assert client.put("/api/accounts/1/learning/mentor/budget-limits", json={"sources_model": "gpt-9"}).status_code == 422
-    # Zurück auf das Hauptmodell.
+    assert client.put("/api/accounts/1/learning/mentor/budget-limits", json={"sources_model": "transkription"}).status_code == 422
+    # Zurück auf das Hauptgespräch.
     assert client.put("/api/accounts/1/learning/mentor/budget-limits", json={"sources_model": ""}).json()["sources_model"] is None
-    assert ai.model_for("sources") == "test"
+    assert ai.tier_for("sources") == "hoch"
 
 
-def test_comparing_a_page_with_another_model_stores_nothing(env, monkeypatch):
+def test_comparing_a_page_with_another_tier_stores_nothing(env, monkeypatch):
     from backend import material_analysis as analysis
     client, state, _ = env
     client.app.include_router(materials_routes.router, prefix="/api")
-    for k, v in {'LEARNING_AI_MODEL': 'test', 'LEARNING_AI_URL': 'https://example.com/responses', 'LEARNING_AI_KEY': 'fake'}.items():
-        monkeypatch.setenv(k, v)
+    ai_env(monkeypatch)
     with closing(db.webapp_conn()) as c:
         c.execute("INSERT INTO materials(account_id,kind,subject_name,title,content_text,source_label,source_page,printed_pages,file_bytes,mime_type,analysis_state,created_at,updated_at) "
                   "VALUES(1,'book_page','LATEIN','Seite 13','Substantive der a- und o-Deklination im Nominativ.','Begleitband',13,'[13]',?,'image/jpeg','ready','now','now')", (photo(),))
         material_id = c.execute("SELECT id FROM materials").fetchone()[0]
     seen = {}
 
-    async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, model=None):
-        seen["model"] = model; seen["purpose"] = purpose
+    async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, tier=None):
+        seen["tier"] = tier; seen["purpose"] = purpose
         return json.dumps({"kind": "book_page", "content_text": "Substantive der a- und o-Deklination im Nominativ", "printed_pages": [13],
                            "book_part": "Begleitband", "confidence": 0.9}), {}, "call-1"
     monkeypatch.setattr(analysis.ai, "complete", complete)
-    reply = client.post(f"/api/accounts/1/materials/{material_id}/analysis/compare", json={"model": "test-model"})
+    reply = client.post(f"/api/accounts/1/materials/{material_id}/analysis/compare", json={"tier": "niedrig"})
     assert reply.status_code == 200, reply.text
     got = reply.json()
-    assert seen == {"model": "test-model", "purpose": "sources"}
+    assert seen == {"tier": "niedrig", "purpose": "sources"}
     assert got["pages_match"] and got["part_match"] and got["text_ratio"] > 0.95
     assert got["word_recall"] == 1.0 and got["word_precision"] == 1.0 and got["missing_words"] == []
     with closing(db.webapp_conn()) as c:

@@ -115,19 +115,19 @@ def test_finish_by_button_ends_a_topic_unit_with_the_stage_sentence(exam_env):
     assert s["status"] == "completed" and s["messages"][-1]["text"].endswith("Stand jetzt: neu.")
 
 
-def test_compare_endpoint_runs_each_model_without_saving(exam_env):
+def test_compare_endpoint_runs_each_tier_without_saving(exam_env):
     client, state, patch, nid, extraction = exam_env
     tid = lernstand.add_manual(1, "cal:latein-2026-09-21", "Latein", "Verben")["id"]
-    models = []
+    tiers = []
 
     async def complete(account, purpose, instruction, context, *a, **kw):
-        models.append(kw.get("model"))
-        return json.dumps({"message": f"Einstieg von {kw.get('model')}", "choices": [], "action": "clarify", "task": None, "assessment": None, "summary": ""}), {}, "fake"
+        tiers.append(kw.get("tier"))
+        return json.dumps({"message": f"Einstieg von {kw.get('tier')}", "choices": [], "action": "clarify", "task": None, "assessment": None, "summary": ""}), {}, "fake"
     patch.setattr(ai, "complete", complete)
     s = client.post(B + "/sessions", json={"topic_id": tid}).json()
-    r = client.post(B + f"/sessions/{s['id']}/opening/compare", json={"models": ["gpt-5.6-terra", "gpt-5.6-luna"]})
+    r = client.post(B + f"/sessions/{s['id']}/opening/compare", json={"tiers": ["mittel", "niedrig"]})
     assert r.status_code == 200, r.text
-    assert [x["model"] for x in r.json()["results"]] == ["gpt-5.6-terra", "gpt-5.6-luna"] and models[1:] == ["gpt-5.6-terra", "gpt-5.6-luna"]
+    assert [x["tier"] for x in r.json()["results"]] == ["mittel", "niedrig"] and tiers[1:] == ["mittel", "niedrig"]
     assert client.get(B + f"/sessions/{s['id']}").json()["messages"][0]["text"] == "Einstieg von None"
 
 

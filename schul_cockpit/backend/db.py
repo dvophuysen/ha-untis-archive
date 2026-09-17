@@ -886,6 +886,26 @@ _MIGRATIONS.append(("mentor_message_author_002",
 # Eintrags), ergebnis (die Bearbeitung des Kindes dazu), stoff (Thema).
 _MIGRATIONS.append(("material_links_002_relation", "ALTER TABLE material_links ADD COLUMN relation TEXT"))
 
+# Die Elternwahl für Einstieg und Abschreiben hielt bisher einen Modellnamen.
+# Seit 0.83.0 hält sie eine Stufe, damit ein Modellwechsel in der
+# Add-on-Konfiguration die Auswahl nicht entwertet (D88). Namen, die zu keiner
+# Stufe passen, werden geleert: Das heißt „wie das Hauptgespräch".
+_MIGRATIONS.append(("mentor_ai_config_003_tiers", """
+UPDATE mentor_ai_config SET sources_model=CASE
+    WHEN sources_model LIKE '%-sol' THEN 'hoch'
+    WHEN sources_model LIKE '%-terra' THEN 'mittel'
+    WHEN sources_model LIKE '%-luna' THEN 'niedrig'
+    WHEN sources_model IN ('hoch','mittel','niedrig') THEN sources_model
+    ELSE NULL END,
+  opening_model=CASE
+    WHEN opening_model LIKE '%-sol' THEN 'hoch'
+    WHEN opening_model LIKE '%-terra' THEN 'mittel'
+    WHEN opening_model LIKE '%-luna' THEN 'niedrig'
+    WHEN opening_model IN ('hoch','mittel','niedrig') THEN opening_model
+    ELSE NULL END
+WHERE id=1;
+"""))
+
 
 def init_webapp_db() -> None:
     """Apply base schema + pending migrations (idempotent)."""

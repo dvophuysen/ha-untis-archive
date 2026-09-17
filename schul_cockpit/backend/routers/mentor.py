@@ -188,7 +188,7 @@ def add_message(c,sid,account,key,role,text,payload=None,author=None):
                      (account,sid,key,role,text,json.dumps(payload or {},ensure_ascii=False),author,now_iso())).lastrowid
 
 
-async def open_unit(account_id,sid,model=None,persist=True):
+async def open_unit(account_id,sid,tier=None,persist=True):
     """Der erste Zug einer Einheit: Lage bestimmen, Einstieg vom Modell holen und
     als Begrüßung ablegen (mit erster Aufgabe, wenn die Lage eine will)."""
     with closing(webapp_conn()) as c:s=get_session(c,account_id,sid)
@@ -197,7 +197,7 @@ async def open_unit(account_id,sid,model=None,persist=True):
     if s.get('topic_id'):ctx['topic']=lernstand.context_for(account_id,s['topic_id'],sid)
     lage=mopen.situation(account_id,s,ctx);ctx['situation']=lage
     if lage['lage'] in ('begleiten','kontrollieren'):return None,lage
-    raw,_,_=await ai.complete(account_id,ai.OPENING,mopen.instruction_for(lage['lage'],Reply.model_json_schema()),mopen.trim(ctx),max_output=2500,session_id=sid,model=model)
+    raw,_,_=await ai.complete(account_id,ai.OPENING,mopen.instruction_for(lage['lage'],Reply.model_json_schema()),mopen.trim(ctx),max_output=2500,session_id=sid,tier=tier)
     reply=Reply.model_validate_json(raw)
     if reply.action=='task' and not reply.task:reply.action='clarify'
     if reply.action=='finish':reply.action='clarify'
@@ -330,11 +330,14 @@ def limits(account_id:int,body:LimitsIn,user:CurrentUser=Depends(get_current_use
                         ('sources_eur','sources_micro'),('background_eur','background_micro')):
         value=getattr(body,name)
         if value is not None:fields[column]=round(value*1e6)
+    # Die Felder halten jetzt eine Stufe (hoch, mittel, niedrig), keinen
+    # Modellnamen: Ein Modellwechsel in der Add-on-Konfiguration lässt die
+    # Auswahl der Eltern unberührt (D88). Leer heißt „wie das Hauptgespräch".
     for name in ('sources_model','opening_model'):
         value=getattr(body,name)
         if value is not None:
             chosen=value.strip()
-            if chosen and chosen not in ai.RATES:raise HTTPException(422,'Unbekanntes Modell.')
+            if chosen and (chosen not in ai.TIERS or chosen==ai.SPEECH_TIER):raise HTTPException(422,'Unbekannte Stufe.')
             fields[name]=chosen or None
     if not fields:raise HTTPException(422,'Nichts zu ändern.')
     with closing(webapp_conn()) as c,c:
@@ -800,7 +803,7 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
 
 
 class CompareOpeningIn(InputModel):
-    models:list[str]=Field(default_factory=list,max_length=4)
+    tiers:list[str]=Field(default_factory=list,max_length=4)
 
 
 @router.post('/sessions/{sid}/opening/compare')
@@ -808,13 +811,13 @@ async def compare_opening(account_id:int,sid:int,body:CompareOpeningIn,user:Curr
     """Eichung: denselben Einstieg mit mehreren Modellen erzeugen, ohne ihn zu speichern."""
     access(user,account_id,parent=True)
     out=[]
-    for model in (body.models or sorted(ai.RATES)):
-        if model not in ai.RATES:raise HTTPException(422,'Unbekanntes Modell.')
+    for tier in (body.tiers or [t for t in ai.TIERS if t!=ai.SPEECH_TIER]):
+        if tier not in ai.TIERS:raise HTTPException(422,'Unbekannte Stufe.')
         try:
-            reply,lage=await open_unit(account_id,sid,model=model,persist=False)
-            out.append({'model':model,'lage':lage,'reply':reply.model_dump() if reply else None})
+            reply,lage=await open_unit(account_id,sid,tier=tier,persist=False)
+            out.append({'tier':tier,'model':ai.model_name(tier),'lage':lage,'reply':reply.model_dump() if reply else None})
         except HTTPException as exc:
-            out.append({'model':model,'error':exc.detail})
+            out.append({'tier':tier,'model':ai.model_name(tier),'error':exc.detail})
     return {'results':out}
 
 
@@ -889,7 +892,7 @@ def quality(account_id:int,user:CurrentUser=Depends(get_current_user)):
     access(user,account_id,parent=True)
     from ..mentor_quality import CASES,QUALITY_VERSION
     with closing(webapp_conn()) as c:
-        results=[json.loads(r[0]) for r in c.execute('SELECT result_json FROM mentor_quality_runs WHERE account_id=? AND model=? AND fingerprint=? ORDER BY batch',(account_id,ai.ai_settings()['model'],mc.fingerprint([CASES,QUALITY_VERSION])))]
+        results=[json.loads(r[0]) for r in c.execute('SELECT result_json FROM mentor_quality_runs WHERE account_id=? AND model=? AND fingerprint=? ORDER BY batch',(account_id,ai.model_name(),mc.fingerprint([CASES,QUALITY_VERSION])))]
     flat=[x for group in results for x in group]
     return {'done':len(flat),'total':len(CASES),'passed':sum(x['passed'] for x in flat),'results':flat}
 
@@ -913,5 +916,5 @@ async def quality_next(account_id:int,user:CurrentUser=Depends(get_current_user)
     result=[{**r.model_dump(),'expected':CASES[r.id][3],'passed':r.result==CASES[r.id][3]} for r in pack.results]
     with closing(webapp_conn()) as c:
         c.execute('INSERT OR IGNORE INTO mentor_quality_runs(account_id,model,fingerprint,batch,result_json,created_at) VALUES(?,?,?,?,?,?)',
-                  (account_id,ai.ai_settings()['model'],mc.fingerprint([CASES,QUALITY_VERSION]),batch,json.dumps(result,ensure_ascii=False),now_iso()))
+                  (account_id,ai.model_name(),mc.fingerprint([CASES,QUALITY_VERSION]),batch,json.dumps(result,ensure_ascii=False),now_iso()))
     return quality(account_id,user)
