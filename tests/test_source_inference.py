@@ -47,7 +47,8 @@ async def test_entries_without_a_page_are_mapped_to_a_chapter_and_the_chapter_is
     book = sources.ledger(1)["subjects"][0]
     titles = {(c["title"], c["inferred"]) for c in book["chapters"]}
     assert titles == {("¡Acércate!", True), ("Gramática", True)}
-    assert book["pending"] == 14 + 5, "die ganze Einheit samt Vokabelteil wird geholt, als Hypothese gekennzeichnet"
+    # Die ganze Einheit als Hypothese, dazu alle Wortschatzteile der Sprache (D109).
+    assert book["pending"] == 14 + 25
     with closing(db.webapp_conn()) as conn:
         quote = conn.execute("SELECT quote FROM source_links WHERE page=48").fetchone()[0]
     assert "erschlossen" in quote

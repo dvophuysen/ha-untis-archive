@@ -1,3 +1,47 @@
+# Alle Vokabellisten, nicht die zufällig vorhandenen Seiten 1.1.0
+
+Stand 17.09.2026. Nutzerrückmeldung (D108, D109).
+
+**Befund.** „Die Vokabellisten sind noch immer nicht fertig." Der Trainer zeigte
+für Spanisch:
+
+```
+Schulbuch S. 171   33 Wörter     Schulbuch S. 172   60 Wörter
+Arbeitsheft S. 26   8 · S. 36  5 · S. 37  4 · Schulbuch S. 50  1
+Unidad 3 De paseo por España   0 Wörter
+```
+
+Drei Fehler übereinander.
+
+*Erstens* wurden die Anhangseiten vor der Umstellung auf Einheiten gelesen.
+`vocab_extractions` merkt sich Seite und Textstand; eine gelesene Seite wird nie
+wieder angefasst. Die neue Anweisung mit der Gliederung kam bei ihnen also gar
+nicht an, und nichts hätte sie je wieder gelesen. Jetzt geht der Stand der
+Anweisung (`EXTRACT_VERSION`) in den Textstand ein.
+
+*Zweitens* standen die Unterrichtsseiten weiter als eigene Bündel da, obwohl sie
+entfallen sollten. `units()` bietet sie nicht mehr an, sobald es eine Einheit
+mit Wörtern gibt — vorher bleiben sie, damit der Trainer nicht leer dasteht.
+
+*Drittens*, und das ist der eigentliche Auftrag: Es lagen überhaupt nur die
+Anhangseiten vor, die der Unterricht zufällig genannt hatte. Die übrigen Unidads
+und das ganze Englischbuch fehlten. `bind_vocab_parts()` setzt jetzt alle
+Wortschatzteile eines Sprachbuchs auf die Abrufliste — welche das sind, sagt das
+Inhaltsverzeichnis selbst (`kind='vocab'`). Unabhängig davon, ob die Lektion
+schon dran war, und nur für Fremdsprachen: Ein Fachwörterverzeichnis in Physik
+ist kein Übungsstoff.
+
+Diese Stellen hängen an keinem Unterrichtseintrag. Sie verschwinden deshalb auch
+nicht, wenn ein Eintrag sich ändert — anders als die Kapitelseiten.
+
+**Kosten.** Einmalig der Anhang je Sprachbuch. Bei etwa fünf Cent je geholter
+und gelesener Seite und einem Vokabelteil von zwanzig bis dreißig Seiten sind
+das ein bis anderthalb Euro je Sprache, verteilt über die nächsten Sammelläufe;
+danach nur noch, was neu hinzukommt.
+
+**Offen.** Die zweite Messung der Eichung nach der Feldkorrektur aus 1.0.1, und
+die Reasoning-Tiefe — dafür muss die Mentor-Route die Tiefe erst durchreichen.
+
 # Eichung: Vokabellisten auf dem kleinen Modell 1.0.1
 
 Stand 17.09.2026. Messung im Auftrag des Nutzers (D107).

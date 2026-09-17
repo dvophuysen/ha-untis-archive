@@ -419,3 +419,48 @@ def test_the_fields_are_tidied_so_the_bundling_does_not_depend_on_the_model():
     assert (c.foreign_word, c.grammar) == ('el/la siguiente (sust.)', 'm/f')
     # Beide Schreibweisen derselben Liste landen damit in einem Bündel.
     assert vocab.clean_unit('Unidad 3 ¡Acércate!  ▶ p. 48') == vocab.clean_unit('Unidad 3 ¡Acércate!')
+
+
+def test_a_changed_reading_instruction_reads_the_page_again(setup):
+    """Eine Seite wird je Textstand einmal gelesen. Als die Anweisung um die
+    Gliederung erweitert wurde, trugen die schon gelesenen Anhangseiten weiter
+    ihre alten Seitenbündel — S. 171 und S. 172 standen als zwei Bündel da statt
+    als eine Unidad, und nichts las sie je wieder (D108)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    mid = seed_page()
+    calls = []
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        calls.append(1)
+        return json.dumps({"words": [{"foreign_word": "ecce", "meanings": ["Schau!"]}]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
+    client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
+    assert len(calls) == 1, "derselbe Text, dieselbe Anweisung: kein zweiter Aufruf"
+    patch.setattr(vocab, "EXTRACT_VERSION", vocab.EXTRACT_VERSION + 1)
+    client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
+    assert len(calls) == 2, "neue Anweisung: die Seite wird noch einmal gelesen"
+
+
+def test_pages_from_lessons_are_no_longer_offered_as_bundles(setup):
+    """Geübt werden Einheiten, nicht einzelne Seiten aus dem Unterricht. Solange
+    es aber noch keine Einheit mit Wörtern gibt, bleiben die Seiten stehen,
+    damit der Trainer nicht leer dasteht (D100)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    sheet = seed_page(subject="SPANISCH", text="una palabra — ein Wort", page=26, label="Arbeitsheft", title="Wortschatz")
+    liste = seed_page(subject="SPANISCH", text="el país — das Land", page=171, label="Schulbuch", title="Vocabulario")
+    answers = {sheet: {"words": [{"foreign_word": "una palabra", "meanings": ["ein Wort"]}]},
+               liste: {"words": [{"unit": "Unidad 3", "foreign_word": "el país", "meanings": ["das Land"]}]}}
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        return json.dumps(answers[sheet if context["page"] == 26 else liste]), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    # Nur die Heftseite gelesen: Sie bleibt stehen, sonst gäbe es gar nichts.
+    client.post(V + "/SPANISCH/extract", json={"material_ids": [sheet]})
+    assert [u["unit"] for u in vocab.units(1, "SPANISCH") if u["words"]] == ["Arbeitsheft S. 26"]
+    # Sobald eine echte Einheit Wörter hat, tritt die Seite zurück.
+    client.post(V + "/SPANISCH/extract", json={"material_ids": [liste]})
+    offered = [u["unit"] for u in vocab.units(1, "SPANISCH")]
+    assert "Unidad 3" in offered and "Arbeitsheft S. 26" not in offered
