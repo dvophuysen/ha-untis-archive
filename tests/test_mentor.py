@@ -795,3 +795,39 @@ def test_book_pages_stop_travelling_once_the_inventory_stands(setup):
     s = send(client, s).json()
     assert pages == ['ENGLISCH'], 'der zweite Zug kommt ohne Seitenbild aus'
     assert contexts[-1]['textbook']['status'] == 'im_bestand'
+
+
+def test_the_mentor_notices_when_it_is_getting_hard(setup):
+    """Verfassung quer zu allen Lagen (MENTOR_EINSTIEG Schritt 5): einsilbige
+    Antworten, viele Hinweise, späte Stunde. Kein Abbruch, kleinere Schritte."""
+    from backend.routers.mentor import condition
+    client, _, patch = setup
+    s = start(client)
+    with closing(db.webapp_conn()) as c:
+        row = dict(c.execute('SELECT * FROM mentor_sessions WHERE id=?', (s['id'],)).fetchone())
+        assert condition(c, row, now='2026-09-11T15:00:00+02:00') is None
+        for n, text in enumerate(['kp', 'weiß nicht']):
+            c.execute("INSERT INTO mentor_messages(session_id,account_id,request_key,role,text,payload,created_at) "
+                      "VALUES(?,1,?, 'user',?, '{}','now')", (s['id'], f'k{n}', text))
+        lage = condition(c, row, now='2026-09-11T15:00:00+02:00')
+        assert lage and 'einsilbig' in lage['signale']
+        # Späte Stunde zählt auch ohne einsilbige Antworten.
+        with closing(db.webapp_conn()) as c2, c2:
+            c2.execute('DELETE FROM mentor_messages WHERE session_id=? AND role=?', (s['id'], 'user'))
+        spaet = condition(c, row, now='2026-09-11T20:30:00+02:00')
+        assert spaet and spaet['signale'] == ['spaet']
+        # Viele Hinweise ebenfalls.
+        viele = condition(c, {**row, 'help_count': 3}, now='2026-09-11T15:00:00+02:00')
+        assert 'viele_hinweise' in viele['signale']
+
+
+def test_the_condition_reaches_the_model(setup):
+    client, _, patch = setup
+    contexts = []
+    mock(patch, [reply(task=None, action='explain')], contexts)
+    s = start(client)
+    s = send(client, s, kind='hint', text='kp').json()
+    s = send(client, s, kind='hint', text='kp').json()
+    send(client, s, kind='hint', text='kp')
+    assert 'verfassung' in contexts[-1], 'nach mehreren Hinweisen kennt der Mentor die Lage'
+    assert 'Pause' in contexts[-1]['verfassung']['hinweis']
