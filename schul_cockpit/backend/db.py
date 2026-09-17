@@ -882,6 +882,9 @@ ALTER TABLE materials ADD COLUMN handwritten INTEGER NOT NULL DEFAULT 0;
 _MIGRATIONS.append(("mentor_message_author_002",
                     "UPDATE mentor_messages SET author='kind' WHERE author='eltern' "
                     "AND session_id IN (SELECT id FROM mentor_sessions WHERE is_demo=0)"))
+# Rolle einer Verknüpfung (D85): blatt (das Material ist das Arbeitsblatt des
+# Eintrags), ergebnis (die Bearbeitung des Kindes dazu), stoff (Thema).
+_MIGRATIONS.append(("material_links_002_relation", "ALTER TABLE material_links ADD COLUMN relation TEXT"))
 
 
 def init_webapp_db() -> None:

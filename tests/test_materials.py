@@ -59,7 +59,7 @@ def test_hints_from_the_calling_screen_become_links(env):
     client = client_for(env)
     body = upload(client, task_id=7, subject_name="Physik", kind="worksheet").json()
     assert body["subject_name"] == "Physik" and body["kind"] == "worksheet"
-    assert {"kind": "task", "target_id": 7, "origin": "mensch"} in body["links"]
+    assert {"kind": "task", "target_id": 7, "origin": "mensch", "relation": None} in body["links"]
 
 
 def test_unknown_file_types_are_refused(env):
@@ -112,7 +112,7 @@ def test_analysis_links_topics_it_recognises(env):
         row = conn.execute("SELECT * FROM materials WHERE id=?", (body["id"],)).fetchone()
         analysis._apply(conn, 1, row, insight)
     links = client.get(f"{URL}/{body['id']}").json()["links"]
-    assert {"kind": "topic", "target_id": topic_id, "origin": "ai"} in links
+    assert {"kind": "topic", "target_id": topic_id, "origin": "ai", "relation": None} in links
     # An invented topic creates nothing.
     assert len([l for l in links if l["kind"] == "topic"]) == 1
 
@@ -270,3 +270,25 @@ def test_handwriting_always_goes_to_review_and_page_type_is_stored(env):
         analysis._apply(conn, 1, row, analysis.Insight(kind="worksheet", title="Blatt", content_text="Aufgabe 1", confidence=0.97, page_type="formula"))
     other = client.get(f"{URL}/{printed['id']}").json()
     assert other["page_type"] == "formula" and other["needs_review"] is False
+
+
+def test_a_double_page_can_be_corrected_by_hand_and_a_link_carries_its_role(env):
+    """Von Hand „10-11“: beide Seiten gelten, die Korrektur überlebt die Lesung (0.81.0);
+    eine Verknüpfung trägt die Rolle blatt und bekommt sie auch nachträglich (D85)."""
+    client = client_for(env)
+    body = upload(client, subject_name="Physik", kind="book_page").json()
+    fixed = client.patch(f"{URL}/{body['id']}", json={"printed_pages": [11, 10]}).json()
+    assert fixed["source_page"] == 10 and json.loads(fixed["printed_pages"]) == [10, 11]
+    assert {"printed_pages", "source_page"} <= set(fixed["locked_fields"])
+    insight = analysis.Insight(kind="book_page", subject_name="Physik", title="Seite", summary="Kurz",
+                               content_text="Text", confidence=0.9, printed_pages=[12])
+    with closing(db.webapp_conn()) as conn:
+        row = conn.execute("SELECT * FROM materials WHERE id=?", (body["id"],)).fetchone()
+        analysis._apply(conn, 1, row, insight)
+    after = client.get(f"{URL}/{body['id']}").json()
+    assert after["source_page"] == 10 and json.loads(after["printed_pages"]) == [10, 11]
+    # Verknüpfung ohne Rolle, dann mit Rolle: dieselbe Zeile, Rolle nachgetragen.
+    assert client.post(f"{URL}/{body['id']}/links", json={"kind": "homework", "target_id": 5}).status_code == 200
+    linked = client.post(f"{URL}/{body['id']}/links", json={"kind": "homework", "target_id": 5, "relation": "blatt"}).json()
+    assert [(l["kind"], l["target_id"], l["relation"]) for l in linked["links"] if l["kind"] == "homework"] == [("homework", 5, "blatt")]
+    assert client.post(f"{URL}/{body['id']}/links", json={"kind": "homework", "target_id": 5, "relation": "egal"}).status_code == 422

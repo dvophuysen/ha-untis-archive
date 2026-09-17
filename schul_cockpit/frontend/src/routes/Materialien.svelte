@@ -9,9 +9,9 @@
     worksheet: 'Arbeitsblatt',
     workbook: 'Arbeitsheft',
     book_page: 'Buchseite',
-    notes: 'Mitschrift aus dem Unterricht',
+    notes: 'Mitschrift',
     assignment: 'Aufgabenstellung',
-    own_work: 'Erledigte Hausaufgabe (eigene Bearbeitung)',
+    own_work: 'Aufgabenbearbeitung',
     exam: 'Klassenarbeit',
     handout: 'Merkblatt',
     exam_notice: 'Offizielle Themenliste (Arbeit)',
@@ -250,8 +250,18 @@
 
   function photoFor(subject, need, item, viaCamera) {
     // Bei einer Stelle ohne Buchteil bekommt das Foto das vermutete Buch mit.
-    claim = { subject, label: need.guess || need.label, page: item.page };
+    // Ein Blatt (Seite 0) bekommt seinen Eintrag mit, nie das Fach allein.
+    claim = { subject, label: need.guess || need.label, page: item.page, entry_kind: item.entry_kind, entry_id: item.entry_id };
     (viaCamera ? camera : picker)?.click();
+  }
+  // Blätter des Fachs, die einem Eintrag „Arbeitsblatt“ zugeordnet werden können.
+  function sheetsOf(subject) {
+    return (data?.materials ?? []).filter((m) => ['worksheet', 'handout'].includes(m.kind) && (m.subject_name ?? '').toLowerCase() === (subject ?? '').toLowerCase());
+  }
+  async function assignSheet(materialId, entryKind, entryId, quote) {
+    await api.post(`${base}/${materialId}/links`, { kind: entryKind, target_id: entryId, relation: 'blatt' });
+    message = `Blatt zugeordnet: „${quote}“.`;
+    await load();
   }
 
   async function send(files) {
@@ -268,6 +278,8 @@
         body.append('subject_name', target.subject);
         body.append('source_label', target.label);
         body.append('source_page', String(target.page));
+        if (!target.page && target.entry_kind === 'homework' && target.entry_id) body.append('homework_id', String(target.entry_id));
+        if (!target.page && target.entry_kind === 'lesson' && target.entry_id) body.append('lesson_id', String(target.entry_id));
       } else {
         if (upload.subject || filterSubject) body.append('subject_name', upload.subject || filterSubject);
         if (upload.kind) body.append('kind', upload.kind);
@@ -333,6 +345,7 @@
           contains_solutions: !!open.contains_solutions,
           source_label: open.source_label ?? '',
           source_page: open.source_page ?? '',
+          pages: pagesOf(open).join('–'),
         }
       : null;
   }
@@ -340,8 +353,12 @@
   async function save() {
     // Eine leere Seite heißt „keine Seite"; 0 räumt sie serverseitig aus.
     // Nur schicken, was sich gegenüber dem Material geändert hat: Jedes gesendete Feld gilt als Korrektur und wird gesperrt.
-    const wanted = { ...form, source_page: form.source_page ? Number(form.source_page) : 0 };
+    // „10“, „10-11“, „10/11“ oder „10, 11“: die erste Seite ist die Seite des Materials, alle sind die gedruckten Seiten.
+    const pages = [...new Set(String(form.pages ?? '').split(/[^0-9]+/).filter(Boolean).map(Number).filter((n) => n > 0 && n < 2000))].sort((a, b) => a - b);
+    const { pages: _pages, ...rest } = form;
+    const wanted = { ...rest, source_page: pages[0] ?? 0 };
     const patch = Object.fromEntries(Object.entries(wanted).filter(([k, v]) => String(v ?? '') !== String(open[k] ?? (k === 'source_page' ? 0 : ''))));
+    if (pages.join(',') !== pagesOf(open).join(',')) patch.printed_pages = pages;
     open = await api.patch(`${base}/${open.id}`, patch);
     message = 'Korrektur gespeichert. Sie bleibt auch bei einer neuen Auswertung erhalten.';
     await load();
@@ -494,12 +511,19 @@
             <!-- Checkliste mit Auto-Bezug: Eintrag antippen, Foto oder Datei
                  wählen, und die Stelle ist belegt. -->
             <ul class="checklist">
-              {#each need.items as item (item.page)}
+              {#each need.items as item (`${item.page}-${item.entry_kind}-${item.entry_id}`)}
                 <li>
                   <span class="box" aria-hidden="true"></span>
                   <span class="entry">
                     <strong>{item.page ? `${need.label} ${item.label}` : need.label}</strong>
                     <small class="muted">„{item.quote}" · {new Date(item.date).toLocaleDateString('de-DE')}</small>
+                    {#if !item.page && sheetsOf(subject.subject).length}
+                      <!-- Ein schon fotografiertes Blatt zuordnen statt neu fotografieren (D85). -->
+                      <select class="assign" disabled={busy} aria-label="Vorhandenes Blatt zuordnen" onchange={(e) => { const id = Number(e.currentTarget.value); e.currentTarget.value = ''; if (id) act(() => assignSheet(id, item.entry_kind, item.entry_id, item.quote)); }}>
+                        <option value="">Vorhandenes Blatt zuordnen …</option>
+                        {#each sheetsOf(subject.subject) as sheet (sheet.id)}<option value={sheet.id}>{sheet.title || 'Ohne Titel'} · {dateOf(sheet)}</option>{/each}
+                      </select>
+                    {/if}
                   </span>
                   <span class="take">
                     <button class="quiet" disabled={busy || uploading > 0} onclick={() => photoFor(subject.subject, need, item, true)} aria-label={`${need.label} ${item.label} fotografieren`}>📷</button>
@@ -586,6 +610,15 @@
         : STATE_NAMES[m.analysis_state] ?? ''}
     </span>
   </button>
+  {#if m.sheet_candidates?.length}
+    <!-- Loses Blatt: zu welchem Eintrag gehört es? Ein Tipp ordnet zu, nichts wird geraten (D85). -->
+    <div class="candidates">
+      <span class="muted">Gehört das Blatt zu …</span>
+      {#each m.sheet_candidates as c (`${c.kind}-${c.id}`)}
+        <button class="quiet" disabled={busy} onclick={() => act(() => assignSheet(m.id, c.kind, c.id, c.quote))}>{c.kind === 'homework' ? 'Hausaufgabe' : 'Stunde'} {new Date(c.date).toLocaleDateString('de-DE')}: „{c.quote.length > 60 ? c.quote.slice(0, 60) + '…' : c.quote}“</button>
+      {/each}
+    </div>
+  {/if}
   {#if open?.id === m.id}
     <!-- Das Detail steht direkt unter der Zeile, nicht am Seitenende. -->
     {@render materialDetail()}
@@ -638,7 +671,7 @@
               {#each BOOK_PARTS as part}<option value={part}>{part}</option>{/each}
             </select>
           </label>
-          <label>Gedruckte Seite<input type="number" min="1" max="1999" bind:value={form.source_page} placeholder="keine" /></label>
+          <label>Gedruckte Seite(n)<input inputmode="numeric" bind:value={form.pages} placeholder="keine, z. B. 10 oder 10-11" /></label>
         </div>
         <label>Kurzbeschreibung<textarea bind:value={form.summary} maxlength="600" rows="2"></textarea></label>
         <label>Erkannter Text<textarea bind:value={form.content_text} maxlength="30000" rows="6"></textarea></label>
@@ -739,6 +772,9 @@
 
 <style>
   .doubts { margin: 4px 0 6px; padding-left: 18px; color: var(--rating-1); font-weight: 600; line-height: 1.4; }
+  .candidates { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 8px 8px; font-size: 0.85rem; }
+  .candidates button { min-height: 36px; padding: 4px 10px; text-align: left; }
+  .assign { display: block; margin-top: 4px; max-width: 100%; font-size: 0.85rem; }
   .place { font-weight: 650; color: var(--fg); }
   .wanted{border-left:4px solid var(--accent)}
   .wanted>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;list-style:none}

@@ -64,9 +64,10 @@ INSTRUCTION = (
     "knapp in Worten, damit später ohne das Bild damit gearbeitet werden kann. Ergänze nichts, "
     "was nicht dasteht; unleserliche Stellen kennzeichnest du mit […] und setzt unreadable auf true.\n"
     "kind ist genau einer dieser Werte: worksheet Arbeitsblatt der Lehrkraft, workbook Seite aus einem "
-    "Arbeitsheft, book_page Buchseite, notes Mitschrift aus dem Unterricht oder Heftseite mit Stoff, assignment reine "
-    "Aufgabenstellung, own_work die erledigte Hausaufgabe des Kindes (gelöste Aufgaben, Recherche, geschriebener Text, "
-    "Ausarbeitung), exam geschriebene Klassenarbeit oder "
+    "Arbeitsheft, book_page Buchseite, notes Mitschrift: vom Kind mitgeschriebener Unterrichtsstoff (Tafelbild, Merksätze, "
+    "Hefteintrag zum Stoff), assignment reine Aufgabenstellung, own_work Aufgabenbearbeitung: die eigene Bearbeitung einer "
+    "Aufgabe durch das Kind (gelöste Aufgaben, Recherche, geschriebener Text), gleich ob im Unterricht oder zu Hause, "
+    "exam geschriebene Klassenarbeit oder "
     "Klausur, handout Merk- oder Infoblatt, exam_notice die offizielle Themenliste der Lehrkraft, was in "
     "einer Klassenarbeit vorkommt (Tafelabschrift, Zettel oder Nachricht), toc Inhaltsübersicht eines Buchs mit Kapiteln und Seitenzahlen, other sonst. "
     "Ist hinweise.gehoert_zu_hausaufgabe gesetzt und die Seite handschriftlich vom Kind, ist kind own_work, nicht notes, "
@@ -221,7 +222,8 @@ def _apply(conn, account_id: int, row, insight: Insight) -> None:
         # gelieferte Seite die bestellte ist; der Betrachter meldet die
         # Bestellung zurück, nicht die Lieferung.
         printed = [int(p) for p in insight.printed_pages if 0 < int(p) < 2000]
-        values["printed_pages"] = json.dumps(printed)
+        if "printed_pages" not in locked:
+            values["printed_pages"] = json.dumps(printed)
         if insight.unreadable and not insight.content_text.strip():
             values["page_check"] = "blank"
         elif not printed:
@@ -236,7 +238,8 @@ def _apply(conn, account_id: int, row, insight: Insight) -> None:
         # verschwindet eine von Hand gescannte Seite von der Einkaufsliste.
         kind = values.get("kind") or row["kind"]
         printed = [int(p) for p in insight.printed_pages if 0 < int(p) < 2000]
-        if printed and kind in ("book_page", "workbook", "toc") and "source_page" not in locked and not row["source_page"]:
+        if printed and kind in ("book_page", "workbook", "toc") and "source_page" not in locked and not row["source_page"] \
+                and "printed_pages" not in locked:
             values["source_page"] = printed[0]
             values["printed_pages"] = json.dumps(printed)
         part = insight.book_part.strip()

@@ -381,15 +381,24 @@ def _shelf(account_id: int) -> dict[str, dict]:
 SHEET_KINDS = ("worksheet", "handout")
 
 
-def _sheet_photos(account_id: int) -> dict:
-    """Fotografierte Blätter: an eine Aufgabe gehängt (→ nur ihre Hausaufgabe)
-    oder lose, je Fach mit Datum (D83).
+def is_sheet_link(kind: str, relation: str | None) -> bool:
+    """Ob eine Verknüpfung sagt: Dieses Material ist das Blatt des Eintrags.
+    Ausdrücklich über die Rolle, sonst über die Materialart (D85)."""
+    if relation:
+        return relation == "blatt"
+    return kind in SHEET_KINDS
 
-    Ein Foto, das ein Mensch an eine Aufgabe gehängt hat, gehört zu dieser
-    Aufgabe und zu keiner anderen: Es kommt nie in den losen Vorrat, aus dem
-    eine Hausaufgabe der nächsten Tage „ihr“ Arbeitsblatt bekommt. Und es
-    belegt auch seine eigene Hausaufgabe nur, wenn die Auswertung ein Blatt
-    gesehen hat, nicht die Ausarbeitung des Kindes.
+
+def _sheet_photos(account_id: int) -> dict:
+    """Fotografierte Blätter, die eine Hausaufgabe oder Stunde ausdrücklich
+    belegen (D83, D85): über eine Aufgabe (→ ihre Hausaufgabe), eine
+    Hausaufgabe oder eine Stunde. Dazu die losen Blätter je Fach mit Datum,
+    aus denen nur noch Vorschläge werden, nie eine Bindung.
+
+    Ein Foto, das ein Mensch an einen Eintrag gehängt hat, gehört zu diesem
+    Eintrag und zu keinem anderen; es kommt nie in den losen Vorrat. Und es
+    belegt seinen Eintrag nur als Blatt, wenn die Rolle oder die Materialart
+    ein Blatt sagt, nicht bei der Bearbeitung des Kindes.
     """
     found: dict = {}
     with closing(webapp_conn()) as conn:
@@ -397,15 +406,17 @@ def _sheet_photos(account_id: int) -> dict:
             "SELECT id,subject_name,kind,document_date,created_at FROM materials WHERE account_id=? AND hidden=0 "
             f"AND origin!='book_fetch' AND kind IN ({','.join('?' * len(SHEET_KINDS))})", (account_id, *SHEET_KINDS))]
         links = [dict(r) for r in conn.execute(
-            "SELECT l.material_id,l.target_id,m.kind FROM material_links l JOIN materials m ON m.id=l.material_id "
-            "WHERE l.kind='task' AND m.account_id=? AND m.hidden=0", (account_id,))]
+            "SELECT l.material_id,l.kind AS link_kind,l.target_id,l.relation,m.kind FROM material_links l "
+            "JOIN materials m ON m.id=l.material_id WHERE l.kind IN ('task','homework','lesson') AND m.account_id=? AND m.hidden=0",
+            (account_id,))]
         tasks = {r["id"]: dict(r) for r in conn.execute("SELECT id,title,notes FROM tasks WHERE account_id=?", (account_id,))}
     attached = {link["material_id"] for link in links}
-    if links:
+    task_links = [l for l in links if l["link_kind"] == "task" and is_sheet_link(l["kind"], l["relation"])]
+    if task_links:
         with closing(history_conn()) as hconn:
-            for link in links:
+            for link in task_links:
                 task = tasks.get(link["target_id"])
-                if not task or link["kind"] not in SHEET_KINDS:
+                if not task:
                     continue
                 try:
                     homework = homework_for_task(hconn, account_id, task)
@@ -413,12 +424,46 @@ def _sheet_photos(account_id: int) -> dict:
                     homework = None
                 if homework:
                     found.setdefault(("homework", homework), link["material_id"])
+    for link in links:
+        if link["link_kind"] in ("homework", "lesson") and is_sheet_link(link["kind"], link["relation"]):
+            found.setdefault((link["link_kind"], link["target_id"]), link["material_id"])
     for row in rows:
         if row["id"] in attached:
             continue
         day = (row["document_date"] or row["created_at"] or "")[:10]
         found.setdefault(("loose", (row["subject_name"] or "").strip().casefold()), []).append((day, row["id"]))
     return found
+
+
+def sheet_candidates(account_id: int, material: dict, days: int = 14, limit: int = 3) -> list[dict]:
+    """Zu welchem Eintrag ein loses Blatt gehören könnte: Hausaufgaben und
+    Stunden desselben Fachs, die ein Blatt nennen und noch keins haben, nach
+    Nähe zum Datum des Blatts. Ein Vorschlag zum Antippen, keine Bindung (D85)."""
+    from datetime import date
+    subject = (material.get("subject_name") or "").strip()
+    day = (material.get("document_date") or material.get("created_at") or "")[:10]
+    if not subject or not day:
+        return []
+    try:
+        anchor = date.fromisoformat(day)
+    except ValueError:
+        return []
+    with closing(webapp_conn()) as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT entry_kind,entry_id,entry_date,quote FROM source_links WHERE account_id=? AND page=0 AND status='paper' "
+            "AND part_kind='worksheet' AND lower(subject_name)=lower(?) AND entry_kind IN ('homework','lesson')",
+            (account_id, subject))]
+    out = []
+    for row in rows:
+        try:
+            gap = abs((date.fromisoformat(row["entry_date"][:10]) - anchor).days)
+        except ValueError:
+            continue
+        if gap <= days:
+            out.append({"kind": row["entry_kind"], "id": row["entry_id"], "date": row["entry_date"][:10],
+                        "quote": row["quote"], "days": gap})
+    out.sort(key=lambda c: (c["days"], c["date"]))
+    return out[:limit]
 
 
 def _sheet_near(sheets: dict, subject: str, entry_date: str, days: int = 5) -> int | None:
@@ -515,8 +560,9 @@ def refresh_status(account_id: int) -> None:
             stored = books.get(folded, {}).get(page) if book else None
             photo = scan_for(scanned, folded, link["part_label"], page)
             if page == 0:
-                photo = sheets.get(("homework", link["entry_id"])) or sheets.get(("lesson", link["entry_id"])) \
-                    or _sheet_near(sheets, folded, link["entry_date"])
+                # Nur ein ausdrücklicher Bezug belegt ein Blatt; die Nähe im
+                # Datum ist höchstens ein Vorschlag (D85, sheet_candidates).
+                photo = sheets.get(("homework", link["entry_id"])) or sheets.get(("lesson", link["entry_id"]))
             habit = habits.get(folded)
             if link["part_kind"] == "unknown" and habit in ("workbook", "worksheet") and not (
                     stored and stored.get("fits_quote") == "ja"):
@@ -584,7 +630,12 @@ def ledger(account_id: int) -> dict:
             reason = link["detail"] if link["status"] == "paper" and link["detail"] in ("passt_nicht", "gewohnheit") else link["status"]
             group = bucket["groups"].setdefault((link["part_label"], link["part_kind"], reason), {
                 "label": link["part_label"], "kind": link["part_kind"], "reason": reason, "pages": {}})
-            entry = group["pages"].setdefault(link["page"], {"page": link["page"], "dates": set(), "quote": "", "quote_date": ""})
+            # Ein Blatt (Seite 0) ist je Eintrag ein eigener Posten: „Arbeitsblatt
+            # beenden“ vom 16.09. und „AB besprochen“ vom 20.09. sind womöglich
+            # zwei Blätter; zugeordnet wird je Eintrag (D85).
+            page_key = (0, link["entry_kind"], link["entry_id"]) if link["page"] == 0 else link["page"]
+            entry = group["pages"].setdefault(page_key, {"page": link["page"], "dates": set(), "quote": "", "quote_date": "",
+                                                         "entry_kind": link["entry_kind"], "entry_id": link["entry_id"]})
             entry["dates"].add(link["entry_date"])
             if link["entry_date"] >= entry["quote_date"]:
                 entry["quote_date"], entry["quote"] = link["entry_date"], link["quote"]
@@ -609,8 +660,9 @@ def ledger(account_id: int) -> dict:
                 "quote": newest["quote"], "last_date": newest["quote_date"],
                 "mentions": sum(len(e["dates"]) for e in gaps),
                 # Je Seite ein Eintrag zum Abhaken: antippen, fotografieren, fertig.
-                "items": [{"page": e["page"], "label": page_list([e["page"]]), "quote": e["quote"], "date": e["quote_date"]}
-                          for e in sorted(gaps, key=lambda e: e["page"])],
+                "items": [{"page": e["page"], "label": page_list([e["page"]]), "quote": e["quote"], "date": e["quote_date"],
+                           "entry_kind": e["entry_kind"], "entry_id": e["entry_id"]}
+                          for e in sorted(gaps, key=lambda e: (e["page"], e["quote_date"]))],
             })
         book = shelf.get(bucket["subject"].casefold())
         missing_count = sum(len(m["pages"]) for m in missing)

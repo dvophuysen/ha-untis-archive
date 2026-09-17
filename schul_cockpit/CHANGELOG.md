@@ -1,3 +1,9 @@
+## 0.81.0
+
+- Arbeitsblätter mit Bezug (D85): Ein Blatt wird nie mehr geraten. Bisher belegte ein loses Foto desselben Fachs innerhalb von fünf Tagen jede Hausaufgabe mit „Arbeitsblatt“; jetzt belegt nur ein ausdrücklicher Bezug, den Kind oder Eltern mit einem Tipp setzen. Ein loses Blatt zeigt in der Materialliste Vorschläge („Gehört das Blatt zu … Hausaufgabe 16.09.: Arbeitsblatt beenden“), ein Tipp ordnet zu. In „Was mir noch fehlt“ steht jedes Blatt je Eintrag, mit „Vorhandenes Blatt zuordnen“ für schon fotografierte Blätter; ein Foto von dort hängt am Eintrag, nicht am Fach. Ein ausgefülltes Blatt ist Blatt und Bearbeitung zugleich. Verknüpfungen tragen eine Rolle (Blatt, Bearbeitung, Stoff).
+- Doppelseiten von Hand: Im Korrekturformular heißt das Feld „Gedruckte Seite(n)“ und nimmt „10-11“ an; beide Seiten gelten dann als vorhanden. Bisher ließ sich nur eine Seite eintragen.
+- Begriffe: „Mitschrift“ und „Aufgabenbearbeitung“, egal ob die Aufgabe im Unterricht oder zu Hause bearbeitet wurde. Die Auswertung unterscheidet mitgeschriebenen Stoff von der eigenen Bearbeitung einer Aufgabe.
+
 ## 0.80.1
 
 - Materialart „Erledigte Hausaufgabe (eigene Bearbeitung)“: Die Art gab es schon (intern own_work), hieß aber „Meine Bearbeitung“ und war so nicht zu finden; „Mitschrift“ heißt jetzt „Mitschrift aus dem Unterricht“. Die Auswertung bekommt den Auftrag der Hausaufgabe als Hinweis und ordnet eine handschriftliche Seite, die an eine Hausaufgabe gehängt wurde, als erledigte Hausaufgabe ein, nicht als Mitschrift, außer sie ist erkennbar ein Blatt der Lehrkraft. Anlass: eine Recherche-Ausarbeitung wurde als Mitschrift abgelegt.

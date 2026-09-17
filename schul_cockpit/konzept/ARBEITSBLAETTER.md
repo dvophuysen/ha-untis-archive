@@ -1,7 +1,22 @@
 # Arbeitsblätter mit Bezug: welches Blatt ist gemeint?
 
-Stand 17.09.2026. Vorschlag, noch nicht beschlossen. Anlass: Nutzerrückmeldung
-nach der Fehlbindung einer Ausarbeitung an „Arbeitsblatt beenden“ (D83).
+Stand 17.09.2026. Entschieden (D85), Stufe 1 gebaut in 0.81.0. Anlass:
+Nutzerrückmeldung nach der Fehlbindung einer Ausarbeitung an „Arbeitsblatt
+beenden“ (D83).
+
+## Entschieden am 17.09.2026
+
+1. Raten abgeschafft; auch eindeutige Fälle sind nur Vorschläge zum Antippen.
+2. Ein ausgefülltes Blatt ist Blatt und Bearbeitung zugleich.
+3. Kind und Eltern ordnen zu; Eltern berichtigen.
+4. Bei Stunden ohne Untis-Text genügt der Kandidat nach Stundenplan.
+
+Gebaut in 0.81.0: Rolle an den Verknüpfungen, keine Bindung über die Nähe
+im Datum, Vorschläge am losen Blatt in der Materialliste, „Vorhandenes Blatt
+zuordnen“ und Foto mit Eintragsbezug in der Quellenbilanz, Blatt je Eintrag.
+Offen aus Stufe 2 und 3: Kandidaten schon beim Einwerfen mit Vorsortierung
+durch die Auswertung, Kennung in Listen und Mentor, Mentor-Wortlaut bei
+fehlendem Blatt.
 
 ## Das Problem
 

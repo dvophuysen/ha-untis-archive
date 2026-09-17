@@ -67,7 +67,7 @@ Seit 0.74.0 gibt es den Wochenrückblick für Eltern (D72) als Ausgangslage. Vor
 
 ## Materialien
 
-- Arbeitsblätter ohne Nummer: Entwurf einer Kennung aus Fach, Ausgabetag und Titel, Bezug beim Einwerfen mit einem Tipp statt Fünf-Tage-Vermutung, rückwirkendes Zuordnen in der Quellenbilanz: [Arbeitsblätter mit Bezug](ARBEITSBLAETTER.md). Vorschlag vom 17.09.2026, nicht beschlossen.
+- Arbeitsblätter ohne Nummer: Entwurf einer Kennung aus Fach, Ausgabetag und Titel, Bezug beim Einwerfen mit einem Tipp statt Fünf-Tage-Vermutung, rückwirkendes Zuordnen in der Quellenbilanz: [Arbeitsblätter mit Bezug](ARBEITSBLAETTER.md). Entschieden (D85), Stufe 1 in 0.81.0; offen Stufe 2 (Kandidaten beim Einwerfen, Kennung) und 3 (Mentor-Wortlaut).
 
 - Material entsteht heute an drei Stellen ohne Verbindung: Chatanhang, Lernmaterial am Thema und Buchseiten aus dem Medienregal. Arbeitshefte, Blätter, eigene Mitschriften, digitale Hefte als PDF, bearbeitete Lösungen und zurückgegebene Arbeiten haben keinen gemeinsamen Ort.
 - Der vorhandene Weg zum Ablegen ist für Kinder nicht erreichbar und für Eltern vierfach verschachtelt. Text muss von Hand eingetippt werden, sonst nutzt ihn weder Mentor noch Übungsklausur.
