@@ -1,5 +1,5 @@
 name: Schul-Cockpit
-version: "0.82.0"
+version: "0.82.1"
 slug: schul_cockpit
 description: Mobile Schul-App für Kinder und Eltern, basierend auf dem UNTIS-Archive-Datenbestand.
 url: https://github.com/dvophuysen/ha-untis-archive/tree/main/schul_cockpit
@@ -66,7 +66,8 @@ schema:
   # still wieder an die alte Ressource zu gehen.
   learning_ai_url_2: str?
   learning_ai_key_2: password?
-  learning_ai_models_2: list(str)?
+  learning_ai_models_2:
+    - str
   # Spracheingabe: Deployment-Name des Transkriptionsmodells; die Adresse wird
   # aus dem Zugang abgeleitet, der dieses Deployment bedient, sonst hier voll angeben.
   learning_ai_transcribe_model: str?

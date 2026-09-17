@@ -25,6 +25,14 @@ Spalte in `mentor_ai_config`, keine Änderung an `RATES` (Deployment-Namen
 bleiben gleich). Unterschiedliche API-Formen je Zugang funktionieren, weil
 die Art am Pfad erkannt wird; das ist Nebenwirkung, nicht Ziel.
 
+**Nachtrag 0.82.1.** `learning_ai_models_2` stand als `list(str)?` im Schema.
+`list(...)` ist in Home Assistant die Auswahl aus festen Werten; eine Liste
+wird als YAML-Liste geschrieben. Der Supervisor lehnte die Optionen ab und das
+Add-on blieb nach dem Update gestoppt. Die Fehlermeldung schrieb dabei alle
+Optionen im Klartext ins Supervisor-Log, den Azure-Schlüssel eingeschlossen;
+der Nutzer wurde auf den Tausch hingewiesen. `tests/test_addon_config.py`
+prüft jetzt Optionen gegen Schema.
+
 **Tests.** `tests/test_ai_endpoints.py`: Namensliste aus Zeilen und Kommas
 inklusive bashio-`null`, Zuordnung je Deployment, Fail-Closed ohne Rückfall,
 Zug mit dem Schlüssel der aufgerufenen Ressource vor und nach dem Umzug des
