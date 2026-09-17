@@ -39,6 +39,9 @@ MANY_EDITS = 3
 # So viele saubere Antworten hintereinander, in so vielen Aufgabenarten, heißen „sitzt".
 CLEAN_RUN = 3
 KINDS_FOR_SITZT = 2
+# Ab diesem Anforderungsbereich gilt eine Aufgabe als eine der schwierigeren.
+# 1 ist Wiedergeben, 2 Anwenden, 3 Übertragen und Beurteilen.
+DEMANDING_AFB = 2
 # Kurzprüfungen nach „sitzt": Tage danach. Beide bestanden heißt „gefestigt".
 CHECK_AFTER = (3, 7)
 CHECK_ANSWERS = 2
@@ -127,10 +130,16 @@ def replay(answers: list[dict]) -> dict:
                 break
             tail += 1
         kinds = {kind_of(r) for r in rows[len(rows) - tail:]} if tail else set()
-        if tail >= CLEAN_RUN and len(kinds) >= KINDS_FOR_SITZT:
+        clean_tail = rows[len(rows) - tail:] if tail else []
+        # „Sitzt" verlangt, dass auch eine der schwierigeren Aufgaben getroffen
+        # hat (D97): Der Nutzer bindet die Einschätzung ausdrücklich daran, dass
+        # die Aufgaben aus Buch und Arbeitsheft „auch in den schwierigeren
+        # Niveaus" richtig bearbeitet wurden. Wiedererkennen allein reicht nicht.
+        demanding = any((r.get("afb") or 0) >= DEMANDING_AFB for r in clean_tail)
+        if tail >= CLEAN_RUN and len(kinds) >= KINDS_FOR_SITZT and demanding:
             if stage not in ("sitzt", "gefestigt"):
                 stage, sat, checks = "sitzt", day, 0
-            reason = f"{tail} Aufgaben in {len(kinds)} Arten ohne Hilfe, ohne Zögern"
+            reason = f"{tail} Aufgaben in {len(kinds)} Arten ohne Hilfe, ohne Zögern, darunter eine schwierigere"
         elif any(r["result"] == "correct" for r in rows):
             stage, sat, checks = "wackelt", None, 0
             reason = _why(rows)
@@ -159,12 +168,13 @@ def is_check(topic: dict, day: date | None = None) -> bool:
 
 def record_answer(c, account_id: int, topic_id: int, session_id: int, message_id: int | None,
                   task_kind: str, result: str, help_used: bool, seconds: int | None,
-                  edits: int | None, re_explained: bool) -> int:
+                  edits: int | None, re_explained: bool, afb: int | None = None,
+                  task_form: str = "") -> int:
     return c.execute(
         "INSERT INTO topic_answers(account_id,topic_id,session_id,message_id,task_kind,result,help_used,"
-        "seconds,edits,re_explained,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        "seconds,edits,re_explained,afb,task_form,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (account_id, topic_id, session_id, message_id, task_kind or "", result, int(help_used),
-         seconds, edits, int(re_explained), now_iso())).lastrowid
+         seconds, edits, int(re_explained), afb, task_form or "", now_iso())).lastrowid
 
 
 def refresh(c, topic_id: int, session_id: int | None = None) -> dict:
@@ -453,7 +463,17 @@ def _matching_rows(account_id: int, subject: str, places: list[dict]) -> list[di
     """Die abgelegten Seiten, die eine der Stellen belegen."""
     from .sources import serves
     if not places:
-        return []
+        # Ohne Stellenangabe stand der Mentor bisher ohne Material da und hat sich
+        # eine Buchseite ausgedacht, obwohl Arbeitsheft und Buch des Fachs im
+        # Bestand lagen (D97). Dann gelten die jüngsten Seiten des Fachs.
+        with closing(webapp_conn()) as c:
+            return [dict(r) for r in c.execute(
+                "SELECT id,kind,origin,title,summary,content_text,source_label,source_page,printed_pages,page_check "
+                "FROM materials WHERE account_id=? AND hidden=0 AND lower(subject_name)=lower(?) "
+                "AND kind IN ('book_page','workbook','worksheet') AND COALESCE(content_text,'')!='' "
+                "AND COALESCE(page_check,'') NOT IN ('mismatch','blank') "
+                "ORDER BY COALESCE(document_date,created_at) DESC, id DESC LIMIT 4",
+                (account_id, subject))]
     with closing(webapp_conn()) as c:
         rows = [dict(r) for r in c.execute(
             "SELECT id,kind,origin,title,summary,content_text,source_label,source_page,printed_pages,page_check "
@@ -499,7 +519,7 @@ def material_for(account_id: int, subject: str, places: list[dict], budget: int 
     """Der Text der Originalseiten zu den Stellen eines Themas, bis zum Budget."""
     out = []
     used = 0
-    for hit in sorted(_matching_rows(account_id, subject, places), key=lambda h: min(h["hit_pages"])):
+    for hit in sorted(_matching_rows(account_id, subject, places), key=lambda h: min(h.get("hit_pages") or [0])):
         text = (hit.get("content_text") or hit.get("summary") or "").strip()
         if not text:
             continue
@@ -508,8 +528,14 @@ def material_for(account_id: int, subject: str, places: list[dict], budget: int 
             break
         text = text[:room]
         used += len(text)
-        label = hit["place"].get("label") or _row_label(hit) or "Buch"
-        out.append({"stelle": f"{label} S. {', '.join(map(str, hit['hit_pages']))}", "text": text})
+        label = (hit.get("place") or {}).get("label") or _row_label(hit) or "Buch"
+        pages = hit.get("hit_pages") or ([hit["source_page"]] if hit.get("source_page") else [])
+        # Ohne Stellenbezug sind es die jüngsten Seiten des Fachs; das wird
+        # benannt, damit der Mentor sie nicht als die genannte Stelle ausgibt.
+        where = f"{label} S. {', '.join(map(str, pages))}" if pages else label
+        if not hit.get("place"):
+            where += " (jüngste Seite des Fachs, keine Stelle genannt)"
+        out.append({"stelle": where, "text": text})
     return out
 
 

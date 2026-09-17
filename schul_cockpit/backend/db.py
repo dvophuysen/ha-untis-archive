@@ -886,6 +886,14 @@ _MIGRATIONS.append(("mentor_message_author_002",
 # Eintrags), ergebnis (die Bearbeitung des Kindes dazu), stoff (Thema).
 _MIGRATIONS.append(("material_links_002_relation", "ALTER TABLE material_links ADD COLUMN relation TEXT"))
 
+# Das Anforderungsniveau und die Aufgabenform je Antwort. „Sitzt" verlangt, dass
+# auch die schwierigeren Aufgaben richtig bearbeitet wurden (D97); ohne diese
+# beiden Angaben ließ sich das aus den Antworten nicht ablesen.
+_MIGRATIONS.append(("topic_answers_001_level", """
+ALTER TABLE topic_answers ADD COLUMN afb INTEGER;
+ALTER TABLE topic_answers ADD COLUMN task_form TEXT;
+"""))
+
 # Die Hintergrundauswertung (Unterrichtseinträge zu Themen ordnen) bekommt eine
 # eigene Stufe, getrennt vom Abschreiben der Buchseiten (D94). Die Eichung vom
 # 17.09. hat sie auf der niedrigen Stufe dreimal in Folge bei 11 von 12

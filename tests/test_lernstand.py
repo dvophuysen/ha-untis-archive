@@ -15,9 +15,13 @@ from backend import db, lernstand, ai_gateway as ai
 from backend.routers import exams as exams_router
 
 
-def answer(session, day, result="correct", help_used=False, seconds=8, edits=0, kind="Bilde", re_explained=False):
+def answer(session, day, result="correct", help_used=False, seconds=8, edits=0, kind="Bilde",
+           re_explained=False, afb=2, form="kurz"):
+    # afb 2 als Vorgabe: die üblichen Übungsaufgaben sind Anwenden. „Sitzt“
+    # verlangt mindestens eine davon (D97), reines Wiedergeben genügt nicht.
     return dict(session_id=session, created_at=f"{day}T15:00:00+02:00", result=result, help_used=int(help_used),
-                seconds=seconds, edits=edits, task_kind=kind, re_explained=int(re_explained))
+                seconds=seconds, edits=edits, task_kind=kind, re_explained=int(re_explained),
+                afb=afb, task_form=form)
 
 
 def test_three_clean_answers_in_two_kinds_mean_sitzt():
@@ -319,3 +323,17 @@ def test_a_topic_without_material_says_so(env):
             " VALUES(1,'k','SPANISCH',1,'Über Spanien sprechen','Länder beschreiben','neu','[]','now','now')").lastrowid
     ctx = lernstand.context_for(1, tid, None)
     assert ctx['material'] == [] and ctx['material_fehlt'] is True
+
+
+def test_recognition_alone_is_not_sitzt():
+    """Der Nutzer bindet „sitzt“ daran, dass die Aufgaben aus Buch und
+    Arbeitsheft auch in den schwierigeren Niveaus richtig bearbeitet wurden
+    (D97). Drei leichte Wiedergabeaufgaben reichen deshalb nicht."""
+    leicht = [answer(1, "2026-09-16", kind="Erkenne", afb=1, form="auswahl"),
+              answer(1, "2026-09-16", kind="Bilde", afb=1, form="auswahl"),
+              answer(1, "2026-09-16", kind="Übersetze", afb=1, form="auswahl")]
+    assert lernstand.replay(leicht)["stage"] == "wackelt"
+    # Eine schwierigere richtig bearbeitete Aufgabe in der Serie genügt.
+    gemischt = leicht[:2] + [answer(1, "2026-09-16", kind="Übersetze", afb=2, form="frei")]
+    state = lernstand.replay(gemischt)
+    assert state["stage"] == "sitzt" and "schwierigere" in state["reason"]
