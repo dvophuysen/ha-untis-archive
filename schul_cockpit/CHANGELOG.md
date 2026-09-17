@@ -1,3 +1,12 @@
+## 0.96.0
+
+- Gelernt wird das Thema, nicht die Buchseite. Die hinterlegten Seiten sind für den Mentor ab jetzt ausdrücklich die Grundlage — Niveau, Wortschatz, Formen und die Art, wie im Heft geübt wird —, nicht der Stoff zum Wiedergeben. Eigene Aufgaben zum selben Ziel sind erwünscht; eine erfundene Fundstelle bleibt ein Fehler.
+- Der Mentor beruft sich nicht mehr auf „das Material". Bei „Über Spanien und andere Länder sprechen" fragte er auf Deutsch, wie viele Comunidades Autónomas Spanien hat, und schrieb die Antwort dem Material zu, obwohl sie in keiner der beiden hinterlegten Seiten steht. Alles, was das Kind zum Lösen braucht, steht jetzt in der Aufgabe selbst; soll es nachschlagen, nennt er Heft und Seite.
+- In Sprachfächern wird Sprache geübt, nicht Erdkunde. Braucht eine Aufgabe einen Fakt, gibt der Mentor ihn vor, und das Kind formuliert ihn in der Fremdsprache.
+- Die Grundlage ist das Kapitel, nicht nur die genannte Seite. Zu den Stellen eines Themas kommen bis zu vier weitere abgelegte Seiten desselben Buchkapitels, als solche gekennzeichnet. Im Beispiel lag die tragende Seite (Schulbuch S. 48, „Hier lernst du: über ein Land zu sprechen") im Bestand, hing aber nicht am Thema — der Mentor hatte sie nicht.
+- Das Kind kann die Grundlage aufschlagen. Im Lernraum steht über dem Gespräch, auf welchen Seiten die Einheit fußt; jede lässt sich aufklappen und zeigt die gedruckte Fassung ohne die eigenen Eintragungen.
+- Kein Nachfragen um Erlaubnis. Nach einem berechtigten Einwand kommt im selben Zug die berichtigte Aufgabe. Drei Züge ohne Aufgabe fordern eine ein.
+
 ## 0.95.0
 
 - Fehler behoben: Dieselbe Seite galt gleichzeitig als vorhanden und als fehlend. Bei „Spanische Texte verstehen und erschließen" stand „Buch S. 48 · Schulbuch S. 48 · Arbeitsheft S. 26 · 2 von 3 Seiten da · fehlt Schulbuch S. 48". Ein Unterrichtseintrag hatte „Buch S. 48" geschrieben, ein anderer „Schulbuch S. 48" — zwei Nennungen einer Seite, die als zwei Stellen geführt wurden. Da eine vorliegende Seite nur die erste passende Stelle belegt, blieb die zweite offen. Nennungen desselben Buchs werden jetzt zusammengeführt, und der genauere Name gewinnt. Verschiedene Bücher mit gleicher Seitenzahl bleiben getrennt, der Begleitband ebenso.

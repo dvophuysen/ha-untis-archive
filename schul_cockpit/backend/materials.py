@@ -294,7 +294,11 @@ def _public(row, with_links=None) -> dict:
     result["has_file"] = bool(row["filename"])
     result["locked_fields"] = json.loads(row["locked_fields"] or "[]")
     result["needs_review"] = needs_review(row)
+    # Die gedruckte Seite ohne die Eintragungen des Kindes: So schlägt das Kind
+    # im Lernraum dieselbe Seite auf, die der Mentor als Grundlage hat (D101).
     keys = row.keys()
+    if "content_text" in keys:
+        result["printed_text"] = printed_only(row["content_text"])
     result["blurry"] = bool("sharpness" in keys and row["sharpness"] is not None and row["sharpness"] < BLURRY_BELOW)
     if with_links is not None:
         result["links"] = with_links
