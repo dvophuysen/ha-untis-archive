@@ -1,3 +1,25 @@
+# Verfassung des Kindes 0.88.0
+
+Stand 17.09.2026. Schritt 5 aus MENTOR_EINSTIEG.md, Entscheidung D93.
+
+**Gebaut.** `routers/mentor.condition()` liest die letzten vier Kindnachrichten,
+den Hinweiszähler der Einheit und die Uhrzeit und liefert die Signale
+`einsilbig`, `viele_hinweise`, `spaet`. Sie stehen als `verfassung` im Kontext,
+und beide Instruktionen (Hausaufgabenhilfe und Üben) verlangen dann kleinere
+Schritte, eine Sache auf einmal, ein Pausenangebot ohne Zwang und einen
+Abschluss mit etwas Geglücktem. Die Erkennung liegt bewusst in der App: Dieselben
+Signale sollen immer dasselbe auslösen, unabhängig davon, wie das Modell den
+Verlauf gerade liest.
+
+**Nicht gebaut, bewusst.** Kein Abbruch, keine verkürzte Uhr, keine Änderung an
+der Grenze: Das Ende bleibt ein Vorschlag (D73). „Voller Tagesplan“ als viertes
+Signal fehlt noch; dafür müsste die Tagesplanung in den Zug hineingereicht
+werden, was mehr kostet als es hier trägt.
+
+**Tests.** Jedes Signal einzeln, der Normalfall ohne Signal, und dass die
+Verfassung nach mehreren Hinweisen wirklich im Kontext des Modells ankommt.
+462 Tests grün.
+
 # Arbeitsblätter Stufe 2 und 3 0.87.0
 
 Stand 17.09.2026. Umsetzung der offenen Stufen aus ARBEITSBLAETTER.md (D85),

@@ -1,3 +1,7 @@
+## 0.88.0
+
+- Der Mentor merkt, wenn es gerade schwer fällt: mehrere einsilbige Antworten hintereinander, mehrere Hinweise in einer Einheit oder eine späte Stunde. Dann werden die Schritte kleiner, es geht eine Sache nach der anderen, eine Pause wird angeboten statt erzwungen, und zum Schluss steht etwas, das geklappt hat. Erkannt wird das in der App, nicht vom Modell, damit dieselben Signale immer dasselbe auslösen. Abgebrochen wird nichts.
+
 ## 0.87.0
 
 - Arbeitsblätter, Stufe 2 und 3: Die Auswertung sieht beim Einlesen die möglichen Einträge des Fachs aus den letzten 14 Tagen und sortiert vor. Sie nennt den Beleg vom Blatt selbst — Überschrift, Aufgabennummern oder ein aufgedrucktes Datum — und ihr Vorschlag steht in der Liste oben, mit dem Grund darunter. Zugeordnet wird weiterhin nur per Tipp; geraten wird nichts.
