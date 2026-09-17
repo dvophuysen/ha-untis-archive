@@ -23,11 +23,15 @@
   Zugang. In der Claude-Code-Sandbox blockt der Agent-Proxy Python-urllib
   mit 403; `ha_diagnose.py` fällt dann selbst auf `curl` zurück, andere
   Aufrufe dort direkt per `curl` machen.
-- Den vollen Supervisor-Zugriff (Add-on-Info, Optionen, Neustart) gibt es
-  über die HA-Websocket-API `$HA_URL/api/websocket` mit dem Kommando
-  `{"type":"supervisor/api","endpoint":"/addons/<slug>/info","method":"get"}`.
-  Textantworten wie Logs kann dieser Weg nicht liefern, dafür den
-  REST-Proxy nehmen.
+- Den vollen Supervisor-Zugriff (Add-on-Info, Store-Reload, Ingress-Sitzung)
+  gibt `node scripts/ha_supervisor.mjs <endpoint> [method]` über die
+  HA-Websocket-API (Kommando `supervisor/api`). Textantworten wie Logs kann
+  dieser Weg nicht liefern, dafür den REST-Proxy nehmen. Die Add-on-API
+  selbst (Verläufe, Materialien, Aufgaben) ist über eine Ingress-Sitzung
+  erreichbar; der Kopf des Skripts zeigt den Weg. Add-on-Updates nie selbst
+  auslösen; der Nutzer spielt sie ein.
+- Stand und offene Punkte für eine neue Session:
+  [schul_cockpit/konzept/UEBERGABE.md](schul_cockpit/konzept/UEBERGABE.md).
 - `.mcp.json` bindet zusätzlich den HA-MCP-Server der Instanz ein
   (`$HA_URL/mcp_server/sse`, Integration „Model Context Protocol
   Server“). Er spricht nur die Assist-Schnittstelle — für Diagnosen die
