@@ -585,3 +585,54 @@ def ai_env(patch, url='https://example.com/responses', key='fake', tiers=None, s
     patch.setenv('LEARNING_AI_PLATFORMS', _json.dumps(platforms))
     patch.setenv('LEARNING_AI_MODELS', _json.dumps(models))
     return platforms, models
+
+
+def test_the_classification_can_be_compared_against_the_stored_state(env, monkeypatch):
+    """Eichwerkzeug für die Unterrichtsauswertung: dieselben Stunden noch einmal
+    einordnen, nichts speichern. Der erste Anlauf scheiterte live an einem
+    falschen Spaltennamen, deshalb hier ein Test am echten Endpunkt."""
+    import json as _json
+    from contextlib import closing as _closing
+    from backend import db as _db, ai_gateway
+    from backend.routers import discovery as disc
+    client, state, patch = env
+    client.app.include_router(disc.router, prefix="/api")
+    seed(client, ai_enabled=True)
+    ai_env(patch)
+    with sqlite3.connect(_db.SETTINGS.history_db_path) as c:
+        c.executescript(
+            "CREATE TABLE IF NOT EXISTS lessons(id INTEGER PRIMARY KEY,account_id INTEGER,date TEXT,"
+            "start_time TEXT,end_time TEXT,subject_name TEXT,subject_untis_id INTEGER,"
+            "teacher_untis_id INTEGER,lstext TEXT,was_absent INTEGER,code TEXT);"
+            "INSERT OR REPLACE INTO lessons(id,account_id,date,start_time,end_time,subject_name,"
+            "subject_untis_id,teacher_untis_id,lstext,was_absent,code) "
+            "VALUES(900,1,'2026-09-10','07:50','08:35','Deutsch',1,1,'Adjektive steigern',0,NULL);")
+    with _closing(_db.webapp_conn()) as c, c:
+        p = c.execute("SELECT id FROM learning_profiles WHERE account_id=1").fetchone()[0]
+        tid = c.execute("INSERT INTO learning_topics(profile_id,subject,title,objective,method,status,priority,"
+                        "source_note,created_at,updated_at) VALUES(?,'Deutsch','Steigerung','Ziel','explain',"
+                        "'active',1,'','now','now')", (p,)).lastrowid
+        c.execute("INSERT INTO learning_discovery_items(account_id,profile_id,lesson_id,fingerprint,topic_id,note)"
+                  " VALUES(1,?,900,'f',?,'')", (p, tid))
+        # Die automatische Auswertung muss für das Konto freigegeben sein.
+        c.execute("INSERT OR REPLACE INTO learning_discovery_settings(account_id,enabled) VALUES(1,1)")
+
+    async def complete(account_id, purpose, instruction, context, images=None, max_output=4096,
+                       session_id=None, tier=None, effort=None):
+        assert tier == 'niedrig'
+        return _json.dumps({"topics": [{"title": "Steigerung", "objective": "Ziel der Stunde",
+                                        "explanation": "Kurze Erklärung", "bridge": "Bild",
+                                        "prerequisites": "Grundlage", "outlook": "Ausblick",
+                                        "lesson_ids": [900],
+                                        "check": {"kind": "practice", "afb": 1, "operator": "Erkläre",
+                                                  "prompt": "Erkläre die Steigerung.", "explanation": "Erklärung",
+                                                  "hint": "Hinweis", "solution": "Lösung",
+                                                  "criteria": "Kriterien", "minutes": 5}}],
+                            "unclear": []}), {}, 'fake'
+    patch.setattr(ai_gateway, 'complete', complete)
+    r = client.post(path() + "/discovery/compare?tier=niedrig")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body['gleich'] == 1 and body['verglichen'] == 1 and body['abweichungen'] == []
+    assert body['model'] == 'test-luna'
+    assert client.post(path() + "/discovery/compare?tier=gibtsnicht").status_code == 422

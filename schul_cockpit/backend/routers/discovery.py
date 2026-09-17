@@ -143,7 +143,7 @@ async def compare_classification(account_id:int, tier:str, user:CurrentUser=Depe
     if not rows:raise HTTPException(409,'Noch keine ausgewerteten Stunden zum Vergleichen.')
     stored={r['lesson_id']:r['title'] for r in rows}
     subject=rows[0]['subject']
-    known={r['lesson_id']:r for r in s['rows']}
+    known={r['id']:r for r in s['rows']}
     batch=[known[i] for i in stored if i in known]
     if not batch:raise HTTPException(409,'Die ausgewerteten Stunden liegen nicht mehr im Bestand.')
     context=dict(grade=p['grade'],subject=subject,existing_topics=prior,

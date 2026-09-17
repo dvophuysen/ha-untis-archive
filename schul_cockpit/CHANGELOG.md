@@ -1,3 +1,7 @@
+## 0.89.1
+
+- Fehler behoben: Das neue Eichwerkzeug für die Unterrichtsauswertung brach mit einem Serverfehler ab, weil es die Stunden unter einem falschen Spaltennamen suchte. Der Weg hat jetzt einen eigenen Test.
+
 ## 0.89.0
 
 - Eichwerkzeug für die automatische Unterrichtsauswertung: Dieselben Stunden lassen sich mit einer anderen Modellstufe noch einmal einordnen und gegen den gespeicherten Stand halten, ohne dass etwas gespeichert wird. Die Auswertung ist der zweitgrößte Kostenposten und läuft ohne Kind davor; ob sie eine günstigere Stufe verträgt, war bisher ungemessen.
