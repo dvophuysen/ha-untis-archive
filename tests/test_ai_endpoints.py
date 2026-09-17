@@ -168,3 +168,62 @@ def test_the_views_still_render_without_any_foundry(setup):
     with pytest.raises(ai.HTTPException) as exc:
         ai.settings_for('hoch')
     assert exc.value.status_code == 503
+
+
+def test_a_rejected_request_releases_its_reservation(setup):
+    """404 oder falscher Schlüssel kosten kein Token. Die Reservierung stehen zu
+    lassen bindet Buchwert für nichts (D89); Zeitüberschreitung bleibt stehen,
+    dort kann das Modell gelaufen sein."""
+    _, _, patch = setup
+    both(patch)
+    key = ai.reserve(1, 'mentor', None, 1000, 100)
+    ai.release(key, 'nicht angenommen (404)')
+    from contextlib import closing
+    from backend import db
+    with closing(db.webapp_conn()) as c:
+        row = c.execute('SELECT status,charged_micro FROM mentor_ai_calls WHERE id=?', (key,)).fetchone()
+        assert (row['status'], row['charged_micro']) == ('released', 0)
+        assert ai.effective_sum(c, 'id=?', (key,)) == 0
+    # Eine unklare Antwort bleibt dagegen mit ihrer Reservierung stehen.
+    other = ai.reserve(1, 'mentor', None, 1000, 100)
+    ai.settle(other, error='provider_error')
+    with closing(db.webapp_conn()) as c:
+        assert ai.effective_sum(c, 'id=?', (other,)) > 0
+
+
+def test_a_crashed_call_stops_binding_budget_after_an_hour(setup):
+    _, _, patch = setup
+    both(patch)
+    key = ai.reserve(1, 'mentor', None, 1000, 100)
+    from contextlib import closing
+    from backend import db
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("UPDATE mentor_ai_calls SET created_at='2026-09-11T10:00:00+02:00' WHERE id=?", (key,))
+    patch.setattr(ai, 'now_iso', lambda: '2026-09-11T14:00:00+02:00')
+    ai.release_stale()
+    with closing(db.webapp_conn()) as c:
+        assert c.execute('SELECT status FROM mentor_ai_calls WHERE id=?', (key,)).fetchone()[0] == 'released'
+
+
+def test_the_month_is_projected_and_warns_before_it_is_reached(setup):
+    """Gewarnt wird auf die Hochrechnung hin, nicht erst beim Erreichen."""
+    _, _, patch = setup
+    both(patch)
+    from contextlib import closing
+    from backend import db
+    with closing(db.webapp_conn()) as c, c:
+        ai.init_config(c)
+        c.execute('UPDATE mentor_ai_config SET monthly_micro=400000000, warning_micro=60000000 WHERE id=1')
+        # 21 Euro in der laufenden Woche, am 11. des Monats. Ein einzelner
+        # schwerer Tag wird über das Fenster geglättet, sonst würde ein
+        # einmaliges Einlesen den Rest des Monats hochrechnen.
+        for n in range(7):
+            c.execute("INSERT INTO mentor_ai_calls(id,account_id,session_id,purpose,month,day,model,status,"
+                      "reserved_micro,charged_micro,input_rate,output_rate,created_at) "
+                      "VALUES(?,1,NULL,'mentor','2026-09',?,'test','settled',?,?,10,45,'now')",
+                      (f'p{n}', f'2026-09-{5+n:02d}', 3_000_000, 3_000_000))
+    s = ai.status()
+    assert s['used_eur'] == 21.0
+    # 3 Euro am Tag, 19 Tage Rest: die Hochrechnung reißt die Schwelle von 60.
+    assert s['per_day_eur'] == 3.0 and s['projected_eur'] == 78.0
+    assert s['warning'] is True and s['used_eur'] < 60, 'die Warnung kommt vor dem Erreichen'

@@ -89,9 +89,16 @@
   const bookAnchor = (book) => 'buch-' + `${book?.subject ?? ''}-${book?.title ?? ''}`.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   function showChapters(book) {
     const el = document.getElementById(book ? bookAnchor(book) : 'buecher');
-    if (!el) return;
-    if (el.tagName === 'DETAILS') el.open = true;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!el) {
+      message = 'Die Kapitelliste steht erst bereit, wenn das Verzeichnis fertig gelesen ist.';
+      return;
+    }
+    // Der Bücher-Block steckt in „Was mir noch fehlt“. Ein zugeklapptes
+    // <details> blendet seinen Inhalt aus, und auf etwas Ausgeblendetes läuft
+    // scrollIntoView ins Leere: Es passiert sichtbar gar nichts. Deshalb erst
+    // alle umschließenden Klappen öffnen, dann springen.
+    for (let node = el; node; node = node.parentElement?.closest('details')) node.open = true;
+    requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
   // Kapitel eines Buchs berichtigen: Anfangs- oder Endseite.
   async function fixChapter(unit, field, value) {

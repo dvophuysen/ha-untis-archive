@@ -11,7 +11,7 @@ import io
 import math
 import uuid
 from contextlib import closing
-from datetime import date
+from datetime import date, datetime, timedelta
 from urllib.parse import urlsplit
 import httpx
 import logging
@@ -57,10 +57,51 @@ def init_config(c):
 
 
 def effective_sum(c, where, args=()):
-    return c.execute("SELECT COALESCE(SUM(CASE WHEN status='settled' THEN charged_micro ELSE reserved_micro END),0) FROM mentor_ai_calls WHERE "+where,args).fetchone()[0]
+    # Abgerechnet zählt der Betrag, freigegeben zählt gar nichts, alles andere
+    # steht mit seiner Reservierung da, bis es sich klärt.
+    return c.execute("SELECT COALESCE(SUM(CASE WHEN status='settled' THEN charged_micro "
+                     "WHEN status='released' THEN 0 ELSE reserved_micro END),0) FROM mentor_ai_calls WHERE "+where,args).fetchone()[0]
+
+
+def release(key, reason):
+    """Eine Reservierung auflösen, wenn der Anbieter die Anfrage nie angenommen
+    hat. Sie stehen zu lassen kostet Buchwert für Token, die nie verbraucht
+    wurden: Ein falsch eingetragener Endpunkt hat so an einem Vormittag 0,80 €
+    gebunden, ohne dass ein einziges Token geflossen wäre (D89)."""
+    with closing(webapp_conn()) as c,c:
+        c.execute("UPDATE mentor_ai_calls SET status='released',charged_micro=0,finished_at=?,error=? "
+                  "WHERE id=? AND status!='settled'",(now_iso(),reason,key))
+
+
+# Ein Aufruf, der nach einer Stunde weder abgerechnet noch gescheitert ist, ist
+# abgestürzt. Seine Reservierung blockiert sonst dauerhaft die Schätzung.
+STALE_AFTER_SECONDS = 3600
+
+
+def release_stale():
+    cutoff=(datetime.fromisoformat(now_iso())-timedelta(seconds=STALE_AFTER_SECONDS)).isoformat()
+    with closing(webapp_conn()) as c,c:
+        if c.execute("SELECT 1 FROM mentor_ai_calls WHERE status='reserved' AND created_at<? LIMIT 1",(cutoff,)).fetchone():
+            c.execute("UPDATE mentor_ai_calls SET status='released',charged_micro=0,finished_at=?,error='abgebrochen' "
+                      "WHERE status='reserved' AND created_at<?",(now_iso(),cutoff))
+
+
+def projection(c, month, used_micro, today):
+    """Wo der Monat landet, wenn es so weitergeht.
+
+    Grundlage sind die letzten sieben Tage, nicht der Monatsschnitt: Ein
+    einmaliges Einlesen eines Buchbestands am Monatsanfang würde die
+    Hochrechnung sonst dauerhaft verzerren."""
+    import calendar
+    days_in_month=calendar.monthrange(today.year,today.month)[1]
+    window=[(today-timedelta(days=n)).isoformat() for n in range(7)]
+    recent=effective_sum(c,'day IN (%s)'%','.join('?'*len(window)),tuple(window))
+    per_day=recent/min(7,today.day)
+    return round((used_micro+per_day*(days_in_month-today.day))/1e6,2),round(per_day/1e6,3)
 
 
 def status():
+    release_stale()
     with closing(webapp_conn()) as c:
         cfg = init_config(c)
         month = today_local().strftime('%Y-%m')
@@ -69,6 +110,10 @@ def status():
         bg = effective_sum(c,"month=? AND purpose IN ('discovery','background')",(month,))
         src = effective_sum(c,"month=? AND purpose='sources'",(month,))
         counts = c.execute('SELECT status,COUNT(*) n FROM mentor_ai_calls WHERE month=? GROUP BY status',(month,)).fetchall()
+    today=today_local()
+    with closing(webapp_conn()) as c:
+        projected,per_day=projection(c,month,used,today)
+        over=[r[0] for r in c.execute("SELECT DISTINCT over_budget FROM mentor_ai_calls WHERE month=? AND over_budget IS NOT NULL",(month,))]
     tiers=ai_tiers()
     model=tiers[MAIN_TIER]['model']
     # Die App wählt Stufen, keine Modellnamen: Ein Modellwechsel in der
@@ -85,7 +130,12 @@ def status():
                 rates=rates,
                 warning_eur=cfg['warning_micro']/1e6,background_eur=round(bg/1e6,4),
                 sources_eur=round(src/1e6,4),sources_limit_eur=cfg['sources_micro']/1e6,
-                warning=used>=cfg['warning_micro'],remaining_eur=max(0,(cfg['monthly_micro']-used)/1e6),
+                # Gewarnt wird, wenn der Monat auf den Richtwert zuläuft, nicht erst
+                # wenn er ihn erreicht hat: Eine Warnung hinterher nützt nichts (D89).
+                warning=used>=cfg['warning_micro'] or projected*1e6>=cfg['warning_micro'],
+                projected_eur=projected,per_day_eur=per_day,
+                over_budget=sorted({x for row in over for x in row.split(',') if x}),
+                remaining_eur=max(0,(cfg['monthly_micro']-used)/1e6),
                 opening_confirmed=bool(cfg['opening_confirmed'] or cfg['opening_month']!=month),
                 opening_eur=opening/1e6,rate_available=bool(rate_for(tiers[MAIN_TIER])),
                 accounting='Konservative Budgetanrechnung, keine Azure-Rechnung',rate_valid_until=RATE_UNTIL.isoformat(),
@@ -151,6 +201,28 @@ def endpoint_overview():
     return '; '.join(parts) or 'kein Modell eingerichtet'
 
 
+# Die Rahmen sperren nicht mehr, sie melden. Der Betreiber hat sie ausdrücklich
+# als Beobachtung gewollt, nicht als Tor: Die Schul-App muss laufen, auch wenn
+# ein Rahmen reißt, denn ein blockierter Mentor mitten in einer Abfrage ist ein
+# schlechterer Ausgang als ein überschrittener Richtwert (D89).
+def thresholds(c, cfg, account_id, purpose, session_id, day, month, upper):
+    """Welche Richtwerte dieser Aufruf überschreitet. Nur zur Meldung."""
+    opening=cfg['opening_micro'] if cfg['opening_month']==month else 0
+    own = purpose!=SOURCES and purpose not in BACKGROUND
+    over=[]
+    if effective_sum(c,'month=?',(month,))+opening+upper>cfg['monthly_micro']:
+        over.append('monat')
+    if own and effective_sum(c,"day=? AND account_id=? AND purpose NOT IN ('sources','background','discovery')",(day,account_id))+upper>cfg['daily_micro']:
+        over.append('tag')
+    if session_id is not None and effective_sum(c,'session_id=? AND account_id=?',(session_id,account_id))+upper>SESSION_MICRO:
+        over.append('einheit')
+    if purpose in BACKGROUND and effective_sum(c,"month=? AND purpose IN ('discovery','background')",(month,))+upper>cfg['background_micro']:
+        over.append('hintergrund')
+    if purpose==SOURCES and effective_sum(c,"month=? AND purpose='sources'",(month,))+upper>cfg['sources_micro']:
+        over.append('quellen')
+    return over
+
+
 def reserve(account_id, purpose, session_id, input_max, output_max, settings=None):
     settings=settings or settings_for(tier_for(purpose))
     model=settings['model']
@@ -164,25 +236,10 @@ def reserve(account_id, purpose, session_id, input_max, output_max, settings=Non
         c.execute('BEGIN IMMEDIATE');cfg=init_config(c)
         if cfg['opening_month']==month and not cfg['opening_confirmed']:
             raise HTTPException(409,'Bitte als Eltern zuerst die bisherigen KI-Kosten dieses Monats im Mentor bestätigen.')
-        opening=cfg['opening_micro'] if cfg['opening_month']==month else 0
-        if effective_sum(c,'month=?',(month,))+opening+upper>cfg['monthly_micro']:
-            raise HTTPException(429,'Der KI-Rahmen ist ausgeschöpft. Gespeicherte Übungen und Antworten bleiben verfügbar.')
-        # Die Tagesgrenze je Kind schützt das Üben und Fragen des Kindes. Was
-        # die App selbst im Hintergrund tut (Quellen einlesen, Materialien
-        # auswerten, Einstiegshilfen), zählt nicht dagegen: Am 15.09. hatten
-        # 26 Auswertungen den Tagesrahmen eines Kindes aufgebraucht, bevor es eine Frage
-        # gestellt hatte. Die Höhe steht in mentor_ai_config.daily_micro.
-        own = purpose!=SOURCES and purpose not in BACKGROUND
-        if own and effective_sum(c,"day=? AND account_id=? AND purpose NOT IN ('sources','background','discovery')",(day,account_id))+upper>cfg['daily_micro']:
-            raise HTTPException(429,'Für heute ist der KI-Rahmen erreicht. Wir sichern deinen Stand.')
-        if session_id is not None and effective_sum(c,'session_id=? AND account_id=?',(session_id,account_id))+upper>SESSION_MICRO:
-            raise HTTPException(429,'Für diese Einheit ist der KI-Rahmen erreicht. Dein Stand bleibt gespeichert.')
-        if purpose in BACKGROUND and effective_sum(c,"month=? AND purpose IN ('discovery','background')",(month,))+upper>cfg['background_micro']:
-            raise HTTPException(429,'Die weitere Hintergrundauswertung wartet auf das nächste Monatsbudget.')
-        if purpose==SOURCES and effective_sum(c,"month=? AND purpose='sources'",(month,))+upper>cfg['sources_micro']:
-            raise HTTPException(429,'Der Rahmen für den Quellenbestand ist für diesen Monat ausgeschöpft.')
-        c.execute('INSERT INTO mentor_ai_calls(id,account_id,session_id,purpose,month,day,model,status,reserved_micro,input_rate,output_rate,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
-                  (key,account_id,session_id,purpose,month,day,model,'reserved',upper,ri,ro,now_iso()))
+        over=thresholds(c,cfg,account_id,purpose,session_id,day,month,upper)
+        c.execute('INSERT INTO mentor_ai_calls(id,account_id,session_id,purpose,month,day,model,status,reserved_micro,input_rate,output_rate,created_at,over_budget) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                  (key,account_id,session_id,purpose,month,day,model,'reserved',upper,ri,ro,now_iso(),','.join(over) or None))
+        if over:LOG.warning('KI-Richtwert überschritten (%s), der Aufruf läuft trotzdem: %s',purpose,', '.join(over))
     return key
 
 
@@ -267,7 +324,14 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
         # Der Grund gehört ins Log, sonst heißt jeder Fehler nur „502": Status der
         # Antwort, warum sie unvollständig blieb, was an Ausgabe kam.
         if result is None:
-            settle(key,error='provider_error')
+            # Eine abgelehnte Anfrage (falsche Adresse, falscher Schlüssel, Drosselung)
+            # hat kein Token gekostet: Reservierung auflösen statt buchen. Zeitüberschreitung
+            # und Serverfehler bleiben stehen, dort kann das Modell gelaufen sein.
+            status=getattr(getattr(exc,'response',None),'status_code',None)
+            if (status is not None and status<500) or isinstance(exc,httpx.ConnectError):
+                release(key,f'nicht angenommen ({status or "keine Verbindung"})')
+            else:
+                settle(key,error='provider_error')
             LOG.warning('KI-Aufruf (%s) ohne verwertbare Antwort: %s',purpose,f'{type(exc).__name__}: {str(exc)[:200]}')
         else:
             outputs=[(o.get('type'),o.get('status')) for o in (result.get('output') or []) if isinstance(o,dict)][:6]
@@ -323,7 +387,12 @@ async def transcribe(account_id, audio, mime, language=None, prompt='', session_
         if not isinstance(usage.get('input_tokens'),int):result['usage']={'input_tokens':upper_input,'output_tokens':min(400,len(result['text'])//2+1)}
         settle(key,result)
         return result['text'].strip()
-    except (httpx.HTTPError,ValueError,KeyError,TypeError):
-        if result is None:settle(key,error='provider_error')
+    except (httpx.HTTPError,ValueError,KeyError,TypeError) as exc:
+        if result is None:
+            status=getattr(getattr(exc,'response',None),'status_code',None)
+            if (status is not None and status<500) or isinstance(exc,httpx.ConnectError):
+                release(key,f'nicht angenommen ({status or "keine Verbindung"})')
+            else:
+                settle(key,error='provider_error')
         raise HTTPException(502,'Die Aufnahme konnte nicht in Text umgewandelt werden. Du kannst deine Antwort tippen.') from None
 

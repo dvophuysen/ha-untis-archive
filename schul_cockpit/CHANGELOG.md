@@ -1,3 +1,10 @@
+## 0.84.0
+
+- Die KI-Rahmen sperren nicht mehr. Monat, Tag je Kind, Quellenbestand, Hintergrund und der Deckel je Gespräch sind jetzt Richtwerte: Wird einer überschritten, läuft der Aufruf trotzdem und die Überschreitung wird vermerkt. Ein Kind soll nicht mitten in einer Abfrage stehenbleiben, weil eine Zahl erreicht ist.
+- Hochrechnung statt Restanzeige: Die Elternansicht zeigt den bisherigen Verbrauch, den Schnitt der letzten Tage und wo der Monat landet, wenn es so weitergeht. Gewarnt wird, sobald die Hochrechnung den eingestellten Richtwert übersteigt, nicht erst beim Erreichen. Die Hochrechnung glättet über sieben Tage, damit ein einmaliges Einlesen eines Buchbestands nicht den ganzen Monat hochrechnet.
+- Fehlgeschlagene Aufrufe binden kein Budget mehr: Hat der Anbieter die Anfrage nie angenommen (falsche Adresse, falscher Schlüssel, Drosselung), wird die Reservierung aufgelöst. Ein falsch eingetragener Endpunkt hatte so an einem Vormittag 0,80 € gebunden, ohne dass ein Token geflossen wäre. Zeitüberschreitungen und Serverfehler bleiben gebucht, dort kann das Modell gelaufen sein.
+- Abgestürzte Aufrufe, die nach einer Stunde weder abgerechnet noch gescheitert sind, geben ihre Reservierung frei.
+
 ## 0.83.2
 
 - Fehler behoben: Unter „Materialien" führte „Kapitel prüfen" im Block „Bitte gegenlesen" auf eine leere Seite mit „Unbekannte Seite". Der Link zeigte auf einen Anker derselben Seite, und den hat die Seitensteuerung als Namen einer eigenen Seite gelesen. Jetzt springt der Knopf zum passenden Buch weiter unten und klappt dessen Kapitelliste gleich auf.

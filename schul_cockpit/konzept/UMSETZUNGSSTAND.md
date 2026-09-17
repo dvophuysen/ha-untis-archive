@@ -1,3 +1,32 @@
+# Richtwerte statt Sperren 0.84.0
+
+Stand 17.09.2026. Nutzerentscheidung: keine harten Grenzen, dafür Kosten im
+Blick und Warnung ab 60 € (D89). Grundlage ist die Messung aller 630 Aufrufe
+des Septembers: 50,06 € gebucht, real rund 26 $ zum Listenpreis; laufender
+Betrieb 1,75 $/Tag, davon 62 % Automatik ohne Kind, 34 % die Kinder selbst.
+
+**Gebaut.** `ai_gateway.thresholds()` ersetzt die fünf `raise`-Pfade in
+`reserve()` und liefert die Liste der überschrittenen Richtwerte; sie landet in
+der neuen Spalte `mentor_ai_calls.over_budget` (Migration
+`mentor_ai_calls_001_over_budget`) und als Warnung im Log. `release()` löst eine
+Reservierung auf, `release_stale()` räumt Aufrufe weg, die nach einer Stunde
+weder abgerechnet noch gescheitert sind; `effective_sum()` zählt freigegebene
+mit null. `complete()` und `transcribe()` geben frei, wenn der Anbieter die
+Anfrage nie angenommen hat (Status unter 500 oder keine Verbindung), und buchen
+weiter bei Zeitüberschreitung und Serverfehlern. `projection()` rechnet den
+Monat aus dem Schnitt der letzten sieben Tage hoch; `status()` liefert
+`projected_eur`, `per_day_eur` und `over_budget`, und `warning` schlägt an der
+Hochrechnung an statt am erreichten Betrag. `Mentor.svelte` zeigt Verbrauch,
+Tagesschnitt und Hochrechnung und nennt die Rahmen ausdrücklich als Richtwerte.
+
+**Nicht gebaut, bewusst.** Keine Notbremse: vom Nutzer abgelehnt. Keine
+Umstellung auf Dollar und keine Umrechnung alter Datensätze: als unnötige
+Verkomplizierung verworfen, der Aufschlag bleibt und warnt früh.
+
+**Tests.** `tests/test_ai_endpoints.py` um Freigabe, Stundenregel und
+Hochrechnung erweitert; drei Tests, die das alte Sperrverhalten festschrieben,
+prüfen jetzt den Vermerk statt des Fehlers. 452 Tests grün, Frontend gebaut.
+
 # KI-Plattformen und Modellstufen 0.83.0
 
 Stand 17.09.2026. Nutzerentwurf einer zentralen KI-Konfiguration (D88); löst
