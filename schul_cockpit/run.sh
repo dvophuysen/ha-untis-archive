@@ -6,17 +6,18 @@ export WEBAPP_LOG_LEVEL="${LOG_LEVEL:-info}"
 EXTERNAL_URL="$(bashio::config 'external_url')"
 export WEBAPP_EXTERNAL_URL="${EXTERNAL_URL:-}"
 
-export LEARNING_AI_URL="$(bashio::config 'learning_ai_url')"
-export LEARNING_AI_KEY="$(bashio::config 'learning_ai_key')"
-export LEARNING_AI_MODEL="$(bashio::config 'learning_ai_model')"
-# Zweiter Foundry-Zugang: Deployments aus der Liste laufen ausschließlich dort.
-# bashio gibt eine Listenoption als JSON aus; das Backend nimmt die Rohform
-# entgegen und trennt selbst an Komma und Zeile.
-export LEARNING_AI_URL_2="$(bashio::config 'learning_ai_url_2')"
-export LEARNING_AI_KEY_2="$(bashio::config 'learning_ai_key_2')"
-export LEARNING_AI_MODELS_2="$(bashio::config 'learning_ai_models_2')"
-export LEARNING_AI_TRANSCRIBE_MODEL="$(bashio::config 'learning_ai_transcribe_model')"
-export LEARNING_AI_TRANSCRIBE_URL="$(bashio::config 'learning_ai_transcribe_url')"
+# KI-Plattformen und Modellstufen kommen als verschachtelte Optionen. Statt
+# jedes Blatt einzeln über bashio zu holen, werden die beiden Blöcke direkt aus
+# der Optionsdatei als kompaktes JSON gereicht; das Backend liest sie.
+AI_OPTIONS=/data/options.json
+if [ -f "$AI_OPTIONS" ]; then
+  export LEARNING_AI_PLATFORMS="$(jq -c '.ki_plattformen // {}' "$AI_OPTIONS")"
+  export LEARNING_AI_MODELS="$(jq -c '.ki_modelle // {}' "$AI_OPTIONS")"
+else
+  bashio::log.warning "Optionsdatei ${AI_OPTIONS} nicht gefunden; KI bleibt aus."
+  export LEARNING_AI_PLATFORMS="{}"
+  export LEARNING_AI_MODELS="{}"
+fi
 
 export LEARNING_READ_TOKEN="$(bashio::config 'learning_read_token')"
 export LEARNING_READ_ACCOUNTS="$(bashio::config 'learning_read_accounts')"

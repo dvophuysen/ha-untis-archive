@@ -146,9 +146,13 @@ Der neue Tab **Lernen** verbindet Unterrichtsthemen, Materialien und Übungen ü
 
 Unter **Themen** lassen sich eigene Übungen anlegen; KI-Entwürfe werden erst nach Prüfung freigegeben. Der Lernverlauf enthält ausdrücklich Selbsteinschätzungen, keine automatisch vergebenen Noten. Für Screenshots und PDFs stehen 100 MB je Kind zur Verfügung (8 MB je Datei). PDF-Inhalt für KI als Text ergänzen oder einzelne Seiten als Bilder einstellen.
 
-Die optionalen Add-on-Einstellungen `learning_ai_url`, `learning_ai_key` und `learning_ai_model` konfigurieren einen kompatiblen HTTPS-Endpunkt für Responses oder Chat Completions. Für die Spracheingabe nennt `learning_ai_transcribe_model` das Transkriptions-Deployment (Standard `gpt-4o-transcribe`); liegt es unter einer eigenen Adresse, `learning_ai_transcribe_url` voll angeben. Zusätzlich muss KI pro Schuljahr freigegeben werden. Ohne Konfiguration ist der Lernraum mit eigenen Aufgaben voll nutzbar.
+Die KI wird an einer Stelle der Add-on-Konfiguration eingerichtet. Unter **KI-Plattformen** stehen zwei Azure-Foundry-Ressourcen mit je Endpunkt und API-Schlüssel; die zweite bleibt leer, solange nur eine im Einsatz ist. Darunter stehen unter **KI-Modelle** vier Stufen: Hoch, Mittel, Niedrig und Transkription. Je Stufe werden der Modellname, wahlweise ein abweichender Bereitstellungsname, die Foundry und wahlweise eigene Kostensätze eingetragen.
 
-Ziehen Deployments schrittweise auf eine zweite Foundry-Ressource um, nehmen `learning_ai_url_2` und `learning_ai_key_2` den zweiten Zugang auf. `learning_ai_models_2` listet die Deployment-Namen, die schon dort liegen; alle übrigen bleiben beim ersten Zugang. Ein gelistetes Deployment läuft ausschließlich über den zweiten Zugang: fehlt dort Adresse oder Schlüssel, bricht der Aufruf mit einer Meldung ab, statt still die alte Ressource zu verwenden. Welches Deployment über welchen Host läuft, steht beim Start im Add-on-Log; in der App ist die Aufteilung nicht sichtbar.
+Hoch bedient das Hauptgespräch, Transkription die Spracheingabe. Welche Stufe den Einstieg in eine Einheit und das Abschreiben der Quellen übernimmt, wählen die Eltern in der App unter den Budgetgrenzen; ohne Wahl gilt Hoch. So lässt sich ein Modell in der Konfiguration austauschen, ohne dass die Auswahl der Eltern ins Leere zeigt.
+
+Der Bereitstellungsname geht in den Aufruf an Azure, der Modellname in Preis, Log und die Kennungen gespeicherter Ergebnisse. Bleibt das Feld leer, sind beide gleich. Die Kostensätze in Euro je Million Token gelten, sobald Eingang und Ausgang gesetzt sind; bei 0 greift die hinterlegte Tabelle der App, und für ein Modell ohne beides wird kein Aufruf gemacht. Zeigt eine Stufe auf eine Foundry ohne Endpunkt oder Schlüssel, bricht ihr Aufruf mit einer Meldung ab, statt auf die andere Ressource auszuweichen.
+
+Zusätzlich muss KI pro Schuljahr freigegeben werden. Ohne Konfiguration ist der Lernraum mit eigenen Aufgaben voll nutzbar. Welche Stufe welches Modell über welchen Host fährt, steht beim Start im Add-on-Log.
 
 [Gesamtkonzept, Architektur, Betriebsgrenzen und Inbetriebnahme](LERNKONZEPT.md)
 

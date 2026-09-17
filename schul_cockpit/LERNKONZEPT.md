@@ -152,13 +152,10 @@ Die KI ist eine optionale Autorenhilfe, keine Voraussetzung für die Verwaltung 
 
 Add-on-Optionen:
 
-- `learning_ai_url`: vollständiger HTTPS-Endpunkt einschließlich des erforderlichen API-Pfads und ggf. API-Version.
-- `learning_ai_key`: API-Schlüssel; in der Add-on-Oberfläche als Passwortfeld, nur serverseitig verwendet.
-- `learning_ai_model`: Modell- oder Deploymentname.
-- `learning_ai_url_2`, `learning_ai_key_2`: zweiter Zugang für eine schrittweise Umstellung auf eine andere Ressource.
-- `learning_ai_models_2`: Liste der Deployment-Namen, die über den zweiten Zugang laufen. Alles Ungenannte bleibt beim ersten.
+- `ki_plattformen.foundry_1` und `foundry_2`: je `endpunkt` (vollständige HTTPS-Adresse einschließlich API-Pfad und API-Version) und `api_key` (in der Oberfläche ein Passwortfeld, nur serverseitig verwendet).
+- `ki_modelle.hoch`, `.mittel`, `.niedrig`, `.transkription`: je `modellname`, optional `bereitstellungsname`, `foundry` (1 oder 2) und optional `preis_eingang`/`preis_ausgang` in Euro je Million Token.
 
-Die Runtime übernimmt diese Werte als `LEARNING_AI_URL`, `LEARNING_AI_KEY`, `LEARNING_AI_MODEL`, `LEARNING_AI_URL_2`, `LEARNING_AI_KEY_2` und `LEARNING_AI_MODELS_2`. Der Client sendet Bearer- und `api-key`-Header für kompatible Gateways. Er folgt keinen Weiterleitungen. Zugangsdaten werden nicht in Browser, Logs oder Lernexport übernommen. Die vorhandene Sicherung der Add-on-Konfiguration kann wie üblich Betriebsgeheimnisse enthalten und muss entsprechend behandelt werden.
+`run.sh` reicht die beiden Blöcke als kompaktes JSON in `LEARNING_AI_PLATFORMS` und `LEARNING_AI_MODELS` weiter, gelesen mit `jq` aus `/data/options.json`. Der Client sendet Bearer- und `api-key`-Header für kompatible Gateways. Er folgt keinen Weiterleitungen. Zugangsdaten werden nicht in Browser, Logs oder Lernexport übernommen. Die vorhandene Sicherung der Add-on-Konfiguration kann wie üblich Betriebsgeheimnisse enthalten und muss entsprechend behandelt werden.
 
 Zusätzlich wird KI pro Schuljahr durch Eltern aktiviert. Vor jedem Entwurf sind konkrete geprüfte Quellen auszuwählen. Übertragen werden Jahrgang, Fach, Thema, Lernziel, Lernmethode und ausgewählte Quellentexte/Bilder. Keine Namen, Fehlzeiten, privaten Rückmeldungen, bisherigen Antworten oder vollständigen Kontoprofile werden dem Prompt hinzugefügt. Persönliche Angaben, die im ausgewählten Material selbst stehen, werden nicht automatisch entfernt; das Material wird vor Auswahl geprüft.
 
@@ -213,10 +210,12 @@ Mit `store=false` wird keine abrufbare Responses-Konversation angelegt. Das ist 
 
 Referenz: https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/responses
 
-### Ergänzung 0.82.0: zwei Ressourcen nebeneinander
+### Ergänzung 0.83.0: Plattformen und Stufen
 
-Adresse und Schlüssel gehören zum Deployment, nicht zur App. `ai_endpoint()` in `backend/learning.py` entscheidet je Deployment-Name, welcher der beiden Zugänge ihn bedient; `ai_gateway.complete()` und die Transkription bauen Aufruf, Nutzlast und Header daraus. Weil die API-Art am Pfad erkannt wird, dürfen die beiden Zugänge unterschiedliche Formen haben, etwa Responses auf der einen und Chat Completions auf der anderen Ressource.
+Modelle heißen in der App nicht mehr beim Namen, sondern nach Stufe. `ai_tiers()` und `ai_settings(stufe)` in `backend/learning.py` lösen eine Stufe zu Modell, Bereitstellung, Adresse, Schlüssel und Kostensatz auf; `ai_gateway.tier_for(purpose)` sagt, welche Stufe einen Zweck bedient. Das Hauptgespräch und alles Erklären und Üben laufen auf „hoch", die Spracheingabe auf „transkription"; für den Einstieg und fürs Abschreiben samt Hintergrundauswertung halten `mentor_ai_config.opening_model` und `.sources_model` eine Stufe, gesetzt von den Eltern. Bis 0.82 standen dort Modellnamen; die Migration `mentor_ai_config_003_tiers` übersetzt sie.
 
-Ein Deployment, das in `learning_ai_models_2` steht, wird nie über den ersten Zugang aufgerufen. Ist der zweite Zugang unvollständig, endet der Aufruf mit 503 und einer Meldung, die das Deployment nennt. Der stille Rückfall wäre die gefährlichere Variante: Er würde nach einer vermeintlich abgeschlossenen Umstellung weiter Kinderdaten an die alte Ressource senden.
+In den Aufruf geht der Bereitstellungsname, in Budget, Log und Kennungen der Modellname. Damit überstehen Preistabelle, Eichungsläufe (`mentor_quality_runs`) und Zwischenstände (`exam_scope`) einen Umzug, bei dem das Deployment anders heißt.
 
-Die Budgetanrechnung in `ai_gateway.RATES` hängt am Deployment-Namen, nicht am Zugang. Rechnen die beiden Ressourcen unterschiedlich ab, stimmen die Sätze nach einem Umzug nicht mehr und sind anzupassen.
+Eine Stufe wird nie über die andere Foundry bedient. Fehlt dort Adresse oder Schlüssel, endet der Aufruf mit 503 und nennt Stufe und Ressource. Der stille Rückfall wäre die gefährlichere Variante: Er würde nach einer vermeintlich abgeschlossenen Umstellung weiter Kinderdaten an die alte Ressource senden. Weil die API-Art am Pfad erkannt wird, dürfen die beiden Ressourcen unterschiedliche Formen haben.
+
+Kostensätze: `rate_for()` nimmt zuerst den in der Konfiguration eingetragenen Satz, sonst den hinterlegten aus `ai_gateway.RATES`, sonst gar keinen — dann wird nicht aufgerufen. Ein halb eingetragener Satz zählt nicht, sonst würde stillschweigend zu billig gebucht. Die hinterlegten Sätze stehen auf dem veröffentlichten Listenpreis für Standard Global in USD mit Faktor 2 auf den Eingang und 1,5 auf den Ausgang; der Aufschlag deckt Währung, Steuer, Cache-Writes und den Aufpreis für Datenzonenstandard, den Microsoft nicht veröffentlicht.

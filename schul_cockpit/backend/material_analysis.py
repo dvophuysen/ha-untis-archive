@@ -247,7 +247,7 @@ def _apply(conn, account_id: int, row, insight: Insight) -> None:
             values["source_label"] = part
     values.update(
         analysis_state="ready",
-        analysis_model=ai.ai_settings()["model"],
+        analysis_model=ai.model_name(ai.tier_for(_purpose(row))),
         analysis_version=ANALYSIS_VERSION,
         analyzed_at=store.now_iso(),
         analysis_error=None,
@@ -283,9 +283,9 @@ def _purpose(row) -> str:
     return ai.SOURCES if source_like else "background"
 
 
-async def extract(account_id: int, row, model: str | None = None, effort: str | None = None) -> tuple[Insight, str]:
+async def extract(account_id: int, row, tier: str | None = None, effort: str | None = None) -> tuple[Insight, str]:
     """Das Material lesen, ohne etwas zu speichern. Gibt die Lesung und den
-    Schlüssel des Aufrufs zurück; mit `model` lässt sich ein anderes Modell
+    Schlüssel des Aufrufs zurück; mit `tier` lässt sich eine andere Modellstufe
     an derselben Seite messen (Eichung, D54)."""
     with closing(webapp_conn()) as conn:
         context = _context(conn, account_id, row)
@@ -296,7 +296,7 @@ async def extract(account_id: int, row, model: str | None = None, effort: str | 
         context["dokumenttext"] = text[:20000]
     raw, _, key = await ai.complete(
         account_id, _purpose(row), INSTRUCTION + json.dumps(Insight.model_json_schema()),
-        context, images, max_output=8000, **({"model": model} if model else {}), **({"effort": effort} if effort else {}))
+        context, images, max_output=8000, **({"tier": tier} if tier else {}), **({"effort": effort} if effort else {}))
     return Insight.model_validate_json(raw), key
 
 
@@ -346,15 +346,15 @@ def compare_texts(stored: str, read: str) -> dict:
     }
 
 
-async def compare(account_id: int, material_id: int, model: str, effort: str | None = None) -> dict:
-    """Eine bereits gelesene Seite mit einem anderen Modell oder einer anderen
+async def compare(account_id: int, material_id: int, tier: str, effort: str | None = None) -> dict:
+    """Eine bereits gelesene Seite mit einer anderen Modellstufe oder einer anderen
     Reasoning-Tiefe lesen und gegen den gespeicherten Stand halten: Seitenzahl,
     Buchteil, Art, Wörter, Zahlen, Zeilen. Gespeichert wird nichts."""
     with closing(webapp_conn()) as conn:
         row = conn.execute("SELECT * FROM materials WHERE id=? AND account_id=?", (material_id, account_id)).fetchone()
     if not row:
         raise ValueError("Material nicht gefunden")
-    insight, key = await extract(account_id, row, model=model, effort=effort)
+    insight, key = await extract(account_id, row, tier=tier, effort=effort)
     stored = row["content_text"] or ""
     with closing(webapp_conn()) as conn:
         call = conn.execute("SELECT charged_micro,reserved_micro,status FROM mentor_ai_calls WHERE id=?", (key,)).fetchone()
@@ -368,7 +368,7 @@ async def compare(account_id: int, material_id: int, model: str, effort: str | N
         stored_pages = [row["source_page"]]
     keys = row.keys()
     return {
-        "material_id": material_id, "model": model, "effort": effort or "low",
+        "material_id": material_id, "tier": tier, "model": ai.model_name(tier), "effort": effort or "low",
         "kind": row["kind"], "stored_kind": row["kind"], "read_kind": insight.kind,
         "stored_page_type": row["page_type"] if "page_type" in keys else None, "read_page_type": insight.page_type or None,
         "stored_handwritten": bool(row["handwritten"]) if "handwritten" in keys else None, "read_handwritten": insight.handwritten,
@@ -455,7 +455,8 @@ async def after_analysis(account_id: int, material_id: int) -> None:
 def due(limit: int = 20) -> list[tuple[int, int]]:
     """What the night run picks up: never analysed, failed, outdated version or
     model, and materials whose subject or topic could not be resolved yet."""
-    model = ai.ai_settings()["model"] or ""
+    # Dieselbe Stufe, die die Auswertung fährt: sonst gilt jede Seite ewig als fällig.
+    model = ai.model_name(ai.tier_for(ai.SOURCES)) or ""
     with closing(webapp_conn()) as conn:
         rows = conn.execute(
             "SELECT m.account_id,m.id FROM materials m "

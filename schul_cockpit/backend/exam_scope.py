@@ -115,7 +115,7 @@ def book_chapters(account,subject,start,end):
     return out
 
 async def group_units(account, items, demo=False):
-    chunk_key='chunk-v2:'+mc.fingerprint([demo,items,ai.ai_settings()['model']])
+    chunk_key='chunk-v2:'+mc.fingerprint([demo,items,ai.model_name()])
     with closing(webapp_conn()) as c:
         cached=c.execute('SELECT result_json FROM mentor_scope_plans WHERE account_id=? AND cache_key=?',(account,chunk_key)).fetchone()
     if cached and cached[0]:return json.loads(cached[0])['partial']
@@ -142,7 +142,7 @@ async def group_units(account, items, demo=False):
 
 async def build(account,body):
     source,warnings=await collect(account,body)
-    key='plan:'+mc.fingerprint(['scope-v2',source,ai.ai_settings()['model']])
+    key='plan:'+mc.fingerprint(['scope-v2',source,ai.model_name()])
     with closing(webapp_conn()) as c,c:
         c.execute('BEGIN IMMEDIATE')
         row=c.execute('SELECT * FROM mentor_scope_plans WHERE account_id=? AND cache_key=?',(account,key)).fetchone()

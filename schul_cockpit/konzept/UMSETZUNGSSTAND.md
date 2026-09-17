@@ -1,3 +1,51 @@
+# KI-Plattformen und Modellstufen 0.83.0
+
+Stand 17.09.2026. Nutzerentwurf einer zentralen KI-Konfiguration (D88); löst
+die Namensliste aus 0.82 ab, die an der Anforderung vorbeiging.
+
+**Gebaut.** `config.yaml`: Block `ki_plattformen` (foundry_1, foundry_2 mit
+`endpunkt`/`api_key`) und `ki_modelle` (hoch, mittel, niedrig, transkription mit
+`modellname`, `bereitstellungsname`, `foundry` als `list(1|2)`, `preis_eingang`,
+`preis_ausgang`). Alle `learning_ai_*` entfernt. `run.sh` liest beide Blöcke mit
+`jq` aus `/data/options.json` und reicht sie als kompaktes JSON weiter, statt
+sich auf die Ausgabeform von bashio zu verlassen.
+
+`backend/learning.py`: `ai_platforms()`, `ai_tiers()`, `ai_settings(stufe)` mit
+`AiEndpointMissing`/`AiTierUnknown`, `ai_status()` über die Stufe „hoch".
+`ai_gateway.py`: `tier_for(purpose)` statt `model_for`, `settings_for()`,
+`rate_for()` (Konfiguration vor Tabelle, halber Satz zählt nicht),
+`model_name()` für Kennungen ohne Zugangsprüfung, `reserve()` nimmt die
+aufgelöste Stufe, `complete()` schickt den Bereitstellungsnamen und bucht auf
+den Modellnamen, `transcribe_url()`/`transcribe()` über die Stufe
+„transkription", `status()` liefert Stufen mit Modell, Sätzen und Foundry,
+`endpoint_overview()` die Startzeile.
+
+Aufrufer: `routers/mentor.py` (Elternwahl prüft Stufen, `open_unit(tier=)`,
+Eichungsvergleich über Stufen, Qualitätskennung über `model_name()`),
+`material_analysis.py` (`extract(tier=)`, `analysis_model` und `due()` über die
+Stufe der Auswertung statt fest über das Hauptmodell), `routers/materials.py`
+(`CompareIn.tier`), `routers/discovery.py`, `exam_scope.py`.
+`Mentor.svelte`: die beiden Auswahlfelder heißen „Stufe für …" und bieten
+Hoch/Mittel/Niedrig mit Modellnamen und Satz. Migration
+`mentor_ai_config_003_tiers` übersetzt gespeicherte Modellnamen in Stufen.
+
+**Preise.** Die hinterlegten Sätze stehen jetzt begründet auf dem
+veröffentlichten Listenpreis für Standard Global (Sol 5/30, Terra 2/12, Luna
+0,20/1,20 USD je Mio.) mit Faktor 2 auf den Eingang und 1,5 auf den Ausgang.
+Datenzonenstandard veröffentlicht Microsoft nicht; der Aufschlag deckt ihn mit
+ab. Luna stand mit 1,90/9,00 € rund neunfach zu hoch und ist auf 0,40/1,80 €
+berichtigt; das Modell war nicht im Einsatz, die bisherige Abrechnung bleibt
+unberührt.
+
+**Tests.** `tests/test_ai_endpoints.py` (Stufe nennt Modell, Bereitstellung und
+Foundry; kein Rückfall; Zug ruft die Bereitstellung auf der eigenen Ressource
+und bucht auf den Modellnamen; gemischte API-Formen; Satz aus der Konfiguration
+vor der Tabelle, halber Satz zählt nicht, ohne Satz kein Aufruf; Elternwahl
+übersteht einen Modellwechsel; Startzeile; eine Foundry allein; Migration),
+`tests/test_addon_config.py` um verschachtelte Optionen erweitert, Fixture
+`ai_env()` in `tests/test_learning.py` für alle Tests mit KI. 447 Tests grün,
+Frontend gebaut.
+
 # Zwei Foundry-Zugänge nebeneinander 0.82.0
 
 Stand 17.09.2026. Nutzerauftrag: Modelle schrittweise auf eine andere Foundry

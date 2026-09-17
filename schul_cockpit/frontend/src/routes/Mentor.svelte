@@ -16,6 +16,9 @@
   async function setCounts(counts){running=await api.put(`${base}/sessions/${running.id}/counts`,{counts});await load();}
   let end=$state(null),demo=$state(false),examBusy=$state(false);
   async function switchMode(value){if(value===demo)return;await leave();demo=value;data=null;tab='today';text='';attachment=null;evidence=null;quality=null;subject='';goal='';await load();}
+  // Die Auswahl nennt Stufen, keine Modellnamen: welches Modell dahinter
+  // steht, entscheidet die Add-on-Konfiguration (D88).
+  const TIER_LABELS={hoch:'Hoch',mittel:'Mittel',niedrig:'Niedrig'};
   let limits=$state({monthly_eur:50,warning_eur:40,daily_eur:10,sources_eur:30,background_eur:10,sources_model:'',opening_model:''}),limitsOpen=$state(false);
   async function load(){data=await api.get(`${base}?demo=${demo}`);const b=data.budget||{};limits={monthly_eur:b.limit_eur??50,warning_eur:b.warning_eur??40,daily_eur:b.daily_limit_eur??10,sources_eur:b.sources_limit_eur??30,background_eur:b.background_limit_eur??10,sources_model:b.sources_model??'',opening_model:b.opening_model??''};}
   async function act(fn){if(busy)return;busy=true;error='';try{await fn();await tick();}catch(e){error=e.message;}finally{busy=false;}}
@@ -117,8 +120,8 @@
           <label>Tag je Kind (€)<input type="number" min="0.5" max="200" step="0.5" bind:value={limits.daily_eur}/></label>
           <label>Quellenbestand im Monat (€)<input type="number" min="0" max="1000" step="1" bind:value={limits.sources_eur}/></label>
           <label>Hintergrund im Monat (€)<input type="number" min="0" max="1000" step="1" bind:value={limits.background_eur}/></label>
-          <label>Modell für den Einstieg in eine Einheit<select bind:value={limits.opening_model}><option value="">wie Hauptmodell ({data.budget.model})</option>{#each data.budget.models??[] as m}<option value={m}>{m}</option>{/each}</select></label>
-          <label>Modell fürs Abschreiben<select bind:value={limits.sources_model}><option value="">wie Hauptmodell ({data.budget.model})</option>{#each data.budget.models??[] as m}<option value={m}>{m} · {data.budget.rates?.[m]?.input_per_m} / {data.budget.rates?.[m]?.output_per_m} € je Mio. Token</option>{/each}</select></label>
+          <label>Stufe für den Einstieg in eine Einheit<select bind:value={limits.opening_model}><option value="">wie das Hauptgespräch ({data.budget.model})</option>{#each data.budget.models??[] as m}<option value={m}>{TIER_LABELS[m]??m} · {data.budget.rates?.[m]?.model}</option>{/each}</select></label>
+          <label>Stufe fürs Abschreiben<select bind:value={limits.sources_model}><option value="">wie das Hauptgespräch ({data.budget.model})</option>{#each data.budget.models??[] as m}<option value={m}>{TIER_LABELS[m]??m} · {data.budget.rates?.[m]?.model} · {data.budget.rates?.[m]?.input_per_m ?? '?'} / {data.budget.rates?.[m]?.output_per_m ?? '?'} € je Mio. Token</option>{/each}</select></label>
           <button disabled={busy}>Rahmen speichern</button>
         </form>
       </details>

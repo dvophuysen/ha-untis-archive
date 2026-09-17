@@ -214,21 +214,21 @@ async def collect_sources(account_id: int, user: CurrentUser = Depends(get_curre
 
 
 class CompareIn(InputModel):
-    model: str = Field(min_length=1, max_length=60)
+    tier: str = Field(min_length=1, max_length=20)
     effort: str | None = Field(default=None, pattern=r"^(low|medium|high)$")
 
 
 @router.post("/{material_id}/analysis/compare")
 async def compare_models(account_id: int, material_id: int, body: CompareIn,
                          user: CurrentUser = Depends(get_current_user)) -> dict:
-    """Eichung: dieselbe Seite mit einem anderen Modell lesen und gegen den
+    """Eichung: dieselbe Seite mit einer anderen Modellstufe lesen und gegen den
     gespeicherten Stand halten. Speichert nichts, kostet einen Aufruf."""
     access(user, account_id, write=True, parent=True)
     from .. import ai_gateway as ai
-    if body.model not in ai.RATES:
-        raise HTTPException(422, "Unbekanntes Modell.")
+    if body.tier not in ai.TIERS:
+        raise HTTPException(422, "Unbekannte Stufe.")
     try:
-        return await analysis.compare(account_id, material_id, body.model, body.effort)
+        return await analysis.compare(account_id, material_id, body.tier, body.effort)
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from None
 

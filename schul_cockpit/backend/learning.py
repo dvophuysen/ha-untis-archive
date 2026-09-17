@@ -131,61 +131,100 @@ def next_review(streak: int, outcome: str, help_used: bool, day: date) -> tuple[
 
 
 class AiEndpointMissing(RuntimeError):
-    """Ein Deployment ist dem zweiten Zugang zugeordnet, der nicht eingerichtet ist."""
+    """Die Foundry, die diese Stufe bedienen soll, ist nicht eingerichtet."""
 
 
-def deployment_names(raw: str) -> tuple[str, ...]:
-    """Deployment-Namen aus einer Add-on-Option.
-
-    bashio reicht eine Listenoption als JSON durch (`["a","b"]`, je nach
-    Version ein- oder mehrzeilig) und eine nicht gesetzte als `null`. Statt auf
-    eine dieser Formen zu bauen, werden Klammern und Anführungszeichen entfernt
-    und an Komma und Zeilenumbruch getrennt; Komma-getrennter Text geht ebenso."""
-    parts = ((raw or "").replace("\n", ",").replace("[", ",").replace("]", ",").split(","))
-    names = (x.strip().strip('"').strip("'").strip() for x in parts)
-    return tuple(dict.fromkeys(x for x in names if x and x != "null"))
+class AiTierUnknown(RuntimeError):
+    """Es wurde eine Stufe angefragt, die es nicht gibt."""
 
 
-def ai_settings() -> dict:
-    return {
-        "url": os.environ.get("LEARNING_AI_URL", "").strip(),
-        "key": os.environ.get("LEARNING_AI_KEY", "").strip(),
-        "model": os.environ.get("LEARNING_AI_MODEL", "").strip(),
-        # Zweite Foundry-Ressource, solange Deployments schrittweise umziehen.
-        # models_2 nennt die Namen, die schon dort liegen; der Rest bleibt beim ersten Zugang.
-        "url_2": os.environ.get("LEARNING_AI_URL_2", "").strip(),
-        "key_2": os.environ.get("LEARNING_AI_KEY_2", "").strip(),
-        "models_2": deployment_names(os.environ.get("LEARNING_AI_MODELS_2", "")),
-        # Spracheingabe: eigenes Transkriptionsmodell in derselben Ressource.
-        "transcribe_model": os.environ.get("LEARNING_AI_TRANSCRIBE_MODEL", "").strip() or "gpt-4o-transcribe",
-        "transcribe_url": os.environ.get("LEARNING_AI_TRANSCRIBE_URL", "").strip(),
-    }
+# Die vier Stufen der Konfigurationsseite. „hoch" bedient das Hauptgespräch,
+# „transkription" die Spracheingabe; welche Stufe den Einstieg und das
+# Abschreiben übernimmt, entscheiden die Eltern in der App.
+TIERS = ("hoch", "mittel", "niedrig", "transkription")
+MAIN_TIER = "hoch"
+SPEECH_TIER = "transkription"
 
 
-def ai_endpoint(model: str, settings: dict | None = None) -> tuple[str, str]:
-    """Adresse und Schlüssel des Zugangs, der dieses Deployment bedient.
+def _options(name: str) -> dict:
+    try:
+        value = json.loads(os.environ.get(name) or "{}")
+    except ValueError:
+        return {}
+    return value if isinstance(value, dict) else {}
 
-    Ein Name aus models_2 läuft ausschließlich über den zweiten Zugang. Fehlt
-    dort Adresse oder Schlüssel, bricht der Aufruf ab; ein stiller Rückfall auf
-    den ersten Zugang würde nach der Umstellung weiter die alte Ressource
-    ansprechen, ohne dass es jemand merkt."""
-    settings = settings or ai_settings()
-    if (model or "").strip() in settings["models_2"]:
-        if not settings["url_2"] or not settings["key_2"]:
-            raise AiEndpointMissing(model)
-        return settings["url_2"], settings["key_2"]
-    return settings["url"], settings["key"]
+
+def ai_platforms() -> dict:
+    """Die beiden Foundry-Zugänge als {"1": {"url", "key"}, "2": {...}}."""
+    raw = _options("LEARNING_AI_PLATFORMS")
+    out = {}
+    for number in ("1", "2"):
+        entry = raw.get(f"foundry_{number}") or {}
+        out[number] = {
+            "url": str(entry.get("endpunkt") or "").strip(),
+            "key": str(entry.get("api_key") or "").strip(),
+        }
+    return out
+
+
+def ai_tiers() -> dict:
+    """Die Modellstufen als {stufe: {model, deployment, foundry, rate}}.
+
+    `model` benennt das Modell und trägt Preis, Log und die Kennungen
+    gespeicherter Ergebnisse. `deployment` geht in den Aufruf an die Foundry und
+    entspricht dem Modellnamen, solange nichts anderes eingetragen ist."""
+    raw = _options("LEARNING_AI_MODELS")
+    out = {}
+    for tier in TIERS:
+        entry = raw.get(tier) or {}
+        model = str(entry.get("modellname") or "").strip()
+        deployment = str(entry.get("bereitstellungsname") or "").strip() or model
+        foundry = str(entry.get("foundry") or "1").strip() or "1"
+        rate = tuple(_positive(entry.get(k)) for k in ("preis_eingang", "preis_ausgang"))
+        out[tier] = {
+            "model": model,
+            "deployment": deployment,
+            "foundry": foundry if foundry in ("1", "2") else "1",
+            # Beide Preise oder keiner: ein halber Satz rechnet stiller falsch als keiner.
+            "rate": rate if all(x is not None for x in rate) else None,
+        }
+    return out
+
+
+def _positive(value) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def ai_settings(tier: str = MAIN_TIER) -> dict:
+    """Alles, was ein Aufruf dieser Stufe braucht: Modell, Deployment, Adresse,
+    Schlüssel und Preissatz.
+
+    Zeigt die Stufe auf eine Foundry ohne Adresse oder Schlüssel, endet das hier.
+    Ein Rückfall auf die andere Ressource wäre die gefährlichere Antwort: Er
+    würde nach einer vermeintlich abgeschlossenen Umstellung weiter Kinderdaten
+    an die alte Foundry senden, ohne dass es jemand merkt."""
+    tiers = ai_tiers()
+    if tier not in tiers:
+        raise AiTierUnknown(tier)
+    entry = tiers[tier]
+    platform = ai_platforms()[entry["foundry"]]
+    if entry["model"] and (not platform["url"] or not platform["key"]):
+        raise AiEndpointMissing(f'{tier} → Foundry {entry["foundry"]}')
+    return {**entry, "url": platform["url"], "key": platform["key"], "tier": tier}
 
 
 def ai_status() -> dict:
-    settings = ai_settings()
     try:
-        url, key = ai_endpoint(settings["model"], settings)
-    except AiEndpointMissing:
-        url, key = "", ""
+        settings = ai_settings()
+    except (AiEndpointMissing, AiTierUnknown):
+        return {"configured": False, "host": "", "model": ""}
     return {
-        "configured": bool(url and key and settings["model"]),
-        "host": urlsplit(url).hostname or "",
+        "configured": bool(settings["url"] and settings["key"] and settings["model"]),
+        "host": urlsplit(settings["url"]).hostname or "",
         "model": settings["model"],
     }
 

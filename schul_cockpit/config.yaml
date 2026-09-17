@@ -1,5 +1,5 @@
 name: Schul-Cockpit
-version: "0.82.1"
+version: "0.83.0"
 slug: schul_cockpit
 description: Mobile Schul-App für Kinder und Eltern, basierend auf dem UNTIS-Archive-Datenbestand.
 url: https://github.com/dvophuysen/ha-untis-archive/tree/main/schul_cockpit
@@ -37,14 +37,38 @@ map:
 options:
   log_level: info
   external_url: ""
-  learning_ai_url: ""
-  learning_ai_key: ""
-  learning_ai_model: ""
-  learning_ai_url_2: ""
-  learning_ai_key_2: ""
-  learning_ai_models_2: []
-  learning_ai_transcribe_model: "gpt-4o-transcribe"
-  learning_ai_transcribe_url: ""
+  ki_plattformen:
+    foundry_1:
+      endpunkt: ""
+      api_key: ""
+    foundry_2:
+      endpunkt: ""
+      api_key: ""
+  ki_modelle:
+    hoch:
+      modellname: "gpt-5.6-sol"
+      bereitstellungsname: ""
+      foundry: "1"
+      preis_eingang: 0
+      preis_ausgang: 0
+    mittel:
+      modellname: "gpt-5.6-terra"
+      bereitstellungsname: ""
+      foundry: "1"
+      preis_eingang: 0
+      preis_ausgang: 0
+    niedrig:
+      modellname: "gpt-5.6-luna"
+      bereitstellungsname: ""
+      foundry: "1"
+      preis_eingang: 0
+      preis_ausgang: 0
+    transkription:
+      modellname: "gpt-4o-transcribe"
+      bereitstellungsname: ""
+      foundry: "1"
+      preis_eingang: 0
+      preis_ausgang: 0
   learning_read_token: ""
   learning_read_accounts: ""
 schema:
@@ -54,23 +78,35 @@ schema:
   # full clickable deep links — perfect for WhatsApp/Telegram automations.
   external_url: str?
 
-  # Full HTTPS Responses or Chat Completions endpoint; server-side only.
-  learning_ai_url: str?
-  learning_ai_key: password?
-  learning_ai_model: str?
-  # Zweite Foundry-Ressource, solange Deployments schrittweise umziehen:
-  # eigene Adresse und eigener Schlüssel. learning_ai_models_2 nennt die
-  # Deployment-Namen, die schon dort liegen; alle übrigen bleiben beim ersten
-  # Zugang. Ein hier genanntes Deployment läuft ausschließlich über den zweiten
-  # Zugang; fehlt dessen Adresse oder Schlüssel, bricht der Aufruf ab, statt
-  # still wieder an die alte Ressource zu gehen.
-  learning_ai_url_2: str?
-  learning_ai_key_2: password?
-  learning_ai_models_2:
-    - str
-  # Spracheingabe: Deployment-Name des Transkriptionsmodells; die Adresse wird
-  # aus dem Zugang abgeleitet, der dieses Deployment bedient, sonst hier voll angeben.
-  learning_ai_transcribe_model: str?
-  learning_ai_transcribe_url: str?
+  # KI-Plattformen an einer Stelle. Zwei Foundry-Ressourcen dürfen nebeneinander
+  # stehen, damit Modelle einzeln umziehen können. Der Endpunkt ist die
+  # vollständige HTTPS-Adresse einschließlich API-Pfad und API-Version; die
+  # API-Art (Responses oder Chat Completions) wird am Pfad erkannt. Nur
+  # serverseitig verwendet, nie an den Browser gegeben.
+  ki_plattformen:
+    foundry_1:
+      endpunkt: str?
+      api_key: password?
+    foundry_2:
+      endpunkt: str?
+      api_key: password?
+  # Die verwendeten Modelle als vier Stufen. modellname ist der Name des
+  # Modells und bestimmt Preis, Log und die Kennungen gespeicherter Ergebnisse.
+  # bereitstellungsname ist der Deployment-Name in der Foundry und geht in den
+  # Aufruf; leer heißt, er entspricht dem Modellnamen. foundry wählt die
+  # Ressource. preis_eingang und preis_ausgang sind Euro je Million Token;
+  # 0 bedeutet, es gilt der hinterlegte Satz aus der Preistabelle der App.
+  # Hoch bedient das Hauptgespräch, Transkription die Spracheingabe; welche
+  # Stufe den Einstieg und das Abschreiben übernimmt, steht in der Elternansicht.
+  ki_modelle:
+    hoch: &stufe
+      modellname: str
+      bereitstellungsname: str?
+      foundry: list(1|2)
+      preis_eingang: float?
+      preis_ausgang: float?
+    mittel: *stufe
+    niedrig: *stufe
+    transkription: *stufe
   learning_read_token: password?
   learning_read_accounts: str?

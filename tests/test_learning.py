@@ -292,7 +292,7 @@ def test_material_verification_upload_and_content_type(env):
 def test_ai_missing_config_and_unknown_source_fail_without_call(env):
     client, _, monkeypatch = env
     _, tid, _ = seed(client)
-    monkeypatch.delenv("LEARNING_AI_KEY", raising=False)
+    monkeypatch.setenv("LEARNING_AI_PLATFORMS", "{}")
     assert (
         client.post(path() + f"/topics/{tid}/generate", json={"material_ids": [1]}).status_code
         == 503
@@ -319,9 +319,8 @@ def test_ai_uses_selected_sources_and_always_creates_drafts(env):
         },
     )
     for k, v in {
-        "LEARNING_AI_URL": "https://model.example/chat/completions",
-        "LEARNING_AI_KEY": "fake-test-key",
-        "LEARNING_AI_MODEL": "test-model",
+        "LEARNING_AI_PLATFORMS": '{"foundry_1":{"endpunkt":"https://model.example/chat/completions","api_key":"fake-test-key"}}',
+        "LEARNING_AI_MODELS": '{"hoch":{"modellname":"test-model","foundry":"1"},"transkription":{"modellname":"gpt-4o-transcribe","foundry":"1"}}',
     }.items():
         monkeypatch.setenv(k, v)
     calls = []
@@ -479,7 +478,7 @@ def test_discovery_cached_mapping_feedback_and_isolation(env):
         c.execute("INSERT INTO lessons VALUES(2,1,'2026-09-09','Deutsch',1,1,'Buch Seite 42',0,NULL)")
         c.execute("INSERT INTO lessons VALUES(3,1,'2026-09-08','Deutsch',1,1,'',0,NULL)")
     client.put(path()+'/profiles',json={**P,'ai_enabled':True})
-    for k,v in {'LEARNING_AI_URL':'https://example.com/responses','LEARNING_AI_KEY':'fake','LEARNING_AI_MODEL':'test'}.items(): monkeypatch.setenv(k,v)
+    ai_env(monkeypatch)
     calls=[]
     class FakeClient:
         def __init__(self,**kwargs): pass
@@ -569,3 +568,20 @@ def test_persistent_read_access_scope_pagination_and_secret_exclusion(env):
     assert client.get(base,headers=headers).status_code==401
     monkeypatch.setenv('LEARNING_READ_ACCOUNTS','')
     assert client.get(base,headers={'X-Learning-Read-Key':'b'*48}).status_code==503
+
+
+def ai_env(patch, url='https://example.com/responses', key='fake', tiers=None, second=None):
+    """Die KI-Konfiguration des Add-ons für Tests: zwei Foundry-Blöcke und die
+    vier Modellstufen, so wie run.sh sie aus den Optionen reicht."""
+    import json as _json
+    platforms = {'foundry_1': {'endpunkt': url, 'api_key': key},
+                 'foundry_2': {'endpunkt': (second or {}).get('url', ''), 'api_key': (second or {}).get('key', '')}}
+    models = {'hoch': {'modellname': 'test', 'foundry': '1'},
+              'mittel': {'modellname': 'test-terra', 'foundry': '1'},
+              'niedrig': {'modellname': 'test-luna', 'foundry': '1'},
+              'transkription': {'modellname': 'gpt-4o-transcribe', 'foundry': '1'}}
+    for name, changes in (tiers or {}).items():
+        models[name] = {**models.get(name, {}), **changes}
+    patch.setenv('LEARNING_AI_PLATFORMS', _json.dumps(platforms))
+    patch.setenv('LEARNING_AI_MODELS', _json.dumps(models))
+    return platforms, models

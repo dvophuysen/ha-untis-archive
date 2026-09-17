@@ -9,7 +9,7 @@ import pytest
 import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).parent))
-from test_learning import env,seed,child,P,path
+from test_learning import env,seed,child,P,path,ai_env
 from backend import db,ai_gateway as ai,mentor_context as mc
 from backend.routers import mentor as m,mentor_exams as ex
 
@@ -24,7 +24,7 @@ def setup(env):
     for mod in [m,mc,ai]:
         patch.setattr(mod,'today_local',lambda:date(2026,9,11)) if hasattr(mod,'today_local') else None
     patch.setitem(ai.RATES,'test',(10.,45.))
-    for k,v in {'LEARNING_AI_MODEL':'test','LEARNING_AI_URL':'https://example.com/responses','LEARNING_AI_KEY':'fake'}.items():patch.setenv(k,v)
+    ai_env(patch)
     with sqlite3.connect(db.SETTINGS.history_db_path) as c:
         c.executescript("CREATE TABLE lessons(id INTEGER PRIMARY KEY,account_id INTEGER,date TEXT,start_time TEXT,end_time TEXT,subject_name TEXT,subject_untis_id INTEGER,teacher_untis_id INTEGER,lstext TEXT,was_absent INTEGER,code TEXT); INSERT INTO lessons VALUES(1,1,'2026-09-11','07:50','08:35','Deutsch',1,1,'Adjektive großschreiben',0,NULL);")
     yield client,state,patch
@@ -152,9 +152,9 @@ def test_budget_reservation_is_atomic_and_failures_stay_charged(setup):
 
 def test_unknown_model_and_prior_usage_fail_closed(setup):
     _,_,patch=setup
-    patch.setenv('LEARNING_AI_MODEL','unknown')
+    ai_env(patch,tiers={'hoch':{'modellname':'unknown'}})
     with pytest.raises(Exception):ai.reserve(1,'mentor',None,100,100)
-    patch.setenv('LEARNING_AI_MODEL','test')
+    ai_env(patch)
     with closing(db.webapp_conn()) as c:
         c.execute("INSERT INTO learning_ai_usage VALUES(1,'2026-09-01',2)")
     assert not ai.status()['opening_confirmed']

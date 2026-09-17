@@ -1,3 +1,11 @@
+## 0.83.0
+
+- KI-Einrichtung an einer Stelle: Die Add-on-Konfiguration hat jetzt einen Block **KI-Plattformen** mit zwei Azure-Foundry-Ressourcen (Endpunkt und API-Schlüssel) und darunter **KI-Modelle** mit vier Stufen — Hoch, Mittel, Niedrig, Transkription. Je Stufe stehen Modellname, ein abweichender Bereitstellungsname, die Foundry zur Auswahl und wahlweise eigene Kostensätze. Damit zieht ein Modell einzeln auf die zweite Ressource um, ohne dass an der übrigen Einrichtung etwas zu ändern wäre. Die alten Einstellungen `learning_ai_*` entfallen; Endpunkt und Schlüssel sind einmal neu einzutragen.
+- Die App wählt Stufen statt Modellnamen: Unter den Budgetgrenzen steht jetzt „Stufe für den Einstieg" und „Stufe fürs Abschreiben" mit Hoch, Mittel und Niedrig zur Wahl. Ein Modellwechsel in der Konfiguration lässt diese Wahl unberührt. Bestehende Einstellungen werden einmalig übersetzt.
+- Der Bereitstellungsname geht in den Aufruf, der Modellname in Abrechnung, Log und die Kennungen gespeicherter Ergebnisse. Heißt ein Deployment in der neuen Ressource anders, bleiben Preise, Eichungsläufe und Zwischenstände trotzdem gültig.
+- Kostensätze je Stufe sind eintragbar. Ohne Eintrag gilt die hinterlegte Tabelle; für ein Modell, für das weder das eine noch das andere vorliegt, wird kein Aufruf gemacht, statt ungemessen Geld auszugeben. Der hinterlegte Satz für gpt-5.6-luna war deutlich zu hoch angesetzt (1,90/9,00 € statt 0,40/1,80 €) und ist berichtigt; das Modell war bisher nicht im Einsatz, an der bisherigen Abrechnung ändert sich dadurch nichts.
+- Zeigt eine Stufe auf eine Foundry ohne Endpunkt oder Schlüssel, bricht ihr Aufruf mit einer Meldung ab, statt auf die andere Ressource auszuweichen. Beim Start steht im Add-on-Log, welche Stufe welches Modell über welchen Host fährt.
+
 ## 0.82.1
 
 - Fehler behoben: 0.82.0 ließ sich nicht starten. Die neue Option `learning_ai_models_2` war als `list(str)?` beschrieben, was in Home Assistant eine Auswahl aus festen Werten ist und nicht eine Liste; der Supervisor lehnte daraufhin sämtliche Optionen ab („value must be one of ['str']"). Jetzt steht dort ein Listenschema. Ein Test prüft künftig, dass jede Option mit Listen-Vorgabe auch ein Listenschema hat.

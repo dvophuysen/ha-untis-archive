@@ -2,7 +2,7 @@
 import json
 from contextlib import closing
 
-from test_learning import env  # noqa: F401
+from test_learning import env, ai_env  # noqa: F401
 from test_sources import history, SN
 from test_source_collector import shelf, fake_capture, png
 from backend import ai_gateway as ai, book_structure as bs, db, source_collector as collector, sources, textbook_context as ctx
@@ -144,7 +144,7 @@ def test_exam_scope_lists_the_chapters_touched_in_the_period(env):
 def test_the_source_stock_has_its_own_monthly_budget(env, monkeypatch):
     from fastapi import HTTPException
     import pytest
-    monkeypatch.setenv("LEARNING_AI_MODEL", "test-model")
+    ai_env(monkeypatch, tiers={"hoch": {"modellname": "test-model"}})
     with closing(db.webapp_conn()) as c:
         ai.init_config(c)
         c.execute("UPDATE mentor_ai_config SET sources_micro=1000000 WHERE id=1")

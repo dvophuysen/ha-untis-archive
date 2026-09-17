@@ -17,15 +17,20 @@ import httpx
 import logging
 from fastapi import HTTPException
 from .db import webapp_conn
-from .learning import (AiEndpointMissing, ai_endpoint, ai_settings, model_payload, model_output, now_iso,
-                       today_local, uses_responses)
+from .learning import (MAIN_TIER, SPEECH_TIER, TIERS, AiEndpointMissing, AiTierUnknown, ai_platforms,
+                       ai_settings, ai_tiers, model_payload, model_output, now_iso, today_local, uses_responses)
 
 LOG = logging.getLogger('schul_cockpit.ai')
 
 RATE_SOURCE = 'https://azure.microsoft.com/en-us/blog/gpt-5-6-now-available-in-microsoft-foundry/'
 RATE_UNTIL = date(2026, 12, 1)
-# EUR per million tokens, deliberately no prompt-cache discount.
-RATES = {'gpt-5.6-sol': (10.0, 45.0), 'gpt-5.6-terra': (5.0, 18.0), 'gpt-5.6-luna': (1.9, 9.0),
+# EUR je Million Token, ohne Cache-Rabatt. Grundlage ist der veröffentlichte
+# Listenpreis für Standard Global in USD (Sol 5/30, Terra 2/12, Luna 0.20/1.20),
+# darauf Faktor 2 auf den Eingang und 1,5 auf den Ausgang. Der Aufschlag deckt
+# Währung, Steuer, Cache-Writes und den Aufpreis für Datenzonenstandard, den
+# Microsoft nicht veröffentlicht. Eigene Sätze je Stufe stehen in der
+# Add-on-Konfiguration und gehen diesen hier vor.
+RATES = {'gpt-5.6-sol': (10.0, 45.0), 'gpt-5.6-terra': (5.0, 18.0), 'gpt-5.6-luna': (0.4, 1.8),
          # Spracheingabe: Audio-Token (etwa 1000 je Minute) und Text; Listenpreis 6 $/M plus Puffer.
          'gpt-4o-transcribe': (6.5, 11.0)}
 # Eine Minute Sprache sind rund tausend Audio-Token; die Schätzung rechnet großzügig.
@@ -64,29 +69,37 @@ def status():
         bg = effective_sum(c,"month=? AND purpose IN ('discovery','background')",(month,))
         src = effective_sum(c,"month=? AND purpose='sources'",(month,))
         counts = c.execute('SELECT status,COUNT(*) n FROM mentor_ai_calls WHERE month=? GROUP BY status',(month,)).fetchall()
-    model = ai_settings()['model']
+    tiers=ai_tiers()
+    model=tiers[MAIN_TIER]['model']
+    # Die App wählt Stufen, keine Modellnamen: Ein Modellwechsel in der
+    # Add-on-Konfiguration lässt die Auswahl der Eltern unberührt (D88).
+    rates={}
+    for name,entry in tiers.items():
+        rate=rate_for(entry)
+        rates[name]=dict(model=entry['model'],input_per_m=rate[0] if rate else None,
+                         output_per_m=rate[1] if rate else None,foundry=entry['foundry'])
     return dict(month=month,used_eur=round(used/1e6,4),limit_eur=cfg['monthly_micro']/1e6,daily_limit_eur=cfg['daily_micro']/1e6,
                 background_limit_eur=cfg['background_micro']/1e6,session_limit_eur=SESSION_MICRO/1e6,
-                model=model,sources_model=cfg.get('sources_model') or None,opening_model=cfg.get('opening_model') or None,models=sorted(RATES),
-                rates={m:{'input_per_m':r[0],'output_per_m':r[1]} for m,r in RATES.items()},
+                model=model,sources_model=cfg.get('sources_model') or None,opening_model=cfg.get('opening_model') or None,
+                models=[t for t in TIERS if t!=SPEECH_TIER and tiers[t]['model']],
+                rates=rates,
                 warning_eur=cfg['warning_micro']/1e6,background_eur=round(bg/1e6,4),
                 sources_eur=round(src/1e6,4),sources_limit_eur=cfg['sources_micro']/1e6,
                 warning=used>=cfg['warning_micro'],remaining_eur=max(0,(cfg['monthly_micro']-used)/1e6),
                 opening_confirmed=bool(cfg['opening_confirmed'] or cfg['opening_month']!=month),
-                opening_eur=opening/1e6,rate_available=model in RATES and today_local()<RATE_UNTIL,
+                opening_eur=opening/1e6,rate_available=bool(rate_for(tiers[MAIN_TIER])),
                 accounting='Konservative Budgetanrechnung, keine Azure-Rechnung',rate_valid_until=RATE_UNTIL.isoformat(),
                 calls={r['status']:r['n'] for r in counts})
 
 
-def model_for(purpose, cfg=None, override=None):
-    """Welches Modell einen Aufruf bedient: fürs Abschreiben von Quellen und
-    die Hintergrundauswertung das in mentor_ai_config.sources_model gewählte,
-    sonst das Hauptmodell. Erklären und Üben bleiben beim Hauptmodell."""
+def tier_for(purpose, cfg=None, override=None):
+    """Welche Stufe einen Aufruf bedient. Das Hauptgespräch, Erklären und Üben
+    laufen auf „hoch"; für den Einstieg in eine Einheit und fürs Abschreiben
+    samt Hintergrundauswertung wählen die Eltern in der App eine Stufe."""
     if override: return override
-    main=ai_settings()['model']
-    # Der Einstieg in eine Einheit hat sein eigenes, geeichtes Modell (opening_model).
+    # Der Einstieg hat seine eigene, geeichte Stufe (opening_model).
     column='opening_model' if purpose==OPENING else 'sources_model' if (purpose==SOURCES or purpose in BACKGROUND) else None
-    if not column: return main
+    if not column: return MAIN_TIER
     if cfg is None:
         # Nur lesen, keine Konfiguration anlegen: Das tut reserve() selbst.
         with closing(webapp_conn()) as c:
@@ -94,44 +107,57 @@ def model_for(purpose, cfg=None, override=None):
         chosen=(row[column] or '').strip() if row else ''
     else:
         chosen=(cfg.get(column) or '').strip()
-    return chosen or main
+    return chosen if chosen in TIERS else MAIN_TIER
 
 
-def endpoint_for(model, config=None):
-    """Adresse und Schlüssel für ein Deployment, mit Meldung statt Rückfall.
+def model_name(tier=MAIN_TIER):
+    """Nur der Modellname einer Stufe, ohne Zugang zu prüfen. Für Kennungen
+    gespeicherter Ergebnisse und für Anzeigen, die auch ohne KI-Zugang tragen."""
+    return (ai_tiers().get(tier) or {}).get('model') or ''
 
-    Zeigt die Zuordnung auf einen zweiten Zugang, der nicht eingerichtet ist,
-    darf der Aufruf nicht an der alten Ressource landen."""
+
+def settings_for(tier):
+    """Modell, Deployment, Adresse, Schlüssel und Preissatz einer Stufe, mit
+    lesbarer Meldung statt Rückfall auf die andere Foundry."""
     try:
-        return ai_endpoint(model, config)
-    except AiEndpointMissing:
-        raise HTTPException(503, f'Für das Modell {model} ist der zweite KI-Zugang noch nicht eingerichtet.') from None
+        return ai_settings(tier)
+    except AiEndpointMissing as exc:
+        raise HTTPException(503,f'Die Foundry für die Stufe {tier} ist nicht eingerichtet ({exc}).') from None
+    except AiTierUnknown:
+        raise HTTPException(503,f'Für die Stufe {tier} ist kein Modell hinterlegt.') from None
+
+
+def rate_for(settings):
+    """Der Kostensatz einer Stufe: erst der eigene aus der Konfiguration, sonst
+    der hinterlegte des Modells. Ohne beides wird nicht gerechnet und nicht
+    aufgerufen, damit nie ungemessen Geld ausgegeben wird."""
+    if settings.get('rate'): return settings['rate']
+    model=settings['model']
+    if model in RATES and today_local()<RATE_UNTIL: return RATES[model]
+    return None
 
 
 def endpoint_overview():
-    """Logzeile für den Start: welches Deployment über welchen Host läuft.
-    Ohne Schlüssel und ohne Pfad, damit sie gefahrlos im Add-on-Log steht."""
-    config=ai_settings()
-    with closing(webapp_conn()) as c:
-        row=c.execute('SELECT sources_model,opening_model FROM mentor_ai_config WHERE id=1').fetchone()
-    chosen=[(row[k] or '').strip() for k in ('sources_model','opening_model')] if row else []
-    models=[m for m in dict.fromkeys([config['model'],config['transcribe_model'],*chosen,*config['models_2']]) if m]
-    parts=[]
-    for model in models:
-        try:
-            url,key=ai_endpoint(model,config)
-        except AiEndpointMissing:
-            parts.append(f'{model}: zweiter Zugang nicht eingerichtet');continue
-        host=urlsplit(url).hostname or ''
-        parts.append(f'{model}: '+(host if host else 'ohne Adresse')+('' if key else ', ohne Schlüssel'))
+    """Logzeile für den Start: welche Stufe welches Modell über welchen Host
+    fährt. Ohne Schlüssel und ohne Pfad, damit sie im Add-on-Log stehen kann."""
+    platforms=ai_platforms();parts=[]
+    for tier,entry in ai_tiers().items():
+        if not entry['model']:
+            parts.append(f'{tier}: kein Modell');continue
+        host=urlsplit(platforms[entry['foundry']]['url']).hostname or 'ohne Adresse'
+        name=entry['model'] if entry['deployment']==entry['model'] else f"{entry['model']} als {entry['deployment']}"
+        rate=rate_for({**entry})
+        parts.append(f"{tier}: {name} über Foundry {entry['foundry']} ({host})"+('' if rate else ', ohne Kostensatz'))
     return '; '.join(parts) or 'kein Modell eingerichtet'
 
 
-def reserve(account_id, purpose, session_id, input_max, output_max, model=None):
-    model=model or model_for(purpose)
-    if model not in RATES or today_local()>=RATE_UNTIL:
+def reserve(account_id, purpose, session_id, input_max, output_max, settings=None):
+    settings=settings or settings_for(tier_for(purpose))
+    model=settings['model']
+    rate=rate_for(settings)
+    if not model or not rate:
         raise HTTPException(503,'Für dieses Modell müssen die Budget-Kostensätze geprüft werden.')
-    ri,ro=RATES[model]
+    ri,ro=rate
     upper=math.ceil(input_max*ri+output_max*ro)
     day=today_local().isoformat(); month=day[:7]; key=uuid.uuid4().hex
     with closing(webapp_conn()) as c,c:
@@ -180,15 +206,14 @@ def settle(key, result=None, error=None):
 EFFORTS=('low','medium','high')
 
 
-async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, model=None, effort=None):
-    config=ai_settings()
+async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, tier=None, effort=None):
     # Reasoning-Tiefe: bisher fest low; für die Eichung je Aufruf wählbar (D77).
     effort=effort or 'low'
     if effort not in EFFORTS: raise ValueError('Invalid reasoning effort')
-    model=model_for(purpose,override=model)
-    # Adresse und Schlüssel gehören zum Deployment, nicht zur App: während der
-    # Umstellung bedient je nach Modell die erste oder die zweite Foundry (D87).
-    endpoint,api_key=endpoint_for(model,config);url=urlsplit(endpoint)
+    # Die Stufe bestimmt alles Weitere: Modell fürs Buchen, Deployment für den
+    # Aufruf, Adresse und Schlüssel der zugeordneten Foundry (D88).
+    config=settings_for(tier_for(purpose,override=tier))
+    endpoint,api_key=config['url'],config['key'];url=urlsplit(endpoint)
     if not api_key or not config['model'] or url.scheme!='https' or not url.hostname or url.username or url.password:
         raise HTTPException(503,'Die KI-Verbindung ist noch nicht eingerichtet.')
     if not 256<=max_output<=8000: raise ValueError('Invalid output boundary')
@@ -219,14 +244,15 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
     text_bytes=len((instruction+raw).encode())
     if text_bytes>48000: raise HTTPException(413,'Zu viel Material für einen Schritt. Bitte einen kleineren Abschnitt wählen.')
     upper_input=text_bytes+1024+32768*len(images)
-    payload=model_payload(endpoint,model,instruction,context,images)
+    # In den Aufruf geht der Bereitstellungsname, nicht der Modellname.
+    payload=model_payload(endpoint,config['deployment'],instruction,context,images)
     if uses_responses(endpoint):
         payload['max_output_tokens']=max_output
         payload['reasoning']={'effort':effort}
     else:
         payload['max_completion_tokens']=max_output
         payload['reasoning_effort']=effort
-    key=reserve(account_id,purpose,session_id,upper_input,max_output,model=model)
+    key=reserve(account_id,purpose,session_id,upper_input,max_output,settings=config)
     result=None
     try:
         async with httpx.AsyncClient(timeout=90,follow_redirects=False) as client:
@@ -251,13 +277,12 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
 
 
 def transcribe_url(config=None):
-    """Die Adresse des Transkriptionsmodells: angegeben oder aus der Ressource
-    abgeleitet, die dieses Deployment bedient (Azure-Pfad je Deployment)."""
-    config=config or ai_settings()
-    if config.get('transcribe_url'):return config['transcribe_url']
-    url=urlsplit(endpoint_for(config['transcribe_model'],config)[0])
+    """Die Adresse der Spracheingabe, aus der Foundry ihrer Stufe abgeleitet
+    (Azure-Pfad je Bereitstellung)."""
+    config=config or settings_for(SPEECH_TIER)
+    url=urlsplit(config['url'])
     if not url.hostname:return ''
-    return f"{url.scheme}://{url.netloc}/openai/deployments/{config['transcribe_model']}/audio/transcriptions?api-version=2025-03-01-preview"
+    return f"{url.scheme}://{url.netloc}/openai/deployments/{config['deployment']}/audio/transcriptions?api-version=2025-03-01-preview"
 
 
 async def transcribe(account_id, audio, mime, language=None, prompt='', session_id=None, seconds=None):
@@ -267,16 +292,15 @@ async def transcribe(account_id, audio, mime, language=None, prompt='', session_
     und erwartete Wörter, damit Fachbegriffe und lateinische Formen nicht zu
     Alltagswörtern werden. Zurück kommt der Text, den das Kind vor dem Senden
     sieht und berichtigen kann."""
-    config=ai_settings();url=transcribe_url(config);parsed=urlsplit(url)
-    model=config['transcribe_model']
-    api_key=endpoint_for(model,config)[1]
+    config=settings_for(SPEECH_TIER);url=transcribe_url(config);parsed=urlsplit(url)
+    model=config['deployment'];api_key=config['key']
     if not api_key or parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password:
         raise HTTPException(503,'Die Spracheingabe ist noch nicht eingerichtet.')
     if not audio or len(audio)>TRANSCRIBE_MAX_BYTES:raise HTTPException(413,'Die Aufnahme ist zu lang. Bitte in kürzeren Stücken sprechen.')
     seconds=min(TRANSCRIBE_MAX_SECONDS,max(1,int(seconds or 0) or max(1,len(audio)//4000)))
     prompt=(prompt or '')[:600]
     upper_input=seconds*AUDIO_TOKENS_PER_SECOND+len(prompt.encode())//2+64
-    key=reserve(account_id,'mentor',session_id,upper_input,400,model=model)
+    key=reserve(account_id,'mentor',session_id,upper_input,400,settings=config)
     ext={'audio/mp4':'m4a','audio/x-m4a':'m4a','audio/aac':'m4a','audio/webm':'webm','audio/ogg':'ogg','audio/wav':'wav','audio/x-wav':'wav','audio/mpeg':'mp3'}.get((mime or '').split(';')[0].strip(),'webm')
     data={'model':model,'response_format':'json','temperature':'0'}
     if prompt:data['prompt']=prompt

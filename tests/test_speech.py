@@ -31,13 +31,17 @@ def fake_azure(patch, calls, payload=None, status=200):
     patch.setattr(ai.httpx, "AsyncClient", FakeClient)
 
 
-def test_url_is_derived_from_the_main_resource_or_taken_as_given(setup):
+def test_url_is_derived_from_the_resource_of_its_own_tier(setup):
     client, state, patch = setup
+    from test_learning import ai_env
     assert ai.transcribe_url() == "https://example.com/openai/deployments/gpt-4o-transcribe/audio/transcriptions?api-version=2025-03-01-preview"
-    patch.setenv("LEARNING_AI_TRANSCRIBE_MODEL", "whisper")
-    assert "/deployments/whisper/" in ai.transcribe_url()
-    patch.setenv("LEARNING_AI_TRANSCRIBE_URL", "https://other.example/openai/v1/audio/transcriptions")
-    assert ai.transcribe_url() == "https://other.example/openai/v1/audio/transcriptions"
+    # Der Bereitstellungsname geht in den Pfad, nicht der Modellname.
+    ai_env(patch, tiers={"transkription": {"modellname": "gpt-4o-transcribe", "bereitstellungsname": "whisper-eu", "foundry": "1"}})
+    assert "/deployments/whisper-eu/" in ai.transcribe_url()
+    # Zieht die Spracheingabe allein auf die zweite Foundry, folgt die Adresse ihr.
+    ai_env(patch, second={"url": "https://neu.example/openai/v1/responses", "key": "neu"},
+           tiers={"transkription": {"modellname": "gpt-4o-transcribe", "foundry": "2"}})
+    assert ai.transcribe_url().startswith("https://neu.example/openai/deployments/gpt-4o-transcribe/")
 
 
 def test_language_follows_the_subject_and_latin_gets_none():
