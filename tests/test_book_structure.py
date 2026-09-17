@@ -84,7 +84,7 @@ async def test_the_table_of_contents_is_read_once_from_the_first_pages(env, monk
     ]
     seen = []
 
-    async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None):
+    async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, **kw):
         seen.append((purpose, len(images or [])))
         return json.dumps(answers.pop(0)), 0, 0
     monkeypatch.setattr(bs.ai, "complete", complete)
@@ -107,7 +107,7 @@ async def test_a_run_reads_the_table_of_contents_before_fetching_pages(env, monk
         conn.execute("INSERT OR IGNORE INTO learning_profiles(account_id,school_year,grade,ai_enabled,active,created_at) VALUES(1,'2026/27',8,1,1,'now')")
         conn.execute("UPDATE digital_textbook_access SET toc_state=NULL")
 
-    async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None):
+    async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, **kw):
         if "Inhaltsverzeichnis" in instruction:
             return json.dumps({"is_toc": True, "continues": False, "chapters": [
                 {"number": "Unidad 3", "title": "¡Acércate!", "start_page": 48, "level": 1},

@@ -193,7 +193,7 @@ def _parts(row) -> tuple[list[dict], str]:
         for page in pages], "")
 
 
-def _apply(conn, account_id: int, row, insight: Insight) -> None:
+def _apply(conn, account_id: int, row, insight: Insight, tier_used: str | None = None) -> None:
     locked = set(json.loads(row["locked_fields"] or "[]"))
     values: dict = {}
     if insight.kind in store.KINDS and "kind" not in locked and row["kind"] == "other":
@@ -247,7 +247,7 @@ def _apply(conn, account_id: int, row, insight: Insight) -> None:
             values["source_label"] = part
     values.update(
         analysis_state="ready",
-        analysis_model=ai.model_name(ai.tier_for(_purpose(row))),
+        analysis_model=ai.model_name(tier_used or ai.tier_for(_purpose(row))),
         analysis_version=ANALYSIS_VERSION,
         analyzed_at=store.now_iso(),
         analysis_error=None,
@@ -382,6 +382,60 @@ async def compare(account_id: int, material_id: int, tier: str, effort: str | No
     }
 
 
+# Zwei Durchgänge beim Lesen (D90). Grundlage ist die Eichung vom 17.09.:
+# Gedruckter Buchtext kam auf der niedrigen Stufe Zeichen für Zeichen gleich
+# heraus wie auf der hohen (Textähnlichkeit 1,00), Handschrift dagegen verlor
+# Zahlen (1,00 gegen 0,82), Arbeitsheftseiten verloren Zeilen, und
+# Wertetabellen verloren selbst auf der hohen Stufe Werte, solange flach
+# nachgedacht wurde. Also liest zuerst die günstige Stufe und ordnet ein;
+# nur wo die Messung einen Verlust gezeigt hat, wird gründlicher neu gelesen.
+FIRST_TIER = "niedrig"
+CAREFUL_TIER = "hoch"
+# Eigene Bearbeitungen, Arbeitshefte und Arbeitsblätter: dort steht Handschrift
+# und dort zählt jede Zeile.
+CAREFUL_KINDS = {"workbook", "worksheet", "own_work"}
+# Naturwissenschaften und Mathematik: Schaltpläne, Skizzen und Wertetabellen.
+# Die Eichung fand Schaltpläne auch auf der niedrigen Stufe richtig, aber die
+# Stichprobe war eine Seite; hier wiegt ein Lesefehler schwerer als der Preis.
+CAREFUL_SUBJECTS = {"mathematik", "physik", "chemie", "biologie", "nwt", "informatik", "technik"}
+# Ab so vielen Zahlen auf einer Seite wird sie wie eine Wertetabelle behandelt.
+MANY_NUMBERS = 25
+
+
+def escalation(row, insight) -> tuple[str, str] | None:
+    """Ob die Seite ein zweites, gründlicheres Lesen braucht: Stufe und Tiefe.
+
+    None heißt, die erste Lesung bleibt stehen."""
+    subject = (insight.subject_name or (row["subject_name"] if "subject_name" in row.keys() else "") or "").strip().lower()
+    numbers = len(NUMBER.findall(insight.content_text or ""))
+    table_like = (insight.page_type or "").lower() in {"table", "formula"} or numbers >= MANY_NUMBERS
+    if table_like:
+        # Wertetabellen verlieren bei flachem Nachdenken Zahlen, auch auf der
+        # hohen Stufe. Nur mit tiefer Prüfung war die Tabelle vollständig.
+        return CAREFUL_TIER, "high"
+    if insight.handwritten or (insight.page_type or "").lower() == "handwriting":
+        return CAREFUL_TIER, "low"
+    if (row["kind"] if "kind" in row.keys() else "") in CAREFUL_KINDS:
+        return CAREFUL_TIER, "low"
+    if subject in CAREFUL_SUBJECTS:
+        return CAREFUL_TIER, "low"
+    if insight.unreadable:
+        return CAREFUL_TIER, "low"
+    return None
+
+
+async def read_material(account_id: int, row) -> tuple[Insight, str]:
+    """Die Seite lesen und die Lesung liefern, die gespeichert werden soll,
+    zusammen mit der Stufe, die sie erzeugt hat."""
+    insight, _ = await extract(account_id, row, tier=FIRST_TIER)
+    step = escalation(row, insight)
+    if not step:
+        return insight, FIRST_TIER
+    tier, effort = step
+    careful, _ = await extract(account_id, row, tier=tier, effort=effort)
+    return careful, tier
+
+
 async def analyze(account_id: int, material_id: int) -> bool:
     """One material. Returns True when fields were written."""
     with closing(webapp_conn()) as conn:
@@ -390,7 +444,7 @@ async def analyze(account_id: int, material_id: int) -> bool:
         if not row:
             return False
     try:
-        insight, _ = await extract(account_id, row)
+        insight, tier_used = await read_material(account_id, row)
     except ValidationError:
         _defer(material_id, "Antwort nicht auswertbar")
         return False
@@ -405,7 +459,7 @@ async def analyze(account_id: int, material_id: int) -> bool:
         conn.execute("BEGIN IMMEDIATE")
         current = conn.execute("SELECT * FROM materials WHERE id=?", (material_id,)).fetchone()
         if current:
-            _apply(conn, account_id, current, insight)
+            _apply(conn, account_id, current, insight, tier_used)
     await after_analysis(account_id, material_id)
     return True
 
@@ -455,8 +509,11 @@ async def after_analysis(account_id: int, material_id: int) -> None:
 def due(limit: int = 20) -> list[tuple[int, int]]:
     """What the night run picks up: never analysed, failed, outdated version or
     model, and materials whose subject or topic could not be resolved yet."""
-    # Dieselbe Stufe, die die Auswertung fährt: sonst gilt jede Seite ewig als fällig.
-    model = ai.model_name(ai.tier_for(ai.SOURCES)) or ""
+    # Beide Stufen, die lesen dürfen: Seit den zwei Durchgängen (D90) trägt eine
+    # Seite mal das günstige, mal das gründliche Modell. Nur eine davon zu
+    # prüfen hieße, die halbe Sammlung dauerhaft für fällig zu halten und jede
+    # Nacht neu zu lesen.
+    models = [ai.model_name(FIRST_TIER) or "", ai.model_name(CAREFUL_TIER) or ""]
     with closing(webapp_conn()) as conn:
         rows = conn.execute(
             "SELECT m.account_id,m.id FROM materials m "
@@ -464,11 +521,11 @@ def due(limit: int = 20) -> list[tuple[int, int]]:
             "WHERE m.hidden=0 AND ("
             " m.analysis_state IN ('pending','failed')"
             " OR (m.analysis_version<? AND COALESCE(m.origin,'')!='book_fetch')"
-            " OR COALESCE(m.analysis_model,'')!=?"
+            " OR COALESCE(m.analysis_model,'') NOT IN (?,?)"
             " OR (m.subject_name IS NULL OR m.subject_name='')"
             " OR NOT EXISTS (SELECT 1 FROM material_links l WHERE l.material_id=m.id AND l.kind='topic')"
             ") ORDER BY m.analysis_state='pending' DESC, m.id DESC LIMIT ?",
-            (ANALYSIS_VERSION, model, limit)).fetchall()
+            (ANALYSIS_VERSION, *models, limit)).fetchall()
     return [(r[0], r[1]) for r in rows]
 
 

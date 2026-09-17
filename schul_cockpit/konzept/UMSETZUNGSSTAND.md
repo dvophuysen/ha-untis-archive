@@ -1,3 +1,37 @@
+# Zwei Durchgänge beim Materiallesen 0.85.0
+
+Stand 17.09.2026. Eichung im Auftrag des Nutzers, Qualität ausdrücklich weit
+vor Kosten (D90).
+
+**Messung.** Zehn echte Seiten, jede von allen drei Stufen neu gelesen, „hoch"
+als Bezug für die Eigenstreuung des Modells. Gedruckter Buchtext 1,00/1,00/1,00
+bei Text, Wörtern und Zahlen auf allen Stufen; gemischte Seiten 0,99.
+Handschrift: Zahlen 1,00 auf „hoch" gegen 0,82 auf „mittel" und „niedrig".
+Arbeitsheft: Textähnlichkeit 0,85 gegen 0,62 und 0,61, dazu 19 verlorene Zeilen.
+Abbildungsseiten sind auf keiner Stufe reproduzierbar, auch „hoch" nicht (0,40
+gegen sich selbst): Dort wird ein Bild frei beschrieben. Seitenart und
+Handschrift-Erkennung stimmten siebenmal von sieben auf allen Stufen.
+„mittel" war nirgends besser als „niedrig" und zweimal schlechter.
+
+Zweite Runde auf drei technischen Seiten (Physik-Schaltplan, Mathe mit Graph
+und Wertetabellen, Äquivalenzumformungen), Stufe und Reasoning-Tiefe gekreuzt:
+Die Schaltplan-Topologie gaben alle fünf Läufe richtig wieder, Luna ausführlicher
+als Sol. Die Wertetabelle verlor auf „hoch/low" reproduzierbar Werte (fehlend
+2, 4, 4, 7, 12) und war erst auf „hoch/high" vollständig. Die Zuversicht lag
+auch bei Verlusten bei 0,98 und taugt deshalb nicht als Auslöser.
+
+**Gebaut.** `material_analysis.escalation(row, insight)` entscheidet nach
+Seitenart, Handschrift-Flag, Materialart, Fach und Zahlendichte über einen
+zweiten Durchgang; `read_material()` liest erst günstig, dann bei Bedarf
+gründlich und gibt die Lesung samt benutzter Stufe zurück. `analyze()`
+speichert nur die letzte Lesung, `_apply()` schreibt die tatsächlich benutzte
+Stufe nach `analysis_model`, und `due()` erkennt beide Stufen als erledigt an —
+sonst hätte der Nachtlauf jede günstig gelesene Seite endlos neu gelesen.
+
+**Tests.** Eskalationsregeln je Fall, der zweite Durchgang als das Gespeicherte,
+und die Fälligkeit nach günstiger Lesung. Zwei Test-Stubs mit fester Signatur
+bekamen `**kw`, weil `extract()` jetzt eine Stufe durchreicht. 455 Tests grün.
+
 # Richtwerte statt Sperren 0.84.0
 
 Stand 17.09.2026. Nutzerentscheidung: keine harten Grenzen, dafür Kosten im

@@ -10,7 +10,7 @@ from contextlib import closing
 
 from PIL import Image
 
-from test_learning import env, child, ai_env
+from test_learning import env, child, ai_env, seed
 from test_sources import history, LA
 from backend import db, sources, book_structure as bs, material_analysis as analysis
 from backend.routers import materials as materials_routes, subjects as subjects_routes
@@ -490,3 +490,73 @@ def test_a_budget_stop_is_named_as_such_on_the_exam_card(env):
     sources._SYNCED.clear()
     got = sources.exam_sources(1, "LATEIN", "2026-08-01", "2026-09-30")
     assert got["pending_items"][0]["kind"] == "budget" and got["pending_items"][0]["error"] == "429"
+
+
+def _row(**over):
+    base = {"id": 1, "kind": "book_page", "subject_name": "GESCHICHTE", "origin": ""}
+    base.update(over)
+    return base
+
+
+def _insight(**over):
+    from backend.material_analysis import Insight
+    return Insight(**{"content_text": "Ein gedruckter Absatz ohne Zahlen.", **over})
+
+
+def test_only_pages_that_measured_worse_are_read_a_second_time(env):
+    """Die Eichung vom 17.09.: gedruckter Text kam günstig identisch heraus,
+    Handschrift verlor Zahlen, Arbeitshefte Zeilen, Wertetabellen brauchten
+    zusätzlich Tiefe. Genau danach eskaliert der zweite Durchgang (D90)."""
+    from backend import material_analysis as analysis
+    # Gedruckter Fließtext bleibt bei der ersten, günstigen Lesung.
+    assert analysis.escalation(_row(), _insight()) is None
+    # Handschrift und eigene Bearbeitungen werden gründlich nachgelesen.
+    assert analysis.escalation(_row(), _insight(handwritten=True)) == ("hoch", "low")
+    assert analysis.escalation(_row(kind="own_work"), _insight()) == ("hoch", "low")
+    assert analysis.escalation(_row(kind="workbook"), _insight()) == ("hoch", "low")
+    # Wertetabellen zusätzlich mit tiefer Prüfung, sonst fehlen Werte.
+    assert analysis.escalation(_row(), _insight(page_type="table")) == ("hoch", "high")
+    viele = " ".join(str(n) for n in range(40))
+    assert analysis.escalation(_row(), _insight(content_text=viele)) == ("hoch", "high")
+    # Mathematik und Naturwissenschaften immer gründlich: Skizzen und Schaltpläne.
+    assert analysis.escalation(_row(subject_name="PHYSIK"), _insight()) == ("hoch", "low")
+    assert analysis.escalation(_row(), _insight(subject_name="Mathematik")) == ("hoch", "low")
+    # Unlesbares ebenfalls.
+    assert analysis.escalation(_row(), _insight(unreadable=True)) == ("hoch", "low")
+
+
+def test_the_second_pass_is_what_gets_stored(env, monkeypatch):
+    from backend import material_analysis as analysis
+    ai_env(monkeypatch)
+    seen = []
+
+    async def extract(account_id, row, tier=None, effort=None):
+        seen.append((tier, effort))
+        return _insight(content_text="Handschrift" if tier == "hoch" else "erste Lesung",
+                        handwritten=True), "k"
+    monkeypatch.setattr(analysis, "extract", extract)
+    import asyncio
+    insight, tier = asyncio.run(analysis.read_material(1, _row()))
+    assert seen == [("niedrig", None), ("hoch", "low")]
+    assert insight.content_text == "Handschrift" and tier == "hoch"
+
+
+def test_a_cheaply_read_page_is_not_due_again_every_night(env, monkeypatch):
+    """Sonst läse die Nacht jede günstig gelesene Seite endlos neu."""
+    from backend import material_analysis as analysis
+    client, _, _ = env
+    ai_env(monkeypatch)
+    # due() sieht nur Konten mit freigegebener KI im aktiven Schuljahr.
+    seed(client, ai_enabled=True)
+    with closing(db.webapp_conn()) as c, c:
+        mid = c.execute("INSERT INTO materials(account_id,kind,subject_name,title,created_at,updated_at,"
+                        "analysis_state,analysis_version,analysis_model) "
+                        "VALUES(1,'book_page','GESCHICHTE','Günstig gelesen','now','now','ready',?,?)",
+                        (analysis.ANALYSIS_VERSION, analysis.ai.model_name(analysis.FIRST_TIER))).lastrowid
+        c.execute("INSERT INTO material_links(material_id,kind,target_id,origin,created_at)"
+                  " VALUES(?,'topic',1,'test','now')", (mid,))
+    assert mid not in [m for _, m in analysis.due()], 'die günstige Lesung gilt als erledigt'
+    # Eine Seite mit einem fremden Modellnamen bleibt dagegen fällig.
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("UPDATE materials SET analysis_model='altes-modell' WHERE id=?", (mid,))
+    assert mid in [m for _, m in analysis.due()]
