@@ -550,11 +550,70 @@ def place_status(account_id: int, subject: str, places: list[dict]) -> dict:
             "missing_label": " · ".join(f"{m['label']} {m['pages_label']}" for m in missing)}
 
 
+# Wie viel Text die Nachbarseiten desselben Kapitels höchstens beisteuern, und
+# wie viele es höchstens sein dürfen. Die genannten Stellen behalten Vorrang.
+CHAPTER_BUDGET = 4000
+CHAPTER_PAGES = 4
+
+
+def chapter_pages_of(account_id: int, subject: str, hits: list[dict]) -> list[dict]:
+    """Weitere abgelegte Seiten desselben Buchkapitels.
+
+    Gelernt wird das Thema, nicht die Buchseite: Das Kapitel ist die Grundlage,
+    die genannte Seite nur der Einstieg. Am 17.09. hing „Über Spanien und andere
+    Länder sprechen" an Arbeitsheft S. 27 und Schulbuch S. 50, während die Seite,
+    die den Stoff trägt (S. 48, „Hier lernst du: über ein Land zu sprechen"),
+    ungenutzt im Bestand lag; der Mentor erfand daraufhin den Inhalt (D101).
+    Die Kapitelgrenzen gelten nur im digitalen Buch, dessen Verzeichnis gelesen
+    ist — Arbeitsheftseiten zählen anders.
+    """
+    from .book_structure import chapter_of, chapters_of
+    from .sources import _shelf
+    shelf = _shelf(account_id).get((subject or "").casefold())
+    if not shelf:
+        return []
+    chapters = chapters_of(account_id, shelf["title"])
+    if not chapters:
+        return []
+    cited = {p for hit in hits if (hit.get("origin") or "") == "book_fetch" for p in (hit.get("hit_pages") or [])}
+    wanted: set[int] = set()
+    for page in cited:
+        found = chapter_of(chapters, page)
+        if found:
+            wanted |= set(range(found["start_page"], (found["end_page"] or found["start_page"]) + 1))
+    wanted -= cited
+    if not wanted:
+        return []
+    marks = ",".join("?" * len(wanted))
+    with closing(webapp_conn()) as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT id,kind,origin,title,summary,content_text,source_label,source_page,printed_pages,page_check "
+            f"FROM materials WHERE account_id=? AND hidden=0 AND origin='book_fetch' AND source_book=? "
+            f"AND source_page IN ({marks}) AND COALESCE(content_text,'')!='' "
+            "AND COALESCE(page_check,'') NOT IN ('mismatch','blank')",
+            (account_id, shelf["title"], *sorted(wanted)))]
+    seen = {hit["id"] for hit in hits}
+    rows = [r for r in rows if r["id"] not in seen]
+    # Die nächstgelegenen zuerst: Was neben der genannten Seite steht, gehört
+    # am ehesten zum selben Schritt der Einheit.
+    rows.sort(key=lambda r: (min((abs(r["source_page"] - p) for p in cited), default=0), r["source_page"]))
+    return rows[:CHAPTER_PAGES]
+
+
 def material_for(account_id: int, subject: str, places: list[dict], budget: int = 7000) -> list[dict]:
-    """Der Text der Originalseiten zu den Stellen eines Themas, bis zum Budget."""
+    """Der Text der Originalseiten zu den Stellen eines Themas, bis zum Budget.
+
+    Zuerst die genannten Stellen, danach — mit eigenem, kleinerem Budget — die
+    übrigen Seiten desselben Kapitels als Grundlage (D101)."""
     out = []
     used = 0
-    for hit in sorted(_matching_rows(account_id, subject, places), key=lambda h: min(h.get("hit_pages") or [0])):
+    hits = _matching_rows(account_id, subject, places)
+    try:
+        extra = chapter_pages_of(account_id, subject, hits)
+    except Exception:
+        LOG.debug("Kapitelseiten zu %s nicht bestimmbar", subject, exc_info=True)
+        extra = []
+    for hit in sorted(hits, key=lambda h: min(h.get("hit_pages") or [0])):
         # Die gedruckte Seite, ohne das, was das Kind hineingeschrieben hat: Sonst
         # baut der Mentor Aufgaben aus den Antworten des Kindes, auch aus falschen (D98).
         from .materials import printed_only
@@ -574,6 +633,18 @@ def material_for(account_id: int, subject: str, places: list[dict], budget: int 
         if not hit.get("place"):
             where += " (jüngste Seite des Fachs, keine Stelle genannt)"
         out.append({"stelle": where, "text": text})
+    spare = 0
+    for row in sorted(extra, key=lambda r: r["source_page"]):
+        from .materials import printed_only
+        text = printed_only(row.get("content_text") or row.get("summary") or "").strip()
+        if not text:
+            continue
+        room = CHAPTER_BUDGET - spare
+        if room <= 200:
+            break
+        spare += len(text[:room])
+        out.append({"stelle": f"{_row_label(row) or 'Schulbuch'} S. {row['source_page']} (gleiches Kapitel, im Unterricht nicht genannt)",
+                    "text": text[:room]})
     return out
 
 
@@ -601,6 +672,26 @@ def public(topic: dict) -> dict:
     return {k: topic.get(k) for k in ("id", "exam_key", "subject", "position", "title", "detail", "origin", "stale",
                                      "stage", "reason", "note", "self_view", "sat_at", "checks", "next_check", "updated_at")} | {
         "label": LABELS.get(topic.get("stage"), ""), "places": places, "places_label": places_label(places)}
+
+
+def basis_of(account_id: int, subject: str, places: list[dict]) -> list[dict]:
+    """Welche abgelegten Seiten der Mentor als Grundlage hat, zum Aufschlagen
+    in der App. Das Kind soll dieselben Seiten sehen können wie er (D101)."""
+    hits = _matching_rows(account_id, subject, places)
+    out = []
+    for hit in sorted(hits, key=lambda h: min(h.get("hit_pages") or [0])):
+        pages = hit.get("hit_pages") or ([hit["source_page"]] if hit.get("source_page") else [])
+        out.append({"material_id": hit["id"], "label": (hit.get("place") or {}).get("label") or _row_label(hit) or "Buch",
+                    "page": pages[0] if pages else None, "title": hit.get("title") or "", "chapter": False})
+    try:
+        extra = chapter_pages_of(account_id, subject, hits)
+    except Exception:
+        LOG.debug("Kapitelseiten zu %s nicht bestimmbar", subject, exc_info=True)
+        extra = []
+    for row in sorted(extra, key=lambda r: r["source_page"]):
+        out.append({"material_id": row["id"], "label": _row_label(row) or "Schulbuch", "page": row["source_page"],
+                    "title": row.get("title") or "", "chapter": True})
+    return out
 
 
 VOCAB_TITLE = re.compile(r"vokabel|voc\b|voc\.|wortschatz|lernw[öo]rter|vocabulary|words|irregular verbs|vocabulario", re.I)

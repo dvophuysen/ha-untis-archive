@@ -180,6 +180,13 @@ def topic_view(c,s):
     siblings=[r[0] for r in c.execute('SELECT id FROM exam_topics WHERE account_id=? AND exam_key=? AND stale=0 ORDER BY position,id',(s['account_id'],row['exam_key']))]
     topic['position']=(siblings.index(row['id'])+1) if row['id'] in siblings else None;topic['total']=len(siblings)
     topic['check']=bool(json.loads(s.get('source_json') or '{}').get('check'))
+    # Die Seiten, auf denen die Einheit fußt, damit das Kind sie aufschlagen
+    # kann statt auf ein Material verwiesen zu werden, das nur der Mentor sieht.
+    try:
+        topic['basis']=lernstand.basis_of(s['account_id'],row['subject'],topic['places'])
+    except Exception:
+        LOG.debug('Grundlage zu Thema %s nicht bestimmbar',s['topic_id'],exc_info=True)
+        topic['basis']=[]
     return topic
 
 
@@ -653,12 +660,18 @@ CHECK_INSTRUCTION='''Du bist ein freundlicher Nachhilfe-Coach für ein Schulkind
 SCHEMA_TAIL='Antworte ausschließlich im folgenden JSON-Schema: '
 # Ein Thema der offiziellen Themenliste: Die App misst die Stufe, der Mentor liefert Aufgaben in
 # wechselnden Arten und den fachlichen Grund. Keine Uhr, keine Minuten.
-TOPIC_RULE=('topic ist ein Thema der offiziellen Themenliste der Lehrkraft für eine Arbeit. Übe nur dieses Thema, mit den Originalseiten in topic.material; '
-            'fehlt dort etwas, sage es und erfinde keine Buchinhalte. Diese Einheit hat keine Uhr und keine Minuten: Sie endet, wenn topic.reached sitzt oder gefestigt ist, oder wenn das Kind aufhört. '
+TOPIC_RULE=('topic ist ein Thema der offiziellen Themenliste der Lehrkraft für eine Arbeit. Übe dieses Thema. '
+            'Gelernt wird das Thema, nicht die Buchseite. topic.material ist die Grundlage, nicht der Stoff: Daraus entnimmst du das Niveau, den Wortschatz, die Formen und die Art, wie in diesem Heft geübt wird. '
+            'Denk dir als Nachhilfelehrer aus, wie du das Ziel trainierst — eigene Aufgaben zum selben Thema sind ausdrücklich erwünscht, du musst nichts abschreiben. Fehlt Material ganz, übst du das Thema trotzdem, mit Allgemeinwissen, und sagst das. '
+            'Was aber nicht im Material steht, schreibst du ihm nicht zu: kein „im Material steht“, kein „laut Text“, kein Zitat und keine Seitenzahl, die du nicht wirklich dort gelesen hast. Eine selbst erfundene Aufgabe ist gut, eine erfundene Quelle ist ein Fehler. '
+            'Das Kind sieht das Material nicht. Alles, was es zum Lösen braucht, steht in deiner Aufgabe selbst: Verweise nie auf „das Material“, „den Text“ oder „die Abbildung“ als Fundstelle einer Lösung. Willst du, dass es im eigenen Heft nachschlägt, nenne Heft und Seite ausdrücklich und sage, dass es nachsehen darf. '
+            'In einem Sprachfach wird Sprache geübt, nicht Sachwissen: Braucht die Aufgabe einen Fakt (Nachbarland, Zahl, Jahreszahl), gibst du ihn vor und das Kind formuliert ihn in der Fremdsprache. '
+            'Diese Einheit hat keine Uhr und keine Minuten: Sie endet, wenn topic.reached sitzt oder gefestigt ist, oder wenn das Kind aufhört. '
             'Sobald topic.reached sitzt oder gefestigt meldet: action finish, eine Zeile, was gezeigt wurde, keine weitere Aufgabe. '
             'Wechsle die Aufgabenart (task.operator: Erkenne, Bilde, Übersetze, Wende an, Erkläre, auch die umgekehrte Richtung); dieselbe Art zweimal nacheinander nur nach einem Fehler. '
-            'Aufgabenformen aus dem eigenen Heft: Sieh in topic.material nach, wie dort geübt wird — Lücke, Zuordnung, eigener Satz, Formenbestimmung, Rechenweg — und wandle eine dieser Formen ab, statt eine eigene zu erfinden. '
+            'Aufgabenformen aus dem eigenen Heft: Sieh in topic.material nach, wie dort geübt wird — Lücke, Zuordnung, eigener Satz, Formenbestimmung, Rechenweg — und wandle eine dieser Formen ab. Übernommen wird die Form, nicht der Inhalt. '
             'task.form sagt, was das Kind tut: auswahl, zuordnen, luecke, kurz oder frei. Auswahl und Zuordnung nur, wo das Material sie auch benutzt, in aller Regel beim Wortschatz; bei Bilden, Übersetzen und Erklären nie, dort liegt der Wert im Selbsterzeugen. '
+            'Hat das Kind einen berechtigten Einwand, gilt: ein Satz dazu, und im selben Zug die berichtigte Aufgabe. Frag nie um Erlaubnis weiterzumachen und stelle keine Rückfrage, die das Kind nur mit „ja“ beantworten kann. '
             'Steigere innerhalb der Einheit: anfangen darfst du leicht und wiedererkennend, aber es muss mindestens eine Aufgabe mit afb 2 oder 3 kommen, die das Kind selbst löst. Die App wertet „sitzt“ erst, wenn auch eine schwierigere Aufgabe getroffen hat. '
             'Ist topic.check true, ist dies eine Kurzprüfung Tage später: keine Erklärung vorweg, direkt kurze Aufgaben verschiedener Art, erklären erst nach einem Fehler. '
             'Setze re_explained auf true, wenn du dasselbe ein zweites Mal anders erklären musstest. topic.self_view ist das Gefühl des Kindes, kein Beleg; nie als Können werten. '
@@ -694,6 +707,26 @@ def condition(c, s, now=None):
     if not signals:return None
     return {'signale':signals,'hinweis':'Kleinere Schritte, eine Sache auf einmal. Biete eine Pause an, '
             'ohne sie zu erzwingen, und schließe mit etwas ab, das gerade geklappt hat.'}
+
+
+STALLED_TURNS=3
+
+
+def stalled(c,s):
+    """Drei Züge hintereinander ohne Aufgabe: Nach einem berechtigten Einwand
+    hat der Mentor am 17.09. zweimal um Erlaubnis gefragt („Sollen wir so
+    weitermachen?"), statt die berichtigte Aufgabe zu stellen; das Kind musste
+    nachfassen (D101). Zwei Züge ohne Aufgabe sind erlaubt — zweimal anders
+    erklären ist Lernen. Beim dritten wird die Aufgabe eingefordert."""
+    rows=[r[0] or '{}' for r in c.execute(
+        "SELECT payload FROM mentor_messages WHERE session_id=? AND role='assistant' ORDER BY id DESC LIMIT ?",(s['id'],STALLED_TURNS))]
+    if len(rows)<STALLED_TURNS:return False
+    for raw in rows:
+        try:
+            if json.loads(raw).get('task'):return False
+        except ValueError:
+            return False
+    return True
 
 
 def _plain(text):
@@ -826,7 +859,10 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
         # ihn nicht aus den letzten Nachrichten rekonstruieren muss (D91).
         with closing(webapp_conn()) as c:
             lage=condition(c,s)
+            steht=topic_mode and stalled(c,s)
         if lage:ctx['verfassung']=lage
+        if steht:ctx['ohne_aufgabe']={'zuege':STALLED_TURNS,'hinweis':'Die letzten Züge hatten keine Aufgabe. '
+                                      'Stelle jetzt eine Aufgabe zum Thema, ohne weitere Rückfrage und ohne um Erlaubnis zu bitten.'}
         stored_quiz=json.loads(s.get('quiz_json') or '[]')
         if stored_quiz:
             ctx['abfrage']={'bestand':stored_quiz,'offen':open_items(stored_quiz)}

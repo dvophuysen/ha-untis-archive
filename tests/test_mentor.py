@@ -831,3 +831,39 @@ def test_the_condition_reaches_the_model(setup):
     send(client, s, kind='hint', text='kp')
     assert 'verfassung' in contexts[-1], 'nach mehreren Hinweisen kennt der Mentor die Lage'
     assert 'Pause' in contexts[-1]['verfassung']['hinweis']
+
+
+def test_three_turns_without_a_task_demand_one(setup):
+    """Nach Noahs berechtigtem Einwand hat der Mentor am 17.09. zweimal um
+    Erlaubnis gefragt („Sollen wir so weitermachen?"), statt die berichtigte
+    Aufgabe zu stellen; das Kind musste nachfassen (D101). Zweimal anders
+    erklären bleibt erlaubt, beim dritten Zug wird die Aufgabe eingefordert."""
+    client,_,_=setup
+    sid=start(client)['id']
+    def say(key,task):
+        with closing(db.webapp_conn()) as c,c:
+            c.execute("INSERT INTO mentor_messages(account_id,session_id,request_key,role,text,payload,created_at) "
+                      "VALUES(1,?,?,'assistant','...',?,'now')",(sid,key,json.dumps({'task':task})))
+    def stuck():
+        with closing(db.webapp_conn()) as c:
+            return m.stalled(c,{'id':sid})
+    with closing(db.webapp_conn()) as c,c:
+        c.execute("DELETE FROM mentor_messages WHERE session_id=?",(sid,))
+    say('k0',None);say('k1',None)
+    assert stuck() is False,'zwei Erklärzüge sind Lernen, kein Stillstand'
+    say('k2',None)
+    assert stuck() is True
+    # Eine gestellte Aufgabe setzt zurück.
+    say('k3',TASK)
+    assert stuck() is False
+
+
+def test_the_mentor_may_invent_tasks_but_not_sources():
+    """Gelernt wird das Thema, nicht die Buchseite: Eigene Aufgaben sind
+    erwünscht, eine erfundene Fundstelle ist ein Fehler (D101)."""
+    rule=m.TOPIC_RULE
+    assert 'Gelernt wird das Thema, nicht die Buchseite' in rule
+    assert 'eigene Aufgaben zum selben Thema sind ausdrücklich erwünscht' in rule
+    assert 'Das Kind sieht das Material nicht' in rule
+    assert 'im Material steht' in rule and 'erfundene Quelle ist ein Fehler' in rule
+    assert 'Frag nie um Erlaubnis weiterzumachen' in rule

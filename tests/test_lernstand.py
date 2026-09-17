@@ -337,3 +337,49 @@ def test_recognition_alone_is_not_sitzt():
     gemischt = leicht[:2] + [answer(1, "2026-09-16", kind="Übersetze", afb=2, form="frei")]
     state = lernstand.replay(gemischt)
     assert state["stage"] == "sitzt" and "schwierigere" in state["reason"]
+
+
+def test_the_chapter_is_the_basis_not_only_the_named_page(env):
+    """Gelernt wird das Thema, nicht die Buchseite. Am 17.09. hing „Über Spanien
+    und andere Länder sprechen" an Arbeitsheft S. 27 und Schulbuch S. 50, während
+    S. 48 („Hier lernst du: über ein Land zu sprechen") ungenutzt im Bestand lag;
+    der Mentor erfand daraufhin ein Quiz und schrieb es dem Material zu (D101)."""
+    from backend.book_structure import Chapter, store_chapters
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO digital_textbook_catalog(account_id,subject_name,title,discovered_at) "
+                  "VALUES(1,'spanisch','¡Apúntate! 2','now')")
+        for page, title, text in [(48, 'Quiz', '¿Cuántas comunidades autónomas hay en España? a Hay 17.'),
+                                  (49, 'Acércate', 'Hier lernst du: über ein Land zu sprechen.'),
+                                  (50, 'Rally', 'Un rally por Madrid. El Parque del Retiro.'),
+                                  (70, 'Unidad 4', 'Eine ganz andere Einheit.')]:
+            c.execute("INSERT INTO materials(account_id,kind,subject_name,title,content_text,origin,source_book,"
+                      "source_page,page_check,analysis_state,created_at,updated_at) "
+                      "VALUES(1,'book_page','SPANISCH',?,?,'book_fetch','¡Apúntate! 2',?,'ok','ready','now','now')",
+                      (title, text, page))
+    store_chapters(1, '¡Apúntate! 2', [Chapter(number='3', title='De paseo por España', start_page=48, end_page=59),
+                                       Chapter(number='4', title='Otra unidad', start_page=60, end_page=79)])
+    places = [{'label': 'Schulbuch', 'pages': [50]}]
+    material = lernstand.material_for(1, 'SPANISCH', places)
+    stellen = [m['stelle'] for m in material]
+    # Die genannte Seite zuerst, danach die Nachbarn desselben Kapitels, als solche benannt.
+    assert stellen[0].startswith('Schulbuch S. 50') and 'gleiches Kapitel' not in stellen[0]
+    assert any(s.startswith('Schulbuch S. 48') and 'gleiches Kapitel' in s for s in stellen)
+    assert any('comunidades autónomas' in m['text'] for m in material), 'die tragende Seite fehlt dem Mentor'
+    # Ein anderes Kapitel gehört nicht dazu.
+    assert not any('S. 70' in s for s in stellen)
+    # Dieselben Seiten kann das Kind aufschlagen.
+    basis = lernstand.basis_of(1, 'SPANISCH', places)
+    assert [(b['page'], b['chapter']) for b in basis] == [(50, False), (48, True), (49, True)]
+
+
+def test_without_a_read_table_of_contents_nothing_is_added(env):
+    """Ohne gelesenes Verzeichnis gibt es keine Kapitelgrenzen; dann bleibt es
+    bei den genannten Stellen, statt irgendwelche Nachbarseiten anzuhängen."""
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,content_text,origin,source_book,"
+                  "source_page,page_check,analysis_state,created_at,updated_at) "
+                  "VALUES(1,'book_page','SPANISCH','S. 50','Un rally por Madrid.','book_fetch','¡Apúntate! 2',50,"
+                  "'ok','ready','now','now')")
+    assert lernstand.chapter_pages_of(1, 'SPANISCH', []) == []
+    material = lernstand.material_for(1, 'SPANISCH', [{'label': 'Schulbuch', 'pages': [50]}])
+    assert len(material) == 1 and 'gleiches Kapitel' not in material[0]['stelle']

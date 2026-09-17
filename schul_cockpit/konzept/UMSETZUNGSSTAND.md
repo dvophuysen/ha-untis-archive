@@ -1,3 +1,68 @@
+# Thema statt Buchseite 0.96.0
+
+Stand 17.09.2026. Nutzerrückmeldung und Nutzerentscheidung (D101).
+
+**Befund.** Die Einheit „Über Spanien und andere Länder sprechen" (Sitzung 22,
+17.09., 17:15) war unbrauchbar. Sie lief auf `gpt-5.6-sol`, also der höchsten
+Stufe — die Vermutung eines billigen Modells trifft nicht zu. Die Reasoning-
+Tiefe steht allerdings überall auf `low`: `ai_gateway.complete()` setzt das als
+Vorgabe, und weder `mentor.py` noch `mentor_opening.py` übergeben je etwas
+anderes. D77 hatte die Tiefe nur für die Eichung wählbar gemacht.
+
+Vier Fehler, alle aus dem gespeicherten Verlauf belegbar:
+
+1. *Erfundene Quelle.* „Im Material steht: España tiene 17 comunidades
+   autónomas." Dieser Satz steht in keiner der beiden Seiten, die am Thema
+   hängen (Arbeitsheft S. 27, Schulbuch S. 50). Das Modell hat das Buchquiz von
+   S. 48 aus Allgemeinwissen nachgebaut und als Zitat ausgegeben.
+2. *Falsche Grundlage.* Arbeitsheft S. 27 behandelt Zahlen bis 1000 und
+   Adjektivformen, Schulbuch S. 50 den Rally durch Madrid. Die Seite, die den
+   Stoff trägt, ist S. 48/49 („Hier lernst du: über ein Land zu sprechen"); sie
+   liegt als Material 11 im Bestand, war aber nie im Unterricht genannt worden
+   und hing deshalb nicht am Thema.
+3. *Unsichtbares Material.* Der Mentor argumentierte aus einer Quelle, die nur
+   er lesen kann. Die Buchaufgabe 1a verweist sogar ausdrücklich auf Cultura
+   S. 148 und die Landkarte — sie ist fürs aufgeschlagene Buch gemacht. Der
+   Einwand des Kindes („Du hast mir die Quelle aber gar nicht gezeigt") war
+   fachlich richtig.
+4. *Zwei tote Züge.* Nach dem Einwand hat das Modell zweimal entschuldigt und
+   um Erlaubnis gefragt („Sollen wir so weitermachen?"), statt die berichtigte
+   Aufgabe zu stellen. Das Kind musste zweimal nachfassen.
+
+Zur Laufzeit: Einstieg 8,8 s, die vier Züge 13,4 / 8,8 / 4,3 / 3,7 s bei rund
+12.000 Kontext-Token. Zeitgleich lief das Neueinlesen der 19 Spanisch-Seiten
+über dieselbe Foundry mit sol-Aufrufen von 50 bis 70 Sekunden, zwei davon wurden
+gar nicht angenommen. Der Stapel hat der Einheit die Leitung weggenommen.
+
+**Entscheidung des Nutzers.** „Wir lernen nicht Buchseiten, sondern Themen. Die
+Buchseiten geben die Grundlage, und aus den Arbeitsheften erkennen wir typische
+Aufgabenstellungen. Der Mentor versteht das Ziel und überlegt sich als Pädagoge
+und geschickter Nachhilfelehrer, wie er dieses Wissen trainiert."
+
+**Gebaut.**
+
+- `TOPIC_RULE` sagt es jetzt zuerst: Grundlage statt Stoff, eigene Aufgaben
+  erwünscht, erfundene Fundstellen verboten, das Kind sieht das Material nicht,
+  in Sprachfächern wird Sprache geübt und ein nötiger Fakt vorgegeben, nach
+  einem Einwand folgt die berichtigte Aufgabe ohne Rückfrage. Aus dem Heft
+  übernommen wird die Form, nicht der Inhalt.
+- `lernstand.chapter_pages_of()` hängt bis zu vier weitere abgelegte Seiten
+  desselben Buchkapitels an das Material, gekennzeichnet als „gleiches Kapitel,
+  im Unterricht nicht genannt", mit eigenem Budget von 4000 Zeichen. Die
+  genannten Stellen behalten Vorrang. Die Kapitelgrenzen gelten nur im digitalen
+  Buch mit gelesenem Verzeichnis; ohne Verzeichnis ändert sich nichts.
+- `lernstand.basis_of()` und `topic.basis` nennen dieselben Seiten dem Kind. Der
+  Lernraum zeigt „Grundlage aufschlagen" über dem Gespräch; jede Seite klappt
+  auf und lädt ihren Text erst dann. `materials.printed_text` liefert die
+  gedruckte Fassung ohne die Eintragungen des Kindes (D98).
+- `mentor.stalled()` erkennt drei Züge hintereinander ohne Aufgabe und fordert
+  im Kontext (`ohne_aufgabe`) eine ein. Zwei bleiben erlaubt: zweimal anders zu
+  erklären ist Lernen.
+
+**Offen.** Die Reasoning-Tiefe ist noch nicht geeicht — dieselbe Einheit auf sol
+mit `low` gegen `medium` messen und nur dort anheben, wo es sich zeigt. Ebenso
+offen: Stapelläufe zurückstellen, solange eine Einheit läuft.
+
 # Eine Seite, zwei Nennungen 0.95.0
 
 Stand 17.09.2026. Nutzerrückmeldung (D99).
