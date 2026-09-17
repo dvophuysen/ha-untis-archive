@@ -279,7 +279,14 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
 def transcribe_url(config=None):
     """Die Adresse der Spracheingabe, aus der Foundry ihrer Stufe abgeleitet
     (Azure-Pfad je Bereitstellung)."""
-    config=config or settings_for(SPEECH_TIER)
+    # Leer, solange die Stufe keinen Zugang hat: Die Uebersichten fragen hier
+    # nur, ob ein Mikrofon angeboten werden kann. Wer wirklich aufnimmt, geht
+    # durch transcribe() und bekommt dort die Meldung.
+    if config is None:
+        try:
+            config=ai_settings(SPEECH_TIER)
+        except (AiEndpointMissing,AiTierUnknown):
+            return ''
     url=urlsplit(config['url'])
     if not url.hostname:return ''
     return f"{url.scheme}://{url.netloc}/openai/deployments/{config['deployment']}/audio/transcriptions?api-version=2025-03-01-preview"
