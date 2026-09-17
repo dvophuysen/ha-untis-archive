@@ -64,10 +64,14 @@ INSTRUCTION = (
     "knapp in Worten, damit später ohne das Bild damit gearbeitet werden kann. Ergänze nichts, "
     "was nicht dasteht; unleserliche Stellen kennzeichnest du mit […] und setzt unreadable auf true.\n"
     "kind ist genau einer dieser Werte: worksheet Arbeitsblatt der Lehrkraft, workbook Seite aus einem "
-    "Arbeitsheft, book_page Buchseite, notes eigene Mitschrift oder Heftseite, assignment reine "
-    "Aufgabenstellung, own_work vom Kind bearbeitete Aufgaben, exam geschriebene Klassenarbeit oder "
+    "Arbeitsheft, book_page Buchseite, notes Mitschrift aus dem Unterricht oder Heftseite mit Stoff, assignment reine "
+    "Aufgabenstellung, own_work die erledigte Hausaufgabe des Kindes (gelöste Aufgaben, Recherche, geschriebener Text, "
+    "Ausarbeitung), exam geschriebene Klassenarbeit oder "
     "Klausur, handout Merk- oder Infoblatt, exam_notice die offizielle Themenliste der Lehrkraft, was in "
-    "einer Klassenarbeit vorkommt (Tafelabschrift, Zettel oder Nachricht), toc Inhaltsübersicht eines Buchs mit Kapiteln und Seitenzahlen, other sonst.\n"
+    "einer Klassenarbeit vorkommt (Tafelabschrift, Zettel oder Nachricht), toc Inhaltsübersicht eines Buchs mit Kapiteln und Seitenzahlen, other sonst. "
+    "Ist hinweise.gehoert_zu_hausaufgabe gesetzt und die Seite handschriftlich vom Kind, ist kind own_work, nicht notes, "
+    "es sei denn, sie ist erkennbar die ausgegebene Aufgabenstellung oder ein Blatt der Lehrkraft; hinweise.gehoert_zu_hausaufgabe.auftrag "
+    "sagt, was zu tun war.\n"
     "subject_name nur setzen, wenn das Fach im Material oder im mitgelieferten Zusammenhang belegt ist; "
     "sonst leer lassen. Verwende dann genau eine Schreibweise aus bekannte_faecher.\n"
     "topics: höchstens sechs Stichworte zum Inhalt. Passt ein Eintrag aus bekannte_themen, übernimm "
@@ -159,8 +163,9 @@ def _context(conn, account_id: int, row) -> dict:
                 "SELECT title,subject_name,due_date,lesson_id,notes,created_at FROM tasks "
                 "WHERE id=? AND account_id=?", (link["target_id"], account_id)).fetchone()
             if task:
+                from .sources import task_text
                 hints["gehoert_zu_hausaufgabe"] = {
-                    "titel": task["title"], "fach": task["subject_name"],
+                    "titel": task["title"], "fach": task["subject_name"], "auftrag": task_text(dict(task))[:400],
                     "gestellt_am": task_given_date(task), "faellig_am": task["due_date"]}
         if link["kind"] == "topic":
             topic = conn.execute("SELECT subject,title FROM learning_topics WHERE id=?",
