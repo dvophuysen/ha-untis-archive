@@ -1,3 +1,27 @@
+# Gedruckte Seite und Eintragung des Kindes getrennt 0.94.0
+
+Stand 17.09.2026. Nutzerrückmeldung zu Arbeitsheft Spanisch S. 34 und 36 (D98).
+
+**Befund.** Auf S. 34 las die Auswertung „el Real Madrid es el mejor equipo
+(equipo / bueno/-a) del mundo“. Gedruckt steht dort eine Lücke; „el mejor
+equipo“ hat das Kind hineingeschrieben. Nur an einer Stelle unterschied die
+Lesung überhaupt, und dann in freier Prosa („handschriftlich darüber: los
+mejores“). Folge: Die Antworten des Kindes gelten als Buchinhalt, die Lücke ist
+verloren, und die Seite lässt sich nicht mehr als Vorlage üben. Auf S. 36
+verlangte umgekehrt ein gedrucktes Musterbeispiel ein Gegenlesen.
+
+**Gebaut.** `Insight.pupil_entries` und die Spalte `materials.pupil_entries`
+(Migration `materials_016_pupil_entries`). Die Anweisung schreibt die Trennung
+vor: Lücke bleibt `___`, Eintragung als `[Kind: …]` dahinter, Durchgestrichenes
+als `[Kind gestrichen: …]`; ein gedrucktes Musterbeispiel in Schreibschrift ist
+gedruckter Inhalt und setzt `handwritten` nicht. `materials.printed_only()` und
+`pupil_only()` trennen die Fassungen wieder, `lernstand.material_for()` gibt dem
+Mentor die gedruckte. `needs_review()` löst zusätzlich bei `pupil_entries` aus.
+
+**Tests.** Trennung und Rückgewinnung beider Fassungen am echten Satz von
+S. 34, unbearbeitete Seite unverändert, und die Gegenlese-Regel in allen drei
+Fällen. 470 Tests grün.
+
 # Aufgabenformen aus dem eigenen Heft 0.93.0
 
 Stand 17.09.2026. Nutzerentscheidung nach der missratenen Spanisch-Übung (D97).

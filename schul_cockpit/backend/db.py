@@ -886,6 +886,11 @@ _MIGRATIONS.append(("mentor_message_author_002",
 # Eintrags), ergebnis (die Bearbeitung des Kindes dazu), stoff (Thema).
 _MIGRATIONS.append(("material_links_002_relation", "ALTER TABLE material_links ADD COLUMN relation TEXT"))
 
+# Ob das Kind auf einer Seite selbst geschrieben hat, getrennt von der Frage, ob
+# Handschrift zu lesen war: Arbeitshefte drucken Musterlösungen in Schreibschrift
+# und verlangten dafür bisher ein Gegenlesen (D98).
+_MIGRATIONS.append(("materials_016_pupil_entries", "ALTER TABLE materials ADD COLUMN pupil_entries INTEGER NOT NULL DEFAULT 0"))
+
 # Das Anforderungsniveau und die Aufgabenform je Antwort. „Sitzt" verlangt, dass
 # auch die schwierigeren Aufgaben richtig bearbeitet wurden (D97); ohne diese
 # beiden Angaben ließ sich das aus den Antworten nicht ablesen.

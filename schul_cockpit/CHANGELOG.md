@@ -1,3 +1,9 @@
+## 0.94.0
+
+- Gedruckte Seite und Eintragung des Kindes werden beim Einlesen sauber getrennt. Bisher verschmolz die Lesung beides: Auf Arbeitsheft S. 34 stand „el Real Madrid es el mejor equipo" als Buchtext, obwohl dort eine Lücke gedruckt ist und das Kind die Antwort hineingeschrieben hat. Jetzt bleibt die Lücke als `___` stehen, und was das Kind eingetragen hat, steht dahinter in eckigen Klammern. Damit gilt eine Antwort des Kindes nie mehr als Buchinhalt — auch keine falsche.
+- Der Mentor baut Übungen aus der gedruckten Fassung der Seite, ohne die Eintragungen des Kindes.
+- Ein im Heft gedrucktes Musterbeispiel in Schreibschrift gilt nicht mehr als Handschrift und verlangt deshalb kein Gegenlesen. Was das Kind selbst geschrieben hat, verlangt es weiterhin immer — und jetzt auch dann, wenn die Lesung die Handschrift nicht als solche gemeldet hat.
+
 ## 0.93.0
 
 - Übungsaufgaben orientieren sich an den Aufgabenformen aus Buch und Arbeitsheft. Der Mentor sieht nach, wie auf den vorliegenden Seiten geübt wird — Lücke, Zuordnung, eigener Satz, Formenbestimmung, Rechenweg — und wandelt eine dieser Formen ab, statt eine eigene zu erfinden. Eine Aufgabe sagt jetzt auch, was das Kind tut: auswählen, zuordnen, ergänzen, kurz oder frei antworten.

@@ -520,7 +520,10 @@ def material_for(account_id: int, subject: str, places: list[dict], budget: int 
     out = []
     used = 0
     for hit in sorted(_matching_rows(account_id, subject, places), key=lambda h: min(h.get("hit_pages") or [0])):
-        text = (hit.get("content_text") or hit.get("summary") or "").strip()
+        # Die gedruckte Seite, ohne das, was das Kind hineingeschrieben hat: Sonst
+        # baut der Mentor Aufgaben aus den Antworten des Kindes, auch aus falschen (D98).
+        from .materials import printed_only
+        text = printed_only(hit.get("content_text") or hit.get("summary") or "").strip()
         if not text:
             continue
         room = budget - used
