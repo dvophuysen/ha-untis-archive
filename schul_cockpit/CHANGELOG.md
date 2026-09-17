@@ -1,3 +1,7 @@
+## 0.95.0
+
+- Fehler behoben: Dieselbe Seite galt gleichzeitig als vorhanden und als fehlend. Bei „Spanische Texte verstehen und erschließen" stand „Buch S. 48 · Schulbuch S. 48 · Arbeitsheft S. 26 · 2 von 3 Seiten da · fehlt Schulbuch S. 48". Ein Unterrichtseintrag hatte „Buch S. 48" geschrieben, ein anderer „Schulbuch S. 48" — zwei Nennungen einer Seite, die als zwei Stellen geführt wurden. Da eine vorliegende Seite nur die erste passende Stelle belegt, blieb die zweite offen. Nennungen desselben Buchs werden jetzt zusammengeführt, und der genauere Name gewinnt. Verschiedene Bücher mit gleicher Seitenzahl bleiben getrennt, der Begleitband ebenso.
+
 ## 0.94.0
 
 - Gedruckte Seite und Eintragung des Kindes werden beim Einlesen sauber getrennt. Bisher verschmolz die Lesung beides: Auf Arbeitsheft S. 34 stand „el Real Madrid es el mejor equipo" als Buchtext, obwohl dort eine Lücke gedruckt ist und das Kind die Antwort hineingeschrieben hat. Jetzt bleibt die Lücke als `___` stehen, und was das Kind eingetragen hat, steht dahinter in eckigen Klammern. Damit gilt eine Antwort des Kindes nie mehr als Buchinhalt — auch keine falsche.

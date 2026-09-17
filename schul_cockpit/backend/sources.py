@@ -666,14 +666,14 @@ def ledger(account_id: int) -> dict:
     for link in links:
         bucket = by_subject.setdefault(link["subject_name"], {
             "subject": link["subject_name"], "digital": set(), "scanned": set(), "pending": set(),
-            "groups": {}})
+            "have": [], "groups": {}})
         # Dieselbe Seite als „Schulbuch" und als „Unbekannte Quelle" genannt
         # ist eine Seite, nicht zwei.
         key = link["page"]
         if link["status"] == "digital":
-            bucket["digital"].add(key)
+            bucket["digital"].add(key);bucket["have"].append((link["part_label"], key))
         elif link["status"] == "scanned":
-            bucket["scanned"].add(key)
+            bucket["scanned"].add(key);bucket["have"].append((link["part_label"], key))
         elif link["status"] == "pending":
             bucket["pending"].add(key)
         else:
@@ -695,7 +695,14 @@ def ledger(account_id: int) -> dict:
         missing = []
         guesser = _book_guesser(account_id, bucket["subject"])
         for group in bucket["groups"].values():
-            gaps = list(group["pages"].values())
+            # Dieselbe Seite unter zwei Bezeichnungen ist eine Seite. „Buch S. 48“
+            # und „Schulbuch S. 48“ standen nebeneinander, eine davon galt als da
+            # und die andere als fehlend (D99). Was schon vorliegt, fehlt nicht.
+            gaps = [e for e in group["pages"].values()
+                    if e["page"] == 0 or not any(page == e["page"] and serves(label, group["label"])
+                                                 for label, page in bucket["have"])]
+            if not gaps:
+                continue
             newest = max(gaps, key=lambda e: e["quote_date"])
             guesses = {guesser(e["page"]) for e in gaps} if group["kind"] == "unknown" else set()
             guess = guesses.pop() if len(guesses) == 1 and None not in guesses else None
