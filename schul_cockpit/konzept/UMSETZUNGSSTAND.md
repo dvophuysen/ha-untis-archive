@@ -1,3 +1,34 @@
+# Vokabeln nach Einheit, nicht nach Seite 0.97.0
+
+Stand 17.09.2026. Nutzerauftrag (D100).
+
+**Auftrag.** „Wir sollten die Vokabellisten nicht seitenweise nach Anhang
+anbieten, sondern als Komplettpaket Unidad 3 aus mehreren Anhangseiten
+zusammengezogen. Die vollständigen Unidads/Units/Kapitel sollten im
+Vokabeltrainer die Standardbündel werden. Als Option noch Untergliederungen
+nach Kapitelabschnitten. Die Vokabeln pro eingelesener Seite aus dem Unterricht
+entfallen."
+
+**Befund.** Die Bündel kamen aus `unit_label()`: dem Kapitel, in dem die
+*Anhangseite* liegt, sonst deren Seitenzahl. Die Vokabelliste von Unidad 3
+beginnt aber auf S. 171 und läuft weiter; jede Seite wurde ein eigenes Bündel.
+Dabei gliedert sich die Liste selbst: Material 14 (Lista cronológica S. 172)
+trägt Überschriften wie „Unidad 3 / Texto A ▸ p. 51" mitten im Seitentext.
+
+**Gebaut.** `WordIn.unit` und `WordIn.section` nehmen die Überschriften beim
+Lesen mit; die Leseanweisung sagt, dass eine Überschrift für alle folgenden
+Wörter gilt, auch über den Seitenwechsel hinweg, und dass keine erfunden wird.
+Wo keine steht, greift weiter `unit_label()`. `units()` zählt die Abschnitte je
+Einheit mit, `cards(..., section=...)` und die Route schränken darauf ein. Die
+Ansicht zeigt die Einheiten als Bündel und darunter „Ganzes Kapitel oder ein
+Teil?"; das ganze Kapitel bleibt die Vorauswahl.
+
+**Offen.** Der zweite Teil des Auftrags — zu Schuljahresbeginn alle
+Vokabellisten eines Sprachbuchs lesen und daraus die Blöcke bauen, statt auf
+die im Unterricht genannten Seiten zu warten — braucht die Kapitel des Buchs,
+also ein gelesenes Inhaltsverzeichnis (D102). Solange das bei Spanisch fehlt,
+lässt sich der Anhang nicht gezielt ansteuern.
+
 # Thema statt Buchseite 0.96.0
 
 Stand 17.09.2026. Nutzerrückmeldung und Nutzerentscheidung (D101).

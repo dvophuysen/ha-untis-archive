@@ -10,7 +10,10 @@
   const style = $derived(subjectStyle(subject));
   const base = $derived(`/api/accounts/${accountId}/learning/vocab`);
   let data = $state(null), error = $state(''), busy = $state(false);
-  let unit = $state(initialUnit), stage = $state(1), direction = $state('from');
+  // Das Standardbündel ist die ganze Einheit. Ein Abschnitt, den die
+  // Vokabelliste selbst nennt („Texto A"), ist nur eine Einschränkung
+  // davon und wird beim Wechsel der Einheit wieder aufgehoben (D100).
+  let unit = $state(initialUnit), section = $state(''), stage = $state(1), direction = $state('from');
   let cards = $state([]), index = $state(0), answer = $state(''), spoken = $state(false), edits = $state(0), shownAt = $state(0);
   let verdict = $state(null), pending = $state(null), done = $state(false), tally = $state({ correct: 0, slow: 0, wrong: 0 });
   let answerInput = $state(null);
@@ -20,6 +23,8 @@
   const card = $derived(cards[index] ?? null);
   const askForeign = $derived(direction === 'from');
   const currentUnit = $derived((data?.units || []).find((u) => u.unit === unit));
+  const sections = $derived(currentUnit?.sections || []);
+  function chooseUnit(name) { if (unit !== name) { unit = name; section = ''; } }
 
   // Wortseiten werden beim Öffnen automatisch in Wörter zerlegt; solange das
   // läuft, lädt die Ansicht alle paar Sekunden nach.
@@ -40,9 +45,9 @@
     stage = s; direction = d; busy = true; error = ''; done = false; verdict = null; pending = null;
     tally = { correct: 0, slow: 0, wrong: 0 };
     try {
-      const r = await api.get(`${base}/${encodeURIComponent(subject)}/cards?unit=${encodeURIComponent(unit)}&stage=${s}&direction=${d}&limit=80`);
+      const r = await api.get(`${base}/${encodeURIComponent(subject)}/cards?unit=${encodeURIComponent(unit)}&section=${encodeURIComponent(section)}&stage=${s}&direction=${d}&limit=80`);
       cards = r.cards; index = 0; show();
-      if (!cards.length) error = s === 2 ? 'Für die Schreibweise zuerst die Bedeutungen sichern: Stufe 2 fragt nur Wörter, deren Bedeutung sitzt.' : 'Keine Wörter in dieser Einheit.';
+      if (!cards.length) error = s === 2 ? 'Für die Schreibweise zuerst die Bedeutungen sichern: Stufe 2 fragt nur Wörter, deren Bedeutung sitzt.' : section ? 'Keine Wörter in diesem Abschnitt.' : 'Keine Wörter in dieser Einheit.';
     } catch (e) { error = e.message; } finally { busy = false; }
   }
   function show() { answer = ''; spoken = false; edits = 0; shownAt = Date.now(); verdict = null; pending = null; setTimeout(() => answerInput?.focus?.(), 50); }
@@ -137,13 +142,26 @@
         <h2>Welche Einheit?</h2>
         <div class="units">
           {#each data.units as u (u.unit)}
-            <button class="unit" class:chosen={unit === u.unit} onclick={() => (unit = u.unit)}>
+            <button class="unit" class:chosen={unit === u.unit} onclick={() => chooseUnit(u.unit)}>
               <strong>{u.unit}</strong>
               <span>{u.words ? `${u.words} Wörter · Bedeutung: ${unitSummary(u, 's1')}` : u.unread ? 'wird gerade gelesen …' : 'keine Lernwörter auf diesen Seiten'}</span>
               {#if u.words && lang.into}<span>Schreibweise: {unitSummary(u, 's2')}</span>{/if}
             </button>
           {/each}
         </div>
+        {#if sections.length}
+          <h3>Ganzes Kapitel oder ein Teil?</h3>
+          <div class="units">
+            <button class="unit" class:chosen={!section} onclick={() => (section = '')}>
+              <strong>Ganze Einheit</strong><span>{currentUnit?.words ?? 0} Wörter</span>
+            </button>
+            {#each sections as part (part.section)}
+              <button class="unit" class:chosen={section === part.section} onclick={() => (section = part.section)}>
+                <strong>{part.section}</strong><span>{part.words} {part.words === 1 ? 'Wort' : 'Wörter'}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
       </section>
       {#if currentUnit}
         {#if currentUnit.unread}

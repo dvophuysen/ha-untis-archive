@@ -54,7 +54,9 @@ async def extract(account_id: int, subject: str, body: ExtractIn, user: CurrentU
 
 @router.get('/{subject}/cards')
 def cards(account_id: int, subject: str, unit: str, stage: int = 1, direction: str = 'from', limit: int = 40,
-          user: CurrentUser = Depends(get_current_user)):
+          section: str = '', user: CurrentUser = Depends(get_current_user)):
+    """Die Karten eines Bündels. Standard ist die ganze Einheit; `section`
+    schränkt auf einen Abschnitt ein, den die Vokabelliste selbst nennt (D100)."""
     access(user, account_id)
     if stage not in (1, 2) or direction not in ('from', 'into'):
         raise HTTPException(422, 'Unbekannte Stufe oder Richtung.')
@@ -63,7 +65,8 @@ def cards(account_id: int, subject: str, unit: str, stage: int = 1, direction: s
         raise HTTPException(422, 'In diesem Fach wird nur in die Muttersprache übersetzt.')
     if stage == 2 and direction != 'into':
         raise HTTPException(422, 'Die Schreibweise wird nur in die Fremdsprache geprüft.')
-    return {'unit': unit, 'stage': stage, 'direction': direction, 'cards': vocab.cards(account_id, subject, unit, stage, direction, max(1, min(limit, 80))),
+    return {'unit': unit, 'section': section, 'stage': stage, 'direction': direction,
+            'cards': vocab.cards(account_id, subject, unit, stage, direction, max(1, min(limit, 80)), section=section),
             'language': lang, 'speech': bool(ai.transcribe_url())}
 
 

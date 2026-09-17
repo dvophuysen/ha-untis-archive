@@ -1,3 +1,8 @@
+## 0.97.0
+
+- Der Vokabeltrainer bündelt nach Einheit, nicht nach Anhangseite. Eine Unidad zieht sich über mehrere Seiten der Vokabelliste; jetzt ist sie ein Block. Die Überschriften der Liste selbst („Unidad 3", darunter „Texto A") sagen, wohin ein Wort gehört, und gelten über den Seitenwechsel hinweg. Steht keine Überschrift über den Wörtern, bleibt es beim Kapitel der Seite — erfunden wird keine Einheit.
+- Neben dem ganzen Kapitel lassen sich einzelne Abschnitte üben, sofern die Vokabelliste sie nennt. Das ganze Kapitel bleibt die Vorauswahl; beim Wechsel der Einheit fällt die Einschränkung weg.
+
 ## 0.96.1
 
 - Der Grundsatz „geübt wird die Fähigkeit des Themas und sonst nichts" steht jetzt allgemein da statt nur für Sprachfächer. Alles, was eine Aufgabe darüber hinaus voraussetzt — ein Sachverhalt, eine Zahl, eine Angabe aus einem anderen Fach, ein Begriff, der noch nicht dran war —, gibt der Mentor vor, statt es stillschweigend mitzuprüfen. Sonst scheitert das Kind an etwas, das gar nicht geübt werden sollte.
