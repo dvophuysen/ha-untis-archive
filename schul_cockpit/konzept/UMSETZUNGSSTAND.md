@@ -1,3 +1,32 @@
+# Aufgabenformen aus dem eigenen Heft 0.93.0
+
+Stand 17.09.2026. Nutzerentscheidung nach der missratenen Spanisch-Übung (D97).
+
+**Was das Arbeitsheft in dieser Lektion macht.** S. 26 „Comprender el texto“:
+zehn Sätze mit Lücken, zu füllen durch Nachschlagen auf den Buchseiten 48/49
+und der Karte. S. 27: Zuordnung Zahlwort zu Ziffer, Lücke mit vorgegebener
+Wortmenge (más, menos, son), Adjektivform selbst bilden. S. 28: Text lesen,
+Orte im Plan markieren, dann Superlative in Lücken einsetzen. Grammatikheft
+S. 18/19: die Regel mit Verweis auf die Buchseite. Zuordnen kommt vor, aber
+beim Wortschatz; bei der Grammatik steht immer Lücke oder freie Bildung.
+
+**Gebaut.** `Task.form` (auswahl, zuordnen, luecke, kurz, frei) neben Operator
+und `afb`. `TOPIC_RULE` und die Einstiegsanweisung verlangen die Aufgabenform
+aus `topic.material`, verbieten Auswahl bei Bilden, Übersetzen und Erklären und
+fordern innerhalb der Einheit mindestens eine Aufgabe mit afb 2 oder 3.
+`topic_answers` speichert `afb` und `task_form` (Migration
+`topic_answers_001_level`), `replay()` verlangt für „sitzt“ zusätzlich eine
+saubere Antwort mit afb ≥ `DEMANDING_AFB` (2).
+
+`_matching_rows()` fällt ohne Stellenangabe auf die vier jüngsten Seiten des
+Fachs zurück; `material_for()` kennzeichnet sie als solche. Vorher stand der
+Mentor ohne Material da, obwohl zehn Spanisch-Materialien vorlagen, darunter
+genau die Seite 50, die er sich ausgedacht hat.
+
+**Tests.** Drei leichte Wiedergabeaufgaben ergeben kein „sitzt“ mehr, eine
+schwierigere in der Serie schon; die Testvorrichtung setzt afb 2 als Vorgabe.
+468 Tests grün.
+
 # Kein Material, keine erfundene Buchseite 0.92.0
 
 Stand 17.09.2026. Zweiter Befund aus derselben Nutzerrückmeldung wie D95 (D96).

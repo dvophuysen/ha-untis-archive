@@ -62,6 +62,9 @@ class Task(InputModel):
     skill_title:str=Field(min_length=3,max_length=160)
     objective:str=Field(min_length=3,max_length=350)
     operator:str=Field(min_length=1,max_length=60)
+    # Ob das Kind auswählt oder selbst erzeugt. Steht getrennt vom Operator, weil
+    # „Erkenne“ als Auswahl und als freie Antwort zwei verschiedene Dinge sind (D97).
+    form:Literal['auswahl','zuordnen','luecke','kurz','frei']='kurz'
     afb:int=Field(ge=1,le=3)
 
 class Assessment(InputModel):
@@ -654,6 +657,9 @@ TOPIC_RULE=('topic ist ein Thema der offiziellen Themenliste der Lehrkraft für 
             'fehlt dort etwas, sage es und erfinde keine Buchinhalte. Diese Einheit hat keine Uhr und keine Minuten: Sie endet, wenn topic.reached sitzt oder gefestigt ist, oder wenn das Kind aufhört. '
             'Sobald topic.reached sitzt oder gefestigt meldet: action finish, eine Zeile, was gezeigt wurde, keine weitere Aufgabe. '
             'Wechsle die Aufgabenart (task.operator: Erkenne, Bilde, Übersetze, Wende an, Erkläre, auch die umgekehrte Richtung); dieselbe Art zweimal nacheinander nur nach einem Fehler. '
+            'Aufgabenformen aus dem eigenen Heft: Sieh in topic.material nach, wie dort geübt wird — Lücke, Zuordnung, eigener Satz, Formenbestimmung, Rechenweg — und wandle eine dieser Formen ab, statt eine eigene zu erfinden. '
+            'task.form sagt, was das Kind tut: auswahl, zuordnen, luecke, kurz oder frei. Auswahl und Zuordnung nur, wo das Material sie auch benutzt, in aller Regel beim Wortschatz; bei Bilden, Übersetzen und Erklären nie, dort liegt der Wert im Selbsterzeugen. '
+            'Steigere innerhalb der Einheit: anfangen darfst du leicht und wiedererkennend, aber es muss mindestens eine Aufgabe mit afb 2 oder 3 kommen, die das Kind selbst löst. Die App wertet „sitzt“ erst, wenn auch eine schwierigere Aufgabe getroffen hat. '
             'Ist topic.check true, ist dies eine Kurzprüfung Tage später: keine Erklärung vorweg, direkt kurze Aufgaben verschiedener Art, erklären erst nach einem Fehler. '
             'Setze re_explained auf true, wenn du dasselbe ein zweites Mal anders erklären musstest. topic.self_view ist das Gefühl des Kindes, kein Beleg; nie als Können werten. '
             'Die Stufe bestimmt die App aus den Antworten; behaupte keine Stufe und versprich keine. '
@@ -884,7 +890,8 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
                 evidence={'result':a.result,'rationale':a.rationale,'help_used':help_used,'label':'KI-Einschätzung zu dieser Antwort'}
             if topic_mode and s.get('topic_id') and kind=='answer' and s['current_task'] and reply.assessment and not s['is_test']:
                 task=json.loads(s['current_task']);a=reply.assessment
-                lernstand.record_answer(c,account_id,s['topic_id'],sid,uid,task.get('operator',''),a.result,bool(s['task_help'] or help_now),body.seconds,body.edits,reply.re_explained)
+                lernstand.record_answer(c,account_id,s['topic_id'],sid,uid,task.get('operator',''),a.result,bool(s['task_help'] or help_now),body.seconds,body.edits,reply.re_explained,
+                                        afb=task.get('afb'),task_form=task.get('form') or '')
                 lernstand.refresh(c,s['topic_id'],sid)
             task_data=s['current_task'];task_help=int(s['task_help'] or help_now)
             if reply.task and reply.action=='task':

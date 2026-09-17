@@ -1,3 +1,10 @@
+## 0.93.0
+
+- Übungsaufgaben orientieren sich an den Aufgabenformen aus Buch und Arbeitsheft. Der Mentor sieht nach, wie auf den vorliegenden Seiten geübt wird — Lücke, Zuordnung, eigener Satz, Formenbestimmung, Rechenweg — und wandelt eine dieser Formen ab, statt eine eigene zu erfinden. Eine Aufgabe sagt jetzt auch, was das Kind tut: auswählen, zuordnen, ergänzen, kurz oder frei antworten.
+- Auswahl- und Zuordnungsaufgaben nur dort, wo das Material sie auch benutzt — im Arbeitsheft ist das der Wortschatz. Bei Bilden, Übersetzen und Erklären nie: Dort liegt der Wert im Selbsterzeugen.
+- „Sitzt" verlangt jetzt, dass auch eine der schwierigeren Aufgaben richtig bearbeitet wurde. Drei leichte Wiedergabeaufgaben hintereinander reichen nicht mehr. Bestehende Themen können dadurch eine Stufe zurückfallen, bis eine anspruchsvollere Aufgabe gelöst ist.
+- Ein Thema ohne Stellenangabe bekommt die jüngsten Seiten seines Fachs statt gar nichts. Der Mentor hat sich bisher eine Buchseite ausgedacht, obwohl Arbeitsheft und Buch im Bestand lagen; die Herkunft steht dabei, damit er sie nicht als die genannte Stelle ausgibt.
+
 ## 0.92.0
 
 - Fehler behoben: Zu einem Thema ohne hinterlegte Originalseite hat der Einstieg trotzdem eine Buchseite genannt und den Inhalt erfunden. Beim Thema „Über Spanien und andere Länder sprechen" lag kein einziges Material vor; die Übung berief sich auf „Schulbuch S. 50" und behauptete unter anderem, Galicia sei für den Fußball berühmt. Der Mentor erfährt jetzt ausdrücklich, dass die Seite fehlt: Dann nennt er keine Seitenzahl, behauptet keinen Buchinhalt, baut die Aufgabe aus dem Thementitel und sagt, dass ein Foto der Seite weiterhilft.
