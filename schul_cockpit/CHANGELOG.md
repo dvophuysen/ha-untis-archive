@@ -1,3 +1,8 @@
+## 0.96.1
+
+- Der Grundsatz „geübt wird die Fähigkeit des Themas und sonst nichts" steht jetzt allgemein da statt nur für Sprachfächer. Alles, was eine Aufgabe darüber hinaus voraussetzt — ein Sachverhalt, eine Zahl, eine Angabe aus einem anderen Fach, ein Begriff, der noch nicht dran war —, gibt der Mentor vor, statt es stillschweigend mitzuprüfen. Sonst scheitert das Kind an etwas, das gar nicht geübt werden sollte.
+- Fehler behoben: Ein misslungener Leseversuch am Inhaltsverzeichnis eines Buchs war endgültig. Ein einzelner Modellfehler hat damit die Kapitelregel für dieses Buch dauerhaft abgeschaltet — beim Spanisch-Schulbuch seit Wochen, weshalb die Kapitel-Grundlage aus 0.96.0 dort ins Leere lief. Fehlversuche werden jetzt bis zu dreimal wiederholt; ein Erfolg setzt den Zähler zurück. „Kein Verzeichnis auf diesen Seiten" bleibt endgültig, denn ein weiterer Lauf holte dieselben Seiten.
+
 ## 0.96.0
 
 - Gelernt wird das Thema, nicht die Buchseite. Die hinterlegten Seiten sind für den Mentor ab jetzt ausdrücklich die Grundlage — Niveau, Wortschatz, Formen und die Art, wie im Heft geübt wird —, nicht der Stoff zum Wiedergeben. Eigene Aufgaben zum selben Ziel sind erwünscht; eine erfundene Fundstelle bleibt ein Fehler.

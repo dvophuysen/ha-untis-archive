@@ -109,10 +109,11 @@ def _ai_enabled(account_id: int) -> bool:
 def _set_state(account_id: int, title: str, state: str, pages: list[int]) -> None:
     with closing(webapp_conn()) as conn, conn:
         conn.execute(
-            "INSERT INTO digital_textbook_access(account_id,book_title,status,checked_at,toc_state,toc_pages) "
-            "VALUES(?,?,'unknown',?,?,?) ON CONFLICT(account_id,book_title) DO UPDATE SET "
-            "toc_state=excluded.toc_state,toc_pages=excluded.toc_pages",
-            (account_id, title, now_iso(), state, json.dumps(pages)))
+            "INSERT INTO digital_textbook_access(account_id,book_title,status,checked_at,toc_state,toc_pages,toc_tries) "
+            "VALUES(?,?,'unknown',?,?,?,?) ON CONFLICT(account_id,book_title) DO UPDATE SET "
+            "toc_state=excluded.toc_state,toc_pages=excluded.toc_pages,"
+            "toc_tries=CASE WHEN excluded.toc_state='failed' THEN toc_tries+1 ELSE 0 END",
+            (account_id, title, now_iso(), state, json.dumps(pages), 1 if state == "failed" else 0))
 
 
 def toc_state(account_id: int, title: str) -> str | None:
@@ -120,6 +121,30 @@ def toc_state(account_id: int, title: str) -> str | None:
         row = conn.execute("SELECT toc_state FROM digital_textbook_access WHERE account_id=? AND book_title=?",
                            (account_id, title)).fetchone()
     return row[0] if row else None
+
+
+# Wie oft ein misslungener Leseversuch wiederholt wird, bevor das Buch ruht.
+TOC_TRIES = 3
+
+
+def toc_pending(account_id: int, title: str) -> bool:
+    """Ob das Verzeichnis dieses Buchs noch zu lesen ist.
+
+    Ein „failed" war bisher endgültig: Ein einzelner Modellfehler beim Lesen hat
+    die Kapitelregel für dieses Buch dauerhaft abgeschaltet. Bei Spanisch stand
+    deshalb `chapters` leer, obwohl das Buch seine Unidades im Verzeichnis nennt
+    — und damit fehlte dem Mentor die Grundlage des Themas (D101). „ready" ist
+    fertig, „not_found" heißt: auf diesen Seiten steht keins, ein weiterer Lauf
+    holte dieselben. Nur der Fehlschlag wird wiederholt, und nur begrenzt.
+    """
+    with closing(webapp_conn()) as conn:
+        row = conn.execute("SELECT toc_state,toc_tries FROM digital_textbook_access WHERE account_id=? AND book_title=?",
+                           (account_id, title)).fetchone()
+    if not row or not row["toc_state"]:
+        return True
+    if row["toc_state"] == "failed":
+        return (row["toc_tries"] or 0) < TOC_TRIES
+    return row["toc_state"] not in ("ready", "not_found", "no_ai")
 
 
 async def _read(account_id: int, book, shots: list[bytes], limit: int = 4, join: bool = True) -> TableOfContents | None:
