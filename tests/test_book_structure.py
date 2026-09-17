@@ -209,6 +209,10 @@ def test_every_vocabulary_part_of_a_language_book_is_fetched(env):
                   "VALUES(1,'physik','Universum Physik','now')")
     liste = [Chapter(number='3', title='De paseo por España', start_page=48, end_page=59),
              Chapter(number='', title='Lista cronológica', kind='vocab', start_page=168, end_page=172),
+             # Nachschlagewerke sind keine Lernlisten: Man schlägt sie nach,
+             # man lernt sie nicht Einheit für Einheit.
+             Chapter(number='', title='Lista alfabética español-alemán', kind='vocab', start_page=173, end_page=180),
+             Chapter(number='', title='Deutsch-spanisches Wörterbuch', kind='vocab', start_page=181, end_page=188),
              Chapter(number='', title='Lösungen', kind='appendix', start_page=200, end_page=210)]
     store_chapters(1, '¡Apúntate! 2', liste)
     store_chapters(1, 'Universum Physik', [Chapter(number='', title='Fachwörter', kind='vocab', start_page=300, end_page=302)])
