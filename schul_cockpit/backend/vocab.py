@@ -277,17 +277,70 @@ PAGE_UNIT = re.compile(r"^.{0,40}\sS\.\s\d+$")
 UNIT_KEY = re.compile(r"^(unidad|unit|lektion|lecci[oó]n|le[cç]on|m[oó]dulo|kapitel|chapter|module)\s*0*(\d{1,2})\b", re.I)
 
 
-def same_unit(stored: str, wanted: str) -> bool:
-    """Ob ein Wort zum gewählten Bündel gehört. „Unidad 3" und „Unidad 3 De paseo
-    por España" sind dasselbe Kapitel; ohne erkennbare Nummer zählt der Name."""
-    key = unit_key(wanted)
-    return unit_key(stored) == key if key else (stored or "") == (wanted or "")
+# Dieselbe Einheit, von verschiedenen Büchern verschieden benannt: Das
+# Schulbuch nummeriert „Unidad 3", das Grammatikheft nur „3". Dann entscheidet
+# der Titel dahinter.
+_NUMBERED = re.compile(r"^(?:unidad|unit|lektion|lecci[oó]n|le[cç]on|m[oó]dulo|kapitel|chapter|module)?\s*0*\d{1,2}[.:)]?\s+(.{6,})$", re.I)
 
 
 def unit_key(name: str) -> str:
     """„Unidad 3 De paseo por España" und „Unidad 3" haben denselben Schlüssel."""
     hit = UNIT_KEY.match((name or "").strip())
     return f"{hit.group(1).casefold()} {int(hit.group(2))}" if hit else ""
+
+
+def unit_title(name: str) -> str:
+    """Der Titel hinter der Nummer: „3 De paseo por España" → „de paseo por españa"."""
+    hit = _NUMBERED.match(re.sub(r"\s+", " ", (name or "").strip()))
+    return plain(hit.group(1)) if hit else ""
+
+
+def bundle_keys(name: str) -> set[str]:
+    """Woran zwei Schreibweisen als dasselbe Bündel erkannt werden: an der Nummer
+    der Einheit, am Titel dahinter, oder — wenn beides fehlt — am Namen selbst.
+
+    Beides zugleich, weil beide Fälle vorkommen: „Unidad 3" trifft „Unidad 3 De
+    paseo por España" über die Nummer, „3 De paseo por España" über den Titel."""
+    keys = {k for k in (unit_key(name), unit_title(name)) if k}
+    return keys or {f"={(name or '').strip()}"}
+
+
+def group_units(names) -> dict[str, str]:
+    """Jeden Namen einer Gruppe zuordnen. Zwei Namen gehören zusammen, wenn sie
+    einen Schlüssel teilen — auch über einen dritten Namen hinweg."""
+    groups: list[tuple[set[str], list[str]]] = []
+    for name in names:
+        keys = bundle_keys(name)
+        hits = [g for g in groups if g[0] & keys]
+        if not hits:
+            groups.append((set(keys), [name]))
+            continue
+        first = hits[0]
+        first[0].update(keys)
+        first[1].append(name)
+        for other in hits[1:]:
+            first[0].update(other[0])
+            first[1].extend(other[1])
+            groups.remove(other)
+    out = {}
+    for keys, members in groups:
+        lead = sorted(keys)[0]
+        for name in members:
+            out[name] = lead
+    return out
+
+
+def unit_family(account_id: int, subject: str, wanted: str) -> set[str]:
+    """Alle gespeicherten Schreibweisen, die zum gewählten Bündel gehören."""
+    with closing(webapp_conn()) as c:
+        names = [r[0] for r in c.execute(
+            "SELECT DISTINCT unit FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0",
+            (account_id, subject))]
+    if wanted not in names:
+        names.append(wanted)
+    grouped = group_units(names)
+    mine = grouped.get(wanted)
+    return {n for n, key in grouped.items() if key == mine}
 
 
 def unit_label(account_id: int, subject: str, label: str, page: int | None) -> str:
@@ -559,8 +612,9 @@ def units(account_id: int, subject: str) -> list[dict]:
     # Dasselbe Kapitel unter zwei Namen zusammenführen; der ausführlichere Name
     # gewinnt, weil er dem Kind mehr sagt.
     merged: dict[str, dict] = {}
+    grouped = group_units(by_unit)
     for name, u in by_unit.items():
-        key = unit_key(name) or f"={name}"
+        key = grouped[name]
         first = merged.get(key)
         if not first:
             merged[key] = u
@@ -619,7 +673,8 @@ def cards(account_id: int, subject: str, unit: str, stage: int, direction: str, 
         words = [dict(r) for r in c.execute(
             "SELECT * FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 "
             "ORDER BY page,position,id", (account_id, subject))]
-    words = [w for w in words if same_unit(w["unit"], unit)]
+    family = unit_family(account_id, subject, unit)
+    words = [w for w in words if w["unit"] in family]
     if (section or "").strip():
         words = [w for w in words if (w["section"] or "").strip() == section.strip()]
     with closing(webapp_conn()) as c:
@@ -637,7 +692,8 @@ def prompt_for(account_id: int, subject: str, unit: str, direction: str) -> str:
         rows = [dict(r) for r in c.execute(
             "SELECT unit,foreign_word,meanings_json FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 ORDER BY position",
             (account_id, subject))]
-    rows = [r for r in rows if same_unit(r["unit"], unit)]
+    family = unit_family(account_id, subject, unit)
+    rows = [r for r in rows if r["unit"] in family]
     lang = language_of(subject) or {"name": subject}
     if direction == "into":
         words = ", ".join(r["foreign_word"] for r in rows)[:450]
