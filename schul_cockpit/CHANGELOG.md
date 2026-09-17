@@ -1,3 +1,7 @@
+## 0.77.0
+
+- Gegenlesen mit Kontext: Bei einer Themenliste oder einer handschriftlichen Seite hält die App jede genannte Stelle gegen die Stellen, die Unterricht und Hausaufgaben desselben Fachs in diesem Schuljahr nennen. Eine Seite, die nirgends vorkommt, steht rot in der Gegenlese-Karte, und wenn eine Ziffernverwechslung (1/7, 0/6, 4/9) auf eine bekannte Stelle führt, steht der Vorschlag dabei: „Textband S. 70 kommt im Unterricht nicht vor · gemeint S. 10?“ Stimmen alle Stellen, steht auch das da. Entschieden wird weiter von Hand.
+
 ## 0.76.0
 
 - Handschrift geht immer zum Gegenlesen. Jede Lesung sagt jetzt, welche Seitenart sie gesehen hat (Text, Tabelle, Handschrift, Zeichnung, Formeln, gemischt) und ob handschriftliche Einträge dabei waren; solche Materialien stehen auf der Materialseite zur Bestätigung, egal wie sicher sich das Modell fühlt. Anlass: Auf einem handschriftlichen Zettel wurde bei der Eichung aus jeder 1 eine 7.

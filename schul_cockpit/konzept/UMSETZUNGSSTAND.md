@@ -1,3 +1,30 @@
+# Gegenlesen mit Kontext 0.77.0
+
+Stand 17.09.2026. Folge aus D78: Handschrift ist ein Kontextproblem.
+
+**Gebaut (D79).** `notice_check.py`: `taught_places` sammelt aus den Stunden-
+und Hausaufgabentexten des Schuljahrs (`sources.mentions`, nur lesson und
+homework, gleiches Fach) je Buchteil die genannten Seiten; `check` hält jede
+Stelle des Zettels dagegen (`sources.serves` für die Buchteil-Verträglichkeit)
+und schlägt bei unbekannten Seiten eine Ziffernverwechslung vor, die auf eine
+bekannte Stelle führt (einzelne Ziffer oder alle verwechselbaren Ziffern:
+77 → 11). `routers/materials.index` hängt das Ergebnis als `plausibility` an
+Einträge zum Gegenlesen, die Themenliste oder Handschrift sind; die Liste
+liefert dafür `page_type`, `handwritten` und den Text ungeprüfter Zettel.
+`Materialien.svelte` zeigt die Zweifel rot mit Vorschlag, sonst „Alle
+Stellen kommen so im Unterricht vor“.
+
+**Geprüft.** Vier Tests: Stellen je Buchteil, Verwechslungsvarianten, der
+falsch gelesene Zettel der Eichung (alle fünf 7er-Seiten mit dem richtigen
+Vorschlag, die richtige Lesung ohne Beanstandung, ohne Unterricht keine
+Behauptung), Route hängt die Prüfung nur an Zettel und Handschrift.
+
+**Offen.** Live am nächsten echten Zettel beobachten. Ob der Vorschlag mit
+einem Tipp übernommen werden kann („So korrigieren“) statt über das
+Formular, ist eine Bedienfrage für später.
+
+---
+
 # Eichung der Reasoning-Tiefe, dritter Durchgang (0.76.0 live)
 
 Stand 17.09.2026, spät. Hauptmodell mit „medium“ gegen „low“ an fünf Seiten,

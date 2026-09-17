@@ -9,6 +9,7 @@ from pydantic import Field
 
 from .. import material_analysis as analysis
 from .. import materials as store
+from .. import notice_check
 from .. import sources
 from ..auth import CurrentUser, get_current_user
 from ..learning import InputModel
@@ -139,6 +140,13 @@ def index(
                           task_id=task_id, offset=offset, limit=min(limit, 300) + 1)
     has_more = len(items) > min(limit, 300)
     items = items[:min(limit, 300)]
+    if manage:
+        # Zettel zu Arbeiten und Handschrift gegen den Unterricht halten (D79):
+        # eine 7 statt einer 1 fällt nur im Zusammenhang auf.
+        run = notice_check.checker(account_id)
+        for m in items:
+            if m.get("needs_review") and (m["kind"] == "exam_notice" or m.get("handwritten")):
+                m["plausibility"] = run(m)
     pending = sum(1 for m in items if m["analysis_state"] in ("pending", "failed"))
     return {
         "materials": items,
