@@ -949,6 +949,14 @@ WHERE id=1;
 """))
 
 
+# Fehlversuche beim Lesen eines Inhaltsverzeichnisses. Ein „failed" war bisher
+# endgültig: Ein einzelner Modellfehler hat die Kapitelregel für dieses Buch
+# dauerhaft abgeschaltet. Spanisch stand deshalb seit Wochen ohne Kapitel da,
+# obwohl das Buch eines hat (D101).
+_MIGRATIONS.append(("textbook_access_toc_tries",
+                    "ALTER TABLE digital_textbook_access ADD COLUMN toc_tries INTEGER NOT NULL DEFAULT 0"))
+
+
 def init_webapp_db() -> None:
     """Apply base schema + pending migrations (idempotent)."""
     schema_sql = _SCHEMA_FILE.read_text()

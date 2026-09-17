@@ -59,6 +59,23 @@ und geschickter Nachhilfelehrer, wie er dieses Wissen trainiert."
   im Kontext (`ohne_aufgabe`) eine ein. Zwei bleiben erlaubt: zweimal anders zu
   erklären ist Lernen.
 
+**Nachtrag 0.96.1.** Zwei Korrekturen direkt nach der Auslieferung.
+
+Erstens war der Satz zum Sachwissen zu eng geraten: Er sprach von Sprachfächern,
+obwohl der Anlass nur ein Beispiel war. Der Grundsatz gilt allgemein — geübt wird
+die Fähigkeit des Themas und sonst nichts; alles, was eine Aufgabe darüber hinaus
+voraussetzt, gibt der Mentor vor, statt es stillschweigend mitzuprüfen. Im
+Sprachunterricht ist die Fähigkeit die Sprache, nicht der Sachverhalt, über den
+gesprochen wird; das ist eine Anwendung des Grundsatzes, nicht der Grundsatz.
+
+Zweitens lief die Kapitel-Grundlage bei Spanisch ins Leere. Die Prüfung nach der
+Auslieferung zeigte `chapters: []` und `toc_state: failed` für das Schulbuch: Das
+Verzeichnis wurde einmal erfolglos gelesen, und `failed` galt als endgültig
+(`source_collector`, Zeile 350). Ein einzelner Modellfehler hat damit die
+Kapitelregel für dieses Buch dauerhaft abgeschaltet. `toc_pending()` wiederholt
+Fehlversuche jetzt bis zu dreimal (`toc_tries`); „kein Verzeichnis auf diesen
+Seiten" bleibt endgültig, weil ein weiterer Lauf dieselben Seiten holte (D102).
+
 **Offen.** Die Reasoning-Tiefe ist noch nicht geeicht — dieselbe Einheit auf sol
 mit `low` gegen `medium` messen und nur dort anheben, wo es sich zeigt. Ebenso
 offen: Stapelläufe zurückstellen, solange eine Einheit läuft.

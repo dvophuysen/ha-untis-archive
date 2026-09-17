@@ -342,12 +342,12 @@ async def _collect(account_id: int, budget: int) -> dict:
     remaining = budget
     # Erst die Struktur: Ohne Inhaltsverzeichnis gibt es keine Kapitelregel.
     # Je Lauf höchstens drei Bücher, jedes einmal.
-    from .book_structure import read_toc, toc_state
+    from .book_structure import read_toc, toc_pending
     read = 0
     for book in _books(account_id):
         if read >= 3 or remaining <= 4:
             break
-        if toc_state(account_id, book["title"]) in ("ready", "not_found", "failed", "no_ai"):
+        if not toc_pending(account_id, book["title"]):
             continue
         if (access_of(account_id, book["title"]) or {}).get("status") in ("blank", "viewer_error"):
             continue

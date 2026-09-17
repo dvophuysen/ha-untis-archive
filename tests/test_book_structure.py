@@ -160,3 +160,26 @@ def test_the_source_stock_reports_its_own_budget_without_stopping(env, monkeypat
     assert not (marks.get(bg) or "")
     status = ai.status()
     assert status["sources_limit_eur"] == 1.0 and status["sources_eur"] > 0
+
+
+def test_a_failed_table_of_contents_is_tried_again_but_not_forever(env):
+    """Ein „failed" war endgültig: Ein einzelner Modellfehler beim Lesen hat die
+    Kapitelregel für dieses Buch dauerhaft abgeschaltet. Bei Spanisch stand
+    deshalb kein Kapitel zur Verfügung, obwohl das Buch seine Unidades im
+    Verzeichnis nennt — und damit fehlte dem Mentor die Grundlage (D101)."""
+    from backend.book_structure import TOC_TRIES, _set_state, toc_pending
+    title = '¡Apúntate! 2'
+    assert toc_pending(1, title) is True, 'ein unbekanntes Buch ist zu lesen'
+    for attempt in range(TOC_TRIES - 1):
+        _set_state(1, title, 'failed', [2, 3])
+        assert toc_pending(1, title) is True, f'nach {attempt + 1} Fehlversuchen noch einmal'
+    _set_state(1, title, 'failed', [2, 3])
+    assert toc_pending(1, title) is False, 'irgendwann ruht das Buch'
+    # Ein Erfolg setzt den Zähler zurück und beendet das Lesen.
+    _set_state(1, title, 'ready', [2, 3])
+    assert toc_pending(1, title) is False
+    _set_state(1, title, 'failed', [2, 3])
+    assert toc_pending(1, title) is True, 'nach einem Erfolg zählt neu'
+    # Kein Verzeichnis auf diesen Seiten: ein weiterer Lauf holte dieselben.
+    _set_state(1, title, 'not_found', [2, 3])
+    assert toc_pending(1, title) is False
