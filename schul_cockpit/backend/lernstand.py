@@ -610,6 +610,7 @@ def context_for(account_id: int, topic_id: int, session_id: int | None = None) -
         siblings = [dict(r) for r in c.execute(
             "SELECT title,stage FROM exam_topics WHERE account_id=? AND exam_key=? AND stale=0 ORDER BY position", (account_id, topic["exam_key"]))]
     places = json.loads(topic.get("places_json") or "[]")
+    material = material_for(account_id, topic["subject"], places)
     this_unit = [a for a in answers if session_id and a["session_id"] == session_id]
     reached = replay(answers)["stage"] if answers else topic["stage"]
     return {
@@ -623,7 +624,11 @@ def context_for(account_id: int, topic_id: int, session_id: int | None = None) -
         "rule": (f"sitzt heißt: {CLEAN_RUN} Aufgaben hintereinander richtig ohne Hilfe, ohne Zögern, in mindestens "
                  f"{KINDS_FOR_SITZT} Aufgabenarten. Die Stufe liest die App aus den Antworten ab."),
         "other_topics": [f"{s['title']} ({s['stage']})" for s in siblings if s["title"] != topic["title"]][:8],
-        "material": material_for(account_id, topic["subject"], places),
+        "material": material,
+        # Ohne Originalseite darf keine erfunden werden. Am 17.09. behauptete ein
+        # Einstieg „Schulbuch S. 50“ und erfand den Inhalt, obwohl zu diesem Thema
+        # kein einziges Material vorlag (D96).
+        "material_fehlt": not material,
     }
 
 
