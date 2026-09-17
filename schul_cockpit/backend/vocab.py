@@ -213,6 +213,11 @@ def word_states(c, account_id: int, word_ids: list[int]) -> dict[int, dict]:
 # ------------------------------------------------------------ Wörter lesen
 
 class WordIn(InputModel):
+    # Die Vokabelliste im Anhang gliedert sich selbst: „Unidad 3 / Texto A ▸ p. 51“
+    # steht als Überschrift über den Wörtern, die dazugehören. Daraus entstehen die
+    # Bündel des Trainers, nicht aus der Seitenzahl des Anhangs (D100).
+    unit: str = Field(default="", max_length=80)
+    section: str = Field(default="", max_length=80)
     foreign_word: str = Field(min_length=1, max_length=80)
     meanings: list[str] = Field(min_length=1, max_length=8)
     grammar: str = Field(default="", max_length=60)
@@ -232,7 +237,12 @@ EXTRACT = (
     "Formen mit Namen als Schlüssel (simple_past, past_participle, genitiv, plural); example ein "
     "Beispielsatz aus dem Buch, falls vorhanden. Nur Wörter, die als Lernwörter dastehen: keine Wörter "
     "aus Beispielsätzen, Merkkästen oder Überschriften, keine erfundenen Bedeutungen. Reihenfolge wie "
-    "im Buch. Enthält die Seite keine Lernwörter, gib eine leere Liste. Nur JSON: "
+    "im Buch. Enthält die Seite keine Lernwörter, gib eine leere Liste.\n"
+    "Gliederung: Vokabellisten im Anhang tragen Überschriften wie „Unidad 3“, „Lektion 5“, „Unit 2“ oder "
+    "„Unidad 3 / Texto A“. Trage bei jedem Wort in unit die Einheit ein, unter der es steht, und in section "
+    "den Abschnitt darunter, falls einer genannt ist (Texto A, Vocabulario, Teil B). Die Überschrift gilt für "
+    "alle folgenden Wörter, bis eine neue kommt, auch über den Seitenwechsel hinweg. Steht über den Wörtern "
+    "keine solche Überschrift, lass beide Felder leer. Erfinde keine Einheit. Nur JSON: "
 )
 
 
@@ -330,7 +340,10 @@ async def extract(account_id: int, material_id: int) -> int:
                       (material_id, account_id, digest, 0, "unlesbar", now_iso()))
         raise HTTPException(502, "Die Wörter dieser Seite ließen sich nicht lesen.")
     haystack = plain(row["content_text"])
-    unit = unit_label(account_id, subject, label, row["source_page"])
+    # Die Einheit kommt aus der Liste selbst; nur wenn dort keine steht, gilt das
+    # Kapitel der Seite. Eine Unidad zieht sich über mehrere Anhangseiten, und
+    # genau sie soll das Bündel sein, nicht die Anhangseite (D100).
+    fallback = unit_label(account_id, subject, label, row["source_page"])
     kept = 0
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
@@ -339,10 +352,11 @@ async def extract(account_id: int, material_id: int) -> int:
             core = _ARTICLES.sub("", core).strip()
             if not core or core.split()[0] not in haystack:
                 continue
-            c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,position,foreign_word,plain,meanings_json,grammar,forms_json,example,created_at) "
-                      "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,material_id,foreign_word) DO UPDATE SET "
-                      "meanings_json=excluded.meanings_json,grammar=excluded.grammar,forms_json=excluded.forms_json,example=excluded.example,position=excluded.position,unit=excluded.unit",
-                      (account_id, subject, material_id, label, row["source_page"], unit, pos, w.foreign_word.strip(), core,
+            unit = (w.unit or "").strip() or fallback
+            c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,section,position,foreign_word,plain,meanings_json,grammar,forms_json,example,created_at) "
+                      "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,material_id,foreign_word) DO UPDATE SET "
+                      "meanings_json=excluded.meanings_json,grammar=excluded.grammar,forms_json=excluded.forms_json,example=excluded.example,position=excluded.position,unit=excluded.unit,section=excluded.section",
+                      (account_id, subject, material_id, label, row["source_page"], unit, (w.section or "").strip(), pos, w.foreign_word.strip(), core,
                        json.dumps([m.strip() for m in w.meanings if m.strip()], ensure_ascii=False), w.grammar.strip(),
                        json.dumps(w.forms, ensure_ascii=False), w.example.strip(), now_iso()))
             kept += 1
@@ -377,7 +391,7 @@ def units(account_id: int, subject: str) -> list[dict]:
     found = pages(account_id, subject)
     with closing(webapp_conn()) as c:
         words = [dict(r) for r in c.execute(
-            "SELECT id,unit,material_id FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0", (account_id, subject))]
+            "SELECT id,unit,section,material_id FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0", (account_id, subject))]
         states = word_states(c, account_id, [w["id"] for w in words])
     # Eine Seite gehört zur Einheit ihrer Wörter, sobald sie welche hat; so bleiben
     # Seite und Wörter zusammen, auch wenn das Verzeichnis später anders benennt.
@@ -397,6 +411,13 @@ def units(account_id: int, subject: str) -> list[dict]:
         st = states.get(w["id"], {})
         u["s1"][st.get("s1", {}).get("stage", "neu")] += 1
         u["s2"][st.get("s2", {}).get("stage", "neu")] += 1
+        # Die Einheit ist das Standardbündel; die Abschnitte, die die Liste
+        # selbst nennt, stehen als Untergliederung zur Wahl (D100).
+        if (w.get("section") or "").strip():
+            u.setdefault("sections", {}).setdefault(w["section"].strip(), 0)
+            u["sections"][w["section"].strip()] += 1
+    for u in by_unit.values():
+        u["sections"] = [{"section": name, "words": n} for name, n in sorted((u.get("sections") or {}).items())]
     return sorted(by_unit.values(), key=lambda u: (u["pages"][0]["page"] if u["pages"] and u["pages"][0]["page"] else 9999, u["unit"]))
 
 
