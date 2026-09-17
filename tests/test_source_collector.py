@@ -5,7 +5,7 @@ from contextlib import closing
 
 from test_learning import env  # noqa: F401
 from test_sources import history, LA, SN
-from backend import db, source_collector as collector, sources, textbook_context as ctx
+from backend import book_structure as bs, db, source_collector as collector, sources, textbook_context as ctx
 from backend.secret_store import encrypt_secret
 from backend.textbook_browser import CaptureResult, PageShot, looks_blank
 
@@ -30,9 +30,11 @@ def shelf(title="¡Apúntate! 2", subject="spanisch"):
     with closing(db.webapp_conn()) as conn:
         conn.execute("INSERT INTO digital_textbook_catalog(account_id,title,provider,launch_url,subject_name,discovered_at)"
                      " VALUES(1,?,NULL,'https://viewer.example/b',?,'2026-09-01T00:00:00+00:00')", (title, subject))
-        # Das Verzeichnis gilt als gelesen, damit ein Lauf im Test nicht erst blättert.
-        conn.execute("INSERT OR IGNORE INTO digital_textbook_access(account_id,book_title,status,checked_at,toc_state) "
-                     "VALUES(1,?,'unknown','2026-09-01T00:00:00+00:00','not_found')", (title,))
+        # Das Verzeichnis gilt als abgesucht, damit ein Lauf im Test nicht erst
+        # blättert — mit dem aktuellen Suchstand, sonst bekäme das Buch eine
+        # zweite Chance auf den späteren Seiten (D111).
+        conn.execute("INSERT OR IGNORE INTO digital_textbook_access(account_id,book_title,status,checked_at,toc_state,toc_version) "
+                     "VALUES(1,?,'unknown','2026-09-01T00:00:00+00:00','not_found',?)", (title, bs.TOC_SEARCH_VERSION))
         conn.execute("INSERT INTO digital_textbook_credentials(account_id,portal_url,username,password_ciphertext,"
                      "verification_status,created_at,updated_at) VALUES(1,'https://gaw-iserv.de','kind',?,'catalog_ready','2026-09-01','2026-09-01')",
                      (encrypt_secret("geheim"),))

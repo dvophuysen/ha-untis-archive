@@ -225,3 +225,38 @@ def test_every_vocabulary_part_of_a_language_book_is_fetched(env):
             "SELECT page FROM source_links WHERE account_id=1 AND lower(subject_name) LIKE 'phys%'")]
     assert pages == [168, 169, 170, 171, 172], 'die ganze Liste, auch ohne angeschnittene Lektion'
     assert other == [], 'Physik ist keine Fremdsprache'
+
+
+async def test_a_book_whose_contents_page_sits_further_in_is_still_found(env, monkeypatch):
+    """„Green Line 4 G9" und „Geschichte und Geschehen 3/4" galten als
+    verzeichnislos: Angesehen wurden nur die Seiten 2 bis 5, und zeigte dieses
+    Fenster kein Verzeichnis, brach die Suche ab, statt hinter Umschlag,
+    Impressum und Vorwort weiterzusuchen (D111)."""
+    from backend import book_structure as bs
+    shelf()
+    seen = []
+
+    async def fetch(account_id, book, credentials, pages, **kw):
+        seen.append(list(pages))
+        return {"shots": [(p, b"bild") for p in pages]}
+
+    async def read(account_id, book, shots, limit=4, join=True):
+        # Erst auf dem dritten Fenster steht das Verzeichnis.
+        found = len(seen) == 3
+        return bs.TableOfContents(is_toc=found, continues=False,
+                                  chapters=[bs.Chapter(number='1', title='Unit 1', start_page=8)] if found else [])
+    monkeypatch.setattr(bs, "fetch_pages", fetch, raising=False)
+    monkeypatch.setattr("backend.textbook_context.fetch_pages", fetch)
+    monkeypatch.setattr(bs, "_read", read)
+    monkeypatch.setattr("backend.textbook_browser.looks_blank", lambda blob: False)
+    monkeypatch.setattr(bs, "_ai_enabled", lambda account_id: True)
+    book = {"title": "Green Line 4 G9", "subject_name": "englisch"}
+    out = await bs.read_toc(1, book, {"user": "x"})
+    assert seen == [bs.TOC_FIRST, bs.TOC_MORE, [10, 11, 12, 13]], seen
+    assert out["state"] == "ready" and out["chapters"] == 1
+    # Ein Buch, das als verzeichnislos gilt, wird nach einer erweiterten Suche
+    # noch einmal angesehen — aber nur einmal je Suchstand.
+    bs._set_state(1, "Anderes Buch", "not_found", [2, 3, 4, 5])
+    assert bs.toc_pending(1, "Anderes Buch") is False
+    monkeypatch.setattr(bs, "TOC_SEARCH_VERSION", bs.TOC_SEARCH_VERSION + 1)
+    assert bs.toc_pending(1, "Anderes Buch") is True

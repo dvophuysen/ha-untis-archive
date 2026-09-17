@@ -27,10 +27,17 @@ from .learning import InputModel, now_iso
 
 log = logging.getLogger("schul_cockpit.sources")
 
-# Wo ein Inhaltsverzeichnis steht: die ersten Seiten nach dem Titel. Reicht
-# das nicht, wird einmal weitergeblättert.
+# Wo ein Inhaltsverzeichnis steht: die ersten Seiten nach dem Titel, und wenn
+# es dort nicht steht, wird weitergeblättert. „Green Line 4 G9" und „Geschichte
+# und Geschehen 3/4" galten als verzeichnislos, weil nur die Seiten 2 bis 5
+# angesehen wurden: Zeigte das erste Fenster kein Verzeichnis, brach die Suche
+# ab, statt hinter Umschlag, Impressum und Vorwort weiterzusuchen (D111).
 TOC_FIRST = [2, 3, 4, 5]
 TOC_MORE = [6, 7, 8, 9]
+TOC_WINDOWS = (TOC_FIRST, TOC_MORE, [10, 11, 12, 13])
+# Hochzählen, wenn sich die durchsuchten Seiten ändern: Bücher, die als
+# verzeichnislos gelten, werden dann noch einmal angesehen.
+TOC_SEARCH_VERSION = 2
 # Größer holt kein Kapitel; eine Spanne darüber ist ein Lesefehler.
 MAX_CHAPTER_PAGES = 60
 
@@ -110,11 +117,11 @@ def _ai_enabled(account_id: int) -> bool:
 def _set_state(account_id: int, title: str, state: str, pages: list[int]) -> None:
     with closing(webapp_conn()) as conn, conn:
         conn.execute(
-            "INSERT INTO digital_textbook_access(account_id,book_title,status,checked_at,toc_state,toc_pages,toc_tries) "
-            "VALUES(?,?,'unknown',?,?,?,?) ON CONFLICT(account_id,book_title) DO UPDATE SET "
-            "toc_state=excluded.toc_state,toc_pages=excluded.toc_pages,"
+            "INSERT INTO digital_textbook_access(account_id,book_title,status,checked_at,toc_state,toc_pages,toc_tries,toc_version) "
+            "VALUES(?,?,'unknown',?,?,?,?,?) ON CONFLICT(account_id,book_title) DO UPDATE SET "
+            "toc_state=excluded.toc_state,toc_pages=excluded.toc_pages,toc_version=excluded.toc_version,"
             "toc_tries=CASE WHEN excluded.toc_state='failed' THEN toc_tries+1 ELSE 0 END",
-            (account_id, title, now_iso(), state, json.dumps(pages), 1 if state == "failed" else 0))
+            (account_id, title, now_iso(), state, json.dumps(pages), 1 if state == "failed" else 0, TOC_SEARCH_VERSION))
 
 
 def toc_state(account_id: int, title: str) -> str | None:
@@ -139,13 +146,17 @@ def toc_pending(account_id: int, title: str) -> bool:
     holte dieselben. Nur der Fehlschlag wird wiederholt, und nur begrenzt.
     """
     with closing(webapp_conn()) as conn:
-        row = conn.execute("SELECT toc_state,toc_tries FROM digital_textbook_access WHERE account_id=? AND book_title=?",
+        row = conn.execute("SELECT toc_state,toc_tries,toc_version FROM digital_textbook_access WHERE account_id=? AND book_title=?",
                            (account_id, title)).fetchone()
     if not row or not row["toc_state"]:
         return True
     if row["toc_state"] == "failed":
         return (row["toc_tries"] or 0) < TOC_TRIES
-    return row["toc_state"] not in ("ready", "not_found", "no_ai")
+    # „Nicht gefunden" gilt nur für die Seiten, die damals angesehen wurden.
+    # Wird weiter gesucht als früher, bekommt das Buch eine zweite Chance (D111).
+    if row["toc_state"] == "not_found":
+        return (row["toc_version"] or 0) < TOC_SEARCH_VERSION
+    return row["toc_state"] not in ("ready", "no_ai")
 
 
 async def _read(account_id: int, book, shots: list[bytes], limit: int = 4, join: bool = True) -> TableOfContents | None:
@@ -255,7 +266,7 @@ async def read_toc(account_id: int, book, credentials) -> dict:
     pages_read: list[int] = []
     shots: list[bytes] = []
     result: TableOfContents | None = None
-    for batch in (TOC_FIRST, TOC_MORE):
+    for batch in TOC_WINDOWS:
         delivery = await fetch_pages(account_id, book, credentials, batch, use_cache=False, budget=200)
         got = [(p, image) for p, image in delivery["shots"] if p is not None and not looks_blank(image)]
         if not got:
@@ -266,12 +277,18 @@ async def read_toc(account_id: int, book, credentials) -> dict:
         if part is None:
             _set_state(account_id, book["title"], "failed", pages_read)
             return {"state": "failed", "pages": pages_read}
+        if not part.is_toc:
+            # Noch nichts gefunden: weiter hinten nachsehen, statt aufzugeben.
+            # Schon etwas gefunden: dann ist das Verzeichnis hier zu Ende.
+            if result is None:
+                continue
+            break
         if result is None:
             result = part
         else:
             result.chapters.extend(part.chapters)
-            result.continues = part.continues
-        if not part.is_toc or not part.continues:
+        result.continues = part.continues
+        if not part.continues:
             break
     if result is None or not result.is_toc or not result.chapters:
         _set_state(account_id, book["title"], "not_found", pages_read)
