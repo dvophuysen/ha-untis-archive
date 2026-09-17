@@ -886,6 +886,11 @@ _MIGRATIONS.append(("mentor_message_author_002",
 # Eintrags), ergebnis (die Bearbeitung des Kindes dazu), stoff (Thema).
 _MIGRATIONS.append(("material_links_002_relation", "ALTER TABLE material_links ADD COLUMN relation TEXT"))
 
+# Der Abschnitt innerhalb einer Einheit, wie ihn die Vokabelliste selbst
+# gliedert („Unidad 3 / Texto A"). Die Einheit ist das Standardbündel des
+# Trainers, der Abschnitt eine Untergliederung zur Auswahl (D100).
+_MIGRATIONS.append(("vocab_words_001_section", "ALTER TABLE vocab_words ADD COLUMN section TEXT NOT NULL DEFAULT ''"))
+
 # Ob das Kind auf einer Seite selbst geschrieben hat, getrennt von der Frage, ob
 # Handschrift zu lesen war: Arbeitshefte drucken Musterlösungen in Schreibschrift
 # und verlangten dafür bisher ein Gegenlesen (D98).
