@@ -414,3 +414,25 @@ def test_the_chapter_index_names_the_pages_the_collector_already_fetched(env):
     with closing(db.webapp_conn()) as c, c:
         c.execute("DELETE FROM book_chapters")
     assert lernstand.chapter_context(1, 'SPANISCH', [{'label': 'Schulbuch', 'pages': [50]}]) is None
+
+
+def test_the_exam_scope_names_the_chapter_pages_it_has(env):
+    """Dieselbe Übersicht wie in der Übungseinheit, auch für die Klausurvorbereitung:
+    Das Kapitel nennt seine vorliegenden Seiten beim Namen, ohne ihren Volltext (D104)."""
+    from backend.book_structure import Chapter, overview, store_chapters
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO digital_textbook_catalog(account_id,subject_name,title,discovered_at) "
+                  "VALUES(1,'spanisch','¡Apúntate! 2','now')")
+        c.execute("INSERT INTO source_links(account_id,entry_kind,entry_id,entry_date,subject_name,part_label,"
+                  "part_kind,page,quote,synced_at,updated_at) "
+                  "VALUES(1,'lesson',1,'2026-09-11','SPANISCH','','book',50,'S. 50','now','now')")
+        for page, title in [(48, 'Quiz und Hörübung'), (50, 'Un rally por Madrid')]:
+            c.execute("INSERT INTO materials(account_id,kind,subject_name,title,content_text,origin,source_book,"
+                      "source_page,page_check,analysis_state,created_at,updated_at) "
+                      "VALUES(1,'book_page','SPANISCH',?,'Text.','book_fetch','¡Apúntate! 2',?,'ok','ready','now','now')",
+                      (title, page))
+    store_chapters(1, '¡Apúntate! 2', [Chapter(number='3', title='De paseo por España', start_page=48, end_page=52)])
+    found = overview(1, '¡Apúntate! 2', 'SPANISCH')
+    assert len(found) == 1
+    assert [(p['page'], p['title']) for p in found[0]['page_index']] == [(48, 'Quiz und Hörübung'), (50, 'Un rally por Madrid')]
+    assert found[0]['pages_stored'] == 2 and found[0]['pages'] == 5

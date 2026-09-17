@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from contextlib import closing
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Response, UploadFile
 from pydantic import Field
@@ -13,6 +14,7 @@ from .. import materials as store
 from .. import notice_check
 from .. import sources
 from ..auth import CurrentUser, get_current_user
+from ..db import webapp_conn
 from ..learning import InputModel
 from .learning import access
 
@@ -198,6 +200,22 @@ def index(
         "needs_check": sum(1 for m in items if not m["verified"]),
         "pending_analysis": pending,
     }
+
+
+@router.get("/for-task/{task_id}")
+def for_task(account_id: int, task_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Bereits abgelegte Materialien, die zu dieser Hausaufgabe passen könnten,
+    beste Treffer zuerst, dazu die schon verknüpften. Muss vor /{material_id}
+    stehen, sonst liest FastAPI „for-task" als ID (D106)."""
+    access(user, account_id)
+    with closing(webapp_conn()) as conn:
+        task = conn.execute("SELECT id,subject_name FROM tasks WHERE id=? AND account_id=?",
+                            (task_id, account_id)).fetchone()
+    if not task:
+        raise HTTPException(404, "Aufgabe nicht gefunden.")
+    return {"task_id": task_id, "subject": task["subject_name"] or "",
+            "linked": store.listing(account_id, task_id=task_id, limit=50),
+            "candidates": sources.task_candidates(account_id, task_id)}
 
 
 @router.get("/sources")

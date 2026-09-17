@@ -1,3 +1,10 @@
+## 1.0.0
+
+- In der Materialansicht zu einer Hausaufgabe lässt sich jetzt ein bereits abgelegtes Material anhängen, nicht nur ein neues hochladen. Darüber stehen Vorschläge aus demselben Fach, beste Treffer zuerst: zuerst, was eine im Auftrag genannte Stelle wirklich zeigt, dann Blätter aus den Tagen um die Aufgabe, dann der Rest. Jeder Vorschlag sagt, warum er dasteht, und angehängt wird nur, was du antippst.
+- Eine Aufgabe muss sinnvoll und lösbar sein — das ersetzt die engere Regel von vorhin. Lösbar heißt: Alles Nötige steht in der Aufgabe selbst oder eindeutig in einer Quelle, die das Kind vor sich hat und die der Mentor benennt. Die Sprachen dürfen sich dabei mischen, etwa ein deutscher Text mit einer Antwort auf Spanisch; der Mentor sagt dann, in welcher Sprache geantwortet wird. Eine Auswahlaufgabe aus dem Buch als Aufwärmer bleibt erlaubt, solange die Quelle eindeutig ist.
+- Auch die Klausurvorbereitung bekommt das Seitenverzeichnis eines angeschnittenen Kapitels: welche Seiten vorliegen und wie sie heißen.
+- Für ein Modell ohne bekannten Kostensatz gilt ein Platzhalter, und die Stufe wird in der Elternansicht als „Kostensatz geschätzt" gekennzeichnet. Ohne das ließe sich ein neues Modell gar nicht erst ausprobieren. Ein eigener Satz aus der Add-on-Konfiguration geht immer vor.
+
 ## 0.99.0
 
 - Der Mentor kennt in einer Themen-Einheit jetzt das ganze Kapitel, in dem sie steht: Nummer, Titel, von welcher bis zu welcher Seite es reicht, welche Seiten der Unterricht genannt hat, welche vorliegen und welche noch fehlen, dazu der Vokabel- und Grammatikteil der Einheit. Die Seiten holt und liest die App ohnehin, sobald ein Kapitel angeschnitten ist — dieses Wissen lag bisher ungenutzt daneben.

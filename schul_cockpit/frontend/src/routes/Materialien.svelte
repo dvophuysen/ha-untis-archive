@@ -226,6 +226,24 @@
     }
   }
 
+  // Zu einer Hausaufgabe: was schon dranhängt und was dazu passen könnte.
+  // Bisher konnte man hier nur Neues ablegen, ein bereits eingelesenes Material
+  // ließ sich nicht auswählen (D106).
+  let forTask = $state(null);
+  async function loadForTask() {
+    if (!taskId) { forTask = null; return; }
+    try { forTask = await api.get(`${base}/for-task/${taskId}`); }
+    catch { forTask = null; }
+  }
+  async function attach(id) {
+    await api.post(`${base}/${id}/links`, { kind: 'task', target_id: taskId });
+    await loadForTask(); await load();
+  }
+  async function detach(id) {
+    await api.delete(`${base}/${id}/links?kind=task&target_id=${taskId}`);
+    await loadForTask(); await load();
+  }
+
   async function act(fn) {
     busy = true;
     error = null;
@@ -244,6 +262,8 @@
     void filterKind;
     load();
   });
+
+  $effect(() => { void accountId; void taskId; loadForTask(); });
 
   // Ein Link aus einer Aufgabe oder Stunde öffnet sein Material direkt.
   $effect(() => {
@@ -755,6 +775,33 @@
 
   {#if taskId}
     <div class="banner">Alles, was du hier ablegst, gehört zu dieser Hausaufgabe.</div>
+    <section class="card">
+      <h2>Schon Abgelegtes anhängen</h2>
+      {#if forTask?.linked?.length}
+        <p class="muted">Gehört bereits dazu:</p>
+        <div class="list">
+          {#each forTask.linked as m (m.id)}
+            <div class="row gap-sm attach">
+              <span class="grow">{m.title || KIND_NAMES[m.kind] || 'Material'}{m.source_label ? ` · ${m.source_label}` : ''}{m.source_page ? ` S. ${m.source_page}` : ''}</span>
+              <button disabled={busy} onclick={() => act(() => detach(m.id))}>Entfernen</button>
+            </div>
+          {/each}
+        </div>
+      {/if}
+      {#if forTask?.candidates?.length}
+        <p class="muted">Vorschläge aus {subjectStyle(forTask.subject).name}, beste Treffer zuerst:</p>
+        <div class="list">
+          {#each forTask.candidates as c (c.material_id)}
+            <div class="row gap-sm attach">
+              <span class="grow">{c.title || KIND_NAMES[c.kind] || 'Material'}<small>{c.reason}</small></span>
+              <button disabled={busy} onclick={() => act(() => attach(c.material_id))}>Anhängen</button>
+            </div>
+          {/each}
+        </div>
+      {:else if forTask && !forTask.linked?.length}
+        <p class="muted">Zu diesem Fach liegt noch nichts Passendes ab. Fotografiere die Seite oder das Blatt.</p>
+      {/if}
+    </section>
   {/if}
 
   {#if data.can_manage && data.needs_check > 0}

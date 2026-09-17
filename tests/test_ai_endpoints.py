@@ -122,7 +122,9 @@ def test_status_and_log_name_tier_model_and_host(setup):
     both(patch, mittel={'modellname': 'test-terra', 'bereitstellungsname': 'terra-eu', 'foundry': '2'})
     status = ai.status()
     assert status['model'] == 'test' and status['models'] == ['hoch', 'mittel', 'niedrig']
-    assert status['rates']['mittel'] == {'model': 'test-terra', 'input_per_m': 5.0, 'output_per_m': 18.0, 'foundry': '2'}
+    # estimated markiert einen Platzhalter-Kostensatz; hier steht ein echter.
+    assert status['rates']['mittel'] == {'model': 'test-terra', 'input_per_m': 5.0, 'output_per_m': 18.0,
+                                         'foundry': '2', 'estimated': False}
     overview = ai.endpoint_overview()
     assert 'hoch: test über Foundry 1 (alt.example)' in overview
     assert 'mittel: test-terra als terra-eu über Foundry 2 (neu.example)' in overview

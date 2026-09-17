@@ -32,7 +32,16 @@ RATE_UNTIL = date(2026, 12, 1)
 # Add-on-Konfiguration und gehen diesen hier vor.
 RATES = {'gpt-5.6-sol': (10.0, 45.0), 'gpt-5.6-terra': (5.0, 18.0), 'gpt-5.6-luna': (0.4, 1.8),
          # Spracheingabe: Audio-Token (etwa 1000 je Minute) und Text; Listenpreis 6 $/M plus Puffer.
-         'gpt-4o-transcribe': (6.5, 11.0)}
+         'gpt-4o-transcribe': (6.5, 11.0),
+         # Platzhalter: Der Satz für gpt-5-mini ist hier nicht bekannt. Gebucht
+         # wird in der Größenordnung der günstigsten bekannten Stufe, damit die
+         # Eichung überhaupt laufen kann. Er kann danebenliegen — sobald der
+         # echte Satz vorliegt, gehört er in die Add-on-Konfiguration, die ihm
+         # vorgeht (D105).
+         'gpt-5-mini': (0.4, 1.8)}
+# Modelle, deren Satz ein Platzhalter ist. Die Elternansicht sagt das dazu,
+# damit eine geschätzte Buchung nicht wie eine gemessene aussieht.
+ESTIMATED = {'gpt-5-mini'}
 # Eine Minute Sprache sind rund tausend Audio-Token; die Schätzung rechnet großzügig.
 AUDIO_TOKENS_PER_SECOND = 20
 TRANSCRIBE_MAX_BYTES = 8 * 1024 * 1024
@@ -127,7 +136,10 @@ def status():
     for name,entry in tiers.items():
         rate=rate_for(entry)
         rates[name]=dict(model=entry['model'],input_per_m=rate[0] if rate else None,
-                         output_per_m=rate[1] if rate else None,foundry=entry['foundry'])
+                         output_per_m=rate[1] if rate else None,foundry=entry['foundry'],
+                         # Geschätzt heißt: kein eigener Satz eingetragen und der
+                         # hinterlegte ist nur ein Platzhalter.
+                         estimated=bool(not entry.get('rate') and entry['model'] in ESTIMATED))
     return dict(month=month,used_eur=round(used/1e6,4),limit_eur=cfg['monthly_micro']/1e6,daily_limit_eur=cfg['daily_micro']/1e6,
                 background_limit_eur=cfg['background_micro']/1e6,session_limit_eur=SESSION_MICRO/1e6,
                 model=model,sources_model=cfg.get('sources_model') or None,opening_model=cfg.get('opening_model') or None,
