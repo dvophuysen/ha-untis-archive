@@ -1,3 +1,7 @@
+## 1.1.5
+
+- Der Lesezugang gibt jetzt auch den Zustand der digitalen Bücher heraus: welches Verzeichnis gelesen ist, welcher Versuch woran scheiterte, und den Katalog selbst. Für die Fehlersuche, wenn ein Buch keine Kapitel bekommt.
+
 ## 1.1.4
 
 - Ein Kapitel ist ein Bündel, auch wenn Buch, Grammatikheft und Vokabelliste es verschieden nennen. „Unidad 3", „Unidad 3 De paseo por España" und „3 De paseo por España" standen getrennt im Trainer; jetzt sind sie eins, unter dem ausführlichsten Namen, und beim Üben kommen die Wörter aller Schreibweisen.

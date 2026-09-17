@@ -50,7 +50,10 @@ dataset('learning_reviews','app','activity_id next_due streak last_outcome last_
 
 
 # Die gelesenen Inhaltsverzeichnisse: Grundlage der Kapitelregel und der
-# Wortschatzteile, deshalb auch von außen nachlesbar.
+# Wortschatzteile, deshalb auch von außen nachlesbar. Dazu der Zustand je
+# Buch — ob sein Verzeichnis gelesen ist und woran ein Versuch scheiterte.
+dataset('digital_textbook_access','app','account_id book_title status page printed_page detail checked_at toc_state toc_pages toc_tries','checked_at')
+dataset('digital_textbook_catalog','app','id account_id title provider subject_name discovered_at','discovered_at')
 dataset('book_chapters','app','id account_id book_title number title kind level start_page end_page belongs_to locked created_at','created_at')
 
 dataset('learning_day_preferences','app','account_id day load updated_at','day','updated_at')
