@@ -556,6 +556,27 @@ CHAPTER_BUDGET = 4000
 CHAPTER_PAGES = 4
 
 
+def chapter_from(account_id: int, subject: str, hits: list[dict]):
+    """Das Buchkapitel, in dem die genannten Buchseiten liegen.
+
+    Zurück: Kapitel, die genannten Seiten, alle Kapitel des Buchs und sein Titel.
+    Die Kapitelgrenzen gelten nur im digitalen Buch mit gelesenem Verzeichnis —
+    Arbeitsheftseiten zählen anders."""
+    from .book_structure import chapter_of, chapters_of
+    from .sources import _shelf
+    shelf = _shelf(account_id).get((subject or "").casefold())
+    if not shelf:
+        return None
+    chapters = chapters_of(account_id, shelf["title"])
+    if not chapters:
+        return None
+    cited = {p for hit in hits if (hit.get("origin") or "") == "book_fetch" for p in (hit.get("hit_pages") or [])}
+    chapter = next((chapter_of(chapters, p) for p in sorted(cited) if chapter_of(chapters, p)), None)
+    if not chapter:
+        return None
+    return chapter, cited, chapters, shelf["title"]
+
+
 def chapter_pages_of(account_id: int, subject: str, hits: list[dict]) -> list[dict]:
     """Weitere abgelegte Seiten desselben Buchkapitels.
 
@@ -567,23 +588,14 @@ def chapter_pages_of(account_id: int, subject: str, hits: list[dict]) -> list[di
     Die Kapitelgrenzen gelten nur im digitalen Buch, dessen Verzeichnis gelesen
     ist — Arbeitsheftseiten zählen anders.
     """
-    from .book_structure import chapter_of, chapters_of
-    from .sources import _shelf
-    shelf = _shelf(account_id).get((subject or "").casefold())
-    if not shelf:
+    found = chapter_from(account_id, subject, hits)
+    if not found:
         return []
-    chapters = chapters_of(account_id, shelf["title"])
-    if not chapters:
-        return []
-    cited = {p for hit in hits if (hit.get("origin") or "") == "book_fetch" for p in (hit.get("hit_pages") or [])}
-    wanted: set[int] = set()
-    for page in cited:
-        found = chapter_of(chapters, page)
-        if found:
-            wanted |= set(range(found["start_page"], (found["end_page"] or found["start_page"]) + 1))
-    wanted -= cited
+    chapter, cited, _, _ = found
+    wanted = set(range(chapter["start_page"], (chapter["end_page"] or chapter["start_page"]) + 1)) - cited
     if not wanted:
         return []
+    shelf = {"title": found[3]}
     marks = ",".join("?" * len(wanted))
     with closing(webapp_conn()) as c:
         rows = [dict(r) for r in c.execute(
@@ -672,6 +684,45 @@ def public(topic: dict) -> dict:
     return {k: topic.get(k) for k in ("id", "exam_key", "subject", "position", "title", "detail", "origin", "stale",
                                      "stage", "reason", "note", "self_view", "sat_at", "checks", "next_check", "updated_at")} | {
         "label": LABELS.get(topic.get("stage"), ""), "places": places, "places_label": places_label(places)}
+
+
+def chapter_context(account_id: int, subject: str, places: list[dict]) -> dict | None:
+    """Das Kapitel, in dem das Thema steht, mit einem Verzeichnis seiner Seiten.
+
+    Die Kapitelregel holt ohnehin alle Seiten eines angeschnittenen Kapitels und
+    wertet sie aus (D39). Dieses Wissen bleibt sonst ungenutzt: Der Mentor sieht
+    nur die genannten Stellen und ein paar Nachbarseiten im Volltext. Hier
+    bekommt er zusätzlich eine Zeile je Seite — Seitenzahl und ihr Titel aus der
+    Auswertung —, damit er weiß, was die Einheit umfasst und worauf er sich
+    beziehen kann. Kostet keinen Aufruf, die Titel liegen vor (D104).
+    """
+    found = chapter_from(account_id, subject, _matching_rows(account_id, subject, places))
+    if not found:
+        return None
+    from .book_structure import companions
+    chapter, cited, chapters, title = found
+    end = chapter["end_page"] or chapter["start_page"]
+    with closing(webapp_conn()) as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT source_page,title,summary FROM materials WHERE account_id=? AND hidden=0 AND origin='book_fetch' "
+            "AND source_book=? AND source_page BETWEEN ? AND ? AND COALESCE(content_text,'')!='' "
+            "AND COALESCE(page_check,'') NOT IN ('mismatch','blank') ORDER BY source_page",
+            (account_id, title, chapter["start_page"], end))]
+    pages = [{"seite": r["source_page"], "titel": (r["title"] or "")[:80]} for r in rows]
+    span = list(range(chapter["start_page"], end + 1))
+    return {
+        "buch": title,
+        "kapitel": f"{chapter['number']} {chapter['title']}".strip(),
+        "seiten": [chapter["start_page"], end],
+        "genannte_seiten": sorted(cited),
+        "seiten_im_bestand": pages,
+        "seiten_fehlen": [p for p in span if p not in {r["source_page"] for r in rows}],
+        "dazu": [{"titel": e["title"], "art": e["kind"], "seiten": [e["start_page"], e["end_page"]]}
+                 for e in companions(chapters, chapter)],
+        "hinweis": "Das Kapitel ist der Zusammenhang der Einheit. seiten_im_bestand nennt nur Seitentitel, "
+                   "keinen Inhalt: Was dort steht, weißt du erst, wenn die Seite in material steht. "
+                   "Behaupte nichts über eine Seite, die du nur aus diesem Verzeichnis kennst.",
+    }
 
 
 def basis_of(account_id: int, subject: str, places: list[dict]) -> list[dict]:
@@ -781,6 +832,8 @@ def context_for(account_id: int, topic_id: int, session_id: int | None = None) -
                  f"{KINDS_FOR_SITZT} Aufgabenarten. Die Stufe liest die App aus den Antworten ab."),
         "other_topics": [f"{s['title']} ({s['stage']})" for s in siblings if s["title"] != topic["title"]][:8],
         "material": material,
+        # Das Kapitel als Zusammenhang, aus den ohnehin geholten Seiten (D104).
+        "chapter": chapter_context(account_id, topic["subject"], places),
         # Ohne Originalseite darf keine erfunden werden. Am 17.09. behauptete ein
         # Einstieg „Schulbuch S. 50“ und erfand den Inhalt, obwohl zu diesem Thema
         # kein einziges Material vorlag (D96).

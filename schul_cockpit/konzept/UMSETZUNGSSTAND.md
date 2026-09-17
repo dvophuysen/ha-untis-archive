@@ -1,3 +1,40 @@
+# Das Kapitel als Zusammenhang 0.99.0
+
+Stand 17.09.2026. Nutzerentscheidung (D104).
+
+**Anlass.** Nachdem die Verzeichnisse wieder gelesen werden (D102), setzt die
+Kapitelregel die fehlenden Seiten angeschnittener Kapitel auf die Abrufliste;
+für Spanisch ist das Unidad 3 mit S. 48–59. Der Nutzer: „Da wir die Kapitel des
+Schulbuches spätestens bei der Klausurenvorbereitung als Gesamtkontext
+berücksichtigen, ist es ohnehin hilfreich, die Seiten ausgewertet vorliegen zu
+haben. Machen wir das beste daraus und verwerten wir sie auch."
+
+**Befund.** Die Seiten wurden geholt und ausgewertet, aber in einer Themen-
+Einheit sah der Mentor davon nur die genannten Stellen und seit 0.96.0 bis zu
+vier Nachbarseiten im Volltext. Dass die Einheit von S. 48 bis 59 reicht, dass
+ein Vokabel- und ein Grammatikteil dazugehören und welche Seiten überhaupt
+vorliegen, stand ihm nirgends. Für Hausaufgaben gab es das schon in Ansätzen
+(`mentor_context.book_context`), aber nur bei einer Seitenzahl im Auftragstext
+und nur als Kapitelname ohne Seitenverzeichnis.
+
+**Gebaut.** `lernstand.chapter_context()` liefert zur Themen-Einheit Buch,
+Kapitelnummer und -titel, die Spanne, die im Unterricht genannten Seiten, ein
+Verzeichnis der vorliegenden Seiten mit je einer Zeile aus Seitenzahl und
+Auswertungstitel, die Lücken und die Vokabel- und Grammatikteile der Einheit.
+Kein Modellaufruf: Die Titel liegen aus der Seitenauswertung vor.
+
+Bewusst kein Inhalt. Der ganze Kapiteltext in jedem Zug wären bei zwölf Seiten
+rund 36.000 Zeichen — das Dreifache des heutigen Kontextes, bei ohnehin
+spürbarer Antwortzeit. Das Verzeichnis kostet unter tausend Zeichen. Die Regel
+dazu steht in der Anweisung und noch einmal im Kontext selbst: Was auf einer
+Seite steht, weiß der Mentor erst, wenn sie in `topic.material` auftaucht; über
+eine Seite, die er nur aus dem Verzeichnis kennt, behauptet er nichts, und auf
+eine Seite unter `seiten_fehlen` schickt er das Kind nicht.
+
+**Offen.** Dieselbe Übersicht für die Klausurvorbereitung: `exam_scope` bekommt
+die Kapitel heute als Textzeile, aber ohne das Verzeichnis der vorliegenden
+Seiten. Ebenso offen bleibt die Eichung der Reasoning-Tiefe.
+
 # Eine kleine Stufe für die Formatarbeit 0.98.0
 
 Stand 17.09.2026. Nutzerfrage und Nutzerentscheidung (D103).
