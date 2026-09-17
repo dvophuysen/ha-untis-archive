@@ -436,13 +436,22 @@ def rank(state: dict, direction_stage: str) -> tuple:
     return (1 if due else order, 0 if st.get("last_result") in ("incorrect", "partial") else 1, st.get("last") or "")
 
 
-def cards(account_id: int, subject: str, unit: str, stage: int, direction: str, limit: int = 40) -> list[dict]:
+def cards(account_id: int, subject: str, unit: str, stage: int, direction: str, limit: int = 40,
+          section: str = "") -> list[dict]:
     """Die Karten einer Einheit, Wackler und fällige zuerst; für Stufe 2 nur Wörter,
-    deren Bedeutung schon sitzt oder gefestigt ist."""
+    deren Bedeutung schon sitzt oder gefestigt ist.
+
+    Die Einheit ist das Standardbündel. `section` schränkt auf einen Abschnitt
+    ein, den die Vokabelliste selbst nennt („Texto A"); leer heißt: die ganze
+    Einheit, also alle Abschnitte zusammen (D100)."""
+    where = "account_id=? AND lower(subject)=lower(?) AND unit=? AND hidden=0"
+    args = [account_id, subject, unit]
+    if (section or "").strip():
+        where += " AND section=?"
+        args.append(section.strip())
     with closing(webapp_conn()) as c:
         words = [dict(r) for r in c.execute(
-            "SELECT * FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND unit=? AND hidden=0 ORDER BY page,position,id",
-            (account_id, subject, unit))]
+            f"SELECT * FROM vocab_words WHERE {where} ORDER BY page,position,id", args)]
         states = word_states(c, account_id, [w["id"] for w in words])
     key = "s2" if stage == 2 else "s1"
     if stage == 2:

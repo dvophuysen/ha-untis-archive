@@ -251,3 +251,81 @@ def test_parents_can_reset_a_language_and_children_cannot(setup):
     assert r.status_code == 200 and r.json()["removed"] == 1 and r.json()["units"][0]["s1"]["neu"] == 1
     child(state)
     assert client.delete(V + "/LATEIN/attempts").status_code == 403
+
+
+LIST_A = """171
+
+Vocabulario
+
+Unidad 3
+Texto A ▸ p. 51
+
+el país — das Land
+limitar con — grenzen an
+
+171 ciento setenta y uno"""
+LIST_B = """172
+
+Unidad 3
+Texto B ▸ p. 53
+
+el río — der Fluss
+
+Unidad 4
+Texto A ▸ p. 62
+
+la tienda — der Laden
+
+172 ciento setenta y dos"""
+
+
+def test_a_unit_is_one_bundle_across_several_appendix_pages(setup):
+    """Eine Unidad zieht sich über mehrere Anhangseiten; genau sie ist das
+    Bündel, nicht die Anhangseite. Die Überschriften der Vokabelliste sagen,
+    wohin ein Wort gehört, und gelten über den Seitenwechsel hinweg (D100)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    first = seed_page(subject="SPANISCH", text=LIST_A, page=171, label="", title="Vocabulario")
+    second = seed_page(subject="SPANISCH", text=LIST_B, page=172, label="", title="Vocabulario")
+    answers = {
+        first: {"words": [
+            {"unit": "Unidad 3", "section": "Texto A", "foreign_word": "el país", "meanings": ["das Land"]},
+            {"unit": "Unidad 3", "section": "Texto A", "foreign_word": "limitar con", "meanings": ["grenzen an"]}]},
+        second: {"words": [
+            {"unit": "Unidad 3", "section": "Texto B", "foreign_word": "el río", "meanings": ["der Fluss"]},
+            {"unit": "Unidad 4", "section": "Texto A", "foreign_word": "la tienda", "meanings": ["der Laden"]}]},
+    }
+    seen = []
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        seen.append(context["page"])
+        return json.dumps(answers[first if context["page"] == 171 else second]), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    r = client.post(V + "/SPANISCH/extract", json={"material_ids": [first, second]})
+    assert r.status_code == 200, r.text
+    units = {u["unit"]: u for u in r.json()["units"] if u["words"]}
+    # Zwei Anhangseiten, aber die Unidad ist das Bündel: drei Wörter in Unidad 3.
+    assert units["Unidad 3"]["words"] == 3 and units["Unidad 4"]["words"] == 1
+    assert [s["section"] for s in units["Unidad 3"]["sections"]] == ["Texto A", "Texto B"]
+    assert [s["words"] for s in units["Unidad 3"]["sections"]] == [2, 1]
+    # Standardbündel: die ganze Einheit über beide Seiten hinweg.
+    whole = client.get(V + "/SPANISCH/cards?unit=Unidad%203&stage=1&direction=from").json()["cards"]
+    assert [c["foreign_word"] for c in whole] == ["el país", "limitar con", "el río"]
+    # Untergliederung: nur der genannte Abschnitt.
+    part = client.get(V + "/SPANISCH/cards?unit=Unidad%203&section=Texto%20B&stage=1&direction=from").json()
+    assert part["section"] == "Texto B" and [c["foreign_word"] for c in part["cards"]] == ["el río"]
+
+
+def test_without_a_heading_the_page_keeps_its_own_label(setup):
+    """Steht über den Wörtern keine Einheit, bleibt es beim Kapitel der Seite —
+    erfunden wird keine."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    mid = seed_page()
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        return json.dumps({"words": [{"foreign_word": "ecce", "meanings": ["Schau!"]}]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    r = client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
+    unit = next(u for u in r.json()["units"] if u["words"])
+    assert unit["unit"] == "Begleitband S. 10" and unit["sections"] == []
