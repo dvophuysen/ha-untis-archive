@@ -5,7 +5,9 @@ Stand: 16.09.2026. Backlog zur gemeinsamen Klärung, kein verbindlicher Bauauftr
 ## Vorgeschlagen am 17.09.2026 aus der Eichung
 
 - Gebaut in 0.77.0 (D79): Plausibilitätsprüfung handschriftlicher Themenlisten: Seitenangaben des Zettels gegen die Stellen halten, die Unterricht und Hausaufgaben desselben Fachs seit der letzten Arbeit nennen; Abweichungen in der Gegenlese-Karte benennen („S. 70, 71 kommen im Unterricht nicht vor; gemeint S. 10, 11?“). Anlass: Jede Lesung las die handschriftliche 1 eines Kindes als 7 (D78).
+- Gebaut in 0.78.0 (D81): Vorschlag der Prüfung mit einem Tipp übernehmen, je Seitenangabe als Ganzes.
 - Seitenart als Steuerung der Modellwahl erst, wenn je Seitenart eine Messung mit Zahlen- und Zeilenvergleich vorliegt (D75, D77).
+- Kontrollieren (0.78.0, D80) nach der ersten echten Kontrolle eichen: Lesbarkeit der Kinderhandschrift, Urteilsqualität je Aufgabe, ob das Modell trotz Verbot Ergebnisse nennt.
 
 ## Zurückgestellt am 16.09.2026 (D67)
 

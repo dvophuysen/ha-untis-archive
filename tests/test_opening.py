@@ -31,6 +31,7 @@ def test_situation_is_read_from_entry_point_and_signals(env):
     assert mopen.situation(1, s, {**ctx, "topic": {"check": False}})["lage"] == "trainieren"
     assert mopen.situation(1, s, {**ctx, "topic": {"check": True}})["lage"] == "pruefen"
     assert mopen.situation(1, {"source_json": json.dumps({"mode": "homework_help"})}, ctx)["lage"] == "begleiten"
+    assert mopen.situation(1, {"source_json": json.dumps({"mode": "homework_check"})}, ctx)["lage"] == "kontrollieren"
     lesson = mopen.situation(1, {"source_json": json.dumps({"lesson_id": 1})}, ctx)
     assert lesson["lage"] == "erklaeren" and lesson["feedback"]["rating"] == 2
     missed = {**ctx, "lessons": [{**ctx["lessons"][0], "rating": None, "catch_up_open": True}]}

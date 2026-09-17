@@ -33,6 +33,16 @@ class MaterialPatch(InputModel):
     source_page: int | None = Field(default=None, ge=0, le=1999)
 
 
+class SuggestionIn(InputModel):
+    label: str = Field(max_length=40)
+    page: int = Field(ge=1, le=1999)
+    suggest: int = Field(ge=1, le=1999)
+
+
+class SuggestionsIn(InputModel):
+    fixes: list[SuggestionIn] = Field(min_length=1, max_length=20)
+
+
 class LinkIn(InputModel):
     kind: str = Field(max_length=10)
     target_id: int = Field(ge=1)
@@ -299,6 +309,27 @@ def correct(account_id: int, material_id: int, body: MaterialPatch, background: 
         # Seite) wirkt sofort auf Verzeichnis und Einkaufsliste.
         background.add_task(analysis.after_analysis, account_id, material_id)
     return found
+
+
+@router.post("/{material_id}/plausibility/apply")
+def apply_suggestion(account_id: int, material_id: int, body: SuggestionsIn, background: BackgroundTasks,
+                     user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Die Vorschläge der Gegenlese-Karte mit einem Tipp übernehmen (D79): die
+    Seiten einer Angabe werden im gelesenen Text ersetzt und gelten als
+    Korrektur der Eltern, die keine Lesung mehr überschreibt. Danach binden
+    sich die Stellen neu."""
+    access(user, account_id, write=True, parent=True)
+    found = store.detail(account_id, material_id)
+    if not found:
+        raise HTTPException(404, "Material nicht gefunden.")
+    text = notice_check.replace_pages(found.get("content_text") or "", [f.model_dump() for f in body.fixes])
+    if text is None:
+        raise HTTPException(409, "Diese Stelle steht so nicht mehr im Text. Bitte neu laden.")
+    fixed = store.update(account_id, material_id, {"content_text": text}, by_parent=True)
+    if not fixed:
+        raise HTTPException(404, "Material nicht gefunden.")
+    background.add_task(analysis.after_analysis, account_id, material_id)
+    return fixed
 
 
 @router.post("/{material_id}/verified")

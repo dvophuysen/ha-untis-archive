@@ -122,7 +122,7 @@ def catalogue(account, snapshot=None):
         g['catch_up_open'] |= r.get('catch_up_open',False)
     with closing(webapp_conn()) as c:
         skills=[dict(r) for r in c.execute('SELECT * FROM mentor_skills WHERE account_id=?',(account,))]
-        sessions=[dict(r) for r in c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND is_test=0 AND COALESCE(json_extract(source_json,'$.mode'),'')!='homework_help' ORDER BY id",(account,))]
+        sessions=[dict(r) for r in c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND is_test=0 AND COALESCE(json_extract(source_json,'$.mode'),'') NOT IN ('homework_help','homework_check') ORDER BY id",(account,))]
         for session in sessions:
             source=json.loads(session['source_json'] or '{}');key=source.get('goal_key')
             if key in aliases:
@@ -192,7 +192,7 @@ def usage(c,account,day):
     d=day.isoformat()
     blocks=c.execute('SELECT COALESCE(SUM(minutes),0),COUNT(*) FROM learning_plan_blocks WHERE account_id=? AND day=?',(account,d)).fetchone()
     # Earlier sessions retain their allotted block; early completion never refills the day.
-    old=c.execute("SELECT COALESCE(SUM(max_minutes),0),COUNT(*) FROM mentor_sessions WHERE account_id=? AND is_test=0 AND COALESCE(json_extract(source_json,'$.mode'),'')!='homework_help' AND substr(created_at,1,10)=? AND id NOT IN (SELECT session_id FROM learning_plan_blocks WHERE account_id=? AND day=?)",(account,d,account,d)).fetchone()
+    old=c.execute("SELECT COALESCE(SUM(max_minutes),0),COUNT(*) FROM mentor_sessions WHERE account_id=? AND is_test=0 AND COALESCE(json_extract(source_json,'$.mode'),'') NOT IN ('homework_help','homework_check') AND substr(created_at,1,10)=? AND id NOT IN (SELECT session_id FROM learning_plan_blocks WHERE account_id=? AND day=?)",(account,d,account,d)).fetchone()
     legacy=c.execute("SELECT COALESCE(SUM(MAX(COALESCE(s.minutes,0),COALESCE(json_extract(s.snapshot,'$.minutes'),a.minutes))),0),COUNT(*) FROM learning_sessions s JOIN users u ON u.id=s.user_id JOIN learning_activities a ON a.id=s.activity_id JOIN learning_topics t ON t.id=a.topic_id JOIN learning_profiles p ON p.id=t.profile_id WHERE p.account_id=? AND u.role='child' AND u.is_admin=0 AND (substr(s.completed_at,1,10)=? OR (s.completed_at IS NULL AND substr(s.started_at,1,10)=?))",(account,d,d)).fetchone()
     homework=c.execute("SELECT COALESCE(SUM(COALESCE(estimated_minutes,20)),0) FROM tasks WHERE account_id=? AND status='done' AND substr(completed_at,1,10)=?",(account,d)).fetchone()[0]
     exams=c.execute("SELECT COALESCE(SUM(MAX(elapsed_seconds,COALESCE(json_extract(snapshot,'$.minutes'),0)*60)),0) FROM mentor_exam_attempts WHERE account_id=? AND is_test=0 AND substr(started_at,1,10)=?",(account,d)).fetchone()[0]
@@ -281,7 +281,7 @@ def build(account,exams=(),snapshot=None,budget_override=None):
 
 def reserve_resume(c, account, session, day):
     """Account for continuing a real mentor session on another local day."""
-    if json.loads(session.get('source_json') or '{}').get('mode')=='homework_help':return
+    if json.loads(session.get('source_json') or '{}').get('mode') in ('homework_help','homework_check'):return
     if session['is_test'] or session['created_at'][:10]==day.isoformat():return
     if c.execute('SELECT 1 FROM learning_plan_blocks WHERE account_id=? AND day=? AND session_id=?',(account,day.isoformat(),session['id'])).fetchone():return
     from fastapi import HTTPException

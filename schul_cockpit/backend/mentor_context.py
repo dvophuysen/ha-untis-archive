@@ -161,7 +161,7 @@ def context(account_id,session):
     s=snapshot(account_id);subject=session['subject']
     lessons=[r for r in s['lessons'] if same_subject(r.get('subject_name'),subject)][:18]
     source=json.loads(session.get('source_json') or '{}')
-    if source.get('mode')=='homework_help':
+    if source.get('mode') in ('homework_help','homework_check'):
         with closing(webapp_conn()) as c:
             task=c.execute('SELECT id,title,notes,subject_name,status,due_date FROM tasks WHERE id=? AND account_id=?',(source.get('task_id'),account_id)).fetchone()
         source={**source,'task':dict(task)} if task else {**source,'unavailable':True}

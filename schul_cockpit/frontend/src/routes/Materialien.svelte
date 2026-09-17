@@ -42,6 +42,16 @@
   let timer = null;
 
   const base = $derived(`/api/accounts/${accountId}/materials`);
+  // Zweifel je Seitenangabe bündeln: nur Seiten mit Vorschlag, ein Knopf je Angabe.
+  function doubtGroups(unknown) {
+    const groups = new Map();
+    for (const u of unknown.filter((x) => x.suggest)) {
+      const g = groups.get(u.span) ?? { span: u.span, label: u.label, fixes: [] };
+      g.fixes.push({ label: u.label, page: u.page, suggest: u.suggest });
+      groups.set(u.span, g);
+    }
+    return [...groups.values()];
+  }
   const KIND_HINT = { workbook: 'Heftseite', worksheet: 'Blatt', book: 'Buchseite', unknown: 'Quelle unklar' };
   // Warum eine Stelle fotografiert werden muss, obwohl es ein digitales Buch gibt.
   const REASON_HINT = {
@@ -415,7 +425,13 @@
                 <li>⚠ {u.label} S. {u.page} kommt im Unterricht nicht vor{#if u.suggest} · gemeint S. {u.suggest}?{/if}</li>
               {/each}
             </ul>
-            <p class="muted">Bitte am Foto prüfen und mit „Korrigieren“ berichtigen; die Stellen holen das Material.</p>
+            <!-- Eine Seitenangabe („S. 70, 71“) wird als Ganzes berichtigt: ein Tipp, beide Seiten. -->
+            <div class="row gap-sm">
+              {#each doubtGroups(m.plausibility.unknown) as g (g.span)}
+                <button class="quiet" disabled={busy} onclick={() => act(async () => { await api.post(`${base}/${m.id}/plausibility/apply`, { fixes: g.fixes }); message = `Übernommen: ${g.label} S. ${g.fixes.map((f) => f.suggest).join(', ')}. Die Stellen werden neu gebunden.`; await load(); })}>So korrigieren: {g.label} S. {g.fixes.map((f) => f.suggest).join(', ')}</button>
+              {/each}
+            </div>
+            <p class="muted">Bitte am Foto prüfen. „So korrigieren“ übernimmt den Vorschlag als Korrektur; alles andere über „Korrigieren“.</p>
           {:else if m.plausibility.cited}
             <p class="muted">✓ Alle {m.plausibility.cited} Stellen kommen so im Unterricht vor.</p>
           {/if}

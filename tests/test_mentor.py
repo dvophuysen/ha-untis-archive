@@ -656,3 +656,46 @@ def test_the_mentor_proposes_the_end_and_the_child_decides(setup):
     s=send(client,s,text='Noch weitermachen').json()
     assert s['status']=='active' and s['task'] is not None
     assert send(client,s,kind='finish').json()['status']=='completed'
+
+
+def test_checking_a_solution_reads_the_photo_without_solution_or_evidence(setup):
+    """Kontrollieren (MENTOR_EINSTIEG Schritt 4): eigener Verlauf zur Hausaufgabe, eigene
+    Instruktion, keine Aufgabe, keine Einschätzung im Lernstand, Ende nur als Vorschlag."""
+    from backend import learning_plan as lp
+    client,state,patch=setup;child(state)
+    with closing(db.webapp_conn()) as c:
+        tid=c.execute("INSERT INTO tasks(account_id,title,subject_name,notes,source,created_at,updated_at) VALUES(1,'Aufgabe 4','Deutsch','S. 12 Nr. 3 und 4','manual','now','now')").lastrowid
+        before=lp.usage(c,1,date(2026,9,11))
+    help_chat=client.post(B+'/sessions',json={'subject':'Deutsch','homework_task_id':tid}).json()
+    r=client.post(B+'/sessions',json={'subject':'Deutsch','homework_task_id':tid,'check':True})
+    assert r.status_code==200,r.text
+    s=r.json()
+    assert s['mode']=='homework_check' and s['untimed'] and s['id']!=help_chat['id']
+    assert s['situation']['lage']=='kontrollieren' and s['goal'].startswith('Kontrolle: ')
+    assert 'Foto' in s['messages'][0]['text'] and s['messages'][0]['payload']['choices']==[]
+    # Dieselbe Kontrolle wird wieder aufgenommen, nicht neu begonnen.
+    assert client.post(B+'/sessions',json={'subject':'Deutsch','homework_task_id':tid,'check':True}).json()['id']==s['id']
+    captured=[]
+    async def complete(account,purpose,instruction,context,images=None,*args,**kw):
+        assert instruction==m.CHECK_INSTRUCTION+json.dumps(m.Reply.model_json_schema())
+        captured.append(context)
+        # Selbst eine ungewollte Aufgabe oder Einschätzung erzeugt keinen Lernnachweis.
+        return json.dumps(reply(assessment={'result':'correct','rationale':'Test'},action='finish',message='Nr. 3 richtig, Nr. 4 fast: Schau noch einmal auf die Endung.')),{},'fake'
+    patch.setattr(ai,'complete',complete)
+    with closing(db.webapp_conn()) as c:
+        c.execute('UPDATE mentor_sessions SET turns=20,elapsed_seconds=?,active_since=NULL WHERE id=?',(s['max_minutes']*60+200,s['id']))
+    r=send(client,client.get(B+f"/sessions/{s['id']}").json(),text='Hier ist meine Lösung')
+    assert r.status_code==200,r.text
+    out=r.json()
+    assert captured[0]['source']['task']['id']==tid and captured[0]['source']['task']['notes']=='S. 12 Nr. 3 und 4'
+    # Das Ende ist ein Vorschlag: die Einheit bleibt offen, das Kind entscheidet.
+    assert out['status']=='active' and out['task'] is None
+    assert out['messages'][-1]['payload']['choices']==m.END_CHOICES_CHECK and out['messages'][-1]['text'].endswith(m.END_QUESTION_CHECK.strip())
+    assert out['messages'][-1]['payload']['assessment'] is None
+    with closing(db.webapp_conn()) as c:
+        assert c.execute('SELECT COUNT(*) FROM mentor_evidence WHERE session_id=?',(s['id'],)).fetchone()[0]==0
+        assert c.execute('SELECT status FROM tasks WHERE id=?',(tid,)).fetchone()[0]=='open'
+        assert lp.usage(c,1,date(2026,9,11))==before
+    r=send(client,out,kind='finish',text='Für heute fertig')
+    assert r.status_code==200,r.text
+    assert r.json()['status']=='completed' and 'Foto' in r.json()['messages'][-1]['text']
