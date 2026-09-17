@@ -138,10 +138,12 @@ class AiTierUnknown(RuntimeError):
     """Es wurde eine Stufe angefragt, die es nicht gibt."""
 
 
-# Die vier Stufen der Konfigurationsseite. „hoch" bedient das Hauptgespräch,
-# „transkription" die Spracheingabe; welche Stufe den Einstieg und das
-# Abschreiben übernimmt, entscheiden die Eltern in der App.
-TIERS = ("hoch", "mittel", "niedrig", "transkription")
+# Die Stufen der Konfigurationsseite. „hoch" bedient das Hauptgespräch,
+# „transkription" die Spracheingabe; welche Stufe den Einstieg, das Abschreiben
+# und das Lesen der Vokabellisten übernimmt, entscheiden die Eltern in der App.
+# „klein" ist ein kleines, günstiges Modell für Formatarbeit auf sauberem Text.
+# Es kommt ohne Vorgabemodell und bleibt unbenutzt, bis eines eingetragen ist.
+TIERS = ("hoch", "mittel", "niedrig", "klein", "transkription")
 MAIN_TIER = "hoch"
 SPEECH_TIER = "transkription"
 

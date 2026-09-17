@@ -110,6 +110,7 @@ class LimitsIn(InputModel):
     sources_model:str|None=Field(default=None,max_length=60)
     opening_model:str|None=Field(default=None,max_length=60)
     background_model:str|None=Field(default=None,max_length=60)
+    vocab_model:str|None=Field(default=None,max_length=60)
 
 class PauseIn(InputModel):
     paused:bool=True
@@ -362,7 +363,7 @@ def limits(account_id:int,body:LimitsIn,user:CurrentUser=Depends(get_current_use
     # Die Felder halten jetzt eine Stufe (hoch, mittel, niedrig), keinen
     # Modellnamen: Ein Modellwechsel in der Add-on-Konfiguration lässt die
     # Auswahl der Eltern unberührt (D88). Leer heißt „wie das Hauptgespräch".
-    for name in ('sources_model','opening_model','background_model'):
+    for name in ('sources_model','opening_model','background_model','vocab_model'):
         value=getattr(body,name)
         if value is not None:
             chosen=value.strip()

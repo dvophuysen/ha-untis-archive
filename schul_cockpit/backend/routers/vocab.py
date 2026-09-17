@@ -52,6 +52,25 @@ async def extract(account_id: int, subject: str, body: ExtractIn, user: CurrentU
     return {'words': counts, 'units': vocab.units(account_id, subject)}
 
 
+class CompareIn(InputModel):
+    material_id: int = Field(ge=1)
+    tiers: list[str] = Field(min_length=1, max_length=4)
+
+
+@router.post('/{subject}/compare')
+async def compare(account_id: int, subject: str, body: CompareIn, user: CurrentUser = Depends(get_current_user)):
+    """Eichung für die Eltern: dieselbe Vokabelseite mit mehreren Stufen lesen,
+    ohne etwas abzulegen. Zeigt je Stufe, was die Seitenprüfung übersteht und
+    was gegenüber der ersten Stufe fehlt oder hinzukommt (D103)."""
+    access(user, account_id, write=True, parent=True)
+    with closing(webapp_conn()) as c:
+        allowed = c.execute('SELECT 1 FROM materials WHERE id=? AND account_id=? AND hidden=0 '
+                            'AND lower(subject_name)=lower(?)', (body.material_id, account_id, subject)).fetchone()
+    if not allowed:
+        raise HTTPException(404, 'Seite nicht gefunden.')
+    return await vocab.compare(account_id, body.material_id, body.tiers)
+
+
 @router.get('/{subject}/cards')
 def cards(account_id: int, subject: str, unit: str, stage: int = 1, direction: str = 'from', limit: int = 40,
           section: str = '', user: CurrentUser = Depends(get_current_user)):

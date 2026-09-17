@@ -1,3 +1,53 @@
+# Eine kleine Stufe für die Formatarbeit 0.98.0
+
+Stand 17.09.2026. Nutzerfrage und Nutzerentscheidung (D103).
+
+**Anlass.** In der zweiten Foundry steht `gpt-5-mini` zur Verfügung, und weitere
+Kontingente werden dort erst bei tatsächlicher Nutzung frei. Gesucht war eine
+Aufgabe, die ein kleines Modell übernehmen kann, ohne die Qualität zu riskieren.
+
+**Auswahl.** Durchgesehen wurden alle Zwecke: `mentor` (Gespräch, Aufgaben,
+Bewertung), `opening` (Einstieg), `sources` (Seiten abschreiben, Verzeichnisse
+ablesen), `background`/`discovery` (Stundenthemen einordnen). Gewählt wurde das
+Lesen der Vokabellisten, aus drei Gründen:
+
+1. Es ist Formatarbeit auf gedrucktem, sauberem Text — Wort, Bedeutungen,
+   grammatische Angabe, Beispielsatz —, kein Urteil über ein Kind.
+2. Dahinter steht bereits eine harte Prüfung: `survivors()` verwirft ein Wort,
+   dessen Stamm nicht im Seitentext steht. Ein schwächeres Modell kann also
+   nichts hineinerfinden, sondern höchstens etwas übersehen, und das fällt beim
+   Üben auf und ist durch erneutes Lesen der Seite reparierbar.
+3. Der zweite Teil des Vokabel-Auftrags — zu Schuljahresbeginn alle
+   Vokabellisten eines Sprachbuchs lesen — ist ein großer, wiederkehrender
+   Stapel. Das ist echte Last auf der zweiten Foundry, kein Alibi-Aufruf.
+
+Zweiter Kandidat, noch nicht angefasst: die Zuordnung von Stundenthemen zu
+Kapiteln (`map_entries`). Sie läuft schon auf der niedrigsten Stufe, hat eine
+regelbasierte Abkürzung davor, und für sie gibt es seit 0.89.0 ein eigenes
+Vergleichswerkzeug.
+
+Nicht verlagert: Hauptgespräch, Einstieg, Kontrolle einer Hausaufgabe, und das
+Abschreiben von Handschrift, Tabellen und Abbildungen.
+
+**Gebaut.** Fünfte Stufe `klein` in `TIERS` und in der Add-on-Konfiguration, mit
+denselben Feldern und derselben Foundry-Auswahl wie die anderen, aber ohne
+Vorgabemodell; sie erscheint in den Auswahllisten erst, wenn ein Modellname
+eingetragen ist. Eigener Zweck `ai_gateway.VOCAB` mit eigener Spalte
+`vocab_model`, die leer auf die Stufe des Abschreibens zurückfällt. Abgerechnet
+wird weiter aus dem Quellenrahmen, nicht aus dem Tagesbudget eines Kindes.
+`POST /vocab/{fach}/compare` liest dieselbe Seite mit mehreren Stufen, legt
+nichts ab und nennt je Stufe die überstehenden Wörter sowie das, was gegenüber
+der ersten Stufe fehlt oder hinzukommt.
+
+Zwei Fehler fielen dabei auf und sind mit behoben: Eine Seite ohne Lernwörter
+lief in einen `NameError`, weil die Protokollzeile eine Schleifenvariable
+benutzte; und ein Verbindungsausfall beim Lesen wurde als „unlesbare Seite"
+vermerkt, womit der Hintergrundlauf sie nie wieder angefasst hätte.
+
+**Nächster Schritt.** Kostensätze für das kleine Modell eintragen, dann messen:
+dieselbe Vokabelseite mit der jetzigen Stufe und mit „klein", die Wortlisten
+vergleichen, und nur bei Gleichstand umlegen.
+
 # Vokabeln nach Einheit, nicht nach Seite 0.97.0
 
 Stand 17.09.2026. Nutzerauftrag (D100).

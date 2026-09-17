@@ -16,7 +16,7 @@ from contextlib import closing
 from datetime import date, timedelta
 
 from fastapi import HTTPException
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from .db import webapp_conn
 from .learning import InputModel, now_iso, today_local
@@ -313,9 +313,72 @@ async def read_unread(account_id: int, subject: str) -> int:
     return done
 
 
-async def extract(account_id: int, material_id: int) -> int:
-    """Die Lernwörter einer Seite lesen und ablegen; einmal je Textstand."""
+def _page(account_id: int, material_id: int) -> dict:
+    with closing(webapp_conn()) as c:
+        row = c.execute("SELECT id,subject_name,title,summary,content_text,source_label,source_page,kind,origin FROM materials "
+                        "WHERE id=? AND account_id=? AND hidden=0", (material_id, account_id)).fetchone()
+    if not row:
+        raise HTTPException(404, "Seite nicht gefunden.")
+    return dict(row)
+
+
+def survivors(row: dict, words: list) -> list:
+    """Die Wörter, die wirklich auf der Seite stehen. Der Stamm muss im Text
+    vorkommen; was ein Modell hinzudichtet, fällt hier heraus."""
+    haystack = plain(row["content_text"])
+    kept = []
+    for w in words:
+        core = plain(_PARENS.sub("", w.foreign_word)).strip()
+        core = _ARTICLES.sub("", core).strip()
+        if core and core.split()[0] in haystack:
+            kept.append((w, core))
+    return kept
+
+
+async def read_words(account_id: int, row: dict, tier: str | None = None):
+    """Eine Seite vom Modell in Lernwörter zerlegen, ohne etwas abzulegen."""
     from . import ai_gateway as ai
+    raw, _, _ = await ai.complete(account_id, ai.VOCAB, EXTRACT + json.dumps(WordsOut.model_json_schema()),
+                                  {"subject": row["subject_name"] or "", "page": row["source_page"],
+                                   "text": (row["content_text"] or "")[:24000]}, max_output=6000, tier=tier)
+    return WordsOut.model_validate_json(raw).words
+
+
+async def compare(account_id: int, material_id: int, tiers: list[str]) -> dict:
+    """Eichung: dieselbe Vokabelseite mit mehreren Stufen lesen, nichts ablegen.
+
+    Zeigt je Stufe die Wörter, die die Seitenprüfung überstehen, und was
+    gegenüber der ersten Stufe fehlt oder hinzukommt (D103)."""
+    from . import ai_gateway as ai
+    row = _page(account_id, material_id)
+    if not (row["content_text"] or "").strip():
+        raise HTTPException(409, "Diese Seite ist noch nicht gelesen.")
+    out = []
+    for tier in tiers:
+        if tier not in ai.TIERS:
+            raise HTTPException(422, "Unbekannte Stufe.")
+        entry = {"tier": tier, "model": ai.model_name(tier)}
+        try:
+            words = await read_words(account_id, row, tier=tier)
+            kept = survivors(row, words)
+            entry |= {"words": [{"foreign_word": w.foreign_word, "meanings": w.meanings, "grammar": w.grammar,
+                                 "unit": w.unit, "section": w.section} for w, _ in kept],
+                      "found": len(words), "kept": len(kept), "dropped": len(words) - len(kept)}
+        except Exception as exc:
+            entry["error"] = str(getattr(exc, "detail", exc))[:200]
+            entry["words"] = []
+        out.append(entry)
+    first = {plain(w["foreign_word"]) for w in (out[0].get("words") or [])} if out else set()
+    for entry in out[1:]:
+        mine = {plain(w["foreign_word"]) for w in entry["words"]}
+        entry["missing"] = sorted(first - mine)
+        entry["extra"] = sorted(mine - first)
+    return {"material_id": material_id, "page": row["source_page"], "label": row["source_label"],
+            "title": row["title"], "results": out}
+
+
+async def extract(account_id: int, material_id: int, tier: str | None = None) -> int:
+    """Die Lernwörter einer Seite lesen und ablegen; einmal je Textstand."""
     with closing(webapp_conn()) as c:
         row = c.execute("SELECT id,subject_name,title,summary,content_text,source_label,source_page,kind,origin FROM materials "
                         "WHERE id=? AND account_id=? AND hidden=0", (material_id, account_id)).fetchone()
@@ -330,16 +393,16 @@ async def extract(account_id: int, material_id: int) -> int:
         raise HTTPException(409, "Diese Seite ist noch nicht gelesen. Bitte die Auswertung abwarten.")
     subject = row["subject_name"] or ""
     label = (row["source_label"] or "").strip() or ("Schulbuch" if (row["origin"] or "") == "book_fetch" else "")
-    raw, _, _ = await ai.complete(account_id, ai.SOURCES, EXTRACT + json.dumps(WordsOut.model_json_schema()),
-                                  {"subject": subject, "page": row["source_page"], "text": row["content_text"][:24000]}, max_output=6000)
+    # Nur eine unlesbare Antwort wird an der Seite vermerkt. Ein Ausfall der
+    # Verbindung darf sie nicht als unlesbar abstempeln, sonst versucht es der
+    # Hintergrundlauf nie wieder.
     try:
-        words = WordsOut.model_validate_json(raw).words
-    except Exception:
+        words = await read_words(account_id, row, tier=tier)
+    except ValidationError:
         with closing(webapp_conn()) as c, c:
             c.execute("INSERT OR REPLACE INTO vocab_extractions(material_id,account_id,text_hash,words,error,updated_at) VALUES(?,?,?,?,?,?)",
                       (material_id, account_id, digest, 0, "unlesbar", now_iso()))
         raise HTTPException(502, "Die Wörter dieser Seite ließen sich nicht lesen.")
-    haystack = plain(row["content_text"])
     # Die Einheit kommt aus der Liste selbst; nur wenn dort keine steht, gilt das
     # Kapitel der Seite. Eine Unidad zieht sich über mehrere Anhangseiten, und
     # genau sie soll das Bündel sein, nicht die Anhangseite (D100).
@@ -347,11 +410,7 @@ async def extract(account_id: int, material_id: int) -> int:
     kept = 0
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
-        for pos, w in enumerate(words):
-            core = plain(_PARENS.sub("", w.foreign_word)).strip()
-            core = _ARTICLES.sub("", core).strip()
-            if not core or core.split()[0] not in haystack:
-                continue
+        for pos, (w, core) in enumerate(survivors(row, words)):
             unit = (w.unit or "").strip() or fallback
             c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,section,position,foreign_word,plain,meanings_json,grammar,forms_json,example,created_at) "
                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,material_id,foreign_word) DO UPDATE SET "
@@ -362,7 +421,7 @@ async def extract(account_id: int, material_id: int) -> int:
             kept += 1
         c.execute("INSERT OR REPLACE INTO vocab_extractions(material_id,account_id,text_hash,words,error,updated_at) VALUES(?,?,?,?,NULL,?)",
                   (material_id, account_id, digest, kept, now_iso()))
-    LOG.info("Vokabeln: %s Wörter aus Material %s (%s)", kept, material_id, unit)
+    LOG.info("Vokabeln: %s Wörter aus Material %s (%s)", kept, material_id, fallback)
     return kept
 
 

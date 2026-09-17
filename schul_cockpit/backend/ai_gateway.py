@@ -44,6 +44,11 @@ BACKGROUND = {'discovery', 'background'}
 SOURCES = 'sources'
 # Der erste Zug einer Einheit: eigener Zweck, damit sein Modell geeicht werden kann.
 OPENING = 'opening'
+# Vokabellisten in Wörter zerlegen: Formatarbeit auf gedrucktem, sauberem Text,
+# mit einer harten Prüfung dahinter — ein Wort wird verworfen, wenn sein Stamm
+# nicht auf der Seite steht. Eigener Zweck, damit die Stufe unabhängig vom
+# übrigen Abschreiben gewählt und geeicht werden kann (D103).
+VOCAB = 'vocab'
 # Eine Übungseinheit darf bis hierhin kosten; danach wird der Stand gesichert.
 SESSION_MICRO = 4_000_000
 
@@ -126,7 +131,7 @@ def status():
     return dict(month=month,used_eur=round(used/1e6,4),limit_eur=cfg['monthly_micro']/1e6,daily_limit_eur=cfg['daily_micro']/1e6,
                 background_limit_eur=cfg['background_micro']/1e6,session_limit_eur=SESSION_MICRO/1e6,
                 model=model,sources_model=cfg.get('sources_model') or None,opening_model=cfg.get('opening_model') or None,
-                background_model=cfg.get('background_model') or None,
+                background_model=cfg.get('background_model') or None,vocab_model=cfg.get('vocab_model') or None,
                 models=[t for t in TIERS if t!=SPEECH_TIER and tiers[t]['model']],
                 rates=rates,
                 warning_eur=cfg['warning_micro']/1e6,background_eur=round(bg/1e6,4),
@@ -151,16 +156,20 @@ def tier_for(purpose, cfg=None, override=None):
     # Der Einstieg hat seine eigene, geeichte Stufe; die Hintergrundauswertung
     # ebenso, getrennt vom Abschreiben der Buchseiten (D94).
     column=('opening_model' if purpose==OPENING else 'background_model' if purpose in BACKGROUND
-            else 'sources_model' if purpose==SOURCES else None)
+            else 'vocab_model' if purpose==VOCAB else 'sources_model' if purpose==SOURCES else None)
     if not column: return MAIN_TIER
+    # Das Lesen der Vokabellisten gehört zum Abschreiben und folgt dessen Stufe,
+    # solange keine eigene gewählt ist; erst eine Auswahl trennt beides (D103).
+    columns=[column,'sources_model'] if purpose==VOCAB else [column]
     if cfg is None:
         # Nur lesen, keine Konfiguration anlegen: Das tut reserve() selbst.
         with closing(webapp_conn()) as c:
-            row=c.execute(f"SELECT {column} FROM mentor_ai_config WHERE id=1").fetchone()
-        chosen=(row[column] or '').strip() if row else ''
-    else:
-        chosen=(cfg.get(column) or '').strip()
-    return chosen if chosen in TIERS else MAIN_TIER
+            row=c.execute(f"SELECT {','.join(columns)} FROM mentor_ai_config WHERE id=1").fetchone()
+        cfg={name:(row[name] if row else None) for name in columns}
+    for name in columns:
+        chosen=(cfg.get(name) or '').strip()
+        if chosen in TIERS: return chosen
+    return MAIN_TIER
 
 
 def model_name(tier=MAIN_TIER):
@@ -211,17 +220,17 @@ def endpoint_overview():
 def thresholds(c, cfg, account_id, purpose, session_id, day, month, upper):
     """Welche Richtwerte dieser Aufruf überschreitet. Nur zur Meldung."""
     opening=cfg['opening_micro'] if cfg['opening_month']==month else 0
-    own = purpose!=SOURCES and purpose not in BACKGROUND
+    own = purpose not in (SOURCES,VOCAB) and purpose not in BACKGROUND
     over=[]
     if effective_sum(c,'month=?',(month,))+opening+upper>cfg['monthly_micro']:
         over.append('monat')
-    if own and effective_sum(c,"day=? AND account_id=? AND purpose NOT IN ('sources','background','discovery')",(day,account_id))+upper>cfg['daily_micro']:
+    if own and effective_sum(c,"day=? AND account_id=? AND purpose NOT IN ('sources','vocab','background','discovery')",(day,account_id))+upper>cfg['daily_micro']:
         over.append('tag')
     if session_id is not None and effective_sum(c,'session_id=? AND account_id=?',(session_id,account_id))+upper>SESSION_MICRO:
         over.append('einheit')
     if purpose in BACKGROUND and effective_sum(c,"month=? AND purpose IN ('discovery','background')",(month,))+upper>cfg['background_micro']:
         over.append('hintergrund')
-    if purpose==SOURCES and effective_sum(c,"month=? AND purpose='sources'",(month,))+upper>cfg['sources_micro']:
+    if purpose in (SOURCES,VOCAB) and effective_sum(c,"month=? AND purpose IN ('sources','vocab')",(month,))+upper>cfg['sources_micro']:
         over.append('quellen')
     return over
 
