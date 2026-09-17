@@ -127,7 +127,7 @@ def homework_task(c,account_id,source):
     when the homework is ticked off. Deriving that from the task instead of
     storing a second state keeps the two from drifting apart."""
     if source.get('mode') not in HOMEWORK_MODES or not source.get('task_id'):return None
-    row=c.execute('SELECT id,title,status FROM tasks WHERE id=? AND account_id=?',(source['task_id'],account_id)).fetchone()
+    row=c.execute('SELECT id,title,notes,status FROM tasks WHERE id=? AND account_id=?',(source['task_id'],account_id)).fetchone()
     return dict(row) if row else None
 
 
@@ -141,6 +141,8 @@ def view(c,s):
     task=homework_task(c,s['account_id'],source)
     result['task_status']=task['status'] if task else None
     result['task_done']=bool(task and task['status']=='done')
+    result['label']=session_label(result['mode'],s.get('goal'),task)
+    result['last_at']=c.execute('SELECT MAX(created_at) FROM mentor_messages WHERE session_id=?',(s['id'],)).fetchone()[0] or s.get('updated_at')
     result['goal_key']=json.loads(s.get('source_json') or '{}').get('goal_key');result['task']=public_task(s['current_task']);result['elapsed_seconds']=elapsed(s)
     result['messages']=[{**dict(r),'payload':json.loads(r['payload'])} for r in c.execute('SELECT id,role,text,payload,author,created_at FROM mentor_messages WHERE session_id=? ORDER BY id',(s['id'],))]
     result['attachments']=[dict(r) for r in c.execute('SELECT id,mime_type,transcript FROM mentor_attachments WHERE session_id=? ORDER BY id',(s['id'],))]
@@ -162,10 +164,22 @@ def is_parent(user):
     return bool(user.is_admin or user.role=='parent')
 
 
-def author_of(user):
-    """Who wrote a message. Parents may sit next to the child, so the verlauf
-    has to say whose words these were."""
-    return 'eltern' if is_parent(user) else 'kind'
+def author_of(user,session):
+    """Wer schrieb. Kinder nutzen die Geräte der Eltern: Ein Gespräch gilt immer
+    als Gespräch des Kindes, egal wer angemeldet ist. Nur der bewusst
+    eingeschaltete Demo-Modus ist eine Simulation der Eltern (D82)."""
+    return 'eltern' if session.get('is_demo') else 'kind'
+
+
+def session_label(mode,goal,task):
+    """Die Zeile, unter der ein Verlauf wiedergefunden wird: bei einer
+    Hausaufgabe ihr Wortlaut (aus Untis steht der in den Notizen, der Titel
+    ist nur das Fach), sonst das Ziel der Einheit."""
+    if mode in HOMEWORK_MODES and task:
+        from ..sources import task_text
+        text=' · '.join(l.strip() for l in task_text(task).splitlines() if l.strip())
+        if text:return (('Kontrolle: ' if mode=='homework_check' else '')+text)[:160]
+    return goal or ''
 
 
 def add_message(c,sid,account,key,role,text,payload=None,author=None):
@@ -264,11 +278,20 @@ async def dashboard(account_id:int,demo:bool=False,user:CurrentUser=Depends(get_
         sessions=[dict(r) for r in c.execute(
             "SELECT s.id,s.subject,s.goal,s.status,s.phase,s.summary,s.updated_at,s.is_test,s.is_demo,"
             "json_extract(s.source_json,'$.mode') AS mode,"
-            "(SELECT t.status FROM tasks t WHERE t.id=json_extract(s.source_json,'$.task_id') AND t.account_id=s.account_id) AS task_status "
+            "(SELECT t.status FROM tasks t WHERE t.id=json_extract(s.source_json,'$.task_id') AND t.account_id=s.account_id) AS task_status,"
+            "(SELECT t.title FROM tasks t WHERE t.id=json_extract(s.source_json,'$.task_id') AND t.account_id=s.account_id) AS task_title,"
+            "(SELECT t.notes FROM tasks t WHERE t.id=json_extract(s.source_json,'$.task_id') AND t.account_id=s.account_id) AS task_notes,"
+            "(SELECT MAX(m.created_at) FROM mentor_messages m WHERE m.session_id=s.id) AS last_at,"
+            "(SELECT COUNT(*) FROM mentor_messages m WHERE m.session_id=s.id) AS messages "
             "FROM mentor_sessions s WHERE s.account_id=? AND s.is_test=0 ORDER BY s.updated_at DESC LIMIT 30",(account_id,))]
         # A help chat is filed away by the tick on its homework, nothing else.
+        # Wiedergefunden wird ein Verlauf über den Wortlaut der Hausaufgabe und
+        # den letzten Gesprächsstand, nicht über das Fach allein.
         for row in sessions:
             row['task_done']=bool(row['mode'] in HOMEWORK_MODES and row['task_status']=='done')
+            row['label']=session_label(row['mode'],row['goal'],{'title':row.pop('task_title'),'notes':row.pop('task_notes')} if row['task_status'] is not None else None)
+            row['last_at']=row['last_at'] or row['updated_at']
+        sessions.sort(key=lambda r:r['last_at'],reverse=True)
         legacy=[dict(r) for r in c.execute('SELECT id,subject,goal,status,updated_at,is_test,is_demo FROM mentor_sessions WHERE account_id=? AND is_test=1 AND is_demo=0 ORDER BY updated_at DESC LIMIT 30',(account_id,))] if is_parent(user) else []
         progress=[dict(r) for r in c.execute("SELECT s.id,s.subject,s.title,s.objective,r.due_date,COUNT(e.id) attempts, SUM(CASE WHEN e.result='correct' AND e.help_used=0 THEN 1 ELSE 0 END) independent,COUNT(DISTINCT CASE WHEN e.result='correct' AND e.help_used=0 THEN e.variant_hash END) variants,MIN(CASE WHEN e.result='correct' AND e.help_used=0 THEN e.created_at END) first_success, MAX(CASE WHEN e.result='correct' AND e.help_used=0 THEN e.created_at END) last_success FROM mentor_skills s JOIN mentor_evidence e ON e.skill_id=s.id AND e.account_id=s.account_id AND e.invalidated=0 AND NOT EXISTS (SELECT 1 FROM mentor_sessions ms WHERE ms.id=e.session_id AND ms.is_test=1) AND NOT EXISTS (SELECT 1 FROM mentor_exam_attempts ma WHERE ma.id=e.exam_attempt_id AND ma.is_test=1) LEFT JOIN mentor_reviews r ON r.skill_id=s.id WHERE s.account_id=? GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 100",(account_id,))]
     for r in progress:
@@ -389,8 +412,10 @@ async def start(account_id:int,body:StartIn,user:CurrentUser=Depends(get_current
             from ..subject_names import SubjectCatalog
             task=SubjectCatalog(account_id).task(task)
             subject=task['subject_name'] or task['title'] or 'Hausaufgabe'
+            from ..sources import task_text
+            wording=' '.join(task_text(task).split())[:230] or task['title'][:230]
             sid=c.execute('INSERT INTO mentor_sessions(account_id,user_id,subject,goal,max_minutes,active_since,source_json,created_at,updated_at,is_test) VALUES(?,?,?,?,?,?,?,?,?,0)',
-                (account_id,user.id,subject,('Kontrolle: ' if body.check else 'Hilfe: ')+task['title'][:240],body.minutes,now_iso(),json.dumps(source,ensure_ascii=False),now_iso(),now_iso())).lastrowid
+                (account_id,user.id,subject,('Kontrolle: ' if body.check else 'Hilfe: ')+wording,body.minutes,now_iso(),json.dumps(source,ensure_ascii=False),now_iso(),now_iso())).lastrowid
             if body.check:
                 add_message(c,sid,account_id,'welcome','assistant','Zeig mir deine fertige Lösung: ein Foto vom Heft oder Blatt. Ich gehe Aufgabe für Aufgabe durch und sage dir, was stimmt, was fast stimmt und wo ein Fehler steckt, ohne die Lösung vorzusagen.',{'choices':[]})
             else:
@@ -640,12 +665,12 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
         # Kontrolle haben keine Uhr.
         at_cap=not homework and not check and ((topic_mode and s['turns']>=lernstand.MAX_TURNS) or (not topic_mode and (s['turns']>=12 or seconds>=s['max_minutes']*60)))
         if not finish and at_cap and s['turns']>=(s.get('end_proposed_turn') or 0)+PROPOSE_EVERY:
-            add_message(c,sid,account_id,body.request_key,'user',text or ('Foto ansehen' if body.attachment_id else 'Weiter'),author=author_of(user))
+            add_message(c,sid,account_id,body.request_key,'user',text or ('Foto ansehen' if body.attachment_id else 'Weiter'),author=author_of(user,s))
             add_message(c,sid,account_id,body.request_key,'assistant',CAP_TEXT,{'choices':END_CHOICES_TOPIC if topic_mode else END_CHOICES,'task':public_task(s['current_task']),'assessment':None})
             c.execute('UPDATE mentor_sessions SET end_proposed_turn=?,version=version+1,elapsed_seconds=?,updated_at=? WHERE id=?',(s['turns'],seconds,now_iso(),sid))
             return view(c,get_session(c,account_id,sid))
         if finish:
-            add_message(c,sid,account_id,body.request_key,'user',text or 'Für heute fertig',author=author_of(user))
+            add_message(c,sid,account_id,body.request_key,'user',text or 'Für heute fertig',author=author_of(user,s))
             if homework:
                 end='Gut, wir machen für heute Pause. Das Gespräch bleibt offen, bis du die Hausaufgabe abhakst.'
             elif check:
@@ -708,7 +733,7 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
         with closing(webapp_conn()) as c,c:
             c.execute('BEGIN IMMEDIATE');live=get_session(c,account_id,sid)
             if live['version']!=s['version'] or live['pending_key']!=body.request_key:raise HTTPException(409,'Die Einheit wurde inzwischen geändert.')
-            uid=add_message(c,sid,account_id,body.request_key,'user',text or ('Foto ansehen' if body.attachment_id else 'Bitte helfen'),({'attachment_id':body.attachment_id} if body.attachment_id else {})|({'spoken':True} if body.spoken else {}),author=author_of(user))
+            uid=add_message(c,sid,account_id,body.request_key,'user',text or ('Foto ansehen' if body.attachment_id else 'Bitte helfen'),({'attachment_id':body.attachment_id} if body.attachment_id else {})|({'spoken':True} if body.spoken else {}),author=author_of(user,s))
             if body.attachment_id and reply.transcription:
                 c.execute('UPDATE mentor_attachments SET transcript=? WHERE id=?',(reply.transcription,body.attachment_id))
             evidence=None;skill=s['skill_id']

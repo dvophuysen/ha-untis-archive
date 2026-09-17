@@ -1,3 +1,8 @@
+## 0.79.0
+
+- Gespräche gelten als Gespräche des Kindes. Kinder lernen auch auf den Geräten der Eltern; bisher stand dann „Eltern“ als Sprecher im Verlauf. Jetzt gilt jedes Gespräch als Gespräch des Kindes, egal wer angemeldet ist. Nur der bewusst eingeschaltete Demo-Modus ist eine Simulation. Bestehende Verläufe werden einmalig umgestellt; „War nur ein Test“ bleibt als nachträgliche Kennzeichnung.
+- Verläufe wiederfinden: In der Liste steht bei Hausaufgaben der Wortlaut der Aufgabe („Irregular verbs p. 206 …“) statt „Hilfe: Englisch“, dazu die Art des Gesprächs (Hilfe zur Hausaufgabe, Lösung geprüft, Thema der Arbeit, Üben), der Stand (offen, beendet, Hausaufgabe abgehakt), Datum und Uhrzeit des letzten Dialogs und die Zahl der Nachrichten. Abgehakte Hausaufgaben stehen nicht mehr eingeklappt darunter, sondern in derselben Liste, sortiert nach dem letzten Dialog. Über dem Gespräch steht ebenfalls der Wortlaut und der letzte Dialog.
+
 ## 0.78.0
 
 - Lösung prüfen lassen: An jeder offenen Hausaufgabe steht neben „Hilfe im Chat“ jetzt „Lösung prüfen lassen“. Das Kind zeigt ein Foto seiner fertigen Lösung, der Mentor geht sie Aufgabe für Aufgabe durch und sagt zu jeder: richtig, fast oder falsch, bei fast und falsch mit dem Grund und einem Hinweis, wo noch einmal hinzuschauen ist. Die richtige Lösung sagt er nicht vor, auch nicht auf Nachfrage als Ergebnis; erklärt wird nur, wenn das Kind fragt. Die Kontrolle ist ein eigener Verlauf neben dem Hilfegespräch, hat keine Uhr, zählt nicht auf den Tagesplan und erzeugt keine Einschätzung im Lernstand. Die Buchseiten der Aufgabe liegen dem Mentor dabei immer vor. Am Ende schlägt er das Ende vor, mit einem Satz, was zu wiederholen wäre; das Kind entscheidet („Für heute fertig“ oder „Noch eine Seite zeigen“).

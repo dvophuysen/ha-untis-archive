@@ -206,11 +206,12 @@ def test_parent_session_belongs_to_the_child_until_marked_as_test(setup):
     assert r.status_code==200,r.text
     with closing(db.webapp_conn()) as c:
         assert c.execute('SELECT COUNT(*) FROM mentor_evidence WHERE invalidated=0').fetchone()[0]==1
-    # The child finds the shared verlauf on its own device, and sees who wrote.
+    # The child finds the shared verlauf on its own device. Kinder nutzen die
+    # Geräte der Eltern: Die Worte gelten als Worte des Kindes (D82).
     child(state)
     seen=client.get(B+f"/sessions/{s['id']}")
     assert seen.status_code==200,seen.text
-    assert {x['author'] for x in seen.json()['messages'] if x['role']=='user'}=={'eltern'}
+    assert {x['author'] for x in seen.json()['messages'] if x['role']=='user'}=={'kind'}
     assert [x['id'] for x in client.get(B).json()['sessions']]==[s['id']]
     # A pure tryout is taken out afterwards, never declared in advance.
     state.user=parent
@@ -699,3 +700,25 @@ def test_checking_a_solution_reads_the_photo_without_solution_or_evidence(setup)
     r=send(client,out,kind='finish',text='Für heute fertig')
     assert r.status_code==200,r.text
     assert r.json()['status']=='completed' and 'Foto' in r.json()['messages'][-1]['text']
+
+
+def test_homework_sessions_are_found_by_their_wording_and_last_dialog(setup):
+    """Verlaufsliste: Wortlaut der Hausaufgabe statt „Hilfe: Englisch“, letzter
+    Gesprächsstand und Nachrichtenzahl; nur Demo-Gespräche gelten als Eltern."""
+    client,state,patch=setup;parent=state.user
+    with closing(db.webapp_conn()) as c:
+        tid=c.execute("INSERT INTO tasks(account_id,title,subject_name,notes,source,created_at,updated_at) VALUES(1,'Englisch','Englisch','Irregular verbs p. 206 ( - to forget)\nTest tomorrow\n\nGegeben am: Mi 16.09.\n\nFällig bis: Do 17.09.\n\n[EN050937]','ha_todo','now','now')").lastrowid
+    s=client.post(B+'/sessions',json={'subject':'Englisch','homework_task_id':tid}).json()
+    assert s['goal']=='Hilfe: Irregular verbs p. 206 ( - to forget) Test tomorrow'
+    assert s['label']=='Irregular verbs p. 206 ( - to forget) · Test tomorrow' and s['last_at']
+    mock(patch,[reply(task=None,action='clarify')])
+    assert send(client,s,text='Frag mich ab.').status_code==200
+    row=next(x for x in client.get(B).json()['sessions'] if x['id']==s['id'])
+    assert row['label']==s['label'] and row['messages']==3 and row['last_at']>=s['last_at']
+    with closing(db.webapp_conn()) as c:
+        assert {r[0] for r in c.execute("SELECT author FROM mentor_messages WHERE session_id=? AND role='user'",(s['id'],))}=={'kind'}
+    demo=client.post(B+'/sessions',json={'subject':'Deutsch','demo':True}).json()
+    mock(patch,[reply(task=None,action='clarify')])
+    assert send(client,demo,text='Nur ein Versuch.').status_code==200
+    with closing(db.webapp_conn()) as c:
+        assert {r[0] for r in c.execute("SELECT author FROM mentor_messages WHERE session_id=? AND role='user'",(demo['id'],))}=={'eltern'}
