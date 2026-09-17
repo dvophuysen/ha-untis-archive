@@ -152,3 +152,19 @@ def test_old_model_names_in_the_parent_choice_become_tiers(env):
         row = c.execute('SELECT opening_model,sources_model FROM mentor_ai_config WHERE id=1').fetchone()
     # terra ist die mittlere Stufe; ein Name ohne Entsprechung heißt „wie das Hauptgespräch".
     assert (row['opening_model'], row['sources_model']) == ('mittel', None)
+
+
+def test_the_views_still_render_without_any_foundry(setup):
+    """Ohne eingerichtete Plattform bleibt die App bedienbar: Die Übersichten
+    fragen nur, ob ein Mikrofon angeboten werden kann. Erst der wirkliche
+    Aufruf scheitert mit Meldung. Anlass: 0.83.0 gab hier 503 zurück."""
+    client, _, patch = setup
+    patch.setenv('LEARNING_AI_PLATFORMS', '{}')
+    assert ai.transcribe_url() == ''
+    r = client.get(B)
+    assert r.status_code == 200, r.text
+    assert r.json()['speech'] is False
+    assert r.json()['budget']['rate_available'] is True
+    with pytest.raises(ai.HTTPException) as exc:
+        ai.settings_for('hoch')
+    assert exc.value.status_code == 503

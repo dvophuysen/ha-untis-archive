@@ -1,3 +1,7 @@
+## 0.83.1
+
+- Fehler behoben: Mit 0.83.0 antwortete die Mentor-Übersicht mit einer Fehlermeldung, solange noch keine Foundry eingetragen war. Die Übersicht fragt dort nur, ob ein Mikrofon angeboten werden kann; diese Frage darf nicht scheitern. Jetzt bleibt die App ohne KI-Zugang bedienbar, und erst eine wirkliche Aufnahme oder Anfrage meldet, dass die Plattform fehlt.
+
 ## 0.83.0
 
 - KI-Einrichtung an einer Stelle: Die Add-on-Konfiguration hat jetzt einen Block **KI-Plattformen** mit zwei Azure-Foundry-Ressourcen (Endpunkt und API-Schlüssel) und darunter **KI-Modelle** mit vier Stufen — Hoch, Mittel, Niedrig, Transkription. Je Stufe stehen Modellname, ein abweichender Bereitstellungsname, die Foundry zur Auswahl und wahlweise eigene Kostensätze. Damit zieht ein Modell einzeln auf die zweite Ressource um, ohne dass an der übrigen Einrichtung etwas zu ändern wäre. Die alten Einstellungen `learning_ai_*` entfallen; Endpunkt und Schlüssel sind einmal neu einzutragen.

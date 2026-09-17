@@ -37,6 +37,14 @@ ab. Luna stand mit 1,90/9,00 € rund neunfach zu hoch und ist auf 0,40/1,80 €
 berichtigt; das Modell war nicht im Einsatz, die bisherige Abrechnung bleibt
 unberührt.
 
+**Nachtrag 0.83.1.** `transcribe_url()` lief über `settings_for()` und warf
+damit 503, wenn die Stufe „transkription" keinen Zugang hat. Vier Übersichten
+(Mentor-Dashboard, Vokabelansichten) benutzen den Rückgabewert aber nur als
+Ja/Nein, ob ein Mikrofon angeboten wird, und gaben deshalb selbst 503 zurück:
+Die Mentor-Übersicht war offline, bis die Plattform eingetragen war. Lesende
+Pfade sind jetzt nachsichtig, nur der wirkliche Aufruf bricht ab. Test:
+`test_the_views_still_render_without_any_foundry`.
+
 **Tests.** `tests/test_ai_endpoints.py` (Stufe nennt Modell, Bereitstellung und
 Foundry; kein Rückfall; Zug ruft die Bereitstellung auf der eigenen Ressource
 und bucht auf den Modellnamen; gemischte API-Formen; Satz aus der Konfiguration
