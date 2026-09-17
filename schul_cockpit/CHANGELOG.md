@@ -1,3 +1,7 @@
+## 0.89.0
+
+- Eichwerkzeug für die automatische Unterrichtsauswertung: Dieselben Stunden lassen sich mit einer anderen Modellstufe noch einmal einordnen und gegen den gespeicherten Stand halten, ohne dass etwas gespeichert wird. Die Auswertung ist der zweitgrößte Kostenposten und läuft ohne Kind davor; ob sie eine günstigere Stufe verträgt, war bisher ungemessen.
+
 ## 0.88.0
 
 - Der Mentor merkt, wenn es gerade schwer fällt: mehrere einsilbige Antworten hintereinander, mehrere Hinweise in einer Einheit oder eine späte Stunde. Dann werden die Schritte kleiner, es geht eine Sache nach der anderen, eine Pause wird angeboten statt erzwungen, und zum Schluss steht etwas, das geklappt hat. Erkannt wird das in der App, nicht vom Modell, damit dieselben Signale immer dasselbe auslösen. Abgebrochen wird nichts.
