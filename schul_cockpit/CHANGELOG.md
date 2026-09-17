@@ -1,3 +1,7 @@
+## 1.1.6
+
+- Fehler behoben: Das Inhaltsverzeichnis eines Buchs wurde nur auf den Seiten 2 bis 5 gesucht. Stand dort keins, galt das Buch als verzeichnislos — endgültig. Bei „Green Line 4 G9" und „Geschichte und Geschehen 3/4" ist genau das passiert; bei einem E-Book mit Umschlag, Impressum und Vorwort steht das Verzeichnis leicht weiter hinten. Jetzt wird bis Seite 13 weitergeblättert, und Bücher, die unter der alten Suche als verzeichnislos galten, werden noch einmal angesehen. Für Englisch war das der Grund, warum keine Vokabellisten entstanden.
+
 ## 1.1.5
 
 - Der Lesezugang gibt jetzt auch den Zustand der digitalen Bücher heraus: welches Verzeichnis gelesen ist, welcher Versuch woran scheiterte, und den Katalog selbst. Für die Fehlersuche, wenn ein Buch keine Kapitel bekommt.

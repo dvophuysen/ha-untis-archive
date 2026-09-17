@@ -962,6 +962,14 @@ _MIGRATIONS.append(("textbook_access_toc_tries",
 _MIGRATIONS.append(("ai_config_vocab_model", "ALTER TABLE mentor_ai_config ADD COLUMN vocab_model TEXT"))
 
 
+# Nach welcher Suche ein „nicht gefunden" entstand. Werden mehr Seiten nach dem
+# Inhaltsverzeichnis abgesucht als früher, bekommt das Buch eine zweite Chance:
+# „Green Line 4 G9" galt als verzeichnislos, weil nur S. 2 bis 5 angesehen
+# wurden (D111).
+_MIGRATIONS.append(("textbook_access_toc_version",
+                    "ALTER TABLE digital_textbook_access ADD COLUMN toc_version INTEGER NOT NULL DEFAULT 0"))
+
+
 def init_webapp_db() -> None:
     """Apply base schema + pending migrations (idempotent)."""
     schema_sql = _SCHEMA_FILE.read_text()
