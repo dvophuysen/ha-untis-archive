@@ -103,7 +103,9 @@ def test_words_come_from_the_page_once_and_must_stand_in_its_text(setup):
     assert r.status_code == 200, r.text
     # gaudēre steht nicht auf der Seite: verworfen. Vier Wörter bleiben.
     assert r.json()["words"] == {mid: 4} or r.json()["words"] == {str(mid): 4}
-    assert calls[0][0] == "sources"
+    # Eigener Zweck: Das Lesen der Vokabellisten lässt sich unabhängig vom
+    # übrigen Abschreiben auf eine andere Stufe legen (D103).
+    assert calls[0][0] == "vocab"
     client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
     assert len(calls) == 1
     cards = client.get(V + "/LATEIN/cards?unit=Begleitband%20S.%2010&stage=1&direction=from").json()["cards"]
@@ -329,3 +331,72 @@ def test_without_a_heading_the_page_keeps_its_own_label(setup):
     r = client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
     unit = next(u for u in r.json()["units"] if u["words"])
     assert unit["unit"] == "Begleitband S. 10" and unit["sections"] == []
+
+
+def test_the_word_reading_follows_the_copying_tier_until_it_gets_its_own(setup):
+    """Das Lesen der Vokabellisten ist Formatarbeit auf sauberem Text mit einer
+    harten Prüfung dahinter. Es bekommt eine eigene Stufenwahl, damit ein kleines
+    Modell sie übernehmen kann, ohne das übrige Abschreiben mitzunehmen (D103).
+    Ohne eigene Wahl gilt weiter die Stufe des Abschreibens."""
+    client, state, patch = setup
+    from backend.routers import mentor as m
+    client.app.include_router(m.router, prefix="/api")
+    with closing(db.webapp_conn()) as c, c:
+        ai.init_config(c)
+        c.execute("UPDATE mentor_ai_config SET sources_model='niedrig',vocab_model=NULL WHERE id=1")
+    assert ai.tier_for(ai.VOCAB) == 'niedrig', 'ohne eigene Wahl wie das Abschreiben'
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("UPDATE mentor_ai_config SET vocab_model='klein' WHERE id=1")
+    assert ai.tier_for(ai.VOCAB) == 'klein' and ai.tier_for(ai.SOURCES) == 'niedrig'
+    # Eltern setzen die Stufe über die Route; die Spracheingabe ist keine Wahl.
+    r = client.put("/api/accounts/1/learning/mentor/budget-limits", json={'vocab_model': 'transkription'})
+    assert r.status_code == 422
+    assert client.put("/api/accounts/1/learning/mentor/budget-limits", json={'vocab_model': ''}).status_code == 200
+    assert ai.tier_for(ai.VOCAB) == 'niedrig'
+
+
+def test_the_word_reading_is_billed_to_the_source_budget_not_to_a_child(setup):
+    """Das Lesen einer Vokabelseite gehört zum Quellenbestand, nicht zum
+    Tagesbudget eines Kindes: Es gehört zu keiner Einheit."""
+    with closing(db.webapp_conn()) as c, c:
+        cfg = ai.init_config(c)
+        over = ai.thresholds(c, {**cfg, 'sources_micro': 0, 'daily_micro': 10 ** 9},
+                             1, ai.VOCAB, None, '2026-09-11', '2026-09', 1000)
+    assert 'quellen' in over and 'tag' not in over
+
+
+def test_parents_can_compare_tiers_on_one_page_without_storing_anything(setup):
+    """Eichung vor dem Umlegen: dieselbe Seite mit zwei Stufen lesen, nichts
+    ablegen, und sehen, was der kleineren fehlt (D103)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    mid = seed_page()
+    by_tier = {
+        'niedrig': {"words": [{"foreign_word": "ecce", "meanings": ["Schau!"]},
+                              {"foreign_word": "esse", "meanings": ["sein"]}]},
+        # Die kleine Stufe übersieht eines und erfindet eines, das nicht dasteht.
+        'klein': {"words": [{"foreign_word": "ecce", "meanings": ["Schau!"]},
+                            {"foreign_word": "amare", "meanings": ["lieben"]}]},
+    }
+    seen = []
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        seen.append((purpose, kw.get('tier')))
+        return json.dumps(by_tier[kw.get('tier')]), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    r = client.post(V + "/LATEIN/compare", json={'material_id': mid, 'tiers': ['niedrig', 'klein']})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert [p for p, _ in seen] == ['vocab', 'vocab']
+    low, small = body['results']
+    assert low['tier'] == 'niedrig' and low['kept'] == 2 and low['dropped'] == 0
+    # „amare" steht nicht auf der Seite und fällt an der Prüfung heraus.
+    assert small['kept'] == 1 and small['dropped'] == 1
+    assert small['missing'] == ['esse'] and small['extra'] == []
+    # Nichts abgelegt: Der Trainer kennt danach kein einziges Wort.
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT COUNT(*) FROM vocab_words").fetchone()[0] == 0
+        assert c.execute("SELECT COUNT(*) FROM vocab_extractions").fetchone()[0] == 0
+    # Kinder eichen nicht.
+    child(state)
+    assert client.post(V + "/LATEIN/compare", json={'material_id': mid, 'tiers': ['klein']}).status_code == 403

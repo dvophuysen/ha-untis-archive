@@ -49,11 +49,20 @@ def test_every_tier_offers_the_same_four_fields_and_a_foundry_choice():
     from backend.learning import TIERS
     assert set(CONFIG['options']['ki_modelle']) == set(TIERS)
     for tier, entry in CONFIG['options']['ki_modelle'].items():
-        assert entry['modellname'], f'{tier}: ohne Vorgabemodell'
         # Leerer Bereitstellungsname heißt „wie der Modellname"; 0 heißt „Satz aus der Tabelle".
-        assert entry['bereitstellungsname'] == '' and entry['foundry'] == '1'
+        assert entry['bereitstellungsname'] == ''
+        assert entry['foundry'] in ('1', '2')
         assert entry['preis_eingang'] == 0 and entry['preis_ausgang'] == 0
         assert CONFIG['schema']['ki_modelle'][tier]['foundry'] == 'list(1|2)'
+
+
+def test_only_the_small_tier_ships_without_a_model():
+    """„klein" ist eine leere Stufe, die der Betreiber selbst belegt; alle
+    anderen tragen ihr Modell ab Werk (D103)."""
+    models = {t: e['modellname'] for t, e in CONFIG['options']['ki_modelle'].items()}
+    assert [t for t, m in models.items() if not m] == ['klein']
+    # Eine unbelegte Stufe darf das Schema nicht erzwingen, sonst startet das Add-on nicht.
+    assert CONFIG['schema']['ki_modelle']['klein']['modellname'].endswith('?')
 
 
 def test_nested_options_match_their_schema_shape():

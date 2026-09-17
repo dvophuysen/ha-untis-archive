@@ -1,5 +1,5 @@
 name: Schul-Cockpit
-version: "0.97.0"
+version: "0.98.0"
 slug: schul_cockpit
 description: Mobile Schul-App für Kinder und Eltern, basierend auf dem UNTIS-Archive-Datenbestand.
 url: https://github.com/dvophuysen/ha-untis-archive/tree/main/schul_cockpit
@@ -63,6 +63,12 @@ options:
       foundry: "1"
       preis_eingang: 0
       preis_ausgang: 0
+    klein:
+      modellname: ""
+      bereitstellungsname: ""
+      foundry: "2"
+      preis_eingang: 0
+      preis_ausgang: 0
     transkription:
       modellname: "gpt-4o-transcribe"
       bereitstellungsname: ""
@@ -100,13 +106,14 @@ schema:
   # Stufe den Einstieg und das Abschreiben übernimmt, steht in der Elternansicht.
   ki_modelle:
     hoch: &stufe
-      modellname: str
+      modellname: str?
       bereitstellungsname: str?
       foundry: list(1|2)
       preis_eingang: float?
       preis_ausgang: float?
     mittel: *stufe
     niedrig: *stufe
+    klein: *stufe
     transkription: *stufe
   learning_read_token: password?
   learning_read_accounts: str?

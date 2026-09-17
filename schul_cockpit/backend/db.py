@@ -957,6 +957,11 @@ _MIGRATIONS.append(("textbook_access_toc_tries",
                     "ALTER TABLE digital_textbook_access ADD COLUMN toc_tries INTEGER NOT NULL DEFAULT 0"))
 
 
+# Eigene Stufe fürs Lesen der Vokabellisten, getrennt vom übrigen Abschreiben.
+# Leer heißt: es gilt die Stufe des Abschreibens (D103).
+_MIGRATIONS.append(("ai_config_vocab_model", "ALTER TABLE mentor_ai_config ADD COLUMN vocab_model TEXT"))
+
+
 def init_webapp_db() -> None:
     """Apply base schema + pending migrations (idempotent)."""
     schema_sql = _SCHEMA_FILE.read_text()

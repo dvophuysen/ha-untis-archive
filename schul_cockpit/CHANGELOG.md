@@ -1,3 +1,11 @@
+## 0.98.0
+
+- Neue Modellstufe „Klein" neben Hoch, Mittel, Niedrig und Transkription, mit eigener Foundry-Auswahl wie die anderen. Sie kommt leer und taucht in den Auswahllisten erst auf, wenn ein Modellname eingetragen ist. Gedacht für ein kleines, günstiges Modell auf der zweiten Foundry.
+- Das Lesen der Vokabellisten hat jetzt eine eigene Stufenwahl, getrennt vom übrigen Abschreiben. Leer heißt weiterhin „wie das Abschreiben". Es ist Formatarbeit auf gedrucktem Text mit einer harten Prüfung dahinter: Ein Wort wird verworfen, wenn sein Stamm nicht auf der Seite steht. Ein schwächeres Modell kann also nichts hineinerfinden, höchstens etwas übersehen.
+- Vorher messen statt hoffen: Eltern können dieselbe Vokabelseite mit mehreren Stufen lesen lassen, ohne dass etwas abgelegt wird. Das Ergebnis zeigt je Stufe die Wörter, die die Seitenprüfung überstehen, und was gegenüber der ersten Stufe fehlt oder hinzukommt.
+- Für ein neues Modell müssen die Kostensätze je Stufe in der Add-on-Konfiguration stehen. Ohne Satz wird der Aufruf mit klarer Meldung abgelehnt, statt still falsch zu buchen.
+- Fehler behoben: Eine Seite, auf der das Modell keine Lernwörter findet, ließ das Zerlegen mit einem internen Fehler abbrechen. Ebenso galt ein Verbindungsausfall beim Lesen als „unlesbare Seite" und wurde nie wieder versucht; jetzt gilt das nur noch für eine wirklich unlesbare Antwort.
+
 ## 0.97.0
 
 - Der Vokabeltrainer bündelt nach Einheit, nicht nach Anhangseite. Eine Unidad zieht sich über mehrere Seiten der Vokabelliste; jetzt ist sie ein Block. Die Überschriften der Liste selbst („Unidad 3", darunter „Texto A") sagen, wohin ein Wort gehört, und gelten über den Seitenwechsel hinweg. Steht keine Überschrift über den Wörtern, bleibt es beim Kapitel der Seite — erfunden wird keine Einheit.
