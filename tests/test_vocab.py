@@ -439,8 +439,15 @@ def test_a_changed_reading_instruction_reads_the_page_again(setup):
     client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
     assert len(calls) == 1, "derselbe Text, dieselbe Anweisung: kein zweiter Aufruf"
     patch.setattr(vocab, "EXTRACT_VERSION", vocab.EXTRACT_VERSION + 1)
+    # Die Seite gilt jetzt als veraltet, und der Hintergrundlauf holt sie sich.
+    # Ohne das käme eine Änderung der Anweisung bei schon gelesenen Seiten nie
+    # an: Er sah nur Seiten an, die noch gar nicht gelesen waren (D108).
+    assert [p["stale"] for p in vocab.pages(1, "LATEIN")] == [True]
+    assert vocab.unread_pages(1, "LATEIN") == [mid]
+    assert client.get(V + "/LATEIN/units").json()["reading"] == 1
     client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
     assert len(calls) == 2, "neue Anweisung: die Seite wird noch einmal gelesen"
+    assert vocab.unread_pages(1, "LATEIN") == [], "danach ist sie wieder aktuell"
 
 
 def test_pages_from_lessons_are_no_longer_offered_as_bundles(setup):

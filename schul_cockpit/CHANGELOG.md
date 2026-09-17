@@ -1,7 +1,7 @@
-## 1.1.1
+## 1.1.2
 
 - Der Vokabeltrainer holt jetzt die Lernwortlisten eines Sprachbuchs vollständig, nicht nur die Seiten, die der Unterricht zufällig genannt hat. Welche Seiten das sind, sagt das Inhaltsverzeichnis des Buchs. Damit stehen alle Unidads, Units und Lektionen einer Sprache zur Verfügung, auch die, die noch nicht dran waren. Alphabetische Verzeichnisse und Wörterbücher bleiben außen vor — die schlägt man nach, statt sie Einheit für Einheit zu lernen. Sachfächer bekommen diese Regel nicht.
-- Fehler behoben: Eine einmal gelesene Vokabelseite wurde nie wieder angefasst. Die Umstellung auf Bündel nach Einheit kam deshalb bei den schon gelesenen Seiten gar nicht an — Spanisch S. 171 und S. 172 standen weiter als zwei Seitenbündel da statt als eine Unidad. Ändert sich die Leseanweisung, werden die Seiten jetzt neu gelesen.
+- Fehler behoben: Eine einmal gelesene Vokabelseite wurde nie wieder angefasst, und der Hintergrundlauf sah ohnehin nur Seiten an, die noch gar nicht gelesen waren. Die Umstellung auf Bündel nach Einheit kam deshalb bei den schon gelesenen Seiten gar nicht an — Spanisch S. 171 und S. 172 standen weiter als zwei Seitenbündel da statt als eine Unidad. Ändert sich die Leseanweisung, werden die Seiten jetzt neu gelesen.
 - Einzelne Seiten aus dem Unterricht werden nicht mehr als eigenes Bündel angeboten, sobald es eine richtige Einheit mit Wörtern gibt. Gibt es noch keine, bleiben sie stehen, damit der Trainer nicht leer dasteht.
 - Die gelesenen Inhaltsverzeichnisse sind über den Lesezugang nachlesbar.
 
