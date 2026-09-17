@@ -220,10 +220,10 @@ def test_the_exam_card_knows_what_material_is_there_and_what_is_missing(env):
     assert sources.exam_sources(1, "", "2026-08-01", "2026-09-30") is None
 
 
-def test_background_work_does_not_eat_the_childs_daily_budget(env, monkeypatch):
+def test_background_work_is_counted_apart_from_the_childs_day(env, monkeypatch):
+    """Hintergrundarbeit zählt nicht gegen den Tagesrichtwert des Kindes, und
+    der Richtwert sperrt ohnehin nicht mehr: Er wird nur vermerkt (D89)."""
     from backend import ai_gateway as ai
-    from fastapi import HTTPException
-    import pytest
     ai_env(monkeypatch)
     with closing(db.webapp_conn()) as c, c:
         ai.init_config(c)
@@ -237,9 +237,15 @@ def test_background_work_does_not_eat_the_childs_daily_budget(env, monkeypatch):
     with closing(db.webapp_conn()) as c, c:
         c.execute("INSERT INTO mentor_ai_calls(id,account_id,session_id,purpose,month,day,model,status,reserved_micro,charged_micro,input_rate,output_rate,created_at) "
                   "VALUES('own',1,NULL,'mentor','2026-09','2026-09-11','test','settled',9990000,9990000,10,45,'now')")
-    with pytest.raises(HTTPException) as caught:
-        ai.reserve(1, "mentor", None, 1000, 500)
-    assert caught.value.status_code == 429 and "heute" in caught.value.detail
+    over_key = ai.reserve(1, "mentor", None, 1000, 500)
+    assert over_key, "auch ein gerissener Tagesrichtwert hält das Kind nicht auf"
+    with closing(db.webapp_conn()) as c:
+        mark = c.execute("SELECT over_budget FROM mentor_ai_calls WHERE id=?", (over_key,)).fetchone()[0]
+    assert "tag" in (mark or ""), "die Überschreitung muss vermerkt sein"
+    # Die Vorarbeit der App selbst bleibt aus dieser Zählung heraus.
+    with closing(db.webapp_conn()) as c:
+        first = c.execute("SELECT over_budget FROM mentor_ai_calls WHERE id=?", (key,)).fetchone()[0]
+    assert not (first or "")
 
 
 def test_a_page_without_book_part_is_guessed_from_the_touched_chapter(env):

@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS mentor_ai_calls (
  month TEXT NOT NULL, day TEXT NOT NULL, model TEXT NOT NULL,
  status TEXT NOT NULL, reserved_micro INTEGER NOT NULL, charged_micro INTEGER NOT NULL DEFAULT 0,
  input_tokens INTEGER, output_tokens INTEGER, input_rate REAL NOT NULL, output_rate REAL NOT NULL,
- created_at TEXT NOT NULL, finished_at TEXT, error TEXT
+ created_at TEXT NOT NULL, finished_at TEXT, error TEXT, over_budget TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_mentor_ai_month ON mentor_ai_calls(month,account_id,status);
 CREATE TABLE IF NOT EXISTS mentor_skills (

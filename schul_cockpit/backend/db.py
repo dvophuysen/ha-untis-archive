@@ -886,6 +886,11 @@ _MIGRATIONS.append(("mentor_message_author_002",
 # Eintrags), ergebnis (die Bearbeitung des Kindes dazu), stoff (Thema).
 _MIGRATIONS.append(("material_links_002_relation", "ALTER TABLE material_links ADD COLUMN relation TEXT"))
 
+# Welche Richtwerte ein Aufruf überschritten hat. Seit 0.84.0 sperrt keiner
+# mehr, deshalb muss die Überschreitung nachlesbar sein statt als Fehler im
+# Gesicht des Kindes zu landen (D89).
+_MIGRATIONS.append(("mentor_ai_calls_001_over_budget", "ALTER TABLE mentor_ai_calls ADD COLUMN over_budget TEXT"))
+
 # Die Elternwahl für Einstieg und Abschreiben hielt bisher einen Modellnamen.
 # Seit 0.83.0 hält sie eine Stufe, damit ein Modellwechsel in der
 # Add-on-Konfiguration die Auswahl nicht entwertet (D88). Namen, die zu keiner

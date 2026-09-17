@@ -136,18 +136,25 @@ def test_stale_source_rejected_without_learning_claim(setup):
     saved=client.get(B+f"/sessions/{s['id']}").json();assert not saved['processing'] and saved['task'] is None
 
 
-def test_budget_reservation_is_atomic_and_failures_stay_charged(setup):
+def test_a_reached_budget_warns_but_never_blocks_the_child(setup):
+    """Der Rahmen ist ein Richtwert, kein Tor (D89): Ein Kind soll nicht mitten
+    in einer Abfrage stehenbleiben, weil eine Zahl erreicht ist. Überschritten
+    wird vermerkt, der Aufruf läuft."""
     with closing(db.webapp_conn()) as c:
         ai.init_config(c);c.execute('UPDATE mentor_ai_config SET monthly_micro=150000 WHERE id=1')
     def reserve():
         try:return ai.reserve(1,'mentor',None,10000,1000)
         except Exception:return None
     with ThreadPoolExecutor(max_workers=2) as pool:keys=list(pool.map(lambda _:reserve(),range(2)))
-    assert sum(k is not None for k in keys)==1
-    key=next(k for k in keys if k);ai.settle(key,error='timeout')
-    assert ai.status()['used_eur']==.145
+    assert all(keys), 'kein Aufruf darf am Rahmen scheitern'
+    with closing(db.webapp_conn()) as c:
+        over=[r[0] for r in c.execute('SELECT over_budget FROM mentor_ai_calls ORDER BY created_at')]
+    # Der erste passt noch, der zweite reißt den Monat und sagt es.
+    assert over[-1] and 'monat' in over[-1]
+    key=keys[0];ai.settle(key,error='timeout')
+    assert ai.status()['used_eur']==.29
     ai.settle(key,{'usage':{'input_tokens':1000,'output_tokens':100}})
-    assert ai.status()['used_eur']==.0145
+    assert ai.status()['used_eur']==.1595
 
 
 def test_unknown_model_and_prior_usage_fail_closed(setup):

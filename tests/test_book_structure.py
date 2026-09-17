@@ -141,18 +141,22 @@ def test_exam_scope_lists_the_chapters_touched_in_the_period(env):
     assert found[0]["cited_pages"] == [50] and found[0]["companions"][0]["start_page"] == 171
 
 
-def test_the_source_stock_has_its_own_monthly_budget(env, monkeypatch):
-    from fastapi import HTTPException
-    import pytest
+def test_the_source_stock_reports_its_own_budget_without_stopping(env, monkeypatch):
+    """Der Quellenrahmen zählt getrennt und meldet seine Überschreitung, hält
+    das Einlesen aber nicht an (D89): Ein halb erfasstes Buch nützt niemandem."""
     ai_env(monkeypatch, tiers={"hoch": {"modellname": "test-model"}})
     with closing(db.webapp_conn()) as c:
         ai.init_config(c)
         c.execute("UPDATE mentor_ai_config SET sources_micro=1000000 WHERE id=1")
     key = ai.reserve(1, "sources", None, 1000, 1000)
     ai.settle(key, {"usage": {"prompt_tokens": 100, "completion_tokens": 100}})
-    with pytest.raises(HTTPException) as caught:
-        ai.reserve(1, "sources", None, 1000, 30000)
-    assert caught.value.status_code == 429 and "Quellenbestand" in caught.value.detail
-    assert ai.reserve(1, "background", None, 1000, 1000), "der Hintergrund-Rahmen bleibt davon unberührt"
+    over_key = ai.reserve(1, "sources", None, 1000, 30000)
+    assert over_key, "der Quellenrahmen darf nicht sperren"
+    with closing(db.webapp_conn()) as c:
+        marks = dict(c.execute("SELECT id,over_budget FROM mentor_ai_calls").fetchall())
+    assert "quellen" in (marks[over_key] or ""), "die Überschreitung muss vermerkt sein"
+    # Der Hintergrundrahmen zählt davon unberührt und ist nicht gerissen.
+    bg = ai.reserve(1, "background", None, 1000, 1000)
+    assert not (marks.get(bg) or "")
     status = ai.status()
     assert status["sources_limit_eur"] == 1.0 and status["sources_eur"] > 0
