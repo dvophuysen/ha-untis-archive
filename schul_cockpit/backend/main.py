@@ -83,6 +83,14 @@ async def lifespan(app: FastAPI):
     if _SCHEMA_OK:
         reconcile_all()
 
+    # Welches Deployment über welchen Zugang läuft, steht nur im Log: die
+    # Zuordnung ist Add-on-Konfiguration und taucht in der App nicht auf (D87).
+    try:
+        from .ai_gateway import endpoint_overview
+        _LOGGER.info("KI-Zugänge: %s", endpoint_overview())
+    except Exception:
+        _LOGGER.warning("KI-Zugänge konnten nicht ermittelt werden", exc_info=True)
+
     _BG_TASK = asyncio.create_task(background_sync_loop())
     mentor_task = asyncio.create_task(mentor_loop())
     materials_task = asyncio.create_task(materials_loop())

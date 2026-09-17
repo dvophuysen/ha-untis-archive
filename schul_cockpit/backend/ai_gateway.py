@@ -17,7 +17,8 @@ import httpx
 import logging
 from fastapi import HTTPException
 from .db import webapp_conn
-from .learning import ai_settings, model_payload, model_output, now_iso, today_local, uses_responses
+from .learning import (AiEndpointMissing, ai_endpoint, ai_settings, model_payload, model_output, now_iso,
+                       today_local, uses_responses)
 
 LOG = logging.getLogger('schul_cockpit.ai')
 
@@ -96,6 +97,36 @@ def model_for(purpose, cfg=None, override=None):
     return chosen or main
 
 
+def endpoint_for(model, config=None):
+    """Adresse und Schlüssel für ein Deployment, mit Meldung statt Rückfall.
+
+    Zeigt die Zuordnung auf einen zweiten Zugang, der nicht eingerichtet ist,
+    darf der Aufruf nicht an der alten Ressource landen."""
+    try:
+        return ai_endpoint(model, config)
+    except AiEndpointMissing:
+        raise HTTPException(503, f'Für das Modell {model} ist der zweite KI-Zugang noch nicht eingerichtet.') from None
+
+
+def endpoint_overview():
+    """Logzeile für den Start: welches Deployment über welchen Host läuft.
+    Ohne Schlüssel und ohne Pfad, damit sie gefahrlos im Add-on-Log steht."""
+    config=ai_settings()
+    with closing(webapp_conn()) as c:
+        row=c.execute('SELECT sources_model,opening_model FROM mentor_ai_config WHERE id=1').fetchone()
+    chosen=[(row[k] or '').strip() for k in ('sources_model','opening_model')] if row else []
+    models=[m for m in dict.fromkeys([config['model'],config['transcribe_model'],*chosen,*config['models_2']]) if m]
+    parts=[]
+    for model in models:
+        try:
+            url,key=ai_endpoint(model,config)
+        except AiEndpointMissing:
+            parts.append(f'{model}: zweiter Zugang nicht eingerichtet');continue
+        host=urlsplit(url).hostname or ''
+        parts.append(f'{model}: '+(host if host else 'ohne Adresse')+('' if key else ', ohne Schlüssel'))
+    return '; '.join(parts) or 'kein Modell eingerichtet'
+
+
 def reserve(account_id, purpose, session_id, input_max, output_max, model=None):
     model=model or model_for(purpose)
     if model not in RATES or today_local()>=RATE_UNTIL:
@@ -150,12 +181,15 @@ EFFORTS=('low','medium','high')
 
 
 async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, model=None, effort=None):
-    config=ai_settings();url=urlsplit(config['url'])
+    config=ai_settings()
     # Reasoning-Tiefe: bisher fest low; für die Eichung je Aufruf wählbar (D77).
     effort=effort or 'low'
     if effort not in EFFORTS: raise ValueError('Invalid reasoning effort')
     model=model_for(purpose,override=model)
-    if not config['key'] or not config['model'] or url.scheme!='https' or not url.hostname or url.username or url.password:
+    # Adresse und Schlüssel gehören zum Deployment, nicht zur App: während der
+    # Umstellung bedient je nach Modell die erste oder die zweite Foundry (D87).
+    endpoint,api_key=endpoint_for(model,config);url=urlsplit(endpoint)
+    if not api_key or not config['model'] or url.scheme!='https' or not url.hostname or url.username or url.password:
         raise HTTPException(503,'Die KI-Verbindung ist noch nicht eingerichtet.')
     if not 256<=max_output<=8000: raise ValueError('Invalid output boundary')
     images=images or []
@@ -185,8 +219,8 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
     text_bytes=len((instruction+raw).encode())
     if text_bytes>48000: raise HTTPException(413,'Zu viel Material für einen Schritt. Bitte einen kleineren Abschnitt wählen.')
     upper_input=text_bytes+1024+32768*len(images)
-    payload=model_payload(config['url'],model,instruction,context,images)
-    if uses_responses(config['url']):
+    payload=model_payload(endpoint,model,instruction,context,images)
+    if uses_responses(endpoint):
         payload['max_output_tokens']=max_output
         payload['reasoning']={'effort':effort}
     else:
@@ -196,11 +230,11 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
     result=None
     try:
         async with httpx.AsyncClient(timeout=90,follow_redirects=False) as client:
-            response=await client.post(config['url'],json=payload,headers={'api-key':config['key']})
+            response=await client.post(endpoint,json=payload,headers={'api-key':api_key})
             response.raise_for_status();result=response.json()
         if not isinstance(result,dict): raise ValueError('Invalid envelope')
         settle(key,result)
-        raw=model_output(config['url'],result).strip()
+        raw=model_output(endpoint,result).strip()
         if raw.startswith('```'): raw=raw.split('\n',1)[1].rsplit('```',1)[0].strip()
         return raw,result,key
     except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError) as exc:
@@ -217,11 +251,11 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
 
 
 def transcribe_url(config=None):
-    """Die Adresse des Transkriptionsmodells: angegeben oder aus der Ressource der
-    Hauptadresse abgeleitet (Azure-Pfad je Deployment)."""
+    """Die Adresse des Transkriptionsmodells: angegeben oder aus der Ressource
+    abgeleitet, die dieses Deployment bedient (Azure-Pfad je Deployment)."""
     config=config or ai_settings()
     if config.get('transcribe_url'):return config['transcribe_url']
-    url=urlsplit(config['url'])
+    url=urlsplit(endpoint_for(config['transcribe_model'],config)[0])
     if not url.hostname:return ''
     return f"{url.scheme}://{url.netloc}/openai/deployments/{config['transcribe_model']}/audio/transcriptions?api-version=2025-03-01-preview"
 
@@ -235,7 +269,8 @@ async def transcribe(account_id, audio, mime, language=None, prompt='', session_
     sieht und berichtigen kann."""
     config=ai_settings();url=transcribe_url(config);parsed=urlsplit(url)
     model=config['transcribe_model']
-    if not config['key'] or parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password:
+    api_key=endpoint_for(model,config)[1]
+    if not api_key or parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password:
         raise HTTPException(503,'Die Spracheingabe ist noch nicht eingerichtet.')
     if not audio or len(audio)>TRANSCRIBE_MAX_BYTES:raise HTTPException(413,'Die Aufnahme ist zu lang. Bitte in kürzeren Stücken sprechen.')
     seconds=min(TRANSCRIBE_MAX_SECONDS,max(1,int(seconds or 0) or max(1,len(audio)//4000)))
@@ -249,7 +284,7 @@ async def transcribe(account_id, audio, mime, language=None, prompt='', session_
     result=None
     try:
         async with httpx.AsyncClient(timeout=60,follow_redirects=False) as client:
-            response=await client.post(url,data=data,files={'file':(f'aufnahme.{ext}',audio,(mime or 'audio/webm').split(';')[0].strip())},headers={'api-key':config['key']})
+            response=await client.post(url,data=data,files={'file':(f'aufnahme.{ext}',audio,(mime or 'audio/webm').split(';')[0].strip())},headers={'api-key':api_key})
             response.raise_for_status();result=response.json()
         if not isinstance(result,dict) or not isinstance(result.get('text'),str):raise ValueError('Invalid envelope')
         usage=result.get('usage') or {}

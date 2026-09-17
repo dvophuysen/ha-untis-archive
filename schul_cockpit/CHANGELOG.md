@@ -1,3 +1,7 @@
+## 0.82.0
+
+- Zwei Foundry-Zugänge nebeneinander (D87): Für eine schrittweise Umstellung nehmen die neuen Add-on-Optionen `learning_ai_url_2` und `learning_ai_key_2` eine zweite Ressource auf. `learning_ai_models_2` listet die Deployment-Namen, die schon dort liegen; alle übrigen bleiben beim ersten Zugang. Umgezogen wird also je Modell, ohne die restliche Einrichtung anzufassen. Ein gelistetes Deployment läuft ausschließlich über den zweiten Zugang: Fehlt dort Adresse oder Schlüssel, bricht der Aufruf mit einer Meldung ab, statt still wieder die alte Ressource zu verwenden. Die Spracheingabe folgt dem Zugang ihres eigenen Deployments. Welches Modell über welchen Host läuft, steht beim Start im Add-on-Log; in der App ändert sich nichts.
+
 ## 0.81.0
 
 - Arbeitsblätter mit Bezug (D85): Ein Blatt wird nie mehr geraten. Bisher belegte ein loses Foto desselben Fachs innerhalb von fünf Tagen jede Hausaufgabe mit „Arbeitsblatt“; jetzt belegt nur ein ausdrücklicher Bezug, den Kind oder Eltern mit einem Tipp setzen. Ein loses Blatt zeigt in der Materialliste Vorschläge („Gehört das Blatt zu … Hausaufgabe 16.09.: Arbeitsblatt beenden“), ein Tipp ordnet zu. In „Was mir noch fehlt“ steht jedes Blatt je Eintrag, mit „Vorhandenes Blatt zuordnen“ für schon fotografierte Blätter; ein Foto von dort hängt am Eintrag, nicht am Fach. Ein ausgefülltes Blatt ist Blatt und Bearbeitung zugleich. Verknüpfungen tragen eine Rolle (Blatt, Bearbeitung, Stoff).

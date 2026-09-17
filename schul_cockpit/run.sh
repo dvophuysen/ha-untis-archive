@@ -9,6 +9,12 @@ export WEBAPP_EXTERNAL_URL="${EXTERNAL_URL:-}"
 export LEARNING_AI_URL="$(bashio::config 'learning_ai_url')"
 export LEARNING_AI_KEY="$(bashio::config 'learning_ai_key')"
 export LEARNING_AI_MODEL="$(bashio::config 'learning_ai_model')"
+# Zweiter Foundry-Zugang: Deployments aus der Liste laufen ausschließlich dort.
+# bashio gibt eine Listenoption als JSON aus; das Backend nimmt die Rohform
+# entgegen und trennt selbst an Komma und Zeile.
+export LEARNING_AI_URL_2="$(bashio::config 'learning_ai_url_2')"
+export LEARNING_AI_KEY_2="$(bashio::config 'learning_ai_key_2')"
+export LEARNING_AI_MODELS_2="$(bashio::config 'learning_ai_models_2')"
 export LEARNING_AI_TRANSCRIBE_MODEL="$(bashio::config 'learning_ai_transcribe_model')"
 export LEARNING_AI_TRANSCRIBE_URL="$(bashio::config 'learning_ai_transcribe_url')"
 

@@ -155,8 +155,10 @@ Add-on-Optionen:
 - `learning_ai_url`: vollständiger HTTPS-Endpunkt einschließlich des erforderlichen API-Pfads und ggf. API-Version.
 - `learning_ai_key`: API-Schlüssel; in der Add-on-Oberfläche als Passwortfeld, nur serverseitig verwendet.
 - `learning_ai_model`: Modell- oder Deploymentname.
+- `learning_ai_url_2`, `learning_ai_key_2`: zweiter Zugang für eine schrittweise Umstellung auf eine andere Ressource.
+- `learning_ai_models_2`: Liste der Deployment-Namen, die über den zweiten Zugang laufen. Alles Ungenannte bleibt beim ersten.
 
-Die Runtime übernimmt diese Werte als `LEARNING_AI_URL`, `LEARNING_AI_KEY` und `LEARNING_AI_MODEL`. Der Client sendet Bearer- und `api-key`-Header für kompatible Gateways. Er folgt keinen Weiterleitungen. Zugangsdaten werden nicht in Browser, Logs oder Lernexport übernommen. Die vorhandene Sicherung der Add-on-Konfiguration kann wie üblich Betriebsgeheimnisse enthalten und muss entsprechend behandelt werden.
+Die Runtime übernimmt diese Werte als `LEARNING_AI_URL`, `LEARNING_AI_KEY`, `LEARNING_AI_MODEL`, `LEARNING_AI_URL_2`, `LEARNING_AI_KEY_2` und `LEARNING_AI_MODELS_2`. Der Client sendet Bearer- und `api-key`-Header für kompatible Gateways. Er folgt keinen Weiterleitungen. Zugangsdaten werden nicht in Browser, Logs oder Lernexport übernommen. Die vorhandene Sicherung der Add-on-Konfiguration kann wie üblich Betriebsgeheimnisse enthalten und muss entsprechend behandelt werden.
 
 Zusätzlich wird KI pro Schuljahr durch Eltern aktiviert. Vor jedem Entwurf sind konkrete geprüfte Quellen auszuwählen. Übertragen werden Jahrgang, Fach, Thema, Lernziel, Lernmethode und ausgewählte Quellentexte/Bilder. Keine Namen, Fehlzeiten, privaten Rückmeldungen, bisherigen Antworten oder vollständigen Kontoprofile werden dem Prompt hinzugefügt. Persönliche Angaben, die im ausgewählten Material selbst stehen, werden nicht automatisch entfernt; das Material wird vor Auswahl geprüft.
 
@@ -210,3 +212,11 @@ Die API-Art wird anhand des Endpunktpfads erkannt. `/openai/responses?api-versio
 Mit `store=false` wird keine abrufbare Responses-Konversation angelegt. Das ist keine Aussage über sämtliche sonstigen Aufbewahrungs- oder Verarbeitungsregeln des Azure-Dienstes. Der Bereitstellungstyp und die gewünschten regionalen Vorgaben sind separat zu prüfen. Die Ressourcennennung „swedencentral“ allein reicht dafür nicht aus.
 
 Referenz: https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/responses
+
+### Ergänzung 0.82.0: zwei Ressourcen nebeneinander
+
+Adresse und Schlüssel gehören zum Deployment, nicht zur App. `ai_endpoint()` in `backend/learning.py` entscheidet je Deployment-Name, welcher der beiden Zugänge ihn bedient; `ai_gateway.complete()` und die Transkription bauen Aufruf, Nutzlast und Header daraus. Weil die API-Art am Pfad erkannt wird, dürfen die beiden Zugänge unterschiedliche Formen haben, etwa Responses auf der einen und Chat Completions auf der anderen Ressource.
+
+Ein Deployment, das in `learning_ai_models_2` steht, wird nie über den ersten Zugang aufgerufen. Ist der zweite Zugang unvollständig, endet der Aufruf mit 503 und einer Meldung, die das Deployment nennt. Der stille Rückfall wäre die gefährlichere Variante: Er würde nach einer vermeintlich abgeschlossenen Umstellung weiter Kinderdaten an die alte Ressource senden.
+
+Die Budgetanrechnung in `ai_gateway.RATES` hängt am Deployment-Namen, nicht am Zugang. Rechnen die beiden Ressourcen unterschiedlich ab, stimmen die Sätze nach einem Umzug nicht mehr und sind anzupassen.

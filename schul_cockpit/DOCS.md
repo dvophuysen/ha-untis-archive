@@ -146,7 +146,9 @@ Der neue Tab **Lernen** verbindet Unterrichtsthemen, Materialien und Übungen ü
 
 Unter **Themen** lassen sich eigene Übungen anlegen; KI-Entwürfe werden erst nach Prüfung freigegeben. Der Lernverlauf enthält ausdrücklich Selbsteinschätzungen, keine automatisch vergebenen Noten. Für Screenshots und PDFs stehen 100 MB je Kind zur Verfügung (8 MB je Datei). PDF-Inhalt für KI als Text ergänzen oder einzelne Seiten als Bilder einstellen.
 
-Die optionalen Add-on-Einstellungen `learning_ai_url`, `learning_ai_key` und `learning_ai_model` konfigurieren einen kompatiblen HTTPS-Endpunkt für Responses oder Chat Completions. Für die Spracheingabe nennt `learning_ai_transcribe_model` das Transkriptions-Deployment derselben Ressource (Standard `gpt-4o-transcribe`); liegt es woanders, `learning_ai_transcribe_url` voll angeben. Zusätzlich muss KI pro Schuljahr freigegeben werden. Ohne Konfiguration ist der Lernraum mit eigenen Aufgaben voll nutzbar.
+Die optionalen Add-on-Einstellungen `learning_ai_url`, `learning_ai_key` und `learning_ai_model` konfigurieren einen kompatiblen HTTPS-Endpunkt für Responses oder Chat Completions. Für die Spracheingabe nennt `learning_ai_transcribe_model` das Transkriptions-Deployment (Standard `gpt-4o-transcribe`); liegt es unter einer eigenen Adresse, `learning_ai_transcribe_url` voll angeben. Zusätzlich muss KI pro Schuljahr freigegeben werden. Ohne Konfiguration ist der Lernraum mit eigenen Aufgaben voll nutzbar.
+
+Ziehen Deployments schrittweise auf eine zweite Foundry-Ressource um, nehmen `learning_ai_url_2` und `learning_ai_key_2` den zweiten Zugang auf. `learning_ai_models_2` listet die Deployment-Namen, die schon dort liegen; alle übrigen bleiben beim ersten Zugang. Ein gelistetes Deployment läuft ausschließlich über den zweiten Zugang: fehlt dort Adresse oder Schlüssel, bricht der Aufruf mit einer Meldung ab, statt still die alte Ressource zu verwenden. Welches Deployment über welchen Host läuft, steht beim Start im Add-on-Log; in der App ist die Aufteilung nicht sichtbar.
 
 [Gesamtkonzept, Architektur, Betriebsgrenzen und Inbetriebnahme](LERNKONZEPT.md)
 
