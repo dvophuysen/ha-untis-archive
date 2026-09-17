@@ -1,3 +1,28 @@
+# Blattbindung und Abfragen 0.80.0
+
+Stand 17.09.2026. Nutzerrückmeldung (Fehlbindung) und die drei Vorschläge aus
+der Bewertung des Verben-Gesprächs.
+
+**Gebaut (D83).** `sources._sheet_photos`: `SHEET_KINDS = (worksheet, handout)`;
+nur diese Arten kommen in den losen Vorrat und belegen über eine Aufgabenverknüpfung
+ihre Hausaufgabe; an eine Aufgabe gehängte Fotos werden aus dem losen Vorrat
+ausgeschlossen. `refresh_status` setzt die betroffene Stelle beim nächsten Lauf
+zurück auf „paper“.
+
+**Gebaut (D84).** `HOMEWORK_INSTRUCTION` um drei Absätze: Abfragen, Merkzettel,
+Bestand nur von der Seite. `Reply.summary` bis 2000 Zeichen. Der Kontext trug
+`summary` schon jede Runde mit; neu ist, dass die Instruktion es als Merkzettel
+nutzt.
+
+**Geprüft.** Test: Ausarbeitung an alter Aufgabe belegt nichts, Blatt an
+derselben Aufgabe belegt nur deren Hausaufgabe, loses Blatt der Nachbartage
+zählt, lose Mitschrift nicht. Mentor-Tests unverändert grün.
+
+**Offen.** Nächste echte Abfrage beobachten: Merkzettel-Inhalt, Wiederholung
+der Fehler, Ende. Danach die Kostenoption (Seiten nicht je Zug) entscheiden.
+
+---
+
 # Verläufe des Kindes 0.79.0
 
 Stand 17.09.2026. Nutzerrückmeldung: Gespräche auf dem Elterngerät standen als
