@@ -540,14 +540,20 @@ def overview(account_id: int, title: str, subject: str, label: str | None = None
     touched = touched_chapters(account_id, title, subject, chapters, label=label)
     if not touched:
         return []
+    # Welche Seiten vorliegen — und wie sie heißen. Die Titel stammen aus der
+    # Auswertung und kosten nichts; sie sagen dem Klausurstoff, was in einem
+    # angeschnittenen Kapitel überhaupt behandelt wird (D104).
+    named: dict[int, str] = {}
     if label:
         from .sources import _scanned_pages, serves
         stored = {page for (have, page) in _scanned_pages(account_id).get(subject.casefold(), {}) if serves(have, label)}
     else:
         with closing(webapp_conn()) as conn:
-            stored = {r[0] for r in conn.execute(
-                "SELECT source_page FROM materials WHERE account_id=? AND origin='book_fetch' AND hidden=0 AND source_book=? "
-                "AND COALESCE(page_check,'') NOT IN ('mismatch','blank')", (account_id, title))}
+            rows = [dict(r) for r in conn.execute(
+                "SELECT source_page,title FROM materials WHERE account_id=? AND origin='book_fetch' AND hidden=0 AND source_book=? "
+                "AND COALESCE(page_check,'') NOT IN ('mismatch','blank') ORDER BY source_page", (account_id, title))]
+        stored = {r["source_page"] for r in rows}
+        named = {r["source_page"]: (r["title"] or "").strip() for r in rows if (r["title"] or "").strip()}
     out = []
     for chapter in touched:
         pages = _pages(chapter)
@@ -558,6 +564,7 @@ def overview(account_id: int, title: str, subject: str, label: str | None = None
             "first_date": chapter["first_date"], "cited_pages": sorted(chapter["cited_pages"]),
             "inferred": chapter.get("inferred", False), "confidence": chapter.get("confidence"),
             "pages": len(pages), "pages_stored": sum(1 for p in pages if p in stored),
+            "page_index": [{"page": p, "title": named[p]} for p in pages if p in named],
             "book": title, "part_label": label,
             "companions": [{"title": e["title"], "kind": e["kind"], "start_page": e["start_page"], "end_page": e["end_page"]}
                            for e in extras],

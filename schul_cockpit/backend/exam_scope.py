@@ -82,8 +82,11 @@ async def collect(account,body):
     for chapter in chapters:
         span=f"S. {chapter['start_page']}" + (f"–{chapter['end_page']}" if chapter.get('end_page') else '')
         extras=''.join(f"; dazu {e['title']} S. {e['start_page']}" + (f"–{e['end_page']}" if e.get('end_page') else '') for e in chapter['companions'])
+        # Die ausgewerteten Seiten des Kapitels beim Namen nennen: Das Verzeichnis
+        # sagt, was die Einheit behandelt, ohne dass ihr Volltext mitgehen muss (D104).
+        index='; Seiten im Bestand: '+', '.join(f"S. {p['page']} {p['title']}" for p in chapter['page_index'][:20]) if chapter.get('page_index') else ''
         where=f"{chapter['part_label']}, " if chapter.get('part_label') else 'Buch'
-        text=f"{where}Kapitel {chapter['number']} {chapter['title']} ({span}{extras}); im Unterricht genannt: S. {', '.join(map(str,chapter['cited_pages']))}".replace('Kapitel  ','Kapitel ').replace('Buch','Buchkapitel',1) if not chapter.get('part_label') else f"{where}Kapitel {chapter['number']} {chapter['title']} ({span}{extras}); genannt: S. {', '.join(map(str,chapter['cited_pages']))}".replace('Kapitel  ','Kapitel ')
+        text=f"{where}Kapitel {chapter['number']} {chapter['title']} ({span}{extras}{index}); im Unterricht genannt: S. {', '.join(map(str,chapter['cited_pages']))}".replace('Kapitel  ','Kapitel ').replace('Buch','Buchkapitel',1) if not chapter.get('part_label') else f"{where}Kapitel {chapter['number']} {chapter['title']} ({span}{extras}{index}); genannt: S. {', '.join(map(str,chapter['cited_pages']))}".replace('Kapitel  ','Kapitel ')
         units.append(dict(id=len(units),kind='chapter',text=text,refs=[dict(id=chapter['id'],date=chapter['first_date'],text=text)]))
     # Die offizielle Themenliste der Lehrkraft: die verlässlichste Quelle.
     if not body.demo:

@@ -1,3 +1,49 @@
+# Vorhandenes Material an eine Hausaufgabe hängen 1.0.0
+
+Stand 17.09.2026. Nutzerrückmeldung (D106) und vier Entscheidungen des Tages.
+
+**Befund.** „Ich möchte in einer Hausaufgabenhilfe ein bereits eingelesenes
+Material hinzufügen — ich finde keine Möglichkeit, dieses zu selektieren." Zu
+Recht: Der Weg „Material hinzufügen" öffnete die Materialansicht mit gesetztem
+Fachfilter und dem Hinweis „Alles, was du hier ablegst, gehört zu dieser
+Hausaufgabe" — das galt aber nur für einen neuen Upload. Die Verknüpfung selbst
+konnte die Schnittstelle längst (`POST /materials/{id}/links`), nur die Ansicht
+bot sie nirgends an.
+
+**Gebaut.** `sources.task_candidates()` ist der Rückweg zu `sheet_candidates()`:
+Dort sucht ein loses Blatt seinen Eintrag, hier sucht eine Aufgabe ihre Blätter.
+Gereiht wird nach Nähe zur Aufgabe — zuerst Material, das eine im Auftrag
+genannte Stelle wirklich zeigt („zeigt Schulbuch S. 48"), dann Blätter desselben
+Fachs aus den vierzehn Tagen um die Aufgabe, dann übriges Material des Fachs,
+zuletzt Buchseiten. Nur das Fach der Aufgabe. Jeder Vorschlag nennt seinen
+Grund, und gebunden wird nichts von selbst. `GET /materials/for-task/{id}`
+liefert Vorschläge und bereits Verknüpftes; die Ansicht hängt an und löst wieder.
+
+**Dazu drei weitere Entscheidungen des Nutzers.**
+
+*Einstieg nicht dogmatisch.* „Nur solange die Quellen eindeutig sind. Könnte ja
+zum Beispiel auch ein deutscher Text sein, und dann soll man die Frage auf
+Spanisch beantworten. Die Aufgabe muss nur sinnvoll und lösbar sein." Die Regel
+heißt jetzt so: lösbar, weil alles Nötige in der Aufgabe steht oder eindeutig in
+einer benannten Quelle vor dem Kind; sinnvoll, weil sie die Fähigkeit des Themas
+voranbringt. Sprachen dürfen sich mischen, solange die Antwortsprache dasteht.
+Eine Auswahlaufgabe aus dem Buch als Aufwärmer bleibt erlaubt.
+
+*Kapitelverzeichnis auch im Klausurstoff.* `book_structure.overview()` gibt jetzt
+`page_index` — Seitenzahl und Auswertungstitel je vorliegender Seite —, und
+`exam_scope` hängt es an die Kapitelzeile.
+
+*Kostensatz für ein unbekanntes Modell.* `gpt-5-mini` ist als Stufe „klein" auf
+Foundry 2 eingetragen, der Preis ist nicht bekannt. Ohne Satz verweigert
+`reserve()` jeden Aufruf, die Eichung könnte also gar nicht laufen. Deshalb ein
+Platzhalter in `RATES`, in der Größenordnung der günstigsten bekannten Stufe,
+und die Elternansicht schreibt „Kostensatz geschätzt" an die Stufe, damit eine
+geschätzte Buchung nicht wie eine gemessene aussieht. Ein eigener Satz aus der
+Add-on-Konfiguration geht vor.
+
+**Offen.** Die Eichung selbst (Vokabelseite mit „niedrig" gegen „klein") und die
+Reasoning-Tiefe; beides soll bei Gelegenheit nebenher laufen.
+
 # Das Kapitel als Zusammenhang 0.99.0
 
 Stand 17.09.2026. Nutzerentscheidung (D104).

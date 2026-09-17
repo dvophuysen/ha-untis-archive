@@ -292,3 +292,39 @@ def test_a_double_page_can_be_corrected_by_hand_and_a_link_carries_its_role(env)
     linked = client.post(f"{URL}/{body['id']}/links", json={"kind": "homework", "target_id": 5, "relation": "blatt"}).json()
     assert [(l["kind"], l["target_id"], l["relation"]) for l in linked["links"] if l["kind"] == "homework"] == [("homework", 5, "blatt")]
     assert client.post(f"{URL}/{body['id']}/links", json={"kind": "homework", "target_id": 5, "relation": "egal"}).status_code == 422
+
+
+def test_a_homework_can_take_an_already_stored_material(env):
+    """In der Hausaufgabenhilfe ließ sich nur Neues ablegen; ein bereits
+    eingelesenes Material konnte man nicht auswählen. Jetzt schlägt die Ansicht
+    die passenden vor — beste Treffer zuerst — und hängt sie an (D106)."""
+    client = client_for(env)
+    with closing(db.webapp_conn()) as conn, conn:
+        conn.execute("INSERT INTO tasks(id,account_id,title,notes,subject_name,task_type,status,due_date,source,"
+                     "created_at,updated_at) VALUES(7,1,'Hausaufgabe','Buch, S. 48 lesen und Arbeitsblatt bearbeiten',"
+                     "'POLITIK','homework','open','2026-09-16','manual','2026-09-15','2026-09-15')")
+        rows = [('Buchseite 48', 'book_page', 'Schulbuch', 48, '2026-09-15'),
+                ('Arbeitsblatt Wahlen', 'worksheet', '', None, '2026-09-16'),
+                ('Buchseite 90', 'book_page', 'Schulbuch', 90, '2026-09-15'),
+                ('Mathe-Blatt', 'worksheet', '', None, '2026-09-16')]
+        for title, kind, label, page, day in rows:
+            conn.execute("INSERT INTO materials(account_id,kind,subject_name,title,source_label,source_page,"
+                         "document_date,analysis_state,created_at,updated_at) VALUES(1,?,?,?,?,?,?,'ready',?,?)",
+                         (kind, 'MATHEMATIK' if title.startswith('Mathe') else 'POLITIK', title, label, page, day, day, day))
+    found = client.get(f"{URL}/for-task/7").json()
+    order = [c['title'] for c in found['candidates']]
+    # Die im Auftrag genannte Seite zuerst, dann das Blatt vom Tag der Aufgabe,
+    # dann die übrige Buchseite. Ein anderes Fach taucht gar nicht auf.
+    assert order == ['Buchseite 48', 'Arbeitsblatt Wahlen', 'Buchseite 90']
+    assert found['candidates'][0]['reason'].startswith('zeigt Schulbuch S. 48')
+    assert 'Mathe-Blatt' not in order
+    # Anhängen und wieder lösen.
+    first = found['candidates'][0]['material_id']
+    assert client.post(f"{URL}/{first}/links", json={'kind': 'task', 'target_id': 7}).status_code == 200
+    again = client.get(f"{URL}/for-task/7").json()
+    assert [m['id'] for m in again['linked']] == [first]
+    assert first not in [c['material_id'] for c in again['candidates']], 'was dranhängt, wird nicht noch einmal vorgeschlagen'
+    assert client.request('DELETE', f"{URL}/{first}/links", params={'kind': 'task', 'target_id': 7}).status_code == 200
+    assert client.get(f"{URL}/for-task/7").json()['linked'] == []
+    # Eine fremde Aufgabe gibt es nicht.
+    assert client.get(f"{URL}/for-task/999").status_code == 404

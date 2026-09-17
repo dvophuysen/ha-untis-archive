@@ -516,6 +516,70 @@ def sheet_candidates(account_id: int, material: dict, days: int = 14, limit: int
     return out[:limit]
 
 
+def task_candidates(account_id: int, task_id: int, limit: int = 12) -> list[dict]:
+    """Bereits abgelegte Materialien, die zu dieser Hausaufgabe passen könnten.
+
+    Der Rückweg zu `sheet_candidates()`: Dort sucht ein loses Blatt seinen
+    Eintrag, hier sucht ein Eintrag seine Blätter. Gereiht wird nach Nähe zur
+    Aufgabe — zuerst, was eine im Auftrag genannte Stelle wirklich zeigt, dann
+    Blätter desselben Fachs aus den Tagen um die Aufgabe, dann der Rest des
+    Fachs. Jeder Vorschlag sagt, warum er dasteht; gebunden wird nichts von
+    selbst (D85, D106).
+    """
+    from datetime import date
+    from .materials import canonical_subject
+    with closing(webapp_conn()) as conn:
+        task = conn.execute("SELECT id,title,notes,subject_name,due_date,created_at FROM tasks WHERE id=? AND account_id=?",
+                            (task_id, account_id)).fetchone()
+        if not task:
+            return []
+        task = dict(task)
+        linked = {r[0] for r in conn.execute(
+            "SELECT material_id FROM material_links WHERE kind='task' AND target_id=?", (task_id,))}
+    subject = canonical_subject(account_id, task["subject_name"] or "") or (task["subject_name"] or "")
+    wanted = citations(task_text(task))
+    anchor_day = (task["due_date"] or task["created_at"] or "")[:10]
+    with closing(webapp_conn()) as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT id,title,kind,subject_name,source_label,source_page,printed_pages,document_date,created_at,origin "
+            "FROM materials WHERE account_id=? AND hidden=0 AND kind NOT IN ('exam_notice','toc') "
+            "AND lower(COALESCE(subject_name,''))=lower(?) ORDER BY id DESC", (account_id, subject))] if subject else []
+    out = []
+    for row in rows:
+        if row["id"] in linked:
+            continue
+        pages = set()
+        for value in (row["source_page"], *(str(row["printed_pages"] or "").split(","))):
+            try:
+                pages.add(int(str(value).strip()))
+            except (TypeError, ValueError):
+                continue
+        label = (row["source_label"] or "").strip()
+        hit = next((w for w in wanted if pages & set(w["pages"]) and serves(label, w["label"])), None)
+        day = (row["document_date"] or row["created_at"] or "")[:10]
+        gap = None
+        if anchor_day and day:
+            try:
+                gap = abs((date.fromisoformat(day) - date.fromisoformat(anchor_day)).days)
+            except ValueError:
+                gap = None
+        if hit:
+            rank, why = 0, f"zeigt {hit['label']} {page_list(sorted(pages & set(hit['pages'])))}"
+        elif row["kind"] in SHEET_KINDS and gap is not None and gap <= 14:
+            rank, why = 1, f"Blatt desselben Fachs vom {day}"
+        elif row["origin"] == "book_fetch":
+            rank, why = 3, f"Buchseite {row['source_page']}" if row["source_page"] else "Buchseite"
+        else:
+            rank, why = 2, f"gleiches Fach, vom {day}" if day else "gleiches Fach"
+        out.append({"material_id": row["id"], "title": row["title"] or "", "kind": row["kind"],
+                    "label": label, "page": row["source_page"], "reason": why,
+                    "_rank": (rank, gap if gap is not None else 999, -row["id"])})
+    out.sort(key=lambda x: x["_rank"])
+    for item in out:
+        item.pop("_rank")
+    return out[:limit]
+
+
 def _sheet_near(sheets: dict, subject: str, entry_date: str, days: int = 5) -> int | None:
     from datetime import date, timedelta
     try:
