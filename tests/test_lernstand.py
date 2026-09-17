@@ -383,3 +383,34 @@ def test_without_a_read_table_of_contents_nothing_is_added(env):
     assert lernstand.chapter_pages_of(1, 'SPANISCH', []) == []
     material = lernstand.material_for(1, 'SPANISCH', [{'label': 'Schulbuch', 'pages': [50]}])
     assert len(material) == 1 and 'gleiches Kapitel' not in material[0]['stelle']
+
+
+def test_the_chapter_index_names_the_pages_the_collector_already_fetched(env):
+    """Die Kapitelregel holt ohnehin alle Seiten eines angeschnittenen Kapitels
+    und wertet sie aus. Der Mentor bekommt daraus ein Verzeichnis: eine Zeile je
+    Seite mit ihrem Titel, dazu was noch fehlt. Ohne Inhalt — was auf einer Seite
+    steht, weiß er erst, wenn sie im Material auftaucht (D104)."""
+    from backend.book_structure import Chapter, store_chapters
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO digital_textbook_catalog(account_id,subject_name,title,discovered_at) "
+                  "VALUES(1,'spanisch','¡Apúntate! 2','now')")
+        for page, title in [(48, 'Quiz und Hörübung'), (50, 'Un rally por Madrid'), (52, 'El Prado')]:
+            c.execute("INSERT INTO materials(account_id,kind,subject_name,title,content_text,origin,source_book,"
+                      "source_page,page_check,analysis_state,created_at,updated_at) "
+                      "VALUES(1,'book_page','SPANISCH',?,'Text der Seite.','book_fetch','¡Apúntate! 2',?,'ok','ready','now','now')",
+                      (title, page))
+    store_chapters(1, '¡Apúntate! 2', [Chapter(number='3', title='De paseo por España', start_page=48, end_page=52),
+                                       Chapter(number='4', title='Otra unidad', start_page=53, end_page=60)])
+    found = lernstand.chapter_context(1, 'SPANISCH', [{'label': 'Schulbuch', 'pages': [50]}])
+    assert found['kapitel'] == '3 De paseo por España' and found['seiten'] == [48, 52]
+    assert found['genannte_seiten'] == [50]
+    assert [(p['seite'], p['titel']) for p in found['seiten_im_bestand']] == [
+        (48, 'Quiz und Hörübung'), (50, 'Un rally por Madrid'), (52, 'El Prado')]
+    # Was noch nicht geholt ist, steht als Lücke da und ist kein Verweisziel.
+    assert found['seiten_fehlen'] == [49, 51]
+    # Kein Seiteninhalt im Verzeichnis: nur Zahl und Titel.
+    assert not any('Text der Seite' in str(v) for v in found['seiten_im_bestand'])
+    # Ohne gelesenes Verzeichnis gibt es kein Kapitel und damit keinen Überblick.
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("DELETE FROM book_chapters")
+    assert lernstand.chapter_context(1, 'SPANISCH', [{'label': 'Schulbuch', 'pages': [50]}]) is None

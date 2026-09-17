@@ -1,3 +1,8 @@
+## 0.99.0
+
+- Der Mentor kennt in einer Themen-Einheit jetzt das ganze Kapitel, in dem sie steht: Nummer, Titel, von welcher bis zu welcher Seite es reicht, welche Seiten der Unterricht genannt hat, welche vorliegen und welche noch fehlen, dazu der Vokabel- und Grammatikteil der Einheit. Die Seiten holt und liest die App ohnehin, sobald ein Kapitel angeschnitten ist — dieses Wissen lag bisher ungenutzt daneben.
+- Ausdrücklich nur ein Verzeichnis, kein Inhalt: Zu jeder Seite steht Zahl und Titel, nicht ihr Text. Was auf einer Seite steht, erfährt der Mentor weiterhin nur aus den Seiten, die er wirklich vorliegen hat, und auf eine noch fehlende Seite schickt er das Kind nicht.
+
 ## 0.98.0
 
 - Neue Modellstufe „Klein" neben Hoch, Mittel, Niedrig und Transkription, mit eigener Foundry-Auswahl wie die anderen. Sie kommt leer und taucht in den Auswahllisten erst auf, wenn ein Modellname eingetragen ist. Gedacht für ein kleines, günstiges Modell auf der zweiten Foundry.
