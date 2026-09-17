@@ -17,7 +17,7 @@ from .. import ai_gateway
 from ..auth import CurrentUser, get_current_user
 from ..courses import hidden_keys, lesson_is_hidden
 from ..db import history_conn, webapp_conn
-from ..learning import InputModel, ActivityIn, ai_settings, ai_status, model_payload, model_output, now_iso, today_local
+from ..learning import InputModel, ActivityIn, ai_status, model_payload, model_output, now_iso, today_local
 from .learning import access, _AI_LOCK, insert_activity
 
 router = APIRouter(prefix="/accounts/{account_id}/learning/discovery", tags=["learning"])
@@ -155,8 +155,9 @@ async def scan_account(account_id):
     if not s['enabled'] or not p or not p['ai_enabled']:
         raise HTTPException(403,'Automatische Unterrichtsauswertung und KI im aktiven Schuljahr zuerst aktivieren')
     if not s['pending']: return dict(processed=0,cached=True)
-    config=ai_settings()
-    url=urlsplit(config['url'])
+    # Der Zugang gehört zum Deployment: die Auswertung läuft über das
+    # Hintergrundmodell, das auf einer anderen Foundry liegen kann (D87).
+    url=urlsplit(ai_gateway.endpoint_for(ai_gateway.model_for('discovery'))[0])
     if not ai_status()['configured'] or url.scheme!='https' or not url.hostname or url.username or url.password:
         raise HTTPException(503,'KI-Verbindung ist noch nicht eingerichtet')
     subject=s['pending'][0]['subject_name']

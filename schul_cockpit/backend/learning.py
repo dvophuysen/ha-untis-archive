@@ -130,23 +130,62 @@ def next_review(streak: int, outcome: str, help_used: bool, day: date) -> tuple[
     return streak, (day + timedelta(days=interval)).isoformat()
 
 
+class AiEndpointMissing(RuntimeError):
+    """Ein Deployment ist dem zweiten Zugang zugeordnet, der nicht eingerichtet ist."""
+
+
+def deployment_names(raw: str) -> tuple[str, ...]:
+    """Deployment-Namen aus einer Add-on-Option.
+
+    bashio reicht eine Listenoption als JSON durch (`["a","b"]`, je nach
+    Version ein- oder mehrzeilig) und eine nicht gesetzte als `null`. Statt auf
+    eine dieser Formen zu bauen, werden Klammern und Anführungszeichen entfernt
+    und an Komma und Zeilenumbruch getrennt; Komma-getrennter Text geht ebenso."""
+    parts = ((raw or "").replace("\n", ",").replace("[", ",").replace("]", ",").split(","))
+    names = (x.strip().strip('"').strip("'").strip() for x in parts)
+    return tuple(dict.fromkeys(x for x in names if x and x != "null"))
+
+
 def ai_settings() -> dict:
     return {
         "url": os.environ.get("LEARNING_AI_URL", "").strip(),
         "key": os.environ.get("LEARNING_AI_KEY", "").strip(),
         "model": os.environ.get("LEARNING_AI_MODEL", "").strip(),
+        # Zweite Foundry-Ressource, solange Deployments schrittweise umziehen.
+        # models_2 nennt die Namen, die schon dort liegen; der Rest bleibt beim ersten Zugang.
+        "url_2": os.environ.get("LEARNING_AI_URL_2", "").strip(),
+        "key_2": os.environ.get("LEARNING_AI_KEY_2", "").strip(),
+        "models_2": deployment_names(os.environ.get("LEARNING_AI_MODELS_2", "")),
         # Spracheingabe: eigenes Transkriptionsmodell in derselben Ressource.
         "transcribe_model": os.environ.get("LEARNING_AI_TRANSCRIBE_MODEL", "").strip() or "gpt-4o-transcribe",
         "transcribe_url": os.environ.get("LEARNING_AI_TRANSCRIBE_URL", "").strip(),
     }
 
 
+def ai_endpoint(model: str, settings: dict | None = None) -> tuple[str, str]:
+    """Adresse und Schlüssel des Zugangs, der dieses Deployment bedient.
+
+    Ein Name aus models_2 läuft ausschließlich über den zweiten Zugang. Fehlt
+    dort Adresse oder Schlüssel, bricht der Aufruf ab; ein stiller Rückfall auf
+    den ersten Zugang würde nach der Umstellung weiter die alte Ressource
+    ansprechen, ohne dass es jemand merkt."""
+    settings = settings or ai_settings()
+    if (model or "").strip() in settings["models_2"]:
+        if not settings["url_2"] or not settings["key_2"]:
+            raise AiEndpointMissing(model)
+        return settings["url_2"], settings["key_2"]
+    return settings["url"], settings["key"]
+
+
 def ai_status() -> dict:
     settings = ai_settings()
-    url = urlsplit(settings["url"])
+    try:
+        url, key = ai_endpoint(settings["model"], settings)
+    except AiEndpointMissing:
+        url, key = "", ""
     return {
-        "configured": bool(settings["url"] and settings["key"] and settings["model"]),
-        "host": url.hostname or "",
+        "configured": bool(url and key and settings["model"]),
+        "host": urlsplit(url).hostname or "",
         "model": settings["model"],
     }
 

@@ -1,3 +1,37 @@
+# Zwei Foundry-Zugänge nebeneinander 0.82.0
+
+Stand 17.09.2026. Nutzerauftrag: Modelle schrittweise auf eine andere Foundry
+übertragen, solange beide parallel laufen (D87). Steuerung in der
+App-Konfiguration; die Oberfläche bleibt unberührt.
+
+**Gebaut.** `config.yaml` und `run.sh` um `learning_ai_url_2`,
+`learning_ai_key_2` und `learning_ai_models_2` (`list(str)`) erweitert. In
+`backend/learning.py`: `deployment_names()` liest die Liste in jeder Form, die
+bashio durchreicht (JSON ein- oder mehrzeilig, Komma-Text, `null`), `ai_settings()` liefert `url_2`, `key_2`
+und `models_2`, `ai_endpoint(model)` entscheidet je Deployment-Name über den
+Zugang und wirft `AiEndpointMissing`, wenn der zweite unvollständig ist;
+`ai_status()` meldet den Host, der das Hauptmodell bedient. In
+`ai_gateway.py`: `endpoint_for()` macht daraus eine 503-Meldung mit
+Modellnamen, `complete()` baut Nutzlast, API-Erkennung, Adresse und
+`api-key`-Header aus dem aufgelösten Zugang, `transcribe_url()` und
+`transcribe()` folgen dem Zugang des Transkriptions-Deployments,
+`endpoint_overview()` liefert die Startzeile (inklusive `sources_model` und
+`opening_model` aus `mentor_ai_config`, ohne Schlüssel und ohne Pfad).
+`main.py` loggt sie beim Start. Die Vorprüfung in `routers/discovery.py`
+prüft jetzt den Zugang des Hintergrundmodells statt fest den ersten.
+
+**Nicht gebaut, absichtlich.** Keine Zuordnung in der Elternansicht, keine
+Spalte in `mentor_ai_config`, keine Änderung an `RATES` (Deployment-Namen
+bleiben gleich). Unterschiedliche API-Formen je Zugang funktionieren, weil
+die Art am Pfad erkannt wird; das ist Nebenwirkung, nicht Ziel.
+
+**Tests.** `tests/test_ai_endpoints.py`: Namensliste aus Zeilen und Kommas
+inklusive bashio-`null`, Zuordnung je Deployment, Fail-Closed ohne Rückfall,
+Zug mit dem Schlüssel der aufgerufenen Ressource vor und nach dem Umzug des
+Hauptmodells, gemischte API-Formen, Transkriptionsadresse und -schlüssel am
+eigenen Deployment, `ai_status()` und Startzeile, unveränderter Betrieb mit
+einem einzigen Zugang. 441 Tests grün.
+
 # Arbeitsblätter mit Bezug, Stufe 1 0.81.0
 
 Stand 17.09.2026. Nutzerentscheidung zu ARBEITSBLAETTER.md (D85) und zwei
