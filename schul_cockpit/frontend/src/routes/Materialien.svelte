@@ -407,6 +407,19 @@
       <div class="review-item">
         <div><strong>{m.title || 'Ohne Titel'}</strong> <small class="muted">· {KIND_NAMES[m.kind] ?? m.kind}{m.subject_name ? ` · ${subjectStyle(m.subject_name).name}` : ''}{m.source_label ? ` · ${m.source_label}` : ''}</small></div>
         <p class="preserve">{m.content_text || m.summary || '(kein Text erkannt)'}</p>
+        {#if m.plausibility?.checked}
+          {#if m.plausibility.unknown.length}
+            <!-- Handschrift: die 1 dieses Kindes sieht aus wie eine 7. Der Unterricht kennt die richtigen Stellen. -->
+            <ul class="doubts">
+              {#each m.plausibility.unknown as u}
+                <li>⚠ {u.label} S. {u.page} kommt im Unterricht nicht vor{#if u.suggest} · gemeint S. {u.suggest}?{/if}</li>
+              {/each}
+            </ul>
+            <p class="muted">Bitte am Foto prüfen und mit „Korrigieren“ berichtigen; die Stellen holen das Material.</p>
+          {:else if m.plausibility.cited}
+            <p class="muted">✓ Alle {m.plausibility.cited} Stellen kommen so im Unterricht vor.</p>
+          {/if}
+        {/if}
         <div class="row gap-sm">
           <button class="primary" disabled={busy} onclick={() => act(async () => { await api.post(`${base}/${m.id}/verified`, { value: true }); message = 'Danke, so gelesen bleibt es.'; await load(); })}>✓ Stimmt so</button>
           <button disabled={busy} onclick={() => act(() => show(m))}>Korrigieren</button>
@@ -709,6 +722,7 @@
 {/if}
 
 <style>
+  .doubts { margin: 4px 0 6px; padding-left: 18px; color: var(--rating-1); font-weight: 600; line-height: 1.4; }
   .place { font-weight: 650; color: var(--fg); }
   .wanted{border-left:4px solid var(--accent)}
   .wanted>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;list-style:none}
