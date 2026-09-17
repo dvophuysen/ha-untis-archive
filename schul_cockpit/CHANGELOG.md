@@ -1,3 +1,8 @@
+## 0.90.0
+
+- Die automatische Unterrichtsauswertung läuft jetzt auf der niedrigen Modellstufe und hat dafür eine eigene Einstellung bekommen, getrennt vom Abschreiben der Buchseiten. Gemessen an zwölf bereits ausgewerteten Stunden: Die niedrige Stufe ordnete dreimal hintereinander 11 von 12 Stunden demselben Thema zu wie zuvor, mit immer derselben einen Abweichung — ein rein organisatorischer Eintrag, den sie als unklar einstuft. Die hohe Stufe schwankte gegen sich selbst zwischen 10 und 12. Die günstige Stufe ist hier also nicht schlechter, sondern stabiler, und sie kostet ein Fünfundzwanzigstel.
+- Unter den Budgetgrenzen steht dafür „Stufe für die Unterrichtsauswertung". Wer sie zurückstellen will, wählt dort das Hauptgespräch.
+
 ## 0.89.1
 
 - Fehler behoben: Das neue Eichwerkzeug für die Unterrichtsauswertung brach mit einem Serverfehler ab, weil es die Stunden unter einem falschen Spaltennamen suchte. Der Weg hat jetzt einen eigenen Test.

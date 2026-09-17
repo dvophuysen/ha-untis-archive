@@ -1,3 +1,30 @@
+# Unterrichtsauswertung geeicht und umgestellt 0.89.0 und 0.90.0
+
+Stand 17.09.2026. Zweitgrößter Kostenposten, bisher ungemessen (D94).
+
+**Werkzeug (0.89.0).** `routers/discovery.compare_classification()` ordnet die
+letzten zwölf bereits ausgewerteten Stunden mit einer wählbaren Stufe erneut ein
+und hält das Ergebnis gegen den gespeicherten Stand; gespeichert wird nichts.
+Die Anweisung liegt dafür in `classify_instruction()`, damit Eichung und
+Nachtlauf dieselbe benutzen. 0.89.1 hat einen Spaltennamen berichtigt, an dem
+der erste Live-Aufruf mit 500 scheiterte; der Weg hat jetzt einen Test.
+
+**Messung.** Gleiche Zuordnung von zwölf Stunden gegen den gespeicherten Stand:
+hoch 12/12 und 10/12 (zwei Läufe, also Eigenstreuung), mittel 9/12, niedrig
+11/12 in drei Läufen hintereinander mit stets derselben einen Abweichung. Diese
+eine ist ein organisatorischer Eintrag, den niedrig als unklar einstuft statt
+als Thema „Klassenorganisation" — nach der Anweisung vertretbar. Mittel
+zersplitterte ein Thema in einen eigenen, spezifischeren Titel.
+
+**Gebaut (0.90.0).** `mentor_ai_config.background_model` (Migration
+`mentor_ai_config_004_background`, Vorgabe „niedrig"), `tier_for()` trennt
+`BACKGROUND` von `SOURCES`, `status()` und die Elternansicht bekommen das dritte
+Auswahlfeld. Buchseiten bleiben unberührt beim Hauptgespräch.
+
+**Tests.** Die Trennung beider Stufen in beide Richtungen, dazu bekamen alle
+Stufen der Testvorrichtung einen Kostensatz — sonst scheitert jeder Aufruf, der
+nicht auf dem Hauptmodell läuft. 463 Tests grün, Frontend gebaut.
+
 # Verfassung des Kindes 0.88.0
 
 Stand 17.09.2026. Schritt 5 aus MENTOR_EINSTIEG.md, Entscheidung D93.

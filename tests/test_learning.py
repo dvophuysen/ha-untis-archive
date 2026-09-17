@@ -49,8 +49,12 @@ def env(tmp_path, monkeypatch):
     from backend.routers import plan as plan_routes
     monkeypatch.setattr(lp,"today_local",lambda:date(2026,9,11))
     from backend import ai_gateway as ai
+    # Alle Stufen der Testvorrichtung brauchen einen Kostensatz, sonst scheitert
+    # jeder Aufruf, der nicht auf dem Hauptmodell läuft.
     monkeypatch.setitem(ai.RATES, 'test', (10.,45.))
     monkeypatch.setitem(ai.RATES, 'test-model', (10.,45.))
+    monkeypatch.setitem(ai.RATES, 'test-terra', (5.,18.))
+    monkeypatch.setitem(ai.RATES, 'test-luna', (0.4,1.8))
     monkeypatch.setattr(ai, 'today_local', lambda: date(2026,9,11))
     with closing(db.webapp_conn()) as conn:
         for uid, role in [(1, "parent"), (2, "child"), (3, "child"), (4, "parent")]:

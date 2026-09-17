@@ -886,6 +886,16 @@ _MIGRATIONS.append(("mentor_message_author_002",
 # Eintrags), ergebnis (die Bearbeitung des Kindes dazu), stoff (Thema).
 _MIGRATIONS.append(("material_links_002_relation", "ALTER TABLE material_links ADD COLUMN relation TEXT"))
 
+# Die Hintergrundauswertung (Unterrichtseinträge zu Themen ordnen) bekommt eine
+# eigene Stufe, getrennt vom Abschreiben der Buchseiten (D94). Die Eichung vom
+# 17.09. hat sie auf der niedrigen Stufe dreimal in Folge bei 11 von 12
+# gleichen Zuordnungen gemessen, während die hohe Stufe gegen sich selbst
+# zwischen 10 und 12 schwankte. Deshalb steht sie von Anfang an auf niedrig.
+_MIGRATIONS.append(("mentor_ai_config_004_background", """
+ALTER TABLE mentor_ai_config ADD COLUMN background_model TEXT;
+UPDATE mentor_ai_config SET background_model='niedrig' WHERE id=1 AND background_model IS NULL;
+"""))
+
 # Die Vorsortierung der Auswertung für ein loses Blatt: welcher Eintrag am
 # ehesten gemeint ist und warum (D85, Stufe 2). Ein Vorschlag, keine Bindung.
 _MIGRATIONS.append(("materials_015_sheet_candidate", "ALTER TABLE materials ADD COLUMN sheet_hint TEXT"))

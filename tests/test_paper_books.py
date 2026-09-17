@@ -560,3 +560,20 @@ def test_a_cheaply_read_page_is_not_due_again_every_night(env, monkeypatch):
     with closing(db.webapp_conn()) as c, c:
         c.execute("UPDATE materials SET analysis_model='altes-modell' WHERE id=?", (mid,))
     assert mid in [m for _, m in analysis.due()]
+
+
+def test_background_analysis_has_its_own_tier_apart_from_copying(env, monkeypatch):
+    """Die Unterrichtsauswertung läuft auf einer eigenen Stufe: Sie verträgt laut
+    Eichung die günstige, das Abschreiben von Buchseiten nicht (D94)."""
+    from backend import ai_gateway as ai
+    ai_env(monkeypatch)
+    with closing(db.webapp_conn()) as c, c:
+        ai.init_config(c)
+        c.execute("UPDATE mentor_ai_config SET background_model='niedrig', sources_model=NULL WHERE id=1")
+    assert ai.tier_for('discovery') == 'niedrig' and ai.tier_for('background') == 'niedrig'
+    assert ai.tier_for('sources') == 'hoch', 'Buchseiten bleiben beim Hauptgespräch'
+    assert ai.tier_for('mentor') == 'hoch'
+    # Umgekehrt zieht eine Stufe fürs Abschreiben die Auswertung nicht mit.
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("UPDATE mentor_ai_config SET sources_model='mittel' WHERE id=1")
+    assert ai.tier_for('sources') == 'mittel' and ai.tier_for('discovery') == 'niedrig'
