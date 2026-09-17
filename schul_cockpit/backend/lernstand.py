@@ -459,9 +459,43 @@ def _row_label(row) -> str:
     return {"workbook": "Arbeitsheft", "worksheet": "Arbeitsblatt"}.get(row["kind"], "")
 
 
+def merge_places(places: list[dict]) -> list[dict]:
+    """Stellen zusammenführen, die dieselbe Seite desselben Buchs meinen.
+
+    Ein Unterrichtseintrag schreibt „Buch S. 48", ein anderer „Schulbuch S. 48".
+    Das sind zwei Nennungen einer Seite, keine zwei Seiten. Ungefiltert standen
+    sie nebeneinander in der Stellenliste, und weil eine vorliegende Seite nur
+    die erste passende Stelle belegt, galt dieselbe Seite gleichzeitig als da
+    und als fehlend (D99). Der genauere Name gewinnt."""
+    from .sources import part_of, serves
+    def canonical(name):
+        # Die Stellen tragen rohe Wörter aus dem Unterrichtstext: „Buch",
+        # „Schulbuch", „AH". serves() kennt nur die Anzeigenamen, deshalb erst
+        # durch dieselbe Mustertabelle schicken, die auch beim Einlesen gilt.
+        name = (name or "").strip()
+        return part_of(name)[0] or name
+    merged: list[dict] = []
+    for place in places:
+        label = canonical(place.get("label"))
+        pages = set(place.get("pages") or [])
+        for other in merged:
+            other_label = canonical(other.get("label"))
+            # Gegenseitig verträglich heißt: dasselbe Buch, nur anders benannt.
+            if serves(label, other_label) and serves(other_label, label):
+                other["pages"] = sorted(set(other["pages"]) | pages)
+                # Der genauere Name gewinnt: „Schulbuch" schlägt „Buch“ und leer.
+                if len(label) > len(other.get("label") or ""):
+                    other["label"] = place.get("label")
+                break
+        else:
+            merged.append({**place, "label": place.get("label"), "pages": sorted(pages)})
+    return merged
+
+
 def _matching_rows(account_id: int, subject: str, places: list[dict]) -> list[dict]:
     """Die abgelegten Seiten, die eine der Stellen belegen."""
     from .sources import serves
+    places = merge_places(places)
     if not places:
         # Ohne Stellenangabe stand der Mentor bisher ohne Material da und hat sich
         # eine Buchseite ausgedacht, obwohl Arbeitsheft und Buch des Fachs im
@@ -497,6 +531,7 @@ def _matching_rows(account_id: int, subject: str, places: list[dict]) -> list[di
 def place_status(account_id: int, subject: str, places: list[dict]) -> dict:
     """Wie viele Stellen eines Themas als Foto oder Buchseite vorliegen."""
     from .sources import page_list
+    places = merge_places(places)
     total = sum(len(p.get("pages", [])) for p in places)
     if not total:
         return {"total": 0, "have": 0, "missing": [], "missing_label": ""}
@@ -544,6 +579,7 @@ def material_for(account_id: int, subject: str, places: list[dict], budget: int 
 
 def places_label(places: list[dict]) -> str:
     from .sources import page_list
+    places = merge_places(places)
     return " · ".join(f"{p.get('label') or 'Buch'} {page_list(p.get('pages', []))}" for p in places if p.get("pages"))
 
 

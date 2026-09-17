@@ -149,3 +149,24 @@ def test_the_list_is_readable_for_a_child_and_survives_an_empty_archive(env):
     assert body['subjects'][0]['missing'][0]['pages_label'] == 'S. 19'
     assert 'Klassenarbeit' in body['subjects'][0]['missing'][0]['quote']
     assert client.get('/api/accounts/2/materials/sources').status_code == 403
+
+
+def test_the_same_page_under_two_names_is_one_place():
+    """Ein Eintrag schreibt „Buch S. 48", ein anderer „Schulbuch S. 48". Das ist
+    eine Seite. Nebeneinander galt sie gleichzeitig als da und als fehlend, weil
+    eine vorliegende Seite nur die erste passende Stelle belegt (D99)."""
+    from backend.lernstand import merge_places, places_label
+    stellen = [{"label": None, "pages": [48]}, {"label": "Schulbuch", "pages": [48]},
+               {"label": "Arbeitsheft", "pages": [26]}]
+    assert merge_places(stellen) == [{"label": "Schulbuch", "pages": [48]},
+                                     {"label": "Arbeitsheft", "pages": [26]}]
+    assert places_label(stellen) == "Schulbuch S. 48 · Arbeitsheft S. 26"
+    # Verschiedene Bücher mit derselben Seitenzahl bleiben getrennt.
+    zwei = [{"label": "Schulbuch", "pages": [26]}, {"label": "Arbeitsheft", "pages": [26]}]
+    assert merge_places(zwei) == zwei
+    # Der Begleitband ist ein eigenes Buch und wird nie mit dem Schulbuch verschmolzen.
+    eigen = [{"label": "Schulbuch", "pages": [10]}, {"label": "Begleitband", "pages": [10]}]
+    assert merge_places(eigen) == eigen
+    # Seiten derselben Nennung werden vereinigt, nicht verdoppelt.
+    assert merge_places([{"label": "Buch", "pages": [48]}, {"label": None, "pages": [49]}]) \
+        == [{"label": "Buch", "pages": [48, 49]}]

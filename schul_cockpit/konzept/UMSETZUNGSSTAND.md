@@ -1,3 +1,26 @@
+# Eine Seite, zwei Nennungen 0.95.0
+
+Stand 17.09.2026. Nutzerrückmeldung (D99).
+
+**Befund.** Beim Thema „Spanische Texte verstehen und erschließen" stand
+„Buch S. 48 · Schulbuch S. 48 · Arbeitsheft S. 26 · 2 von 3 Seiten da · fehlt
+Schulbuch S. 48". Zwei Unterrichtseinträge hatten dieselbe Seite verschieden
+benannt. `_matching_rows()` bricht nach der ersten passenden Stelle ab, also
+belegte Material 11 (Schulbuch S. 48, ohne Buchteil eingetragen) nur die erste
+der beiden; die zweite blieb offen. Die Materialbilanz war nicht betroffen, sie
+zählt Seiten und nicht Stellen.
+
+**Gebaut.** `lernstand.merge_places()` führt Stellen zusammen, die nach
+`sources.serves()` gegenseitig dasselbe Buch meinen, und wird von
+`_matching_rows()`, `place_status()` und `places_label()` benutzt. Die rohen
+Namen aus den Einträgen laufen vorher durch `sources.part_of()`, weil „Buch"
+kein Anzeigename ist und `serves()` ihn sonst nicht kennt. Der genauere Name
+gewinnt, Seitenmengen werden vereinigt.
+
+**Tests.** Zusammenführung der echten Stellenliste, getrennte Bücher mit
+gleicher Seitenzahl, der Begleitband als eigenes Buch, und die Vereinigung
+mehrerer Seiten derselben Nennung. 471 Tests grün.
+
 # Gedruckte Seite und Eintragung des Kindes getrennt 0.94.0
 
 Stand 17.09.2026. Nutzerrückmeldung zu Arbeitsheft Spanisch S. 34 und 36 (D98).
