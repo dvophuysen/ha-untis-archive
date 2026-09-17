@@ -577,3 +577,31 @@ def test_background_analysis_has_its_own_tier_apart_from_copying(env, monkeypatc
     with closing(db.webapp_conn()) as c, c:
         c.execute("UPDATE mentor_ai_config SET sources_model='mittel' WHERE id=1")
     assert ai.tier_for('sources') == 'mittel' and ai.tier_for('discovery') == 'niedrig'
+
+
+def test_the_printed_page_and_the_childs_entry_stay_apart():
+    """Auf Arbeitsheft S. 34 hat das Kind die Lücken ausgefüllt. Die Lesung darf
+    seine Antworten nicht zum Buchtext machen: Sonst übt der Mentor später mit
+    den Antworten des Kindes, auch mit den falschen (D98)."""
+    from backend.materials import printed_only, pupil_only
+    gelesen = ("el Real Madrid es ___ [Kind: el mejor equipo] (equipo / bueno/-a) del mundo. "
+               "Tienen [Kind gestrichen: churros] ___ [Kind: los mejores] churros.")
+    assert printed_only(gelesen) == ("el Real Madrid es ___ (equipo / bueno/-a) del mundo. "
+                                     "Tienen ___ churros.")
+    assert pupil_only(gelesen) == ['el mejor equipo', 'los mejores']
+    # Eine unbearbeitete Seite bleibt, wie sie ist.
+    assert printed_only('Completa las frases. 1. La capital es ___.') == 'Completa las frases. 1. La capital es ___.'
+    assert pupil_only('Completa las frases.') == []
+
+
+def test_the_childs_writing_always_goes_to_review():
+    """Handschrift bleibt gegenlesepflichtig (D77). Dass ein gedrucktes
+    Musterbeispiel in Schreibschrift keinen Blick kostet, regelt die Lesung: Für
+    sie bleibt handwritten false. Und was das Kind geschrieben hat, zählt auch
+    dann, wenn die Lesung es nicht als Handschrift gemeldet hat (D98)."""
+    from backend.materials import needs_review
+    gedruckt = {"origin": "", "analysis_state": "ready", "verified": 0, "kind": "workbook",
+                "handwritten": 0, "pupil_entries": 0, "confidence": 0.95}
+    assert needs_review(gedruckt) is False
+    assert needs_review({**gedruckt, "handwritten": 1}) is True
+    assert needs_review({**gedruckt, "pupil_entries": 1}) is True

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import logging
 import subprocess
 from contextlib import closing
@@ -277,8 +278,12 @@ def needs_review(row) -> bool:
         return False
     if row["kind"] in REVIEW_KINDS:
         return True
-    # Handschrift immer gegenlesen: Eine 1 wird zur 7, egal wie sicher sich das Modell fühlt (D77).
-    if "handwritten" in keys and row["handwritten"]:
+    # Handschrift immer gegenlesen: Eine 1 wird zur 7, egal wie sicher sich das
+    # Modell fühlt (D77). Dass eine im Heft gedruckte Musterlösung in
+    # Schreibschrift keinen Blick kostet, regelt die Lesung selbst: Für sie
+    # bleibt handwritten false (D98). Hat das Kind geschrieben, zählt das auch
+    # dann, wenn die Lesung die Handschrift nicht als solche gemeldet hat.
+    if ("handwritten" in keys and row["handwritten"]) or ("pupil_entries" in keys and row["pupil_entries"]):
         return True
     confidence = row["confidence"] if "confidence" in keys else None
     return confidence is not None and confidence < REVIEW_CONFIDENCE
@@ -489,3 +494,18 @@ def for_context(account_id: int, *, subject: str | None = None, task_id: int | N
                 used += len(text)
         chosen.append(entry)
     return chosen
+
+
+# Die gedruckte Seite ohne die Eintragungen des Kindes. Die Lesung schreibt sie
+# als „___ [Kind: …]“ dahinter (D98); wer die Seite als Vorlage braucht — der
+# Mentor beim Aufgabenbauen —, nimmt diese Fassung.
+_PUPIL = re.compile(r"\s*\[Kind(?: gestrichen)?:[^\]]*\]")
+
+
+def printed_only(text: str) -> str:
+    return _PUPIL.sub("", text or "")
+
+
+def pupil_only(text: str) -> list[str]:
+    """Nur das, was das Kind eingetragen hat, in der Reihenfolge der Seite."""
+    return [m.group(1).strip() for m in re.finditer(r"\[Kind:([^\]]*)\]", text or "")]

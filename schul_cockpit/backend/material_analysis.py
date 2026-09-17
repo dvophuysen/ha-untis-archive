@@ -53,6 +53,10 @@ class Insight(InputModel):
     # Handschrift zu lesen war: steuert Gegenlesen und Eichung (D77).
     page_type: str = Field(default="", max_length=20)
     handwritten: bool = False
+    # Ob das Kind auf dieser Seite selbst geschrieben hat. Getrennt von
+    # handwritten, weil Arbeitshefte Beispiellösungen in Schreibschrift drucken:
+    # Die sind gedruckter Inhalt und kein Grund zum Gegenlesen (D98).
+    pupil_entries: bool = False
     # Vorsortierung für ein loses Blatt: die Nummer aus hinweise.blatt_kandidaten,
     # die am besten passt, und warum. Ein Vorschlag zum Antippen, keine Bindung (D85).
     sheet_candidate: int = Field(default=0, ge=0, le=9)
@@ -106,7 +110,15 @@ INSTRUCTION = (
     "page_type ist genau einer dieser Werte: text (überwiegend Fließtext), table (Tabelle oder Liste), "
     "handwriting (überwiegend handschriftlich), figure (Zeichnungen, Schaltpläne, Diagramme, Karten oder Bilder tragen den Inhalt), "
     "formula (Gleichungen, Terme, Rechnungen), mixed. handwritten true, sobald handschriftliche Einträge zu lesen waren, "
-    "auch nur eingetragene Lösungen; bei Ziffern in Handschrift besonders sorgfältig zwischen 1 und 7 sowie 0 und 6 unterscheiden.\n"
+    "auch nur eingetragene Lösungen; bei Ziffern in Handschrift besonders sorgfältig zwischen 1 und 7 sowie 0 und 6 unterscheiden. "
+    "Ein im Heft gedrucktes Musterbeispiel, auch in Schreibschrift oder in einer Handschrift nachempfundenen Type, ist "
+    "gedruckter Inhalt: handwritten bleibt dafür false.\n"
+    "Gedruckte Seite und Eintragung des Kindes streng trennen. content_text gibt immer die gedruckte Seite wieder, "
+    "so wie sie ohne Bearbeitung aussieht: Eine Lücke bleibt als ___ stehen, auch wenn sie ausgefüllt ist. Was das Kind "
+    "selbst eingetragen hat, schreibst du unmittelbar dahinter in eckige Klammern, also ___ [Kind: seine Antwort]. "
+    "Durchgestrichenes des Kindes als [Kind gestrichen: …], eine Verbesserung darüber als [Kind: …]. Setze pupil_entries "
+    "auf true, sobald du eine eigene Eintragung des Kindes gelesen hast. Die Eintragung des Kindes darf nie als Teil des "
+    "gedruckten Satzes erscheinen: Sonst gilt seine Antwort später als Buchinhalt, auch wenn sie falsch war.\n"
     "Stehen in hinweise.blatt_kandidaten Einträge, ist dies ein loses Blatt, und du sortierst vor: sheet_candidate ist die "
     "Nummer des Eintrags, zu dem das Blatt am ehesten gehört, sheet_reason der Beleg dafür aus dem Blatt selbst, also "
     "Überschrift, Aufgabennummern oder ein aufgedrucktes Datum. Ein aufgedrucktes Ausgabedatum wiegt am schwersten. "
@@ -274,6 +286,7 @@ def _apply(conn, account_id: int, row, insight: Insight, tier_used: str | None =
             ensure_ascii=False) if chosen else None
     else:
         values["sheet_hint"] = None
+    values["pupil_entries"] = int(insight.pupil_entries)
     values.update(
         analysis_state="ready",
         analysis_model=ai.model_name(tier_used or ai.tier_for(_purpose(row))),
