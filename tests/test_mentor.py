@@ -729,3 +729,69 @@ def test_homework_sessions_are_found_by_their_wording_and_last_dialog(setup):
     assert send(client,demo,text='Nur ein Versuch.').status_code==200
     with closing(db.webapp_conn()) as c:
         assert {r[0] for r in c.execute("SELECT author FROM mentor_messages WHERE session_id=? AND role='user'",(demo['id'],))}=={'eltern'}
+
+
+def test_the_quiz_inventory_survives_a_long_conversation(setup):
+    """Im echten Verben-Gespräch schrumpfte der Merkzettel nach 36 Zügen auf
+    einen Satz, und die Fehler der ersten Runde waren am Ende vergessen. Die
+    App führt den Bestand jetzt selbst (D91)."""
+    from backend.routers.mentor import merge_quiz, open_items, QuizItem
+    q = merge_quiz([], [QuizItem(item='fall', state='falsch'), QuizItem(item='feed', state='falsch')])
+    assert open_items(q) == ['fall', 'feed']
+    # Eine spätere Runde meldet nur ihre eigenen Items; die alten bleiben stehen.
+    q = merge_quiz(q, [QuizItem(item='feel', state='richtig')])
+    assert [x['item'] for x in q] == ['fall', 'feed', 'feel']
+    assert open_items(q) == ['fall', 'feed']
+    # Ein Fehler gilt erst nach eigener Wiederholung als erledigt, nicht schon,
+    # weil das Modell das Item später einmal als richtig meldet.
+    q = merge_quiz(q, [QuizItem(item='fall', state='richtig')])
+    assert open_items(q) == ['fall', 'feed']
+    q = merge_quiz(q, [QuizItem(item='fall', state='wiederholt')])
+    assert open_items(q) == ['feed']
+
+
+def test_the_inventory_is_stored_and_handed_back_next_turn(setup):
+    client, _, patch = setup
+    contexts = []
+    mock(patch, [reply(task=None, action='explain', quiz=[{'item': 'bring', 'state': 'falsch'}]),
+                 reply(task=None, action='explain', quiz=[{'item': 'build', 'state': 'offen'}])], contexts)
+    s = start(client)
+    s = send(client, s).json()
+    with closing(db.webapp_conn()) as c:
+        stored = c.execute('SELECT quiz_json FROM mentor_sessions WHERE id=?', (s['id'],)).fetchone()[0]
+    assert json.loads(stored) == [{'item': 'bring', 'state': 'falsch'}]
+    s = send(client, s).json()
+    # Der zweite Zug bekam den Bestand mitgeliefert, nicht nur die letzten Nachrichten.
+    assert contexts[-1]['abfrage'] == {'bestand': [{'item': 'bring', 'state': 'falsch'}], 'offen': ['bring']}
+    with closing(db.webapp_conn()) as c:
+        stored = json.loads(c.execute('SELECT quiz_json FROM mentor_sessions WHERE id=?', (s['id'],)).fetchone()[0])
+    assert [x['item'] for x in stored] == ['bring', 'build']
+
+
+def test_book_pages_stop_travelling_once_the_inventory_stands(setup):
+    """36 Züge lang gingen Seitenbilder mit, obwohl ab dem dritten Zug alles
+    Nötige bekannt war. Steht der Bestand, wird aus der Liste abgefragt (D91)."""
+    client, _, patch = setup
+    pages = []
+
+    async def book(account_id, subject, task_text):
+        pages.append(subject)
+        return ([{'type': 'image_url', 'image_url': {'url': 'data:image/jpeg;base64,AAA'}}],
+                {'status': 'loaded', 'delivered_pages': [206]})
+    from backend import textbook_context
+    patch.setattr(textbook_context, 'homework_page_images', book)
+    contexts = []
+    mock(patch, [reply(task=None, action='explain', quiz=[{'item': 'fall', 'state': 'falsch'}]),
+                 reply(task=None, action='explain')], contexts)
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO tasks(account_id,title,subject_name,status,source,created_at,updated_at) "
+                  "VALUES(1,'Irregular verbs p. 206','ENGLISCH','open','manual','now','now')")
+        tid = c.execute('SELECT id FROM tasks ORDER BY id DESC LIMIT 1').fetchone()[0]
+    r = client.post(B + '/sessions', json={'subject': 'Englisch', 'homework_task_id': tid})
+    assert r.status_code == 200, r.text
+    s = r.json()
+    s = send(client, s).json()
+    assert pages == ['ENGLISCH'], 'der erste Zug braucht die Seite'
+    s = send(client, s).json()
+    assert pages == ['ENGLISCH'], 'der zweite Zug kommt ohne Seitenbild aus'
+    assert contexts[-1]['textbook']['status'] == 'im_bestand'

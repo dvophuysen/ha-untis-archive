@@ -886,6 +886,11 @@ _MIGRATIONS.append(("mentor_message_author_002",
 # Eintrags), ergebnis (die Bearbeitung des Kindes dazu), stoff (Thema).
 _MIGRATIONS.append(("material_links_002_relation", "ALTER TABLE material_links ADD COLUMN relation TEXT"))
 
+# Der Bestand einer Abfrage, von der App geführt statt vom Modell jede Runde
+# neu geschrieben (D91). Vorher stand er im Fließtext von summary und ging
+# über ein langes Gespräch verloren.
+_MIGRATIONS.append(("mentor_sessions_004_quiz", "ALTER TABLE mentor_sessions ADD COLUMN quiz_json TEXT"))
+
 # Welche Richtwerte ein Aufruf überschritten hat. Seit 0.84.0 sperrt keiner
 # mehr, deshalb muss die Überschreitung nachlesbar sein statt als Fehler im
 # Gesicht des Kindes zu landen (D89).

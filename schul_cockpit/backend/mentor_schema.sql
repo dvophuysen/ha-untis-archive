@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS mentor_sessions (
  current_task TEXT, task_help INTEGER NOT NULL DEFAULT 0, task_started_at TEXT,
  summary TEXT NOT NULL DEFAULT '', source_json TEXT NOT NULL DEFAULT '{}',
  context_hash TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
- pending_key TEXT, pending_since TEXT, FOREIGN KEY(skill_id) REFERENCES mentor_skills(id)
+ pending_key TEXT, pending_since TEXT, quiz_json TEXT, FOREIGN KEY(skill_id) REFERENCES mentor_skills(id)
 );
 CREATE INDEX IF NOT EXISTS idx_mentor_sessions_account ON mentor_sessions(account_id,updated_at);
 CREATE TABLE IF NOT EXISTS mentor_messages (

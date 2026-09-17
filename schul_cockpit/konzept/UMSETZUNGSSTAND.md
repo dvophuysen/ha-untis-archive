@@ -1,3 +1,33 @@
+# Bestand einer Abfrage in der App 0.86.0
+
+Stand 17.09.2026. Erste echte Abfrage beobachtet (D84), Befund umgesetzt (D91).
+
+**Befund.** Konto 2, Englisch, 36 Züge, unregelmäßige Verben Seite 206. Der
+Merkzettel im Feld `summary` stand am Ende auf einem Satz. Falsch waren in
+Runde eins fall, feed, feel, fight, find und fit; die Sammelwiederholung nannte
+fit, fly und forget. In Runde zwei gingen beat, become, bite und bring daneben
+und wurden nie wiederholt. Kosten des Gesprächs: 1,69 $ Liste, dominiert von
+Seitenbildern in jedem Zug.
+
+**Gebaut.** `QuizItem` und `Reply.quiz` in `routers/mentor.py`;
+`merge_quiz()` schreibt den Bestand fort statt ihn zu ersetzen, weil das Modell
+nur die Items der laufenden Runde sieht; `open_items()` liefert, was offen ist.
+Gespeichert in `mentor_sessions.quiz_json` (Migration
+`mentor_sessions_004_quiz`), zurück in den Kontext als `abfrage.bestand` und
+`abfrage.offen`, dazu in `view()` als `quiz`/`quiz_open` für die Oberfläche.
+Die Instruktion verlangt nur noch die Änderung der Runde. `Mentor.svelte` zeigt
+unter dem Gespräch, was zu wiederholen ist.
+
+Buchseiten: `quiz_running` unterdrückt `homework_page_images`, sobald ein
+Bestand steht und keine Aufgabe offen ist; der Kontext meldet dann
+`textbook.status = im_bestand`, und die Instruktion verbietet, deswegen nach
+einem Foto zu fragen.
+
+**Tests.** Fortschreiben über mehrere Runden inklusive der Regel, dass
+„richtig" einen Fehler nicht abschließt; Speichern und Zurückgeben über zwei
+Züge; und dass der zweite Zug einer Abfrage ohne Seitenbild auskommt.
+458 Tests grün, Frontend gebaut.
+
 # Zwei Durchgänge beim Materiallesen 0.85.0
 
 Stand 17.09.2026. Eichung im Auftrag des Nutzers, Qualität ausdrücklich weit
