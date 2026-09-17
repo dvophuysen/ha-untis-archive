@@ -41,14 +41,16 @@ KINDS = (
 # Buchteile, die eine Datei zeigen kann; die Namen sind die der Quellenbilanz.
 BOOK_PARTS = ("Textband", "Begleitband", "Schulbuch", "Arbeitsheft", "Grammatikheft", "Arbeitsblatt")
 
-LINK_KINDS = ("topic", "task", "lesson", "exam")
+LINK_KINDS = ("topic", "task", "lesson", "exam", "homework")
+# Rolle einer Verknüpfung (D85). Ohne Angabe folgt sie aus der Materialart.
+RELATIONS = ("blatt", "ergebnis", "stoff")
 
 # Fields a parent may correct. A correction is remembered in locked_fields and
 # survives every later analysis run.
 EDITABLE = (
     "kind", "subject_name", "title", "summary", "content_text",
     "document_date", "period_start", "period_end", "contains_solutions",
-    "source_label", "source_page",
+    "source_label", "source_page", "printed_pages",
 )
 
 
@@ -256,7 +258,7 @@ def duplicate_of(account_id: int, material_id: int, max_distance: int = 3) -> di
 
 def links(conn, material_id: int) -> list[dict]:
     return [dict(r) for r in conn.execute(
-        "SELECT kind,target_id,origin FROM material_links WHERE material_id=?", (material_id,))]
+        "SELECT kind,target_id,origin,relation FROM material_links WHERE material_id=?", (material_id,))]
 
 
 # Lesungen mit Folgen: Aus einem Zettel werden Stellen gebunden, aus einem
@@ -382,15 +384,21 @@ def set_flag(account_id: int, material_id: int, field: str, value: int) -> dict 
     return detail(account_id, material_id) if changed else None
 
 
-def link(account_id: int, material_id: int, kind: str, target_id: int, origin: str = "mensch") -> bool:
+def link(account_id: int, material_id: int, kind: str, target_id: int, origin: str = "mensch",
+         relation: str | None = None) -> bool:
     if kind not in LINK_KINDS:
         raise ValueError("Unbekannte Verknüpfung")
+    if relation is not None and relation not in RELATIONS:
+        raise ValueError("Unbekannte Rolle")
     with closing(webapp_conn()) as conn, conn:
         if not conn.execute("SELECT 1 FROM materials WHERE id=? AND account_id=?",
                             (material_id, account_id)).fetchone():
             return False
-        conn.execute("INSERT OR IGNORE INTO material_links(material_id,kind,target_id,origin,created_at) "
-                     "VALUES(?,?,?,?,?)", (material_id, kind, int(target_id), origin, now_iso()))
+        # Eine bestehende Verknüpfung bekommt die Rolle nachgetragen, statt zu verschwinden.
+        conn.execute("INSERT INTO material_links(material_id,kind,target_id,origin,created_at,relation) VALUES(?,?,?,?,?,?) "
+                     "ON CONFLICT(material_id,kind,target_id) DO UPDATE SET relation=COALESCE(excluded.relation,relation),"
+                     "origin=CASE WHEN excluded.relation IS NOT NULL THEN excluded.origin ELSE origin END",
+                     (material_id, kind, int(target_id), origin, now_iso(), relation))
     return True
 
 

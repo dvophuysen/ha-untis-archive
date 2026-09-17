@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Response, UploadFile
@@ -31,6 +32,8 @@ class MaterialPatch(InputModel):
     contains_solutions: bool | None = None
     source_label: str | None = Field(default=None, max_length=40)
     source_page: int | None = Field(default=None, ge=0, le=1999)
+    # Eine Doppelseite hat zwei gedruckte Seiten; die erste ist source_page.
+    printed_pages: list[int] | None = Field(default=None, max_length=4)
 
 
 class SuggestionIn(InputModel):
@@ -46,6 +49,8 @@ class SuggestionsIn(InputModel):
 class LinkIn(InputModel):
     kind: str = Field(max_length=10)
     target_id: int = Field(ge=1)
+    # Rolle des Bezugs (D85): blatt, ergebnis oder stoff; ohne Angabe folgt sie der Materialart.
+    relation: str | None = Field(default=None, pattern=r"^(blatt|ergebnis|stoff)$")
 
 
 class FlagIn(InputModel):
@@ -71,6 +76,7 @@ async def upload(
     topic_id: int | None = Form(default=None),
     lesson_id: int | None = Form(default=None),
     exam_id: int | None = Form(default=None),
+    homework_id: int | None = Form(default=None),
     source_label: str = Form(default=""),
     source_page: int | None = Form(default=None),
     user: CurrentUser = Depends(get_current_user),
@@ -95,7 +101,9 @@ async def upload(
         raise HTTPException(422, "Unbekannter Buchteil.")
     # Getippt oder gewählt: gespeichert wird die Schreibweise des Stundenplans.
     subject_name = store.canonical_subject(account_id, subject_name) or ""
-    claimed = bool(source_label and source_page is not None and subject_name)
+    # Ein Blatt (Seite 0) wird nicht je Fach beansprucht, sondern an seinen
+    # Eintrag gehängt (homework_id oder lesson_id, D85).
+    claimed = bool(source_label and source_page and subject_name)
     if source_label and not kind:
         kind = {"Arbeitsheft": "workbook", "Grammatikheft": "workbook", "Arbeitsblatt": "worksheet"}.get(source_label, "book_page")
     if claimed and not title.strip() and kind != "toc":
@@ -104,7 +112,7 @@ async def upload(
         "kind": kind if kind in store.KINDS else "",
         "subject_name": subject_name or None,
         "title": title.strip() or None,
-        "task_id": task_id, "topic_id": topic_id, "lesson_id": lesson_id, "exam_id": exam_id,
+        "task_id": task_id, "topic_id": topic_id, "lesson_id": lesson_id, "exam_id": exam_id, "homework_id": homework_id,
         "source_label": source_label or None,
         "source_page": source_page if source_page else None,
     }
@@ -157,6 +165,14 @@ def index(
         for m in items:
             if m.get("needs_review") and (m["kind"] == "exam_notice" or m.get("handwritten")):
                 m["plausibility"] = run(m)
+    # Ein loses Blatt bekommt Vorschläge, zu welchem Eintrag es gehören könnte;
+    # zugeordnet wird mit einem Tipp, von Kind oder Eltern (D85).
+    for m in items:
+        if m["kind"] in sources.SHEET_KINDS and not any(l["kind"] in ("task", "homework", "lesson") for l in m.get("links", [])):
+            try:
+                m["sheet_candidates"] = sources.sheet_candidates(account_id, m)
+            except Exception:
+                _LOGGER.debug("Blatt-Vorschläge für Material %s nicht berechenbar", m["id"], exc_info=True)
     pending = sum(1 for m in items if m["analysis_state"] in ("pending", "failed"))
     return {
         "materials": items,
@@ -297,6 +313,12 @@ def correct(account_id: int, material_id: int, body: MaterialPatch, background: 
             raise HTTPException(422, "Unbekannter Buchteil.")
     if "source_page" in changes and not changes["source_page"]:
         changes["source_page"] = None
+    if "printed_pages" in changes:
+        pages = sorted({int(p) for p in changes["printed_pages"] if 0 < int(p) < 2000})
+        changes["printed_pages"] = json.dumps(pages)
+        # Die erste gedruckte Seite ist die Seite des Materials, wenn keine gesetzt ist.
+        if pages and not changes.get("source_page"):
+            changes["source_page"] = pages[0]
     if "subject_name" in changes:
         changes["subject_name"] = store.canonical_subject(account_id, changes["subject_name"])
     if "contains_solutions" in changes:
@@ -304,7 +326,7 @@ def correct(account_id: int, material_id: int, body: MaterialPatch, background: 
     found = store.update(account_id, material_id, changes, by_parent=True)
     if not found:
         raise HTTPException(404, "Material nicht gefunden.")
-    if changes.keys() & {"kind", "subject_name", "source_label", "source_page"}:
+    if changes.keys() & {"kind", "subject_name", "source_label", "source_page", "printed_pages"}:
         # Ein umgewidmetes Foto (Inhaltsverzeichnis, Klausurzettel, andere
         # Seite) wirkt sofort auf Verzeichnis und Einkaufsliste.
         background.add_task(analysis.after_analysis, account_id, material_id)
@@ -369,7 +391,7 @@ def add_link(account_id: int, material_id: int, body: LinkIn,
              user: CurrentUser = Depends(get_current_user)) -> dict:
     access(user, account_id, write=True)
     try:
-        ok = store.link(account_id, material_id, body.kind, body.target_id)
+        ok = store.link(account_id, material_id, body.kind, body.target_id, relation=body.relation)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from None
     if not ok:

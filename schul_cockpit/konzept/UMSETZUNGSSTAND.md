@@ -1,3 +1,31 @@
+# Arbeitsblätter mit Bezug, Stufe 1 0.81.0
+
+Stand 17.09.2026. Nutzerentscheidung zu ARBEITSBLAETTER.md (D85) und zwei
+Rückmeldungen (Doppelseite von Hand, Begriffe D86).
+
+**Gebaut.** `material_links.relation` (Migration), `materials.link(...,
+relation)` mit Upsert; `LINK_KINDS` um `homework`. `sources.is_sheet_link`,
+`_sheet_photos` bindet nur über Aufgabe, Hausaufgabe oder Stunde mit Rolle
+blatt oder Blatt-Materialart; `refresh_status` ohne `_sheet_near`;
+`sheet_candidates` (gleiches Fach, Seite 0, paper, ±14 Tage, drei nächste);
+Ledger führt Seite 0 je Eintrag mit `entry_kind`/`entry_id`. Router: Listing
+hängt `sheet_candidates` an lose Blätter, `LinkIn.relation`, Upload nimmt
+`homework_id` und beansprucht Seite 0 nicht mehr je Fach, `MaterialPatch.printed_pages`
+mit Sperre (auch in `_apply`). Frontend: Vorschläge unter der Materialzeile,
+„Vorhandenes Blatt zuordnen“ je Eintrag in der Quellenbilanz, Foto von dort
+mit Eintragsbezug, Feld „Gedruckte Seite(n)“, Begriffe.
+
+**Geprüft.** Blattbindung über Aufgabe, Stunde, Hausaufgabe und Rolle; lose
+Mitschrift zählt nicht; Nähe bindet nicht, Vorschlag richtig sortiert, Tipp
+bindet; Ledger je Eintrag; Doppelseite per Korrektur gesperrt gegen Lesung.
+
+**Offen.** Stufe 2 (Kandidaten beim Einwerfen, Kennung „AB Mathe 26.08.
+Lückentext“ in Listen), Stufe 3 (Mentor bittet um Foto statt fremdes Blatt).
+Live: die Geschichte-Doppelseite 10/11 nach dem Update im Formular auf
+„10-11“ setzen.
+
+---
+
 # Blattbindung und Abfragen 0.80.0
 
 Stand 17.09.2026. Nutzerrückmeldung (Fehlbindung) und die drei Vorschläge aus
