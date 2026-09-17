@@ -246,6 +246,12 @@ EXTRACT = (
 )
 
 
+# Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
+# sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
+# für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
+EXTRACT_VERSION = 2
+
+
 def looks_like_vocab(row: dict) -> bool:
     """Ob eine Seite Lernwörter trägt: Titel/Kurzfassung sagen es, oder der Text
     hat viele Zeilen der Form „Wort — Bedeutung" oder eine Wörtertabelle."""
@@ -260,6 +266,11 @@ def looks_like_vocab(row: dict) -> bool:
     dashes = len(re.findall(r"^\S[^\n]{0,40}\s[—–-]\s\S", text, re.M))
     pipes = len(re.findall(r"^[^\n|]+\|[^\n|]+\|[^\n]+$", text, re.M))
     return dashes >= 12 or pipes >= 8
+
+
+# Ein Bündel, dessen Name nur „Arbeitsheft S. 26" ist: keine Einheit des Buchs,
+# sondern eine Seite aus dem Unterricht.
+PAGE_UNIT = re.compile(r"^.{0,40}\sS\.\s\d+$")
 
 
 def unit_label(account_id: int, subject: str, label: str, page: int | None) -> str:
@@ -430,7 +441,7 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
         if not row:
             raise HTTPException(404, "Seite nicht gefunden.")
         row = dict(row)
-        digest = mc.fingerprint(row["content_text"] or "")
+        digest = mc.fingerprint([EXTRACT_VERSION, row["content_text"] or ""])
         done = c.execute("SELECT text_hash,words FROM vocab_extractions WHERE material_id=?", (material_id,)).fetchone()
     if done and done["text_hash"] == digest:
         return done["words"]
@@ -522,7 +533,14 @@ def units(account_id: int, subject: str) -> list[dict]:
             u["sections"][w["section"].strip()] += 1
     for u in by_unit.values():
         u["sections"] = [{"section": name, "words": n} for name, n in sorted((u.get("sections") or {}).items())]
-    return sorted(by_unit.values(), key=lambda u: (u["pages"][0]["page"] if u["pages"] and u["pages"][0]["page"] else 9999, u["unit"]))
+        u["page_only"] = bool(PAGE_UNIT.match(u["unit"]))
+    # Geübt werden Einheiten, nicht einzelne Seiten aus dem Unterricht (D100).
+    # Ein Bündel, das nur eine Seitenzahl ist, steht für eine Heftseite, die
+    # nebenbei ein paar Wörter trug — es bleibt, solange es noch keine Einheit
+    # mit Wörtern gibt, damit der Trainer nicht leer dasteht.
+    real = [u for u in by_unit.values() if not u["page_only"]]
+    offered = real if any(u["words"] for u in real) else list(by_unit.values())
+    return sorted(offered, key=lambda u: (u["pages"][0]["page"] if u["pages"] and u["pages"][0]["page"] else 9999, u["unit"]))
 
 
 def public_word(w: dict, state: dict | None = None) -> dict:

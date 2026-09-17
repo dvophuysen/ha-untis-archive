@@ -46,10 +46,13 @@ def test_a_touched_chapter_is_collected_whole_with_its_vocabulary(env):
     shelf()
     chapters_fixture()
     result = sources.sync_links(1)
-    assert result["links"] == 1 + 14 + 5, "die Stelle, Seiten 48–61 und der Vokabelteil 171–175"
+    # Die Stelle, die Einheit 48–61, ihr Vokabelteil 171–175 (der zusätzlich als
+    # Begleiter gebunden wird) und alle Wortschatzteile des Buchs 165–189 (D109).
+    assert result["links"] == 1 + 14 + 5 + 25
     book = sources.ledger(1)
     only = book["subjects"][0]
-    assert only["pending"] == 19 and only["pending_pages"][:3] == [48, 49, 50]
+    assert only["pending"] == 14 + 25, "die Einheit und alle Vokabelteile der Sprache"
+    assert only["pending_pages"][:3] == [48, 49, 50]
     assert only["chapters"][0]["title"] == "¡Acércate!" and only["chapters"][0]["pages"] == 14
     assert only["chapters"][0]["companions"][0]["title"] == "Vocabulario Unidad 3"
     groups = collector.wanted_pages(1)
@@ -65,7 +68,10 @@ def test_a_touched_chapter_is_collected_whole_with_its_vocabulary(env):
         c.execute("UPDATE homework SET text='Vokabeln wiederholen' WHERE id=1")
     sources.sync_links(1)
     with closing(db.webapp_conn()) as conn:
-        assert conn.execute("SELECT COUNT(*) FROM source_links").fetchone()[0] == 0
+        left = [r[0] for r in conn.execute("SELECT DISTINCT page FROM source_links ORDER BY page")]
+    # Die Kapitelseiten verschwinden mit ihrem Eintrag; die Wortschatzteile der
+    # Sprache bleiben, sie hängen an keinem Unterrichtseintrag (D109).
+    assert left == list(range(165, 190))
 
 
 async def test_the_table_of_contents_is_read_once_from_the_first_pages(env, monkeypatch):
@@ -122,12 +128,17 @@ async def test_a_run_reads_the_table_of_contents_before_fetching_pages(env, monk
     assert summary["toc"] == {"¡Apúntate! 2": "ready"}
     assert calls[0] == [2, 3, 4, 5], "erst das Verzeichnis"
     assert calls[1] == [50], "das knappe Budget geht an die im Unterricht genannte Seite"
-    summary = await collector.collect(1, budget=30)
-    assert set(calls[2]) == (set(range(48, 62)) | set(range(171, 176))) - {50} and calls[2] == sorted(calls[2]), \
-        "dann die Einheit und ihr Vokabelteil, in Buchreihenfolge geblättert"
-    assert summary["stored"] == 18 and summary["verified"] == 18
+    summary = await collector.collect(1, budget=60)
+    want = sorted((set(range(48, 62)) | set(range(165, 190))) - {50})
+    assert set(calls[2]) <= set(want) and calls[2] == sorted(calls[2]), \
+        "dann die Einheit und die Wortschatzteile, in Buchreihenfolge geblättert"
+    assert set(range(48, 62)) - {50} <= set(calls[2]), "die angeschnittene Einheit zuerst und ganz"
+    assert summary["stored"] == summary["verified"] and summary["stored"] >= 18
     book = sources.ledger(1)["subjects"][0]
-    assert book["chapters"][0]["pages_stored"] == 14 and book["pending"] == 0
+    # Die angeschnittene Einheit ist vollständig da; was ein Lauf vom Wortschatz
+    # nicht mehr schafft, bleibt für den nächsten liegen (D109).
+    assert book["chapters"][0]["pages_stored"] == 14
+    assert all(165 <= p <= 189 for p in book["pending_pages"]), book["pending_pages"]
 
 
 def test_exam_scope_lists_the_chapters_touched_in_the_period(env):
@@ -183,3 +194,30 @@ def test_a_failed_table_of_contents_is_tried_again_but_not_forever(env):
     # Kein Verzeichnis auf diesen Seiten: ein weiterer Lauf holte dieselben.
     _set_state(1, title, 'not_found', [2, 3])
     assert toc_pending(1, title) is False
+
+
+def test_every_vocabulary_part_of_a_language_book_is_fetched(env):
+    """Zu Schuljahresbeginn gehören die Wortschatzteile einer Fremdsprache
+    vollständig geholt, nicht erst wenn der Unterricht die Lektion anschneidet:
+    Geübt wird eine Unidad als Ganzes, und die steht im Anhang über mehrere
+    Seiten (D109). Ein Sachfach bekommt diese Regel nicht."""
+    from backend.book_structure import Chapter, bind_vocab_parts, store_chapters, vocab_parts, chapters_of
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO digital_textbook_catalog(account_id,subject_name,title,discovered_at) "
+                  "VALUES(1,'spanisch','¡Apúntate! 2','now')")
+        c.execute("INSERT INTO digital_textbook_catalog(account_id,subject_name,title,discovered_at) "
+                  "VALUES(1,'physik','Universum Physik','now')")
+    liste = [Chapter(number='3', title='De paseo por España', start_page=48, end_page=59),
+             Chapter(number='', title='Lista cronológica', kind='vocab', start_page=168, end_page=172),
+             Chapter(number='', title='Lösungen', kind='appendix', start_page=200, end_page=210)]
+    store_chapters(1, '¡Apúntate! 2', liste)
+    store_chapters(1, 'Universum Physik', [Chapter(number='', title='Fachwörter', kind='vocab', start_page=300, end_page=302)])
+    assert [c['title'] for c in vocab_parts(chapters_of(1, '¡Apúntate! 2'))] == ['Lista cronológica']
+    assert bind_vocab_parts(1, '2026-09-17T18:00:00+02:00') == 5, 'S. 168 bis 172'
+    with closing(db.webapp_conn()) as c:
+        pages = sorted(r[0] for r in c.execute(
+            "SELECT page FROM source_links WHERE account_id=1 AND entry_kind='chapter' AND lower(subject_name) LIKE 'span%'"))
+        other = [r[0] for r in c.execute(
+            "SELECT page FROM source_links WHERE account_id=1 AND lower(subject_name) LIKE 'phys%'")]
+    assert pages == [168, 169, 170, 171, 172], 'die ganze Liste, auch ohne angeschnittene Lektion'
+    assert other == [], 'Physik ist keine Fremdsprache'

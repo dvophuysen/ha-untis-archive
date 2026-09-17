@@ -528,6 +528,39 @@ def expand(account_id: int, stamp: str) -> int:
         subject = _spelling(account_id, paper["subject_name"])
         units = _units_of(account_id, paper["title"], subject, chapters, paper["part_label"])
         count += _bind_units(account_id, subject, units, paper["part_label"], stamp)
+    # Wortschatzteile der Sprachbücher gehören ganz dazu, unabhängig davon, ob
+    # der Unterricht die Lektion schon angeschnitten hat (D109).
+    count += bind_vocab_parts(account_id, stamp)
+    return count
+
+
+def vocab_parts(chapters: list[dict]) -> list[dict]:
+    """Die Wortschatzteile eines Buchs: Vokabelverzeichnis, Lernwortlisten.
+
+    Das Verzeichnis nennt sie selbst (`kind='vocab'`). Für eine Fremdsprache
+    werden sie zu Schuljahresbeginn vollständig geholt, nicht erst wenn der
+    Unterricht die Lektion anschneidet: Das Kind übt eine Unidad als Ganzes,
+    und die steht im Anhang über mehrere Seiten (D109)."""
+    return [c for c in chapters if c["kind"] == "vocab"]
+
+
+def bind_vocab_parts(account_id: int, stamp: str) -> int:
+    """Die Wortschatzteile aller Sprachbücher auf die Abrufliste setzen."""
+    from .vocab import language_of
+    count = 0
+    with closing(webapp_conn()) as conn:
+        books = [dict(r) for r in conn.execute(
+            "SELECT DISTINCT c.book_title, k.subject_name FROM book_chapters c "
+            "JOIN digital_textbook_catalog k ON k.account_id=c.account_id AND k.title=c.book_title "
+            "WHERE c.account_id=? AND k.subject_name IS NOT NULL", (account_id,))]
+    for book in books:
+        if not language_of(book["subject_name"] or ""):
+            continue
+        chapters = chapters_of(account_id, book["book_title"])
+        subject = _spelling(account_id, book["subject_name"])
+        parts = {c["id"]: (c, f"Wortschatz: {c['title']}".strip(), stamp[:10]) for c in vocab_parts(chapters)}
+        if parts:
+            count += _bind_units(account_id, subject, parts, "Schulbuch", stamp)
     return count
 
 

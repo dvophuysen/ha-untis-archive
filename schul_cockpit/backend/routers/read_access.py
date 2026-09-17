@@ -49,6 +49,10 @@ dataset('learning_sessions','app','id activity_id snapshot answer help_used outc
 dataset('learning_reviews','app','activity_id next_due streak last_outcome last_session_id','next_due',joins=ACTIVITY_JOIN,account='p.account_id')
 
 
+# Die gelesenen Inhaltsverzeichnisse: Grundlage der Kapitelregel und der
+# Wortschatzteile, deshalb auch von außen nachlesbar.
+dataset('book_chapters','app','id account_id book_title number title kind level start_page end_page belongs_to locked created_at','created_at')
+
 dataset('learning_day_preferences','app','account_id day load updated_at','day','updated_at')
 dataset('learning_plan_links','app','account_id goal_key skill_id')
 dataset('learning_plan_blocks','app','account_id day session_id goal_key minutes','day')
