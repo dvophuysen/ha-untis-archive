@@ -302,7 +302,8 @@ _BUSY: set[int] = set()
 def unread_pages(account_id: int, subject: str) -> list[int]:
     """Seiten des Fachs mit Lernwörtern, die noch nie zerlegt wurden."""
     return [p["material_id"] for p in pages(account_id, subject)
-            if p["extracted"] is None and p["readable"] and not p["error"] and p["material_id"] not in _BUSY]
+            if (p["extracted"] is None or p["stale"]) and p["readable"] and not p["error"]
+            and p["material_id"] not in _BUSY]
 
 
 async def read_unread(account_id: int, subject: str) -> int:
@@ -488,15 +489,21 @@ def pages(account_id: int, subject: str) -> list[dict]:
     with closing(webapp_conn()) as c:
         rows = [dict(r) for r in c.execute(
             "SELECT m.id,m.title,m.summary,m.content_text,m.source_label,m.source_page,m.origin,m.kind,"
-            "e.words AS extracted,e.error FROM materials m LEFT JOIN vocab_extractions e ON e.material_id=m.id "
+            "e.words AS extracted,e.error,e.text_hash FROM materials m LEFT JOIN vocab_extractions e ON e.material_id=m.id "
             "WHERE m.account_id=? AND m.hidden=0 AND lower(m.subject_name)=lower(?) AND m.kind NOT IN ('exam_notice','toc') "
             "ORDER BY m.source_label,m.source_page,m.id", (account_id, subject))]
     out = []
     for r in rows:
         if r["extracted"] or looks_like_vocab(r):
             label = (r["source_label"] or "").strip() or ("Schulbuch" if (r["origin"] or "") == "book_fetch" else "")
+            # Veraltet heißt: gelesen, aber mit einer älteren Anweisung oder einem
+            # älteren Seitentext. Solche Seiten müssen noch einmal gelesen werden,
+            # sonst käme eine Änderung der Anweisung bei ihnen nie an (D108).
+            stale = bool(r["extracted"] is not None
+                         and r["text_hash"] != mc.fingerprint([EXTRACT_VERSION, r["content_text"] or ""]))
             out.append({"material_id": r["id"], "title": r["title"], "label": label, "page": r["source_page"],
-                        "extracted": r["extracted"], "error": r["error"], "readable": bool((r["content_text"] or "").strip()),
+                        "extracted": r["extracted"], "error": r["error"], "stale": stale,
+                        "readable": bool((r["content_text"] or "").strip()),
                         "unit": unit_label(account_id, subject, label, r["source_page"])})
     return out
 
@@ -516,9 +523,10 @@ def units(account_id: int, subject: str) -> list[dict]:
     by_unit: dict[str, dict] = {}
     for p in found:
         u = by_unit.setdefault(p["unit"], {"unit": p["unit"], "pages": [], "words": 0, "s1": {s: 0 for s in STAGES}, "s2": {s: 0 for s in STAGES}, "unread": 0})
-        u["pages"].append({k: p[k] for k in ("material_id", "label", "page", "extracted", "readable", "error")})
-        # Ungelesen heißt: noch nie zerlegt. Eine gelesene Seite ohne Lernwörter zählt nicht.
-        if p["extracted"] is None and p["readable"] and not p["error"]:
+        u["pages"].append({k: p[k] for k in ("material_id", "label", "page", "extracted", "readable", "error", "stale")})
+        # Ungelesen heißt: noch nie zerlegt oder mit einer älteren Anweisung
+        # gelesen. Eine gelesene Seite ohne Lernwörter zählt nicht.
+        if (p["extracted"] is None or p["stale"]) and p["readable"] and not p["error"]:
             u["unread"] += 1
     for w in words:
         u = by_unit.setdefault(w["unit"], {"unit": w["unit"], "pages": [], "words": 0, "s1": {s: 0 for s in STAGES}, "s2": {s: 0 for s in STAGES}, "unread": 0})
