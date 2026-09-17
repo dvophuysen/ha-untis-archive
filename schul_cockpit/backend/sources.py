@@ -435,6 +435,56 @@ def _sheet_photos(account_id: int) -> dict:
     return found
 
 
+SUBJECT_SHORT = {"deutsch": "DE", "englisch": "EN", "mathematik": "MA", "latein": "LA", "spanisch": "SP",
+                 "französisch": "FR", "geschichte": "GE", "physik": "PH", "chemie": "CH", "biologie": "BI",
+                 "politik": "PO", "erdkunde": "EK", "kunst": "KU", "musik": "MU", "religion": "RE",
+                 "sport": "SP", "informatik": "IF"}
+
+
+def sheet_label(material: dict, entry_date: str | None = None) -> str:
+    """Die Kennung eines Blatts: „AB GE 16.09. Lückentext“.
+
+    Sie wird nicht gespeichert, sondern aus Bezug und Material abgeleitet
+    (D85). Der Ausgabetag ist das Datum des verknüpften Eintrags, sonst das
+    aufgedruckte Datum, sonst der Tag der Aufnahme mit dem Vermerk „ungefähr“."""
+    subject = (material.get("subject_name") or "").strip()
+    short = SUBJECT_SHORT.get(subject.casefold(), subject[:2].upper() if subject else "")
+    day = (entry_date or material.get("document_date") or "")[:10]
+    ungefaehr = not day
+    if ungefaehr:
+        day = (material.get("created_at") or "")[:10]
+    stamp = ""
+    if len(day) == 10:
+        stamp = f"{day[8:10]}.{day[5:7]}."
+        if ungefaehr:
+            stamp = "ca. " + stamp
+    title = (material.get("title") or "").strip()
+    parts = ["AB", short, stamp, title]
+    return " ".join(x for x in parts if x).strip()
+
+
+def sheet_for_task(account_id: int, task_id: int) -> dict | None:
+    """Das Arbeitsblatt, das ausdrücklich zu dieser Hausaufgabe gehört.
+
+    Nur über einen gesetzten Bezug, nie über Nähe im Datum (D85). Gibt es
+    keinen, bekommt der Mentor das auch so gesagt und bittet um ein Foto,
+    statt ein fremdes Blatt zu benutzen."""
+    if not task_id:
+        return None
+    with closing(webapp_conn()) as conn:
+        row = conn.execute(
+            "SELECT m.id,m.title,m.subject_name,m.document_date,m.created_at,m.kind,m.content_text,l.relation "
+            "FROM material_links l JOIN materials m ON m.id=l.material_id "
+            "WHERE l.kind='task' AND l.target_id=? AND m.account_id=? AND m.hidden=0 "
+            "AND (l.relation='blatt' OR m.kind IN ('worksheet','handout')) "
+            "ORDER BY (l.relation='blatt') DESC, m.id DESC LIMIT 1", (task_id, account_id)).fetchone()
+    if not row:
+        return None
+    material = dict(row)
+    return {"id": material["id"], "kennung": sheet_label(material), "art": material["kind"],
+            "text": (material["content_text"] or "")[:4000]}
+
+
 def sheet_candidates(account_id: int, material: dict, days: int = 14, limit: int = 3) -> list[dict]:
     """Zu welchem Eintrag ein loses Blatt gehören könnte: Hausaufgaben und
     Stunden desselben Fachs, die ein Blatt nennen und noch keins haben, nach

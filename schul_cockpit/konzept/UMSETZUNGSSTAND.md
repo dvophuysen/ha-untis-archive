@@ -1,3 +1,27 @@
+# Arbeitsblätter Stufe 2 und 3 0.87.0
+
+Stand 17.09.2026. Umsetzung der offenen Stufen aus ARBEITSBLAETTER.md (D85),
+Entscheidung D92.
+
+**Gebaut.** `material_analysis._context()` hängt `hinweise.blatt_kandidaten`
+an, sobald das Material an keiner Hausaufgabe hängt; `Insight.sheet_candidate`
+und `sheet_reason` nehmen die Vorsortierung entgegen, `_apply()` legt sie als
+`materials.sheet_hint` ab (Migration `materials_015_sheet_candidate`). Die
+Instruktion verlangt einen Beleg vom Blatt und verbietet ausdrücklich, nach
+Datumsnähe zu raten — das kann die App selbst. `routers/materials.py` sortiert
+den Vorschlag nach oben und reicht den Grund mit.
+
+`sources.sheet_label()` bildet die Kennung aus Fach, Tag und Titel, mit
+`SUBJECT_SHORT` für die Fachkürzel und „ca." für ein geschätztes Datum.
+`sources.sheet_for_task()` liefert das Blatt einer Hausaufgabe ausschließlich
+über einen gesetzten Bezug. Der Mentor bekommt es als `arbeitsblatt` in den
+Kontext; fehlt es, steht dort `vorhanden: false`, und die Instruktion gibt den
+Wortlaut vor, statt ein fremdes Blatt anzunehmen.
+
+**Tests.** Kennung in drei Varianten (aufgedrucktes Datum, geschätzter Tag,
+Datum des Bezugs), und dass zwei Blätter desselben Fachs vom selben Tag ohne
+Bezug nicht an die Hausaufgabe gebunden werden. 460 Tests grün, Frontend gebaut.
+
 # Bestand einer Abfrage in der App 0.86.0
 
 Stand 17.09.2026. Erste echte Abfrage beobachtet (D84), Befund umgesetzt (D91).
