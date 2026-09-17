@@ -375,23 +375,37 @@ def _shelf(account_id: int) -> dict[str, dict]:
     return books
 
 
+# Nur diese Arten sind ein Blatt, das eine Hausaufgabe „Arbeitsblatt“ belegt.
+# Eine Mitschrift oder eine eigene Ausarbeitung (notes, own_work) ist das
+# Ergebnis einer Hausaufgabe, nicht ihr Blatt; „other“ ist unbestimmt.
+SHEET_KINDS = ("worksheet", "handout")
+
+
 def _sheet_photos(account_id: int) -> dict:
-    """Fotografierte Blätter: an eine Aufgabe gehängt (→ ihre Hausaufgabe) oder
-    lose, je Fach mit Datum."""
+    """Fotografierte Blätter: an eine Aufgabe gehängt (→ nur ihre Hausaufgabe)
+    oder lose, je Fach mit Datum (D83).
+
+    Ein Foto, das ein Mensch an eine Aufgabe gehängt hat, gehört zu dieser
+    Aufgabe und zu keiner anderen: Es kommt nie in den losen Vorrat, aus dem
+    eine Hausaufgabe der nächsten Tage „ihr“ Arbeitsblatt bekommt. Und es
+    belegt auch seine eigene Hausaufgabe nur, wenn die Auswertung ein Blatt
+    gesehen hat, nicht die Ausarbeitung des Kindes.
+    """
     found: dict = {}
     with closing(webapp_conn()) as conn:
         rows = [dict(r) for r in conn.execute(
             "SELECT id,subject_name,kind,document_date,created_at FROM materials WHERE account_id=? AND hidden=0 "
-            "AND origin!='book_fetch' AND kind IN ('worksheet','handout','other','notes','own_work')", (account_id,))]
+            f"AND origin!='book_fetch' AND kind IN ({','.join('?' * len(SHEET_KINDS))})", (account_id, *SHEET_KINDS))]
         links = [dict(r) for r in conn.execute(
-            "SELECT l.material_id,l.target_id FROM material_links l JOIN materials m ON m.id=l.material_id "
-            "WHERE l.kind='task' AND m.account_id=?", (account_id,))]
+            "SELECT l.material_id,l.target_id,m.kind FROM material_links l JOIN materials m ON m.id=l.material_id "
+            "WHERE l.kind='task' AND m.account_id=? AND m.hidden=0", (account_id,))]
         tasks = {r["id"]: dict(r) for r in conn.execute("SELECT id,title,notes FROM tasks WHERE account_id=?", (account_id,))}
+    attached = {link["material_id"] for link in links}
     if links:
         with closing(history_conn()) as hconn:
             for link in links:
                 task = tasks.get(link["target_id"])
-                if not task:
+                if not task or link["kind"] not in SHEET_KINDS:
                     continue
                 try:
                     homework = homework_for_task(hconn, account_id, task)
@@ -400,6 +414,8 @@ def _sheet_photos(account_id: int) -> dict:
                 if homework:
                     found.setdefault(("homework", homework), link["material_id"])
     for row in rows:
+        if row["id"] in attached:
+            continue
         day = (row["document_date"] or row["created_at"] or "")[:10]
         found.setdefault(("loose", (row["subject_name"] or "").strip().casefold()), []).append((day, row["id"]))
     return found

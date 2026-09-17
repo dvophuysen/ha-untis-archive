@@ -1,3 +1,8 @@
+## 0.80.0
+
+- Fehler behoben: Ein Foto, das an eine Hausaufgabe gehängt wurde, galt als Arbeitsblatt für jede Hausaufgabe desselben Fachs in den Nachbartagen. So bekam die neueste Geschichte-Hausaufgabe „Arbeitsblatt beenden“ ein „Blatt liegt vor“, obwohl nur die Ausarbeitung des Kindes zu einer alten Aufgabe fotografiert worden war. Jetzt gilt: Ein angehängtes Foto gehört zu seiner Aufgabe und zu keiner anderen, und es belegt auch die eigene Hausaufgabe nur, wenn die Auswertung ein Blatt gesehen hat (Arbeitsblatt oder Handout), nicht bei Mitschrift, Ausarbeitung oder Unbestimmtem. Lose Fotos ohne Aufgabe zählen weiter nur, wenn sie ein Blatt sind.
+- Mentor beim Abfragen: Will das Kind abgefragt werden oder heißt die Hausaufgabe lernen, fängt der Mentor sofort im gewünschten Format an, nennt bei Fehlern die ganze Reihe mit Merksatz, lässt sie wiederholen, fragt jedes falsche Item nach drei bis fünf weiteren noch einmal und am Ende alle gesammelt. Er führt dafür einen Merkzettel über das ganze Gespräch (Bestand, Reihenfolge, Fehler, nächstes Item), weil er nur die letzten Nachrichten sieht; und er nimmt den Bestand der Items nur von der Buchseite oder dem Foto, statt eine Liste zu erfinden. Anlass: Abfrage unregelmäßiger Verben, bei der am Ende die Fehler vergessen waren.
+
 ## 0.79.0
 
 - Gespräche gelten als Gespräche des Kindes. Kinder lernen auch auf den Geräten der Eltern; bisher stand dann „Eltern“ als Sprecher im Verlauf. Jetzt gilt jedes Gespräch als Gespräch des Kindes, egal wer angemeldet ist. Nur der bewusst eingeschaltete Demo-Modus ist eine Simulation. Bestehende Verläufe werden einmalig umgestellt; „War nur ein Test“ bleibt als nachträgliche Kennzeichnung.
