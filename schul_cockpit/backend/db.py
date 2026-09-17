@@ -877,6 +877,11 @@ _MIGRATIONS.append(("materials_014_page_type", """
 ALTER TABLE materials ADD COLUMN page_type TEXT;
 ALTER TABLE materials ADD COLUMN handwritten INTEGER NOT NULL DEFAULT 0;
 """))
+# Gespräche auf den Geräten der Eltern waren als „Eltern“ markiert; sie gelten
+# als Gespräche des Kindes (D82). Nur Demo-Gespräche bleiben Simulation.
+_MIGRATIONS.append(("mentor_message_author_002",
+                    "UPDATE mentor_messages SET author='kind' WHERE author='eltern' "
+                    "AND session_id IN (SELECT id FROM mentor_sessions WHERE is_demo=0)"))
 
 
 def init_webapp_db() -> None:

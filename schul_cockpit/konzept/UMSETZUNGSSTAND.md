@@ -1,3 +1,25 @@
+# Verläufe des Kindes 0.79.0
+
+Stand 17.09.2026. Nutzerrückmeldung: Gespräche auf dem Elterngerät standen als
+„Eltern“ im Verlauf; die Verlaufsliste nannte nur „Hilfe: Englisch“.
+
+**Gebaut (D82).** `author_of(user, session)` schreibt „kind“, außer im
+Demo-Modus; Migration `mentor_message_author_002` stellt bestehende echte
+Verläufe um. `session_label` (Wortlaut der Hausaufgabe aus `sources.task_text`,
+bei Kontrolle mit Präfix, sonst Ziel) und `last_at` in Dashboard und Detail;
+Nachrichtenzahl in der Liste; Sortierung nach letztem Dialog; neue
+Hausaufgaben-Einheiten tragen den Wortlaut auch im Ziel. `Mentor.svelte`:
+eine Liste mit Art, Stand, letztem Dialog und Zahl, abgehakte Hausaufgaben
+darin statt eingeklappt; Kopf des Gesprächs mit Wortlaut und letztem Dialog.
+
+**Geprüft.** Autor „kind“ für Eltern im echten Verlauf, „eltern“ im Demo;
+Wortlaut und letzter Dialog in Liste und Detail.
+
+**Offen.** Bewertung des Abfrage-Gesprächs (unregelmäßige Verben) mit
+Vorschlägen an die Instruktion liegt beim Nutzer zur Entscheidung.
+
+---
+
 # Kontrollieren und „So korrigieren“ 0.78.0
 
 Stand 17.09.2026. MENTOR_EINSTIEG Schritt 4 und die offene Bedienfrage aus 0.77.0.
