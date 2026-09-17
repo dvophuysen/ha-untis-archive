@@ -1,3 +1,7 @@
+## 0.92.0
+
+- Fehler behoben: Zu einem Thema ohne hinterlegte Originalseite hat der Einstieg trotzdem eine Buchseite genannt und den Inhalt erfunden. Beim Thema „Über Spanien und andere Länder sprechen" lag kein einziges Material vor; die Übung berief sich auf „Schulbuch S. 50" und behauptete unter anderem, Galicia sei für den Fußball berühmt. Der Mentor erfährt jetzt ausdrücklich, dass die Seite fehlt: Dann nennt er keine Seitenzahl, behauptet keinen Buchinhalt, baut die Aufgabe aus dem Thementitel und sagt, dass ein Foto der Seite weiterhilft.
+
 ## 0.91.0
 
 - Fehler behoben: Unter einer Aufgabe konnte die Lösung als antippbarer Knopf stehen. Bei einer Auswahlaufgabe zum relativen Superlativ lauteten die Knöpfe „Erst kurz erklären", „Nico es el jugador más fuerte" und „Weiß ich nicht" — der mittlere war die richtige Antwort. Angetippt, als richtig verbucht, geübt war nichts. Die Knöpfe sind Wege weiterzureden, keine Antwortmöglichkeiten: Die App wirft jetzt jeden Knopf weg, der in der Musterlösung, in den Kriterien oder unter den Antwortmöglichkeiten der Aufgabe vorkommt, im Einstieg wie mitten in der Einheit. Beide Anweisungen sagen es zusätzlich ausdrücklich.

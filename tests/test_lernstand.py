@@ -305,3 +305,17 @@ def test_subject_overview_counts_stages_and_stage_changes_per_subject(env):
     child(state)
     assert client.get("/api/accounts/1/subjects/stages").status_code == 200
     assert client.get("/api/accounts/2/subjects/stages").status_code == 403
+
+
+def test_a_topic_without_material_says_so(env):
+    """Ohne Originalseite darf der Einstieg keine erfinden. Am 17.09. behauptete
+    er „Schulbuch S. 50“ und erfand den Inhalt, obwohl nichts vorlag (D96)."""
+    from contextlib import closing
+    from backend import db, lernstand
+    with closing(db.webapp_conn()) as c, c:
+        tid = c.execute(
+            "INSERT INTO exam_topics(account_id,exam_key,subject,position,title,detail,stage,places_json,"
+            "created_at,updated_at)"
+            " VALUES(1,'k','SPANISCH',1,'Über Spanien sprechen','Länder beschreiben','neu','[]','now','now')").lastrowid
+    ctx = lernstand.context_for(1, tid, None)
+    assert ctx['material'] == [] and ctx['material_fehlt'] is True

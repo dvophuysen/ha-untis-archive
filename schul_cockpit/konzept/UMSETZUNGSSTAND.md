@@ -1,3 +1,23 @@
+# Kein Material, keine erfundene Buchseite 0.92.0
+
+Stand 17.09.2026. Zweiter Befund aus derselben Nutzerrückmeldung wie D95 (D96).
+
+**Befund.** Sitzung 20 von Konto 1, Thema „Über Spanien und andere Länder
+sprechen", topic_id 8: `material` war leer. Der Einstieg nannte trotzdem
+„Schulbuch S. 50" mit „passenden Verben wie limitar und ser famoso" und stellte
+eine Zuordnungsaufgabe, deren Kriterien „Galicia es famosa por el fútbol" als
+richtig auswiesen. Die Regel „erfinde keine Buchinhalte" stand in der
+Anweisung, aber nichts sagte dem Modell, was es stattdessen tun soll, wenn
+nichts vorliegt.
+
+**Gebaut.** `lernstand.context_for()` liefert `material_fehlt`, sobald
+`material_for()` nichts findet (und ruft es nur noch einmal auf). Die
+Einstiegsanweisung verzweigt darauf: keine Seitenzahl, kein Buchinhalt, kein
+Beispiel aus dem Buch; die Aufgabe entsteht aus Thementitel und `detail`, die
+fehlende Seite wird benannt, ein Foto angeboten.
+
+**Tests.** Ein Thema ohne Material meldet `material_fehlt`. 467 Tests grün.
+
 # Antwort-Chips verraten die Lösung nicht mehr 0.91.0
 
 Stand 17.09.2026, nachmittags. Nutzerrückmeldung mit Bildschirmfoto (D95).
