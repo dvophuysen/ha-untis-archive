@@ -18,6 +18,12 @@ nutzt.
 derselben Aufgabe belegt nur deren Hausaufgabe, loses Blatt der Nachbartage
 zählt, lose Mitschrift nicht. Mentor-Tests unverändert grün.
 
+**Nachtrag 0.80.1.** Die Ausarbeitung war als notes eingeordnet; own_work heißt
+in der Oberfläche jetzt „Erledigte Hausaufgabe (eigene Bearbeitung)“, die
+Auswertung bekommt `hinweise.gehoert_zu_hausaufgabe.auftrag` und die Regel:
+handschriftlich und an eine Hausaufgabe gehängt heißt own_work, nicht notes.
+Das betroffene Material wurde live von Hand berichtigt.
+
 **Offen.** Nächste echte Abfrage beobachten: Merkzettel-Inhalt, Wiederholung
 der Fehler, Ende. Danach die Kostenoption (Seiten nicht je Zug) entscheiden.
 

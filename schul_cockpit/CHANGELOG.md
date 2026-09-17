@@ -1,3 +1,7 @@
+## 0.80.1
+
+- Materialart „Erledigte Hausaufgabe (eigene Bearbeitung)“: Die Art gab es schon (intern own_work), hieß aber „Meine Bearbeitung“ und war so nicht zu finden; „Mitschrift“ heißt jetzt „Mitschrift aus dem Unterricht“. Die Auswertung bekommt den Auftrag der Hausaufgabe als Hinweis und ordnet eine handschriftliche Seite, die an eine Hausaufgabe gehängt wurde, als erledigte Hausaufgabe ein, nicht als Mitschrift, außer sie ist erkennbar ein Blatt der Lehrkraft. Anlass: eine Recherche-Ausarbeitung wurde als Mitschrift abgelegt.
+
 ## 0.80.0
 
 - Fehler behoben: Ein Foto, das an eine Hausaufgabe gehängt wurde, galt als Arbeitsblatt für jede Hausaufgabe desselben Fachs in den Nachbartagen. So bekam die neueste Geschichte-Hausaufgabe „Arbeitsblatt beenden“ ein „Blatt liegt vor“, obwohl nur die Ausarbeitung des Kindes zu einer alten Aufgabe fotografiert worden war. Jetzt gilt: Ein angehängtes Foto gehört zu seiner Aufgabe und zu keiner anderen, und es belegt auch die eigene Hausaufgabe nur, wenn die Auswertung ein Blatt gesehen hat (Arbeitsblatt oder Handout), nicht bei Mitschrift, Ausarbeitung oder Unbestimmtem. Lose Fotos ohne Aufgabe zählen weiter nur, wenn sie ein Blatt sind.
