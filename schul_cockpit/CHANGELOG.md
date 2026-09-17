@@ -1,6 +1,6 @@
-## 1.1.3
+## 1.1.4
 
-- Ein Kapitel ist ein Bündel, auch wenn Buch und Vokabelliste es verschieden nennen. „Unidad 3" und „Unidad 3 De paseo por España" standen getrennt im Trainer, einmal mit Wörtern und einmal leer; jetzt sind sie eins, unter dem ausführlicheren Namen, und beim Üben kommen die Wörter beider Schreibweisen.
+- Ein Kapitel ist ein Bündel, auch wenn Buch, Grammatikheft und Vokabelliste es verschieden nennen. „Unidad 3", „Unidad 3 De paseo por España" und „3 De paseo por España" standen getrennt im Trainer; jetzt sind sie eins, unter dem ausführlichsten Namen, und beim Üben kommen die Wörter aller Schreibweisen.
 - Ein Bündel ohne Wörter, an dem auch nichts mehr zu lesen ist, wird nicht mehr angeboten.
 
 ## 1.1.2

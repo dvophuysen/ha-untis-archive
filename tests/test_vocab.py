@@ -500,4 +500,9 @@ def test_one_unit_is_one_bundle_even_under_two_names(setup):
     # das Bündel angetippt wird.
     for name in ("Unidad 3", "Unidad 3 De paseo por España"):
         assert len(vocab.cards(1, "SPANISCH", name, 1, "from")) == 3, name
+    # Auch über einen dritten Namen hinweg: Das Grammatikheft nummeriert nur
+    # „3", das Schulbuch „Unidad 3"; beide meinen dasselbe Kapitel.
+    assert vocab.group_units(["Unidad 3", "3 De paseo por España", "Unidad 3 De paseo por España", "Unidad 4"]) \
+        == {"Unidad 3": "de paseo por espana", "3 De paseo por España": "de paseo por espana",
+            "Unidad 3 De paseo por España": "de paseo por espana", "Unidad 4": "unidad 4"}
     assert "el país" in vocab.prompt_for(1, "SPANISCH", "Unidad 3 De paseo por España", "into")
