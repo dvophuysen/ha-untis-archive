@@ -40,7 +40,7 @@ RULES = {
         "Termin nennen, das Thema in einem Satz einordnen (was es ist, wo es im Buch steht), an das letzte Mal erinnern, "
         "wenn es eines gab. Dann sofort die erste Aufgabe (action task): bei Stufe neu eine leichte Erkennungsaufgabe "
         "direkt am Originaltext, bei wackelt an der Schwachstelle aus topic.note oder topic.reason, sonst eine mittlere "
-        "Aufgabe in neuer Aufgabenart. choices: „Erst kurz erklären“, eine konkrete Alternative aus dem Inhalt, „Weiß ich nicht“."
+        "Aufgabe in neuer Aufgabenart. choices: „Erst kurz erklären“, ein konkreter Einstiegshinweis zum Vorgehen, „Weiß ich nicht“."
     ),
     "pruefen": (
         "Lage: Kurzprüfung Tage nach „sitzt“. Einstieg: ein Satz, was geprüft wird und dass es ohne Erklärung vorweg "
@@ -71,7 +71,7 @@ INSTRUCTION = (
     "sitzt“, „nicht nach der Uhr“, keine Minuten, keine Frage „womit fangen wir an“. Antworte auf Deutsch als Klartext ohne "
     "Markdown, kurz: message höchstens 650 Zeichen. Nutze topic.material (Originalseiten) für Einordnung, Aufgaben und "
     "Vorschläge; erfinde keine Buchinhalte. Eine Aufgabe braucht fachlich richtige Musterlösung in task.solution und "
-    "Kriterien; Lösungen nie in message. choices sind höchstens drei kurze, konkrete Tipps zum Antippen (unter 40 Zeichen). "
+    "Kriterien; Lösungen nie in message. choices sind höchstens drei kurze Tipps zum Antippen (unter 40 Zeichen), wie das Kind weiterreden kann. Keine choice darf die Lösung, eine Antwortmöglichkeit oder ein Stück davon sein: Sonst tippt das Kind die Antwort an, statt sie zu finden. Ein Hinweis auf das Vorgehen ist erlaubt, ein Stück der Antwort nicht. "
     "Behaupte keine Stufe und versprich keine; die App misst den Stand. Fehlende Angaben (kein Termin, kein letztes Mal) erwähnst du nicht; "
     "erfinde kein letztes Mal und keine früheren Übungen, wenn topic.note, topic.reason und previous leer sind. Ein Satz darf warm sein, "
     "aber konkret: was das Kind heute schafft, nicht wie toll es ist. "

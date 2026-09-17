@@ -192,3 +192,38 @@ def test_the_mentor_closing_a_catch_up_unit_marks_the_lesson_too(exam_env):
     patch.setattr(ai, "complete", lambda *a, **kw: _reply({"message": "Weiter.", "choices": [], "action": "clarify", "task": None, "assessment": None, "summary": ""}))
     again = client.post(B + "/sessions", json={"subject": "Deutsch", "lesson_id": 2, "voluntary": True}).json()
     assert again["situation"]["lage"] != "nachholen"
+
+
+def test_a_choice_never_hands_over_the_answer():
+    """Am 17.09. stand unter einer Auswahlaufgabe zum relativen Superlativ die
+    richtige Lösung als antippbarer Knopf. Das Kind hat sie angetippt und der
+    Mentor „Richtig“ gebucht — geübt wurde nichts (D95)."""
+    from backend.routers.mentor import safe_choices
+    task = {
+        "prompt": "Wähle den Satz mit dem relativen Superlativ:\n"
+                  "A) Nico es más fuerte que Ana.\n"
+                  "B) Nico es el jugador más fuerte del equipo.\n"
+                  "C) Mateo es tan alto como Nico.\nSchreibe nur A, B oder C.",
+        "solution": "B", "criteria": "Richtig ist B. Ein relativer Superlativ hat Artikel und más, "
+                                     "z. B. el jugador más fuerte.",
+    }
+    kept = safe_choices(['Erst kurz erklären', 'Nico es el jugador más fuerte', 'Weiß ich nicht'], task)
+    assert kept == ['Erst kurz erklären', 'Weiß ich nicht']
+    # Auch eine wörtlich abgeschriebene Antwortmöglichkeit fliegt raus.
+    assert safe_choices(['Nico es más fuerte que Ana.'], task) == []
+    # Ein Hinweis auf das Vorgehen bleibt.
+    assert safe_choices(['Achte auf den Artikel'], task) == ['Achte auf den Artikel']
+    # Ohne Aufgabe wird nichts angefasst.
+    assert safe_choices(['Egal was'], None) == ['Egal was']
+    # Kurze Marken wie „A“ oder „Los“ bleiben, sie verraten nichts.
+    assert safe_choices(['Los', 'B'], task) == ['Los', 'B']
+
+
+def test_the_guard_also_covers_a_normal_turn(setup):
+    """Nicht nur der Einstieg: Auch ein Zug mitten in der Einheit darf die
+    Lösung nicht als Knopf anbieten."""
+    from backend.routers.mentor import safe_choices
+    import json as _json
+    task = _json.dumps({"prompt": "Bilde den Satz.", "solution": "la ciudad más famosa",
+                        "criteria": "Der Satz enthält „la ciudad más famosa“."})
+    assert safe_choices(['la ciudad más famosa', 'Erst kurz erklären'], task) == ['Erst kurz erklären']

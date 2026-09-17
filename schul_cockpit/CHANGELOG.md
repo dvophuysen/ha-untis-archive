@@ -1,3 +1,8 @@
+## 0.91.0
+
+- Fehler behoben: Unter einer Aufgabe konnte die Lösung als antippbarer Knopf stehen. Bei einer Auswahlaufgabe zum relativen Superlativ lauteten die Knöpfe „Erst kurz erklären", „Nico es el jugador más fuerte" und „Weiß ich nicht" — der mittlere war die richtige Antwort. Angetippt, als richtig verbucht, geübt war nichts. Die Knöpfe sind Wege weiterzureden, keine Antwortmöglichkeiten: Die App wirft jetzt jeden Knopf weg, der in der Musterlösung, in den Kriterien oder unter den Antwortmöglichkeiten der Aufgabe vorkommt, im Einstieg wie mitten in der Einheit. Beide Anweisungen sagen es zusätzlich ausdrücklich.
+- Die Einstiegsanweisung verlangte als Knopf „eine konkrete Alternative aus dem Inhalt". Genau das hat das Modell als Antwortmöglichkeit gelesen. Verlangt wird jetzt ein Hinweis auf das Vorgehen.
+
 ## 0.90.0
 
 - Die automatische Unterrichtsauswertung läuft jetzt auf der niedrigen Modellstufe und hat dafür eine eigene Einstellung bekommen, getrennt vom Abschreiben der Buchseiten. Gemessen an zwölf bereits ausgewerteten Stunden: Die niedrige Stufe ordnete dreimal hintereinander 11 von 12 Stunden demselben Thema zu wie zuvor, mit immer derselben einen Abweichung — ein rein organisatorischer Eintrag, den sie als unklar einstuft. Die hohe Stufe schwankte gegen sich selbst zwischen 10 und 12. Die günstige Stufe ist hier also nicht schlechter, sondern stabiler, und sie kostet ein Fünfundzwanzigstel.

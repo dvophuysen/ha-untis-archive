@@ -1,3 +1,40 @@
+# Antwort-Chips verraten die Lösung nicht mehr 0.91.0
+
+Stand 17.09.2026, nachmittags. Nutzerrückmeldung mit Bildschirmfoto (D95).
+
+**Befund.** Zwei Übungen von Konto 1 um 16:00 und 16:01, beide Einstiege auf
+`gpt-5.6-terra`. Die erste stellte eine fachlich saubere Auswahlaufgabe zum
+relativen Superlativ (A Komparativ, B Superlativ, C Gleichheitsvergleich), bot
+darunter aber die Chips „Erst kurz erklären“, „Nico es el jugador más fuerte“,
+„Weiß ich nicht“ an. Der mittlere ist die Lösung. Das Kind hat ihn angetippt,
+der Mentor hat „Richtig“ geantwortet und die Antwort als eigenständige Leistung
+gebucht. Die zweite Übung gab mit „Mit ‚limitar con‘ anfangen“ die erste
+Zuordnung preis.
+
+Ursache im Wortlaut: Die Einstiegsanweisung verlangte als Chip „eine konkrete
+Alternative aus dem Inhalt“. Bei einer Auswahlaufgabe ist die naheliegende
+Lesart davon eine Antwortmöglichkeit. Die Regel „Lösungen nie in message“ deckte
+`choices` nicht ab.
+
+**Gebaut.** `safe_choices(choices, task)` in `routers/mentor.py`: Ein Chip
+fliegt raus, wenn sein Text (auf Buchstaben und Ziffern reduziert) in
+`solution`, in `criteria` oder in einer der Antwortmöglichkeiten „A) …“ bis
+„D) …“ des Aufgabentextes vorkommt. Kurze Marken unter vier Zeichen bleiben,
+damit „Los“ oder „B“ nicht verschwinden. Eingesetzt im Einstieg
+(`open_unit`) und im normalen Zug. Beide Instruktionen nennen die Regel jetzt
+ausdrücklich, die Einstiegsanweisung verlangt einen Hinweis auf das Vorgehen
+statt einer Alternative aus dem Inhalt.
+
+**Nicht die Ursache.** Die Umstellung der Hintergrundauswertung auf die
+niedrige Stufe (0.90.0) war nicht beteiligt: Die Luna-Aufrufe um 15:05 waren
+Eichungsläufe und speichern nichts. Der Einstieg lief auf `mittel`, und das
+schon vor dieser Session. Als Sofortmaßnahme stehen Einstieg und Auswertung
+wieder auf dem Hauptgespräch, bis die Chip-Sperre sich im Betrieb bewährt hat.
+
+**Tests.** Der echte Fall aus dem Bildschirmfoto, eine wörtlich abgeschriebene
+Antwortmöglichkeit, ein erlaubter Vorgehenshinweis, kurze Marken, und derselbe
+Schutz im normalen Zug. 466 Tests grün.
+
 # Unterrichtsauswertung geeicht und umgestellt 0.89.0 und 0.90.0
 
 Stand 17.09.2026. Zweitgrößter Kostenposten, bisher ungemessen (D94).
