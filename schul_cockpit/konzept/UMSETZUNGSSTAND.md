@@ -1,3 +1,40 @@
+# Kontrollieren und „So korrigieren“ 0.78.0
+
+Stand 17.09.2026. MENTOR_EINSTIEG Schritt 4 und die offene Bedienfrage aus 0.77.0.
+
+**Gebaut (D80).** `routers/mentor.py`: `StartIn.check` mit `homework_task_id`
+eröffnet den Modus `homework_check` (eigener Verlauf je Hausaufgabe, der
+reichste gewinnt, wie bei der Hilfe); feste Begrüßung ohne Modellaufruf,
+`situation` kontrollieren/„Lösung prüfen“ in der Quelle; `CHECK_INSTRUCTION`
+(Urteil je Aufgabe, kein Ergebnis, keine Zählung, Ende als Vorschlag);
+`HOMEWORK_MODES` für Uhr, Zuggrenze, Wiederaufnahme, Ablage nach dem Haken;
+Buchseiten der Aufgabe immer beigefügt; Aufgabe und Einschätzung der Antwort
+werden verworfen; Ende-Frage „Noch eine Seite zeigen“. `learning_plan` zählt
+den Modus wie die Hilfe nicht auf den Tagesplan. `mentor_opening.LAGEN` und
+`situation` kennen die Lage. `TaskDetail.svelte`: „Lösung prüfen lassen“ →
+`#/learning?check=<id>`; `Mentor.svelte` startet den Modus, zeigt den Hinweis
+und macht „Foto der Lösung“ zum Hauptknopf, solange kein Foto da ist.
+
+**Gebaut (D81).** `notice_check.check` nummeriert die Seitenangabe (`span`);
+`replace_pages` ersetzt in einem Durchgang über den ursprünglichen Text nur
+die Seiten der passenden Angabe. Route `POST …/materials/{id}/plausibility/apply`
+mit `fixes[]`, Korrektur der Eltern (Sperre), danach `after_analysis`.
+`Materialien.svelte`: ein Knopf je Angabe, „So korrigieren: Textband S. 10, 11“.
+
+**Geprüft.** Kontrolle: eigener Verlauf neben der Hilfe, Instruktion,
+Aufgabentext im Kontext, keine Evidenz, kein Verbrauch, Ende als Vorschlag mit
+den Kontroll-Antworten, „Für heute fertig“ schließt. Übernahme: nur Seiten der
+Angabe, Lektions- und Aufgabennummern bleiben, falscher Buchteil ändert nichts,
+Route sperrt das Textfeld und ruft die Nachbereitung, zweiter Tipp 409.
+Gesamt 70 Tests in den betroffenen Dateien grün, Frontend gebaut.
+
+**Offen.** Erste echte Kontrolle am Foto eines Kindes beobachten (Lesbarkeit
+der Handschrift, Urteilsqualität) und die Instruktion daran nachschärfen. Ein
+Foto ohne Frage im Hilfegespräch als Auslöser der Kontrolle (Konzept) ist
+nicht gebaut. Schritt 5 (Verfassung) offen.
+
+---
+
 # Gegenlesen mit Kontext 0.77.0
 
 Stand 17.09.2026. Folge aus D78: Handschrift ist ein Kontextproblem.

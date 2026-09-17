@@ -63,3 +63,44 @@ def test_the_review_card_gets_the_check_for_notices_only(env):
     assert [(u["page"], u["suggest"]) for u in notice["plausibility"]["unknown"]] == [(70, 10), (77, 11), (73, 13)]
     # Ein gedrucktes Arbeitsblatt bekommt keine Prüfung, auch wenn es zum Gegenlesen steht.
     assert items["worksheet"]["needs_review"] and "plausibility" not in items["worksheet"]
+
+
+def test_suggestions_replace_only_those_pages_of_that_part():
+    misread = "Voc. 7. Lektion S. 70, 71\nSubstantive BB. S. 73\nVerben BB S. 73-75\nAufgabe 70 wiederholen"
+    fixed = nc.replace_pages(misread, [{"label": "Unbekannte Quelle", "page": 70, "suggest": 10}, {"label": "Unbekannte Quelle", "page": 71, "suggest": 11}])
+    # Die Lektionsnummer 7 und „Aufgabe 70“ bleiben; nur die Seitenangabe wird berichtigt, beide Seiten zugleich.
+    assert fixed == "Voc. 7. Lektion S. 10, 11\nSubstantive BB. S. 73\nVerben BB S. 73-75\nAufgabe 70 wiederholen"
+    assert nc.replace_pages(fixed, [{"label": "Begleitband", "page": 73, "suggest": 13}]) == "Voc. 7. Lektion S. 10, 11\nSubstantive BB. S. 13\nVerben BB S. 13-75\nAufgabe 70 wiederholen"
+    # Ein falscher Buchteil oder eine Seite, die nicht mehr da ist: nichts geändert.
+    assert nc.replace_pages(fixed, [{"label": "Textband", "page": 73, "suggest": 13}]) is None
+    assert nc.replace_pages(fixed, [{"label": "Unbekannte Quelle", "page": 70, "suggest": 10}]) is None
+
+
+def test_the_review_card_applies_suggestions_as_a_parent_correction(env):
+    from contextlib import closing
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from backend import db, material_analysis as analysis
+    from backend.auth import get_current_user
+    from backend.routers import materials as routes
+    client, state, patch = env
+    app = FastAPI(); app.include_router(routes.router, prefix="/api"); app.dependency_overrides[get_current_user] = lambda: state.user
+    c = TestClient(app)
+    patch.setattr(nc, "mentions", lambda account_id: ([{"kind": "lesson", "subject": "LATEIN", "text": t} for t in LESSONS], "2026-08-01"))
+    ran = []
+    async def after(account_id, material_id): ran.append(material_id)
+    patch.setattr(analysis, "after_analysis", after)
+    with closing(db.webapp_conn()) as conn, conn:
+        mid = conn.execute("INSERT INTO materials(account_id,kind,subject_name,title,content_text,analysis_state,confidence,handwritten,created_at,updated_at) "
+                           "VALUES(1,'exam_notice','LATEIN','Zettel','Gefahr im C.M. TB S. 70, 71\nSubjekt BB S. 74','ready',0.78,1,'now','now')").lastrowid
+    url = f"/api/accounts/1/materials/{mid}/plausibility/apply"
+    doubts = next(m for m in c.get("/api/accounts/1/materials?books=0").json()["materials"] if m["id"] == mid)["plausibility"]["unknown"]
+    assert [(u["page"], u["suggest"], u["span"]) for u in doubts] == [(70, 10, 0), (71, 11, 0), (74, 14, 1)]
+    r = c.post(url, json={"fixes": [{"label": u["label"], "page": u["page"], "suggest": u["suggest"]} for u in doubts if u["span"] == 0]})
+    assert r.status_code == 200, r.text
+    assert r.json()["content_text"] == "Gefahr im C.M. TB S. 10, 11\nSubjekt BB S. 74" and "content_text" in r.json()["locked_fields"]
+    assert ran == [mid]
+    notice = next(m for m in c.get("/api/accounts/1/materials?books=0").json()["materials"] if m["id"] == mid)
+    assert [(u["page"], u["suggest"]) for u in notice["plausibility"]["unknown"]] == [(74, 14)]
+    # Derselbe Tipp ein zweites Mal: die Stelle ist weg, nichts wird still verändert.
+    assert c.post(url, json={"fixes": [{"label": "Textband", "page": 70, "suggest": 10}]}).status_code == 409

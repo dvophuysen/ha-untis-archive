@@ -28,6 +28,7 @@ LAGEN = {
     "erklaeren": "Verstehen",
     "nachholen": "Nachholen",
     "begleiten": "Hausaufgabe",
+    "kontrollieren": "Lösung prüfen",
     "frei": "Frei üben",
 }
 
@@ -132,6 +133,8 @@ def situation(account_id: int, session: dict, ctx: dict) -> dict:
     out = {"lage": "frei", "label": LAGEN["frei"], "why": "frei gewählt"}
     if mode == "homework_help":
         return {"lage": "begleiten", "label": LAGEN["begleiten"], "why": "Hausaufgabe"}
+    if mode == "homework_check":
+        return {"lage": "kontrollieren", "label": LAGEN["kontrollieren"], "why": "Lösung prüfen"}
     if mode == "topic" and topic:
         if topic.get("check"):
             out = {"lage": "pruefen", "label": LAGEN["pruefen"], "why": "Kurzprüfung fällig"}

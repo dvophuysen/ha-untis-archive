@@ -95,6 +95,8 @@
     <div class="actions">
       {#if !isDone}
         <a class="primary help" href={`#/learning?help=${task.id}`} onclick={onclose}><ActionLabel kind="chat" label="Hilfe im Chat" /></a>
+        <!-- Kontrollieren: die fertige Lösung vom Foto prüfen lassen, ohne Vorsagen. -->
+        <a class="help" href={`#/learning?check=${task.id}`} onclick={onclose}><ActionLabel kind="chat" label="Lösung prüfen lassen" /></a>
       {/if}
       <button disabled={busy} onclick={toggle}>{isDone ? 'Wieder öffnen' : 'Erledigt'}</button>
       <a class="quiet" href={`#/materialien/${encodeURIComponent(task.subject_name ?? '')}/${task.id}`} onclick={onclose}>Foto anhängen</a>

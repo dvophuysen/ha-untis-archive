@@ -143,7 +143,8 @@ zählt.
 
 ### Kontrollieren (Lösung prüfen)
 
-- Auslöser: Vorschlag „Ich habe es schon, prüf es" oder Foto ohne Frage.
+- Auslöser: „Lösung prüfen lassen“ an der Hausaufgabe (seit 0.78.0), später
+  auch ein Foto ohne Frage im Hilfegespräch.
 - Einstieg: Foto lesen, Aufgabe für Aufgabe Rückmeldung: richtig, fast,
   falsch mit Grund. Keine Musterlösung, kein Nachschieben.
 - Ende: Nach der Rückmeldung, mit einem Satz, was zu wiederholen wäre.
@@ -194,7 +195,9 @@ jetzt sofort"). Keine Uhr, keine Minuten, keine Formulare.
 3. **Nachholen** aus der Fehlzeit. Gebaut in 0.72.0 (D70): Einstieg aus
    Nachhol-Liste und Stundenansicht, Quellen der Stunde im Kontext, Ende
    setzt die Stunde auf nachgeholt.
-4. **Kontrollieren** als eigener Einstieg mit Foto.
+4. **Kontrollieren** als eigener Einstieg mit Foto. Gebaut in 0.78.0 (D80):
+   „Lösung prüfen lassen“ an der Hausaufgabe, eigener Verlauf, Urteil je
+   Aufgabe ohne Vorsagen, Ende als Vorschlag.
 5. **Verfassung**: kürzere Einheiten bei Frust- und Müdigkeitssignalen,
    Erfolg zum Schluss.
 6. Hausaufgabe bleibt, bekommt nur die konkreten Vorschläge und den

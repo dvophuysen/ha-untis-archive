@@ -13,8 +13,9 @@ verändert.
 from __future__ import annotations
 
 import logging
+import re
 
-from .sources import citations, mentions, serves
+from .sources import citations, mentions, page_hits, part_of, serves
 from .subject_names import key as subject_key
 
 LOG = logging.getLogger("schul_cockpit.notice_check")
@@ -62,7 +63,10 @@ def variants(page: int) -> list[int]:
 def check(text: str, known: dict[str, set[int]]) -> dict:
     """Die Stellen eines Zettels gegen die bekannten Stellen des Fachs halten."""
     cited, unknown = 0, []
-    for cite in citations(text or ""):
+    # span nummeriert die Seitenangabe im Text: „S. 70, 71“ ist eine, und ihre
+    # Seiten werden zusammen berichtigt, weil der Parser nach der ersten
+    # Berichtigung („S. 10, 71“) die zweite nicht mehr als Aufzählung liest.
+    for span, cite in enumerate(citations(text or "")):
         for page in cite["pages"]:
             if page <= 0:
                 continue
@@ -70,9 +74,30 @@ def check(text: str, known: dict[str, set[int]]) -> dict:
             if _known(known, cite["label"], page):
                 continue
             suggest = next((v for v in variants(page) if _known(known, cite["label"], v)), None)
-            unknown.append({"label": cite["label"], "page": page, "suggest": suggest})
+            unknown.append({"label": cite["label"], "page": page, "suggest": suggest, "span": span})
     return {"checked": bool(known), "cited": cited, "unknown": unknown,
             "known_pages": sum(len(p) for p in known.values())}
+
+
+def replace_pages(text: str, fixes: list[dict]) -> str | None:
+    """Falsch gelesene Seiten durch die Vorschläge ersetzen, alle in einem
+    Durchgang über den ursprünglichen Text: nur innerhalb der Seitenangabe des
+    passenden Buchteils, nie eine Aufgabennummer, eine Lektion oder ein Datum.
+    None, wenn keine der Stellen mehr im Text steht."""
+    out = text or ""
+    changed = False
+    # Von hinten nach vorn, damit die Positionen der früheren Treffer gültig bleiben.
+    for start, end, pages in reversed(page_hits(out)):
+        have, _ = part_of(out[:start])
+        label = have or "Unbekannte Quelle"
+        piece = out[start:end]
+        for fix in fixes:
+            if fix["label"] != label or fix["page"] not in pages:
+                continue
+            piece, count = re.subn(rf"(?<!\d){int(fix['page'])}(?!\d)", str(int(fix["suggest"])), piece)
+            changed = changed or bool(count)
+        out = out[:start] + piece + out[end:]
+    return out if changed else None
 
 
 def checker(account_id: int):
