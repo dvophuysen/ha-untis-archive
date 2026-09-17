@@ -1,3 +1,9 @@
+## 0.86.0
+
+- Der Bestand einer Abfrage wird jetzt von der App geführt, nicht mehr vom Mentor in einem Fließtext. Bisher schrumpfte der Merkzettel über ein langes Gespräch zusammen: Nach 36 Zügen mit unregelmäßigen Verben stand dort ein einziger Satz, und die Fehler der ersten Runde waren am Ende vergessen. Der Mentor meldet nur noch, was sich in dieser Runde geändert hat; die App führt die Liste, gibt sie jede Runde zurück und weiß, was offen ist. Ein Fehler gilt erst als erledigt, wenn das Kind die Reihe selbst richtig gesagt hat.
+- Unter dem Gespräch steht, was noch zu wiederholen ist. Das Kind musste bisher danach fragen, und die Antwort war unvollständig.
+- Buchseiten gehen nicht mehr bei jedem Zug mit. Sobald der Bestand einer Abfrage steht, fragt der Mentor aus der Liste ab statt vom Bild. Im Verben-Gespräch wanderten 36 Züge lang Seitenbilder mit, obwohl ab dem dritten Zug alles Nötige bekannt war; das war der größte Einzelposten bei den Kindergesprächen.
+
 ## 0.85.0
 
 - Materialien werden in zwei Durchgängen gelesen. Die günstige Modellstufe liest jede Seite zuerst und ordnet sie ein; nur Seiten, bei denen die Eichung einen Qualitätsverlust gezeigt hat, werden gründlich neu gelesen und nur diese Lesung gespeichert. Gründlich gelesen werden Handschrift, eigene Bearbeitungen, Arbeitshefte und Arbeitsblätter, alles aus Mathematik und den Naturwissenschaften sowie alles Unlesbare. Wertetabellen und Formelseiten zusätzlich mit tiefer Prüfung, weil dort sonst Werte fehlen — das galt auch für die hohe Stufe.

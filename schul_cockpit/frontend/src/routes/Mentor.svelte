@@ -83,6 +83,11 @@
     {:else}<section class="card"><h2>{running.status==='active'?'Gespeicherter Verlauf':running.topic?'Einheit beendet':running.mode==='homework_check'?'Kontrolle beendet':running.untimed?'Unterbrochen':'Für heute geschafft'}</h2><p>{running.summary||'Dein Gespräch und deine Antworten bleiben gespeichert.'}</p>{#if running.topic}<p><strong>Stufe: {running.topic.stage}</strong>{#if running.topic.reason&&running.topic.stage!=='neu'} · {running.topic.reason}{/if}{#if running.topic.next_check} · Kurzprüfung ab {formatShortDate(running.topic.next_check)}{/if}</p><a href="#/klausuren">Zur Arbeit und den anderen Themen</a>{/if}
       {#if running.status!=='active'&&data?.can_write}<button class="primary" disabled={busy} onclick={()=>act(resume)}><ActionLabel kind="chat" label="Hier weitermachen" /></button>{/if}
       <button onclick={()=>act(leave)}>Zur Übersicht</button><a href="#/plan"><ActionLabel label="Aktualisierten Lernplan ansehen" /></a></section>{/if}
+    <!-- Bei einer Abfrage führt die App den Bestand. Was offen ist, steht hier
+         und nicht nur im Merkzettel des Modells: Das Kind musste vorher danach
+         fragen, und die Antwort war unvollständig (D91). -->
+    {#if running.quiz_open?.length}<p class="muted">Noch zu wiederholen: {running.quiz_open.join(', ')}.</p>
+    {:else if running.quiz?.length}<p class="muted">Alles wiederholt: {running.quiz.length} {running.quiz.length===1?'Wort':'Wörter'} sitzen.</p>{/if}
     {#if busy}<p role="status" class="working">{running.messages.length<=1?'Dein Coach schaut sich Thema und Material an …':'Einen Moment – deine Antwort wird vorbereitet …'}</p>{/if}
   {:else if data}
     <header><span class="eyebrow">Dein Lernbegleiter</span><h1>{data.can_manage&&!demo?'Der echte Lernverlauf.':'Was hast du vor?'}</h1><p>{data.can_manage&&!demo?'Wähle oben das Kind. Hier findest du seine gespeicherten Gespräche, Antworten und Lernbeobachtungen.':'Du wählst das Thema. Ich helfe dir beim Üben.'}</p></header>
