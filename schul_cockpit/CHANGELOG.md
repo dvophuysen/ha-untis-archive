@@ -1,3 +1,9 @@
+## 0.85.0
+
+- Materialien werden in zwei Durchgängen gelesen. Die günstige Modellstufe liest jede Seite zuerst und ordnet sie ein; nur Seiten, bei denen die Eichung einen Qualitätsverlust gezeigt hat, werden gründlich neu gelesen und nur diese Lesung gespeichert. Gründlich gelesen werden Handschrift, eigene Bearbeitungen, Arbeitshefte und Arbeitsblätter, alles aus Mathematik und den Naturwissenschaften sowie alles Unlesbare. Wertetabellen und Formelseiten zusätzlich mit tiefer Prüfung, weil dort sonst Werte fehlen — das galt auch für die hohe Stufe.
+- Grundlage ist eine Messung an zehn echten Seiten: Gedruckter Buchtext kam auf der günstigen Stufe Zeichen für Zeichen gleich heraus, Handschrift verlor Zahlen (Trefferquote 1,00 gegen 0,82), Arbeitsheftseiten verloren Zeilen, und eine Seite mit Wertetabellen war erst mit tiefer Prüfung vollständig. Schaltpläne aus der Physik gaben alle Stufen richtig wieder.
+- Die nächtliche Nacharbeit erkennt beide Lesestufen als erledigt an. Sonst hätte sie jede günstig gelesene Seite jede Nacht erneut gelesen.
+
 ## 0.84.0
 
 - Die KI-Rahmen sperren nicht mehr. Monat, Tag je Kind, Quellenbestand, Hintergrund und der Deckel je Gespräch sind jetzt Richtwerte: Wird einer überschritten, läuft der Aufruf trotzdem und die Überschreitung wird vermerkt. Ein Kind soll nicht mitten in einer Abfrage stehenbleiben, weil eine Zahl erreicht ist.
