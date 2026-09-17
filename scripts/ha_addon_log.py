@@ -42,8 +42,29 @@ def fetch(slug: str, lines: int) -> str:
             "Range": f"entries=:-{lines}:",
         },
     )
-    with urllib.request.urlopen(request, timeout=60) as response:
-        return response.read().decode("utf-8", "replace")
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return response.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as error:
+        # In der Claude-Code-Sandbox blockt der Agent-Proxy Python-urllib mit
+        # 403 und lässt curl durch (wie in ha_diagnose.py).
+        if error.code != 403:
+            raise
+        return fetch_curl(slug, lines)
+
+
+def fetch_curl(slug: str, lines: int) -> str:
+    import subprocess
+    cmd = ["curl", "-sS", "-m", "60", "-H", f"Authorization: Bearer {TOKEN}",
+           "-H", f"Range: entries=:-{lines}:", "-w", "\n%{http_code}",
+           f"{BASE}/api/hassio/addons/{slug}/logs"]
+    done = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
+    if done.returncode != 0:
+        raise urllib.error.URLError(done.stderr.strip() or f"curl {done.returncode}")
+    body, _, code = done.stdout.rpartition("\n")
+    if not code.isdigit() or int(code) >= 400:
+        raise urllib.error.HTTPError(cmd[-1], int(code) if code.isdigit() else 599, "curl", None, None)
+    return body
 
 
 def main() -> int:
