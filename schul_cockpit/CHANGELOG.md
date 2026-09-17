@@ -1,3 +1,7 @@
+## 0.82.1
+
+- Fehler behoben: 0.82.0 ließ sich nicht starten. Die neue Option `learning_ai_models_2` war als `list(str)?` beschrieben, was in Home Assistant eine Auswahl aus festen Werten ist und nicht eine Liste; der Supervisor lehnte daraufhin sämtliche Optionen ab („value must be one of ['str']"). Jetzt steht dort ein Listenschema. Ein Test prüft künftig, dass jede Option mit Listen-Vorgabe auch ein Listenschema hat.
+
 ## 0.82.0
 
 - Zwei Foundry-Zugänge nebeneinander (D87): Für eine schrittweise Umstellung nehmen die neuen Add-on-Optionen `learning_ai_url_2` und `learning_ai_key_2` eine zweite Ressource auf. `learning_ai_models_2` listet die Deployment-Namen, die schon dort liegen; alle übrigen bleiben beim ersten Zugang. Umgezogen wird also je Modell, ohne die restliche Einrichtung anzufassen. Ein gelistetes Deployment läuft ausschließlich über den zweiten Zugang: Fehlt dort Adresse oder Schlüssel, bricht der Aufruf mit einer Meldung ab, statt still wieder die alte Ressource zu verwenden. Die Spracheingabe folgt dem Zugang ihres eigenen Deployments. Welches Modell über welchen Host läuft, steht beim Start im Add-on-Log; in der App ändert sich nichts.
