@@ -40,6 +40,9 @@ NIGHT_HOUR = 2
 PAGE_BUDGET = 40
 # Nach so vielen vergeblichen Abrufen gilt eine Seite als nicht lieferbar.
 MAX_ATTEMPTS = 3
+# So viele Seiten schafft eine Browsersitzung zuverlässig in ihrem Zeitbudget
+# (gemessen: neun Seiten in rund 140 Sekunden, zehn liefen in die Grenze).
+PAGES_PER_SESSION = 9
 AFTERNOON_KEY = "sources:afternoon"
 NIGHT_KEY = "sources:night"
 
@@ -389,7 +392,9 @@ async def _collect(account_id: int, budget: int) -> dict:
         book, subject = group["book"], group["subject"]
         # Das Budget nimmt die wichtigsten Seiten zuerst (genannte vor
         # Kapitelseiten); geblättert wird dann in Buchreihenfolge.
-        pages = sorted(group["order"][:remaining])
+        # Nicht mehr bestellen, als eine Sitzung in ihrem Zeitbudget schafft:
+        # Der Rest käme ohnehin nicht dazu und wartet auf die nächste Runde.
+        pages = sorted(group["order"][:min(remaining, PAGES_PER_SESSION)])
         remaining -= len(pages)
         delivery = await fetch_pages(account_id, book, credentials, pages, use_cache=False,
                                      budget=90 + 25 * len(pages))
@@ -401,9 +406,18 @@ async def _collect(account_id: int, budget: int) -> dict:
             summary["failed"] += len(pages)
             continue
         delivered = {p: image for p, image in delivery["shots"] if p is not None}
+        # Eine Sitzung hat ein Zeitbudget. Was sie nicht mehr geschafft hat, ist
+        # kein Fehlversuch der Seite: Sonst verbraucht eine große Bestellung die
+        # drei Versuche der hinteren Seiten, ohne dass sie je geöffnet wurden,
+        # und sie werden nie wieder geholt — der Abruf stand danach still,
+        # während die Bilanz sie weiter als offen führte (D112).
+        out_of_time = "Zeitbudget" in (delivery.get("detail") or "")
         for page in pages:
             image = delivered.get(page)
             if image is None:
+                if out_of_time:
+                    summary["deferred"] = summary.get("deferred", 0) + 1
+                    continue
                 _bump(account_id, subject, page, "nicht erreichbar")
                 summary["failed"] += 1
                 continue

@@ -132,13 +132,18 @@ async def test_a_run_reads_the_table_of_contents_before_fetching_pages(env, monk
     want = sorted((set(range(48, 62)) | set(range(165, 190))) - {50})
     assert set(calls[2]) <= set(want) and calls[2] == sorted(calls[2]), \
         "dann die Einheit und die Wortschatzteile, in Buchreihenfolge geblättert"
-    assert set(range(48, 62)) - {50} <= set(calls[2]), "die angeschnittene Einheit zuerst und ganz"
-    assert summary["stored"] == summary["verified"] and summary["stored"] >= 18
+    # Eine Sitzung bestellt nur so viele Seiten, wie sie in ihrem Zeitbudget
+    # schafft; der Rest wartet auf die nächste Runde (D112).
+    assert len(calls[2]) == collector.PAGES_PER_SESSION
+    assert calls[2][0] == 48, "die angeschnittene Einheit zuerst"
+    # Eine Runde bringt eine Sitzung voll; der Rest kommt in den naechsten.
+    assert summary["stored"] == summary["verified"] == collector.PAGES_PER_SESSION - 1
     book = sources.ledger(1)["subjects"][0]
-    # Die angeschnittene Einheit ist vollständig da; was ein Lauf vom Wortschatz
-    # nicht mehr schafft, bleibt für den nächsten liegen (D109).
-    assert book["chapters"][0]["pages_stored"] == 14
-    assert all(165 <= p <= 189 for p in book["pending_pages"]), book["pending_pages"]
+    # Ein Lauf bringt eine Sitzung voll und arbeitet die Einheit von vorn ab;
+    # der Rest bleibt für die nächsten Runden liegen (D109, D112).
+    assert 0 < book["chapters"][0]["pages_stored"] < 14, "angefangen, aber in einem Lauf nicht fertig"
+    assert set(book["pending_pages"]) <= set(want), book["pending_pages"]
+    assert 48 not in book["pending_pages"], "von vorn abgearbeitet"
 
 
 def test_exam_scope_lists_the_chapters_touched_in_the_period(env):
