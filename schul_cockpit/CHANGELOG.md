@@ -1,3 +1,9 @@
+## 1.4.0
+
+- Der Vokabeltrainer kennt jetzt drei Ebenen: Einheit, Abschnitt und Themenkasten. Ein Kasten mit eigener Überschrift — „School" in „The new boy", „Feelings" in „Story" — ist ein eigenes Unterthema, steht aber unter seinem Abschnitt und nicht daneben. Ein Kasten direkt unter der Einheit, wie „Holiday words", ist weiterhin selbst ein Abschnitt.
+- Geübt werden kann jede Ebene: die ganze Einheit, ein Abschnitt daraus oder ein einzelner Themenkasten.
+- Die Fortsetzung über den Seitenwechsel gilt für alle drei Ebenen. Eine neue Einheit setzt Abschnitt und Kasten zurück, ein neuer Abschnitt setzt den Kasten zurück.
+
 ## 1.3.2
 
 - Fehler behoben: „Vocabulary" stand als eigener Abschnitt in der Wortliste. Das ist der Laufkopf, der über jeder Anhangseite steht — er sammelte Wörter ein, die zum Abschnitt davor gehören. Ebenso ein Abschnitt, der nur den Namen der Einheit wiederholt.

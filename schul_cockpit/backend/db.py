@@ -992,6 +992,12 @@ _MIGRATIONS.append(("source_claims_tb_is_textbook_d114",
                     "AND lower(COALESCE(subject_key,'')) NOT IN ('la','lat')"))
 
 
+# Dritte Ebene der Vokabelliste: ein Kasten mit eigener Überschrift innerhalb
+# eines Abschnitts („School" in „The new boy"). Steht der Kasten direkt unter
+# der Einheit, ist er selbst der Abschnitt (D116).
+_MIGRATIONS.append(("vocab_words_002_box", "ALTER TABLE vocab_words ADD COLUMN box TEXT NOT NULL DEFAULT ''"))
+
+
 def init_webapp_db() -> None:
     """Apply base schema + pending migrations (idempotent)."""
     schema_sql = _SCHEMA_FILE.read_text()

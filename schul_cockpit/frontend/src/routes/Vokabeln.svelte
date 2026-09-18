@@ -13,7 +13,7 @@
   // Das Standardbündel ist die ganze Einheit. Ein Abschnitt, den die
   // Vokabelliste selbst nennt („Texto A"), ist nur eine Einschränkung
   // davon und wird beim Wechsel der Einheit wieder aufgehoben (D100).
-  let unit = $state(initialUnit), section = $state(''), stage = $state(1), direction = $state('from');
+  let unit = $state(initialUnit), section = $state(''), box = $state(''), stage = $state(1), direction = $state('from');
   let cards = $state([]), index = $state(0), answer = $state(''), spoken = $state(false), edits = $state(0), shownAt = $state(0);
   let verdict = $state(null), pending = $state(null), done = $state(false), tally = $state({ correct: 0, slow: 0, wrong: 0 });
   let answerInput = $state(null);
@@ -24,7 +24,10 @@
   const askForeign = $derived(direction === 'from');
   const currentUnit = $derived((data?.units || []).find((u) => u.unit === unit));
   const sections = $derived(currentUnit?.sections || []);
-  function chooseUnit(name) { if (unit !== name) { unit = name; section = ''; } }
+  // Kästen gehören unter ihren Abschnitt, nicht daneben (D116).
+  const boxes = $derived(sections.find((s) => s.section === section)?.boxes || []);
+  function chooseUnit(name) { if (unit !== name) { unit = name; section = ''; box = ''; } }
+  function chooseSection(name) { if (section !== name) { section = name; box = ''; } }
 
   // Wortseiten werden beim Öffnen automatisch in Wörter zerlegt; solange das
   // läuft, lädt die Ansicht alle paar Sekunden nach.
@@ -45,9 +48,9 @@
     stage = s; direction = d; busy = true; error = ''; done = false; verdict = null; pending = null;
     tally = { correct: 0, slow: 0, wrong: 0 };
     try {
-      const r = await api.get(`${base}/${encodeURIComponent(subject)}/cards?unit=${encodeURIComponent(unit)}&section=${encodeURIComponent(section)}&stage=${s}&direction=${d}&limit=80`);
+      const r = await api.get(`${base}/${encodeURIComponent(subject)}/cards?unit=${encodeURIComponent(unit)}&section=${encodeURIComponent(section)}&box=${encodeURIComponent(box)}&stage=${s}&direction=${d}&limit=80`);
       cards = r.cards; index = 0; show();
-      if (!cards.length) error = s === 2 ? 'Für die Schreibweise zuerst die Bedeutungen sichern: Stufe 2 fragt nur Wörter, deren Bedeutung sitzt.' : section ? 'Keine Wörter in diesem Abschnitt.' : 'Keine Wörter in dieser Einheit.';
+      if (!cards.length) error = s === 2 ? 'Für die Schreibweise zuerst die Bedeutungen sichern: Stufe 2 fragt nur Wörter, deren Bedeutung sitzt.' : box ? 'Keine Wörter in diesem Kasten.' : section ? 'Keine Wörter in diesem Abschnitt.' : 'Keine Wörter in dieser Einheit.';
     } catch (e) { error = e.message; } finally { busy = false; }
   }
   function show() { answer = ''; spoken = false; edits = 0; shownAt = Date.now(); verdict = null; pending = null; setTimeout(() => answerInput?.focus?.(), 50); }
@@ -152,15 +155,28 @@
         {#if sections.length}
           <h3>Ganzes Kapitel oder ein Teil?</h3>
           <div class="units">
-            <button class="unit" class:chosen={!section} onclick={() => (section = '')}>
+            <button class="unit" class:chosen={!section} onclick={() => chooseSection('')}>
               <strong>Ganze Einheit</strong><span>{currentUnit?.words ?? 0} Wörter</span>
             </button>
             {#each sections as part (part.section)}
-              <button class="unit" class:chosen={section === part.section} onclick={() => (section = part.section)}>
+              <button class="unit" class:chosen={section === part.section} onclick={() => chooseSection(part.section)}>
                 <strong>{part.section}</strong><span>{part.words} {part.words === 1 ? 'Wort' : 'Wörter'}</span>
               </button>
             {/each}
           </div>
+          {#if boxes.length}
+            <h3>Oder nur ein Themenkasten aus „{section}"?</h3>
+            <div class="units">
+              <button class="unit" class:chosen={!box} onclick={() => (box = '')}>
+                <strong>Ganzer Abschnitt</strong><span>{sections.find((s) => s.section === section)?.words ?? 0} Wörter</span>
+              </button>
+              {#each boxes as kasten (kasten.box)}
+                <button class="unit" class:chosen={box === kasten.box} onclick={() => (box = kasten.box)}>
+                  <strong>{kasten.box}</strong><span>{kasten.words} {kasten.words === 1 ? 'Wort' : 'Wörter'}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
         {/if}
       </section>
       {#if currentUnit}
