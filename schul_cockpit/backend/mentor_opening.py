@@ -175,7 +175,11 @@ def situation(account_id: int, session: dict, ctx: dict) -> dict:
 
 
 def instruction_for(lage: str, schema: dict) -> str:
-    return INSTRUCTION + RULES.get(lage, RULES["frei"]) + " Antworte ausschließlich im folgenden JSON-Schema: " + json.dumps(schema)
+    # Der Einstieg stellt die erste Aufgabe: Für ihn gilt dieselbe Regel über
+    # Vorlage und Auftrag wie für jeden weiteren Zug (G1, G2 aus D126).
+    from .routers.mentor import TASK_RULE
+    return (INSTRUCTION + RULES.get(lage, RULES["frei"]) + " " + TASK_RULE
+            + " Antworte ausschließlich im folgenden JSON-Schema: " + json.dumps(schema))
 
 
 def trim(ctx: dict) -> dict:

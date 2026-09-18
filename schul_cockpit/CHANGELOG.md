@@ -1,3 +1,10 @@
+## 1.7.0
+
+- Eine Übungsaufgabe bringt jetzt mit, woran gearbeitet wird: der Textabschnitt, die Tabelle, die Gleichung stehen in der Aufgabe selbst. „Lies Seite 15, Zeile 3–6" schickt niemanden mehr auf Material, das er nicht vor sich hat.
+- Zitiert der Mentor aus dem Buch, wird geprüft, ob die Stelle dort wirklich steht. Eine erfundene Fundstelle wird zurückgewiesen, nicht ausgeliefert.
+- Die Aufgabe steht nur noch einmal da — im Aufgabenfeld. Die Nachricht daneben wiederholt sie nicht mehr.
+- Antwortmöglichkeiten sind mögliche Antworten oder echte Handlungen, nicht mehr zwingend drei und keine Arbeitshinweise.
+
 ## 1.6.0
 
 - Die Kontrolle einer Hausaufgabe sucht die Bearbeitung jetzt selbst. Liegt die bearbeitete Seite schon eingelesen vor, zeigt der Mentor sie und fragt kurz, ob das der neueste Stand ist — statt immer ein Foto zu verlangen. „Ja" prüft sie und bindet sie an die Hausaufgabe, „Nein" bittet um ein neues Foto.

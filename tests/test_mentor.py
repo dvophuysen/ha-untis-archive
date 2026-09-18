@@ -916,3 +916,54 @@ def test_a_page_without_the_childs_writing_is_not_a_solution(setup):
     assert sources.solution_for_task(1, 911) is None
     r = client.post(B + "/sessions", json={"subject": "DEUTSCH", "homework_task_id": 911, "check": True})
     assert "Zeig mir deine fertige Lösung" in r.json()["messages"][0]["text"]
+
+
+def test_a_task_carries_what_is_worked_on_instead_of_pointing_at_it():
+    """Eine Aufgabe besteht aus Vorlage und Auftrag. „Lies Z. 15–18 auf S. 15"
+    schickt das Kind auf Material, das es nicht vor sich hat — und auf einer
+    Seite mit vierzehn Zeilen gibt es die Stelle nicht einmal (G1, D126)."""
+    from backend.routers.mentor import task_fault, cited_in, Reply, Task
+    seite = ("Ecce, ibi equi sunt! Domini et dominae, servi et servae stant, spectant, clamant. "
+             "Etiam Davus servus clamat, sed spectare non audet. Davus orat: Incitatus victor esse debet. "
+             "Tandem equi veniunt. Davus videt: Crescens iam adest, sed Scorpus nondum adest. ") * 6
+
+    def reply(**kw):
+        base = dict(solution='x', criteria='y', skill_title='Personen im Text', operator='zuordnen', afb=1,
+                    objective='Du entnimmst dem Text, wer handelt.')
+        return Reply(message='Los geht es.', choices=[], action='task', task=Task(**{**base, **kw}), summary='s')
+
+    # Verweis ohne Vorlage: unbrauchbar.
+    fehlt = task_fault(reply(prompt='Lies Z. 15–18 auf S. 15 und nenne die Handlungen.'), seite)
+    assert fehlt and 'Vorlage' in fehlt
+    # Mit Vorlage aus dem Material: in Ordnung.
+    assert task_fault(reply(prompt='Nenne die Handlungen.', quelle='Textband S. 15, Z. 2-3',
+                            vorlage='Domini et dominae, servi et servae stant, spectant, clamant.'), seite) is None
+    # Behauptete Stelle, die es nicht gibt: zurückgewiesen.
+    erfunden = task_fault(reply(prompt='Nenne die Handlungen.', quelle='Textband S. 15, Z. 15-18',
+                                vorlage='Symmachus medicus Lydum vocat et equum aegrum diligenter curat cotidie.'), seite)
+    assert erfunden and 'nicht im vorliegenden Material' in erfunden
+    # Eigene Vorlage ohne behauptete Stelle: erlaubt.
+    assert task_fault(reply(prompt='Bestimme die Form.', vorlage='servus clamat'), seite) is None
+    # Ohne Stoff im Kontext wird ein Zitat nicht geprüft, statt es zu verwerfen.
+    assert task_fault(reply(prompt='Nenne die Handlungen.', quelle='Textband S. 15',
+                            vorlage='Ein Satz, der nirgends steht und trotzdem durchgeht.'), '') is None
+    assert cited_in('kurz', 'ganz egal') is True
+
+
+def test_the_message_does_not_repeat_the_task():
+    """Der Bildschirm zeigt Nachricht und Aufgabenkasten. Steht die Aufgabe in
+    beidem, liest das Kind zweimal dasselbe (G2, D126)."""
+    from backend.routers.mentor import strip_echo, Task
+    task = Task(vorlage='Domini et dominae, servi et servae stant, spectant, clamant.',
+                quelle='Textband S. 15, Z. 2-3', prompt='Nenne zu jeder Person die Handlung auf Deutsch.',
+                solution='x', criteria='y', skill_title='Personen im Text',
+                objective='Du entnimmst dem Text, wer handelt.', operator='zuordnen', afb=1)
+    text = ('Die Arbeit ist am 21.09.; wir üben „Gefahr im Circus Maximus". '
+            'Erste Aufgabe: Nenne zu jeder Person die Handlung auf Deutsch.')
+    gekuerzt = strip_echo(text, task)
+    assert 'Circus Maximus' in gekuerzt
+    assert 'Nenne zu jeder Person' not in gekuerzt and 'Erste Aufgabe' not in gekuerzt
+    # Ohne Aufgabe bleibt die Nachricht unangetastet.
+    assert strip_echo(text, None) == text
+    # Eine Nachricht, die nur die Aufgabe war, bleibt nicht als Rumpf stehen.
+    assert strip_echo('Erste Aufgabe: Nenne zu jeder Person die Handlung auf Deutsch.', task) == ''
