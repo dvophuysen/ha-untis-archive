@@ -279,7 +279,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 9
+EXTRACT_VERSION = 10
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -494,6 +494,9 @@ def split_mark(word: str) -> tuple[str, str]:
 # Was oben auf jeder Anhangseite steht und keine Überschrift ist: „Vocabulary",
 # „V", „Wortschatz". Als Abschnitt gelesen sammelt der Laufkopf Wörter ein, die
 # in Wahrheit zum Abschnitt davor gehören (D115).
+# Eine Aufgabennummer: „5", „2a", „B3", „Nr. 7". Als Abschnitt gelesen zerreißt
+# sie den Abschnitt, in dem sie steht (D128).
+_JUST_A_NUMBER = re.compile(r"^(nr\.?\s*)?[a-z]?\s*\d{1,3}\s*[a-z]?[).]?$", re.I)
 _RUNNING_HEAD = re.compile(r"^(v|voc|vocabulary|vocabulario|vocabulaire|wortschatz|lernwörter|lernwoerter|words)$", re.I)
 
 
@@ -521,6 +524,13 @@ def tidy(words: list, open_unit: str = "", open_section: str = "") -> list:
         w.box = clean_unit(w.box)
         if _RUNNING_HEAD.match(w.section.strip()) or plain(w.section) == plain(w.unit):
             w.section = ""
+        # Eine bloße Nummer ist eine Aufgabennummer, keine Zwischenüberschrift:
+        # „5" stand als eigener Abschnitt neben „Holiday words" und nahm ihm ein
+        # Wort weg. Bei der Einheit ist es umgekehrt — die Wortliste von Green
+        # Line überschreibt ihre Units nur mit „1", „2", „3" (D110, D128).
+        for field in ("section", "box"):
+            if _JUST_A_NUMBER.match((getattr(w, field) or "").strip()):
+                setattr(w, field, "")
         if _RUNNING_HEAD.match(w.unit.strip()):
             w.unit = ""
         # Eine neue Einheit macht den Abschnitt der alten zu: Was in ihr offen
