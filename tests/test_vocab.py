@@ -741,3 +741,78 @@ def test_rereading_a_page_clears_what_the_old_reading_left_behind(setup):
     unit = client.get(V + "/LATEIN/units").json()["units"][0]
     assert [s["section"] for s in unit["sections"]] == ["A"]
     assert unit["words"] == 2
+
+
+def test_a_heading_keeps_its_name_whether_or_not_a_colon_follows():
+    """„la fruta:" und „la fruta" sind dieselbe Überschrift; der Doppelpunkt
+    kündigt im Buch die Liste an. Ohne das Abschneiden stand jeder Kasten
+    zweimal in der Liste (D124)."""
+    mit, ohne = vocab.tidy([
+        vocab.WordIn(foreign_word='a', meanings=['x'], unit='Módulo 3', section='Comida', box='la fruta:'),
+        vocab.WordIn(foreign_word='b', meanings=['x'], unit='Módulo 3', section='Comida', box='la fruta')])
+    assert mit.box == ohne.box == 'la fruta'
+
+
+def test_a_box_that_runs_over_the_page_edge_stays_a_box(setup):
+    """Läuft ein Kasten über den Seitenrand, meldet die Folgeseite seine
+    Überschrift gern als Abschnitt. Dann stand „School" mit einem Wort neben
+    „The new boy", obwohl derselbe Kasten darunter schon lief (D124)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    erste = seed_page(page=10)
+    zweite = seed_page(page=11)
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        if context["page"] == 10:
+            return json.dumps({"words": [{**w, "unit": "Lektion 1", "section": "A", "box": "Tiere"}
+                                         for w in WORDS["words"][:2]]}), {}, "fake"
+        # Die Folgeseite meldet den Kasten als Abschnitt.
+        return json.dumps({"words": [{**w, "unit": "", "section": "Tiere", "box": ""}
+                                     for w in WORDS["words"][2:4]]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    client.post(V + "/LATEIN/extract", json={"material_ids": [erste]})
+    client.post(V + "/LATEIN/extract", json={"material_ids": [zweite]})
+    unit = client.get(V + "/LATEIN/units").json()["units"][0]
+    assert [(s["section"], [(b["box"], b["words"]) for b in s["boxes"]]) for s in unit["sections"]] == [
+        ("A", [("Tiere", 4)])]
+
+
+def test_a_reread_never_costs_a_learned_word_its_history(setup):
+    """Die Aufräumregel aus D122 darf keinen Lernstand kosten. Ein geübtes Wort
+    bleibt, auch wenn die neue Lesung es nicht mehr nennt, und dieselbe Vokabel
+    in neuer Schreibweise behält ihre Zeile samt Verlauf (D125)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    mid = seed_page()
+    stand = {"n": 0}
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        stand["n"] += 1
+        if stand["n"] == 1:
+            return json.dumps({"words": [{**w, "unit": "Lektion 1"} for w in WORDS["words"][:3]]}), {}, "fake"
+        # Zweite Lesung: „servus" steht mit Marke da, „esse" fehlt ganz.
+        return json.dumps({"words": [
+            {**WORDS["words"][0], "unit": "Lektion 1"},
+            {**WORDS["words"][2], "foreign_word": "servus m.", "unit": "Lektion 1"}]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
+    with closing(db.webapp_conn()) as c:
+        ids = {r[1]: r[0] for r in c.execute("SELECT id,foreign_word FROM vocab_words WHERE material_id=?", (mid,))}
+    # Das Kind übt zwei der drei Wörter.
+    for word in ("servus", "esse"):
+        r = client.post(V + "/attempts", json={"word_id": ids[word], "stage": 1, "direction": "from",
+                                               "answer": "der Sklave" if word == "servus" else "sein", "seconds": 4})
+        assert r.status_code == 200, r.text
+
+    patch.setattr(vocab, "EXTRACT_VERSION", vocab.EXTRACT_VERSION + 1)
+    client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
+    with closing(db.webapp_conn()) as c:
+        rows = {r[1]: r[0] for r in c.execute("SELECT id,foreign_word FROM vocab_words WHERE material_id=?", (mid,))}
+        versuche = {r[0] for r in c.execute("SELECT word_id FROM vocab_attempts")}
+    # Die Marke wandert ins Grammatikfeld; die Zeile bleibt dieselbe.
+    assert rows.get("servus") == ids["servus"] and "servus m." not in rows
+    # Das geübte, nicht mehr genannte Wort bleibt mitsamt seinem Verlauf.
+    assert rows.get("esse") == ids["esse"]
+    assert versuche == {ids["servus"], ids["esse"]}
+    # Das ungeübte, nicht mehr genannte Wort ist weg.
+    assert "cōgitāre" not in rows
