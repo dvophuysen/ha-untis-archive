@@ -1,3 +1,8 @@
+## 1.7.3
+
+- Fehler behoben: Beim Lesen einer Vokabelseite bekam ich die Einheit der Vorseite vorgesagt und habe sie im Zweifel abgeschrieben, statt auf den Laufkopf der Seite zu sehen. Ein einziger Fehler zog sich so durch alle Folgeseiten — bei Kind B Englisch landeten dreizehn von sechzehn Seiten in „Unit 1".
+- Steht über einer Seite ein doppelter Laufkopf wie „Unit 1 / Media smart", entscheidet jetzt die Seite selbst, welcher gemeint ist.
+
 ## 1.7.2
 
 - Fehler behoben: Eine Vokabelseite blieb ungelesen, wenn dieselbe Vokabel in der alten Lesung zweimal stand — einmal mit und einmal ohne grammatische Marke. Die Seite meldete keinen Fehler, sie blieb einfach, wie sie war.
