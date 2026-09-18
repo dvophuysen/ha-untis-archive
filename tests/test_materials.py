@@ -252,7 +252,7 @@ def test_compare_texts_sees_digit_and_line_errors_that_word_recall_misses():
     assert analysis.compare_texts("", "")["text_ratio"] == 1.0
 
 
-def test_handwriting_always_goes_to_review_and_page_type_is_stored(env):
+def test_a_confident_reading_of_handwriting_needs_no_second_pair_of_eyes(env):
     client = client_for(env)
     body = upload(client).json()
     insight = analysis.Insight(kind="notes", subject_name="Latein", title="Zettel", summary="Kurz", content_text="BB S. 13",
@@ -262,8 +262,9 @@ def test_handwriting_always_goes_to_review_and_page_type_is_stored(env):
         analysis._apply(conn, 1, row, insight)
     after = client.get(f"{URL}/{body['id']}").json()
     assert after["page_type"] == "handwriting" and after["handwritten"] == 1
-    # Vertrauen 0,97 hätte bisher kein Gegenlesen ausgelöst; Handschrift tut es immer.
-    assert after["needs_review"] is True
+    # Handschrift allein löst kein Gegenlesen mehr aus: Die Lesung war sich
+    # sicher und hat keine Zweifelsstelle gemeldet (D118).
+    assert after["needs_review"] is False
     printed = upload(client).json()
     with closing(db.webapp_conn()) as conn:
         row = conn.execute("SELECT * FROM materials WHERE id=?", (printed["id"],)).fetchone()
@@ -328,3 +329,55 @@ def test_a_homework_can_take_an_already_stored_material(env):
     assert client.get(f"{URL}/for-task/7").json()['linked'] == []
     # Eine fremde Aufgabe gibt es nicht.
     assert client.get(f"{URL}/for-task/999").status_code == 404
+
+
+def test_a_doubt_is_the_only_thing_that_asks_for_a_second_pair_of_eyes(env):
+    """Der Weg von der Lesung bis zur erledigten Zweifelsstelle (D118): Die
+    Lesung meldet, wo sie unsicher war, die Karte zeigt nur diese Stellen mit
+    einer Zeile Zusammenhang, und ein Tipp berichtigt oder bestätigt sie."""
+    client = client_for(env)
+    body = upload(client).json()
+    seite = ("1 Berechne.\n" + "\n".join(f"{c}) Aufgabe = ___" for c in "abcdefgh")
+             + "\ni) 2/7 + 4/7 = ___ [Kind: 6/7]\nj) letzte Zeile")
+    insight = analysis.Insight(kind="workbook", subject_name="Mathematik", title="Brüche", summary="Kurz",
+                               content_text=seite, confidence=0.95, page_type="mixed", handwritten=True,
+                               pupil_entries=True,
+                               doubts=[{"text": "[Kind: 6/7]", "alternative": "[Kind: 5/7]", "reason": "6 oder 5"}])
+    with closing(db.webapp_conn()) as conn:
+        row = conn.execute("SELECT * FROM materials WHERE id=?", (body["id"],)).fetchone()
+        analysis._apply(conn, 1, row, insight)
+    after = client.get(f"{URL}/{body['id']}").json()
+    assert after["needs_review"] is True
+    assert [d["alternative"] for d in after["doubts"]] == ["[Kind: 5/7]"]
+    # Gezeigt wird der Auszug, nicht die ganze Seite.
+    assert after["review"]["shortened"] and after["review"]["spots"] == 1
+    gezeigt = "".join(s.get("text", "") for s in after["review"]["segments"])
+    assert "[Kind: 6/7]" in gezeigt and "1 Berechne." not in gezeigt
+
+    # „Heißt 5/7“: Der Text wird berichtigt, die Stelle ist erledigt, und die
+    # Korrektur der Eltern überschreibt keine spätere Lesung mehr.
+    fixed = client.post(f"{URL}/{body['id']}/doubts/resolve",
+                        json={"text": "[Kind: 6/7]", "replace": "[Kind: 5/7]"}).json()
+    assert "[Kind: 5/7]" in fixed["content_text"] and "[Kind: 6/7]" not in fixed["content_text"]
+    assert fixed["doubts"] == [] and fixed["needs_review"] is False
+    assert "content_text" in fixed["locked_fields"]
+    # Dieselbe Stelle ein zweites Mal gibt es nicht mehr.
+    assert client.post(f"{URL}/{body['id']}/doubts/resolve",
+                       json={"text": "[Kind: 6/7]", "replace": "[Kind: 4/7]"}).status_code == 409
+
+
+def test_a_doubt_can_simply_be_confirmed_without_changing_the_text(env):
+    client = client_for(env)
+    body = upload(client).json()
+    insight = analysis.Insight(kind="workbook", subject_name="Mathematik", title="Brüche",
+                               content_text="a) 1/2 + 1/2 = ___ [Kind: 1]", confidence=0.95,
+                               handwritten=True, pupil_entries=True,
+                               doubts=[{"text": "[Kind: 1]", "alternative": "[Kind: 7]", "reason": "1 oder 7"}])
+    with closing(db.webapp_conn()) as conn:
+        row = conn.execute("SELECT * FROM materials WHERE id=?", (body["id"],)).fetchone()
+        analysis._apply(conn, 1, row, insight)
+    kept = client.post(f"{URL}/{body['id']}/doubts/resolve", json={"text": "[Kind: 1]"}).json()
+    assert kept["content_text"] == "a) 1/2 + 1/2 = ___ [Kind: 1]"
+    assert kept["doubts"] == [] and kept["needs_review"] is False
+    # Ohne Änderung bleibt der Text frei für eine spätere, bessere Lesung.
+    assert "content_text" not in kept["locked_fields"]

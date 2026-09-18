@@ -594,14 +594,27 @@ def test_the_printed_page_and_the_childs_entry_stay_apart():
     assert pupil_only('Completa las frases.') == []
 
 
-def test_the_childs_writing_always_goes_to_review():
-    """Handschrift bleibt gegenlesepflichtig (D77). Dass ein gedrucktes
-    Musterbeispiel in Schreibschrift keinen Blick kostet, regelt die Lesung: Für
-    sie bleibt handwritten false. Und was das Kind geschrieben hat, zählt auch
-    dann, wenn die Lesung es nicht als Handschrift gemeldet hat (D98)."""
+def test_only_an_uncertain_reading_goes_to_review():
+    """Gegengelesen wird, wo die Lesung unsicher war, nicht wo Handschrift steht
+    (D118). Handschrift allein verlangte bisher immer einen Blick (D77); auf
+    einer Arbeitsheftseite mit drei eingetragenen Brüchen unter sechzig Zeilen
+    führte das zum Bestätigen ohne Hinsehen. Eine unleserliche Stelle bleibt ein
+    Grund: Sie ist das Eingeständnis, nicht gelesen zu haben."""
     from backend.materials import needs_review
     gedruckt = {"origin": "", "analysis_state": "ready", "verified": 0, "kind": "workbook",
-                "handwritten": 0, "pupil_entries": 0, "confidence": 0.95}
+                "handwritten": 0, "pupil_entries": 0, "confidence": 0.95, "doubts": "",
+                "content_text": "1 Berechne. a) 2/7 + 4/7 = ___"}
     assert needs_review(gedruckt) is False
-    assert needs_review({**gedruckt, "handwritten": 1}) is True
-    assert needs_review({**gedruckt, "pupil_entries": 1}) is True
+    # Sauber gelesene Handschrift des Kindes kostet keinen Blick mehr.
+    sauber = {**gedruckt, "handwritten": 1, "pupil_entries": 1,
+              "content_text": "a) 2/7 + 4/7 = ___ [Kind: 6/7]"}
+    assert needs_review(sauber) is False
+    # Eine gemeldete Zweifelsstelle schon.
+    unsicher = {**sauber, "doubts": '[{"text": "[Kind: 6/7]", "alternative": "[Kind: 5/7]", "reason": "6 oder 5"}]'}
+    assert needs_review(unsicher) is True
+    # Und eine Stelle, die gar nicht gelesen werden konnte.
+    assert needs_review({**sauber, "content_text": "a) 2/7 + 4/7 = ___ [Kind: […]]"}) is True
+    # Eine Themenliste und ein Verzeichnis immer: daraus entstehen Stellen und
+    # Kapitel, ein falsch gelesener Zettel wirkt wochenlang weiter.
+    assert needs_review({**gedruckt, "kind": "exam_notice"}) is True
+    assert needs_review({**gedruckt, "kind": "toc"}) is True

@@ -12,6 +12,7 @@ from pydantic import Field
 from .. import material_analysis as analysis
 from .. import materials as store
 from .. import notice_check
+from .. import proofread
 from .. import sources
 from ..auth import CurrentUser, get_current_user
 from ..db import webapp_conn
@@ -46,6 +47,13 @@ class SuggestionIn(InputModel):
 
 class SuggestionsIn(InputModel):
     fixes: list[SuggestionIn] = Field(min_length=1, max_length=20)
+
+
+class DoubtIn(InputModel):
+    """Eine Zweifelsstelle erledigen: `replace` gesetzt heißt „so heißt es
+    richtig", leer heißt „so stimmt es"."""
+    text: str = Field(min_length=1, max_length=300)
+    replace: str | None = Field(default=None, max_length=300)
 
 
 class LinkIn(InputModel):
@@ -165,8 +173,14 @@ def index(
         # eine 7 statt einer 1 fällt nur im Zusammenhang auf.
         run = notice_check.checker(account_id)
         for m in items:
-            if m.get("needs_review") and (m["kind"] == "exam_notice" or m.get("handwritten")):
+            if m.get("origin") == "book_fetch" or m.get("verified"):
+                continue
+            if m["kind"] == "exam_notice" or m.get("handwritten") or m.get("pupil_entries"):
                 m["plausibility"] = run(m)
+                # Eine genannte Seite, die es im Fach nie gab, ist ein Zweifel,
+                # auch wenn die Lesung sich sicher war (D118).
+                if (m["plausibility"] or {}).get("unknown"):
+                    store.call_for_review(m)
     # Ein loses Blatt bekommt Vorschläge, zu welchem Eintrag es gehören könnte;
     # zugeordnet wird mit einem Tipp, von Kind oder Eltern (D85).
     for m in items:
@@ -385,6 +399,37 @@ def apply_suggestion(account_id: int, material_id: int, body: SuggestionsIn, bac
         raise HTTPException(404, "Material nicht gefunden.")
     background.add_task(analysis.after_analysis, account_id, material_id)
     return fixed
+
+
+@router.post("/{material_id}/doubts/resolve")
+def resolve_doubt(account_id: int, material_id: int, body: DoubtIn, background: BackgroundTasks,
+                  user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Eine einzelne Zweifelsstelle erledigen (D118). Mit `replace` wird der
+    Text berichtigt und gilt als Korrektur der Eltern, die keine Lesung mehr
+    überschreibt; ohne bleibt er, wie er ist. In beiden Fällen ist die Stelle
+    danach geklärt. Bleibt keine übrig, verschwindet die Karte von selbst."""
+    access(user, account_id, write=True, parent=True)
+    found = store.detail(account_id, material_id)
+    if not found:
+        raise HTTPException(404, "Material nicht gefunden.")
+    text = found.get("content_text") or ""
+    changes: dict = {}
+    if body.replace is not None and body.replace != body.text:
+        fixed = proofread.resolve(text, body.text, body.replace)
+        if fixed is None:
+            raise HTTPException(409, "Diese Stelle steht so nicht mehr im Text. Bitte neu laden.")
+        changes["content_text"] = fixed
+    elif proofread.resolve(text, body.text, None) is None:
+        raise HTTPException(409, "Diese Stelle steht so nicht mehr im Text. Bitte neu laden.")
+    rest = [d for d in (found.get("doubts") or []) if (d.get("text") or "").strip() != body.text.strip()]
+    with closing(webapp_conn()) as conn, conn:
+        conn.execute("UPDATE materials SET doubts=?,updated_at=? WHERE id=? AND account_id=?",
+                     (json.dumps(rest, ensure_ascii=False) if rest else "", store.now_iso(),
+                      material_id, account_id))
+    if changes:
+        store.update(account_id, material_id, changes, by_parent=True)
+        background.add_task(analysis.after_analysis, account_id, material_id)
+    return store.detail(account_id, material_id) or {}
 
 
 @router.post("/{material_id}/verified")

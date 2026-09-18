@@ -1,3 +1,13 @@
+## 1.5.0
+
+- Gegengelesen wird nur noch, wo ich beim Lesen unsicher war. Bisher verlangte jede Seite mit Handschrift einen Blick — bei einer Arbeitsheftseite mit sechzig Zeilen und drei eingetragenen Brüchen war das eine Textwand, die man irgendwann ungelesen bestätigt.
+- Das Foto der Seite steht jetzt in der Gegenlese-Karte, auf Tipp groß. Ohne die Quelle daneben ließ sich gar nichts vergleichen.
+- Gezeigt werden nur die unsicheren Stellen, markiert und mit einer Zeile Zusammenhang; dazwischen steht „[…] 9 Zeilen" und führt auf Tipp zum ganzen Text.
+- Zu jeder unsicheren Stelle steht, was ich gelesen habe und was sonst dastehen könnte: „Heißt 5/7" berichtigt sie, „Stimmt so" hakt sie ab.
+- Eine Seitenzahl, die es im Fach nie gab, verlangt jetzt selbst einen Blick, statt nur danebenzustehen.
+- Themenlisten und Inhaltsverzeichnisse zeige ich weiterhin immer — daraus entstehen Stellen und Kapitel. Auch sie jetzt kurz und mit Foto.
+- Die fraglichen Seiten werden neu gelesen, und ihre bisherigen Bestätigungen gelten nicht mehr. Zurück kommt nur, was wirklich unsicher ist.
+
 ## 1.4.1
 
 - Fehler behoben: In Englisch wurde „WB" nicht als Arbeitsheft erkannt. Eine solche Stelle erbte den zuletzt genannten Buchteil und stand als Schulbuchseite in der Liste.

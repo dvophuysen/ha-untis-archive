@@ -1,3 +1,48 @@
+# Gegenlesen nur bei Zweifel, mit Foto und Auszug 1.5.0
+
+Stand 18.09.2026. Nutzerrückmeldung und Nutzerentscheidung (D118).
+
+**Befund.** In der Gegenlese-Karte stand eine Arbeitsheftseite Mathematik
+(„Addieren von Brüchen") mit rund sechzig Zeilen gedrucktem Text am Stück, ohne
+das Foto daneben, darunter „✓ Stimmt so". Handschriftlich waren daran drei
+Zeilen: `[Kind: 6/7]`, `[Kind: 1 4/9]`, `[Kind: 3 2/8]`. Der Nutzer dazu: „Ich
+habe an vielen Stellen einfach nur bestätigt, weil ich den Überblick verloren
+habe." Damit war die Karte nicht nur unbequem, sondern wirkungslos — eine
+Bestätigung ohne Hinsehen ist keine Prüfung. Drei Ursachen: Die Regel fragte
+nach Handschrift statt nach Unsicherheit (D77), die Anzeige zeigte alles statt
+des Fraglichen, und die Quelle zum Vergleichen fehlte ganz, obwohl sie unter
+`/{id}/file` längst bereitliegt.
+
+**Gebaut (D118).** `material_analysis`: neues Feld `Insight.doubts` (Stelle
+wortgetreu, Alternative, Grund) mit einer Anweisung, die benennt, was hineingehört
+(ähnliche handschriftliche Ziffern, Einzelbuchstaben, Überschriebenes, Verblasstes,
+jede mit […] markierte Stelle) und was nicht (sauber lesbare Handschrift);
+`ANALYSIS_VERSION` 4. Neue Spalte `materials.doubts`. Neues Modul `proofread.py`:
+`marks()` findet die Marken, die in jedem gelesenen Text stehen (`[Kind: …]`,
+`[Kind gestrichen: …]`, `[…]`), `spots()` legt sie mit den gemeldeten Stellen
+zusammen (die gemeldete gewinnt, sie trägt den Vorschlag), `excerpt()` kürzt den
+Text auf die Stellen samt einer Zeile Zusammenhang und meldet die Lücken mit
+ihrer Zeilenzahl, `resolve()` ersetzt genau eine Stelle. `materials.needs_review`
+fragt jetzt nach Zweifeln statt nach Handschrift; `routers/materials.index` lässt
+die Plausibilitätsprüfung selbst ein Gegenlesen auslösen; neue Route
+`POST /{id}/doubts/resolve`. `Materialien.svelte`: Foto in der Karte (Tipp macht
+es groß), Auszug mit markierten Stellen und antippbaren Lücken, je Zweifel
+„Heißt X" und „Stimmt so".
+
+**Geprüft.** Neun Tests (`test_proofread.py` fünf, `test_materials.py` zwei zum
+Weg durch die API, zwei umgeschriebene zur neuen Regel). Gesamtlauf 509 grün.
+Am Beispiel der echten Heftseite: drei Stellen erkannt, zehn von siebzehn Zeilen
+weggekürzt, die Nachbarzeilen jeder Stelle bleiben stehen.
+
+**Offen.** Die einmalige Rücknahme der bisherigen Bestätigungen und das Neulesen
+der fraglichen Seiten laufen über `ANALYSIS_VERSION`; wie viele Seiten danach
+wirklich einen Blick verlangen, zeigt sich erst am Ergebnis. Beobachten, ob die
+Lesung Zweifelsstellen ernsthaft und sparsam meldet — meldet sie zu viele, ist
+die Karte wieder voll; meldet sie keine, fällt eine falsch gelesene Ziffer nur
+noch der Plausibilitätsprüfung auf.
+
+---
+
 # Alle Vokabellisten, nicht die zufällig vorhandenen Seiten 1.1.0
 
 Stand 17.09.2026. Nutzerrückmeldung (D108, D109).

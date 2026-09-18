@@ -998,6 +998,18 @@ _MIGRATIONS.append(("source_claims_tb_is_textbook_d114",
 _MIGRATIONS.append(("vocab_words_002_box", "ALTER TABLE vocab_words ADD COLUMN box TEXT NOT NULL DEFAULT ''"))
 
 
+# Gegengelesen wird nur noch, wo die Lesung selbst unsicher ist (D118). Die
+# Zweifelsstellen stehen als JSON-Liste am Material.
+_MIGRATIONS.append(("materials_001_doubts", "ALTER TABLE materials ADD COLUMN doubts TEXT NOT NULL DEFAULT ''"))
+# Die bisherigen Bestätigungen der fraglichen Seiten gelten nicht mehr: Sie
+# entstanden vor einer Textwand ohne Foto daneben, bei der der Überblick
+# verlorenging. Nach dem Neulesen kommt nur zurück, was wirklich unsicher ist;
+# Buchabrufe bleiben außen vor, die sind gedruckt und maschinell geholt.
+_MIGRATIONS.append(("materials_002_reread_doubtful_d118",
+                    "UPDATE materials SET verified=0 WHERE verified=1 AND COALESCE(origin,'')!='book_fetch' "
+                    "AND (handwritten=1 OR pupil_entries=1 OR kind IN ('exam_notice','toc'))"))
+
+
 def init_webapp_db() -> None:
     """Apply base schema + pending migrations (idempotent)."""
     schema_sql = _SCHEMA_FILE.read_text()
