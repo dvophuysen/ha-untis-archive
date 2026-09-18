@@ -47,15 +47,25 @@ PARTS: list[tuple[str, str, str]] = [
     # es der Textband; das steht in SUBJECT_PARTS und geht hier vor (D114).
     (r"lehrbuch|schulbuch|kursbuch|textbook|\bSB\b|\bTB\b|\blibro\b|\bbuch\b", "Schulbuch", "book"),
     (r"vocabulario|wordbank|wortschatzteil", "Schulbuch, Vokabelteil", "book"),
-    (r"arbeitsheft|\bA-?Heft\b|\bAH\b|workbook|cuaderno|\bcda\b|übungsheft|uebungsheft|arbeitsbuch", "Arbeitsheft", "workbook"),
+    # „WB" ist das Workbook, also das Arbeitsheft.
+    (r"arbeitsheft|\bA-?Heft\b|\bAH\b|workbook|\bWB\b|cuaderno|\bcda\b|übungsheft|uebungsheft|arbeitsbuch", "Arbeitsheft", "workbook"),
     (r"grammatikheft|grammatisches beiheft|beiheft", "Grammatikheft", "workbook"),
     (r"arbeitsblatt|\bAB\b|handout|merkblatt|kopie", "Arbeitsblatt", "worksheet"),
 ]
 # Kürzel, die je Fach etwas anderes bedeuten. Sie gelten vor der allgemeinen
 # Tabelle. Latein hat zwei Bücher, Textband („TB") und Begleitband („BB"); im
 # Englischen ist „TB" das Text Book und „BB" nichts Bekanntes (D114).
+# In den modernen Fremdsprachen steht der Wortschatz im Anhang des Schulbuchs,
+# und „Voc." ist die übliche Kurzform dafür. In Latein wäre es der Begleitband,
+# ein eigenes Buch — dort bleibt die Kurzform lieber unbestimmt, als die falsche
+# Seite zu belegen (D117).
+_VOC = (r"vocabulary|\bvoc\b", "Schulbuch, Vokabelteil", "book")
 SUBJECT_PARTS: dict[str, list[tuple[str, str, str]]] = {
     "latein": [(r"\bTB\b", "Textband", "book"), (r"\bBB\b", "Begleitband", "book")],
+    "englisch": [_VOC],
+    "spanisch": [_VOC],
+    "französisch": [_VOC],
+    "franzoesisch": [_VOC],
 }
 # Solange keine Stunde das Kürzel auflöst, steht in einer Hausaufgabe nur „LA".
 # Ein Kürzel wird genau verglichen, nie als Teilwort: „la" steckt auch in
@@ -98,7 +108,12 @@ def book_serves(book_title: str | None, label: str | None) -> bool:
 
 # Nur eine ausdrückliche Seitenangabe zählt. Ohne diese Regel wird aus
 # „#libro, p. 50 vocabulario 4 b" eine Seite 4, obwohl 4 b die Aufgabe ist.
-PAGE = re.compile(r"\b(?:S\.|Seite|pp?\.|página|pagina)\s*(\d{1,3})(?:\s*(?:-|–|bis)\s*(\d{1,3}))?", re.I)
+PAGE = re.compile(r"\b(?:S\.|Seite|(?P<plural>pp\.)|p\.|páginas?|paginas?)\s*(?P<first>\d{1,3})"
+                  r"(?:\s*(?:-|–|bis)\s*(?P<last>\d{1,3}))?", re.I)
+# „pp. 216/7" heißt im Englischen Seite 216 und 217: Die zweite Zahl ist die
+# abgekürzte Folgeseite. Nur nach dem Plural „pp."; hinter „S. 60/1" steht die
+# Aufgabe, nicht die nächste Seite (D117).
+_SHORT_NEXT = re.compile(r"\s*/\s*(\d{1,3})(?![\w.])")
 # Eine Aufzählung hinter der Angabe („S. 10, 11, 14, 15") gehört dazu, solange
 # sie aufsteigt und nah bleibt; „S. 12, 3a" ist Seite 12 und Aufgabe 3a.
 _MORE = re.compile(r"\s*,\s*(\d{1,3})(?:\s*(?:-|–|bis)\s*(\d{1,3}))?(?![\w.])")
@@ -127,10 +142,20 @@ def _hits(text: str) -> list[tuple[int, int, list[int], bool]]:
     text = text or ""
     out = []
     for hit in PAGE.finditer(text):
-        first, last = int(hit.group(1)), int(hit.group(2)) if hit.group(2) else None
+        first = int(hit.group("first"))
+        last = int(hit.group("last")) if hit.group("last") else None
         wide = last is not None and (last < first or last - first > 30)
         pages = _span(first, last)
         end = hit.end()
+        if hit.group("plural") and last is None:
+            # Die abgekürzte Folgeseite: „pp. 216/7" sind 216 und 217.
+            short = _SHORT_NEXT.match(text, end)
+            if short:
+                tail = int(short.group(1))
+                whole = first - (first % (10 ** len(short.group(1)))) + tail
+                if first < whole <= first + 30:
+                    pages = list(range(first, whole + 1))
+                    end = short.end()
         while True:
             more = _MORE.match(text, end)
             if not more:

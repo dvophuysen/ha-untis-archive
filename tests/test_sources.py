@@ -192,3 +192,33 @@ def test_the_same_short_form_means_different_books_in_different_subjects():
     assert sources.part_of('TB S. 24', 'Klassenlehrerstunde') == ('Schulbuch', 'book')
     # Ausgeschrieben bleibt es in jedem Fach eindeutig.
     assert sources.part_of('Textband S. 24', 'ENGLISCH') == ('Textband', 'book')
+
+
+def test_the_english_short_forms_split_a_homework_into_its_three_sources():
+    """Bei Kind B stand in Englisch eine Hausaufgabe als eine einzige, dazu noch
+    unbekannte Quelle in der Liste. „WB" ist das Workbook, also das Arbeitsheft,
+    „Voc." der Vokabelteil im Anhang des Schulbuchs, und „pp. 216/7" sind die
+    Seiten 216 und 217 — die zweite Zahl ist die abgekürzte Folgeseite (D117)."""
+    text = ('Voc. pp. 216/7 (Copy and learn.) Irregular verbs TB p. 206 '
+            '(Copy to end of page) Zusatz: WB p. 6, ex. 6')
+    assert [(c['label'], c['pages']) for c in sources.citations(text, 'ENGLISCH')] == [
+        ('Schulbuch, Vokabelteil', [216, 217]), ('Schulbuch', [206]), ('Arbeitsheft', [6])]
+    # Das Arbeitsheft heißt in jedem Fach so.
+    assert sources.part_of('WB p. 4, ex. 2', 'ENGLISCH') == ('Arbeitsheft', 'workbook')
+    assert sources.part_of('WB S. 4', 'LATEIN') == ('Arbeitsheft', 'workbook')
+    # Der Wortschatz steht in den modernen Fremdsprachen im Schulbuch. In Latein
+    # wäre es der Begleitband, ein eigenes Buch: dort lieber unbestimmt bleiben,
+    # als die falsche Seite zu belegen.
+    assert sources.part_of('Voc. p. 213', 'SPANISCH') == ('Schulbuch, Vokabelteil', 'book')
+    assert sources.part_of('Voc. S. 213', 'LATEIN') == ('', '')
+
+
+def test_an_abbreviated_follow_on_page_only_counts_after_the_plural_marker():
+    """«pp.» steht für zwei Seiten, «p.» für eine. Hinter „S. 60/1" und
+    „p. 48/5" steht darum die Aufgabe, nicht die nächste Seite (D117)."""
+    assert sources.page_hits('Voc. pp. 216/7') == [(5, 14, [216, 217])]
+    assert [pages for _, _, pages in sources.page_hits('pp. 98/102')] == [[98, 99, 100, 101, 102]]
+    for einzeln in ('S. 60/1', 'p. 48/5', 'Seite 60/1'):
+        assert [pages for _, _, pages in sources.page_hits(einzeln)] == [[int(einzeln.split()[-1].split('/')[0])]]
+    # Rückwärts oder weit weg ist keine Folgeseite, sondern etwas anderes.
+    assert [pages for _, _, pages in sources.page_hits('pp. 216/5')] == [[216]]
