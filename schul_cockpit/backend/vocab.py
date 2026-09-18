@@ -726,7 +726,14 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
             # der gelernte Stand weg (D125).
             same = known.get(core)
             if same and same[1] != w.foreign_word.strip():
-                c.execute("UPDATE vocab_words SET foreign_word=? WHERE id=?", (w.foreign_word.strip(), same[0]))
+                # Nur umbenennen, wenn der neue Name auf dieser Seite frei ist.
+                # Standen „servus" und „servus m." beide in der alten Lesung,
+                # bricht die Umbenennung sonst an der Eindeutigkeit ab und die
+                # ganze Seite bleibt ungelesen (D129).
+                taken = c.execute("SELECT id FROM vocab_words WHERE account_id=? AND material_id=? AND foreign_word=?",
+                                  (account_id, material_id, w.foreign_word.strip())).fetchone()
+                if not taken:
+                    c.execute("UPDATE vocab_words SET foreign_word=? WHERE id=?", (w.foreign_word.strip(), same[0]))
             c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,section,box,position,foreign_word,plain,meanings_json,grammar,forms_json,example,created_at) "
                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,material_id,foreign_word) DO UPDATE SET "
                       "meanings_json=excluded.meanings_json,grammar=excluded.grammar,forms_json=excluded.forms_json,example=excluded.example,position=excluded.position,unit=excluded.unit,section=excluded.section,box=excluded.box",

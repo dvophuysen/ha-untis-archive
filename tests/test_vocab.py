@@ -830,3 +830,26 @@ def test_an_exercise_number_is_no_heading():
     assert nummer.section == ''
     assert mit_text.section == 'Holiday words' and mit_text.box == ''
     assert einheit.unit == '3' and einheit.section == 'Station 1'
+
+
+def test_two_spellings_of_one_word_do_not_break_the_page(setup):
+    """Standen „servus" und „servus m." beide in der alten Lesung, brach die
+    Umbenennung aus D125 an der Eindeutigkeit ab — mit ihr die ganze Seite
+    (D129). Sie wird jetzt übersprungen, statt alles mitzureißen."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    mid = seed_page()
+    with closing(db.webapp_conn()) as c, c:
+        for pos, wort in enumerate(('servus', 'servus m.')):
+            c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,position,"
+                      "foreign_word,plain,meanings_json,created_at) VALUES(1,'LATEIN',?,'Begleitband',10,'Lektion 1',?,?,?,?,'now')",
+                      (mid, pos, wort, vocab.plain(wort), json.dumps(['der Sklave'])))
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        return json.dumps({"words": [{**WORDS["words"][2], "unit": "Lektion 1"}]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    r = client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
+    assert r.status_code == 200, r.text
+    with closing(db.webapp_conn()) as c:
+        namen = sorted(x[0] for x in c.execute("SELECT foreign_word FROM vocab_words WHERE material_id=?", (mid,)))
+    assert 'servus' in namen
