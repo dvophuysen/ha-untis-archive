@@ -1,3 +1,7 @@
+## 1.5.1
+
+- Fehler behoben: Eine vollgeschriebene Heftseite ließ sich nicht mehr lesen. Das Denken des Modells zählt in dasselbe Budget wie der Text, und seit die Lesung auch ihre unsicheren Stellen nennt, reichte es nicht mehr — die Antwort kam leer zurück, bei vollen Kosten. Eine Lesung hat jetzt knapp doppelt so viel Platz.
+
 ## 1.5.0
 
 - Gegengelesen wird nur noch, wo ich beim Lesen unsicher war. Bisher verlangte jede Seite mit Handschrift einen Blick — bei einer Arbeitsheftseite mit sechzig Zeilen und drei eingetragenen Brüchen war das eine Textwand, die man irgendwann ungelesen bestätigt.
