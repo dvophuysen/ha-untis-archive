@@ -1,3 +1,8 @@
+## 1.5.6
+
+- Fehler behoben: Themenkästen wie „School" und „Feelings" standen weiter neben ihrem Abschnitt statt darunter. Ob eine Überschrift eine laufende Zwischenüberschrift ist oder ein abgesetzter Kasten, steht nicht im Text — ich bekomme dafür jetzt das Bild der Seite zu sehen.
+- Die Vokabelseiten werden damit noch einmal gelesen.
+
 ## 1.5.5
 
 - Jede unsichere Stelle hat jetzt ihr eigenes Eingabefeld, vorbelegt mit dem vermuteten Inhalt. Anpassen, „Übernehmen" — fertig. Bisher gab es nur den Vorschlag zum Annehmen oder Ablehnen; für alles andere musste das große Korrekturformular am Ende der Seite herhalten.
