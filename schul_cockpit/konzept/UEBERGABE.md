@@ -72,3 +72,41 @@ rund beim Doppelten der Azure-Rechnung und warnt deshalb früh.
 - Der Nutzer entscheidet Grundsatzfragen, will Vorschläge mit Empfehlung und
   konsequentes Abarbeiten ohne Rückfragen bei allem anderen. Qualität steht weit
   vor Kosten.
+
+## Warteschlange: Antwort-Chips und doppelte Aufgabenstellung (18.09.)
+
+Nutzerrückmeldung mit Bildschirmfoto, Thema „Spanische Texte verstehen und
+erschließen". Noch nicht gebaut, nur festgehalten.
+
+**Befund aus dem Code.** Die drei Chips sind keine Absicht, sondern ein
+Höchstwert: `Reply.choices` erlaubt bis zu drei, `turn()` schneidet zusätzlich
+auf drei ab. Wie viele es tatsächlich werden und was daraufsteht, entscheidet
+das Modell frei; die App prüft nur, dass kein Chip die Lösung verrät
+(`safe_choices`, D95) und ersetzt sie nach zwei Hinweisen durch „Anderes
+Beispiel / Für heute fertig". Es gibt keine Regel, was ein Chip sein soll —
+deshalb steht unter einer Auswahlaufgabe mit a/b/c so etwas wie „Auf den
+Satzbau achten", das als Antwort sinnlos ist.
+
+**Fragen des Nutzers.**
+
+- Warum immer drei? Nur weil drei die Obergrenze ist. Kein didaktischer Grund.
+- Warum nicht a | b | c | „Ich benötige Hilfe"? Weil D95 Chips verbietet, die
+  die Lösung enthalten — der Anlass war eine angetippte richtige Antwort, die
+  als eigene Leistung gebucht wurde. Bei einer Auswahlaufgabe sind die Buchstaben
+  aber gerade keine verratene Lösung, sondern die Aufgabe selbst. Die Sperre ist
+  hier zu grob: Sie müsste den Buchstaben (a/b/c) vom Lösungstext trennen.
+- Was soll „Auf den Satzbau achten" für eine Antwort sein? Nichts. Ein Chip muss
+  entweder eine Antwort auf die gestellte Aufgabe sein oder ein Weg weiterzureden
+  („Erst kurz erklären", „Weiß ich nicht"). Ein Lerntipp ist beides nicht.
+
+**Zweite Beobachtung.** Der Mentor leitet die Aufgabe zweimal ein: einmal im
+Fließtext der Nachricht, einmal im Kasten „Deine Aufgabe" aus `task.prompt`.
+Die Ansicht zeigt beides untereinander (`Mentor.svelte`, `m.payload.task`).
+Entweder stellt die Nachricht die Aufgabe und der Kasten entfällt, oder die
+Nachricht führt nur hin und die Aufgabe steht allein im Kasten. Heute steht
+sie doppelt, in leicht abweichender Formulierung.
+
+**Vorschlag für später.** Chips bekommen eine Rolle: bei einer Auswahlaufgabe
+die Antwortmöglichkeiten als Buchstaben, sonst höchstens zwei Wege
+weiterzureden, und immer „Weiß ich nicht". Die Anweisung sagt außerdem, dass
+die Nachricht zur Aufgabe hinführt und sie nicht wiederholt.
