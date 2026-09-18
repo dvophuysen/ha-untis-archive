@@ -90,19 +90,32 @@ def _lines(text: str) -> list[tuple[int, int]]:
     return out
 
 
-def excerpt(text: str, found: list[dict], context: int = 1) -> list[dict]:
+def anchors(found: list[dict]) -> list[dict]:
+    """Welche Stellen den Ausschnitt bestimmen.
+
+    Hat die Lesung gesagt, wo sie unsicher war, sind das die Stellen — eine
+    Eintragung, die sie sicher gelesen hat, ist dann eine eindeutige Passage und
+    darf in der Lücke verschwinden. Sagt sie nichts (so gelesen vor D118), tut
+    es jede Marke, sonst bliebe nichts zu zeigen."""
+    genannt = [s for s in found if s["source"] in ("read", "unreadable")]
+    return genannt or found
+
+
+def excerpt(text: str, found: list[dict], context: int = 1, keep_at: list[dict] | None = None) -> list[dict]:
     """Der Text auf die Zweifelsstellen gekürzt.
 
-    Jede Stelle steht mit `context` Zeilen davor und dahinter da; was dazwischen
-    wegfällt, wird als Lücke mit ihrer Zeilenzahl gemeldet. Ohne Zweifelsstelle
-    bleibt der Text ganz — dann ist nichts zu suchen, sondern alles zu prüfen.
+    `keep_at` sind die Stellen, um die herum gekürzt wird; `found` alles, was in
+    den stehengebliebenen Zeilen markiert wird. Jede Stelle steht mit `context`
+    Zeilen davor und dahinter da; was dazwischen wegfällt, wird als Lücke mit
+    ihrer Zeilenzahl gemeldet. Ohne Zweifelsstelle bleibt der Text ganz — dann
+    ist nichts zu suchen, sondern alles zu prüfen.
     """
     text = text or ""
     if not found:
         return [{"kind": "text", "text": text}] if text else []
     rows = _lines(text)
     keep: set[int] = set()
-    for spot in found:
+    for spot in keep_at if keep_at is not None else found:
         first = next(i for i, (a, b) in enumerate(rows) if a <= spot["start"] < b or i == len(rows) - 1)
         last = next(i for i, (a, b) in enumerate(rows) if a < spot["end"] <= b or i == len(rows) - 1)
         keep.update(range(max(0, first - context), min(len(rows) - 1, last + context) + 1))
@@ -144,7 +157,7 @@ def view(text: str, doubts: list[dict] | None = None, context: int = 1) -> dict:
     """Was die Gegenlese-Karte zeigt: die gekürzte Fassung, die Zahl der
     Zweifelsstellen und die gemeldeten Stellen ohne Fundort."""
     found, loose = spots(text, doubts)
-    segments = excerpt(text, found, context)
+    segments = excerpt(text, found, context, anchors(found))
     return {"segments": segments, "spots": len(found), "loose": loose,
             "shortened": any(part["kind"] == "gap" for part in segments)}
 
