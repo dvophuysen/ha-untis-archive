@@ -887,3 +887,22 @@ def test_a_double_running_head_is_resolved_by_the_page_itself():
     assert vocab.split_head('Unit 1 / Media smart', 'Vocabulary') == 'Unit 1 / Media smart'
     # Ein einfacher Laufkopf bleibt unangetastet, auch mit Bindestrich im Namen.
     assert vocab.split_head('Across cultures 1', 'Vocabulary: Across cultures') == 'Across cultures 1'
+def test_the_continuation_stops_at_the_book_and_at_the_page_before():
+    """Fortgesetzt wird nur von der unmittelbar vorhergehenden Seite desselben
+    Buchteils. Zwischen Arbeitsheft S. 146 und Schulbuch S. 206 liegen zwei
+    Bücher — die Einheit der Heftseite wanderte von dort durch den ganzen
+    Anhang (D131)."""
+    from contextlib import closing as schliessen
+    with schliessen(db.webapp_conn()) as c, c:
+        c.execute("DELETE FROM vocab_words WHERE account_id=1")
+        for page, label, unit in ((146, 'Arbeitsheft', 'Unit 1'), (205, 'Schulbuch', 'Grammar'),
+                                  (206, 'Schulbuch', 'Grammar')):
+            c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,section,position,"
+                      "foreign_word,plain,meanings_json,created_at) VALUES(1,'ENGLISCH',?,?,?,?,'Irregular verbs',0,?,?,'[]','now')",
+                      (page, label, page, unit, f'wort{page}', f'wort{page}'))
+    # Aus einem anderen Buch wird nichts fortgesetzt.
+    assert vocab.carry_over(1, 'ENGLISCH', 206, 'Arbeitsheft') == ('', '', '')
+    # Und auch nicht über eine Lücke von sechzig Seiten hinweg.
+    assert vocab.carry_over(1, 'ENGLISCH', 209, 'Schulbuch') == ('', '', '')
+    # Die Seite davor im selben Buch schon.
+    assert vocab.carry_over(1, 'ENGLISCH', 206, 'Schulbuch') == ('Grammar', 'Irregular verbs', '')
