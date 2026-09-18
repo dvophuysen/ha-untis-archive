@@ -675,6 +675,7 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
     # eigene Überschrift, gelten Einheit und Abschnitt der Seite davor (D115).
     unit, part, box = open_at
     kept = 0
+    seen: list[str] = []
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
         for pos, (w, core) in enumerate(survivors(row, words)):
@@ -696,6 +697,23 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
                        json.dumps([m.strip() for m in w.meanings if m.strip()], ensure_ascii=False), w.grammar.strip(),
                        json.dumps(w.forms, ensure_ascii=False), w.example.strip(), now_iso()))
             kept += 1
+            seen.append(w.foreign_word.strip())
+        # Was die neue Lesung nicht mehr nennt, gehört nicht mehr zur Seite. Ohne
+        # dieses Aufräumen bleibt ein Wort mit seiner alten Gliederung stehen und
+        # bildet neben dem berichtigten Abschnitt einen zweiten („School" mit
+        # einem Wort neben „School" mit fünfundzwanzig, D122). Nur wenn die neue
+        # Lesung überhaupt etwas gefunden hat: Eine einmal leere Antwort darf
+        # keine gelernten Wörter samt Verlauf löschen.
+        if seen:
+            marks = ",".join("?" * len(seen))
+            gone = [r[0] for r in c.execute(
+                f"SELECT id FROM vocab_words WHERE account_id=? AND material_id=? AND foreign_word NOT IN ({marks})",
+                (account_id, material_id, *seen))]
+            if gone:
+                holes = ",".join("?" * len(gone))
+                c.execute(f"DELETE FROM vocab_attempts WHERE word_id IN ({holes})", gone)
+                c.execute(f"DELETE FROM vocab_words WHERE id IN ({holes})", gone)
+                LOG.info("Vokabeln: %s Wörter der alten Lesung von Material %s entfernt", len(gone), material_id)
         c.execute("INSERT OR REPLACE INTO vocab_extractions(material_id,account_id,text_hash,words,error,updated_at) VALUES(?,?,?,?,NULL,?)",
                   (material_id, account_id, digest, kept, now_iso()))
     LOG.info("Vokabeln: %s Wörter aus Material %s (%s)", kept, material_id, fallback)

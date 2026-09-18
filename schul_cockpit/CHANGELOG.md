@@ -1,3 +1,7 @@
+## 1.5.8
+
+- Fehler behoben: Beim Neulesen einer Vokabelseite blieben Wörter der alten Lesung stehen. Sie bildeten mit ihrer alten Zuordnung einen zweiten, fast leeren Abschnitt neben dem richtigen.
+
 ## 1.5.7
 
 - Fehler behoben: Ein Themenkasten auf einer Folgeseite wurde weiterhin zum eigenen Abschnitt. Ich sehe beim Lesen immer nur eine Seite — „The new boy" beginnt aber eine Seite vor „School". Ich bekomme jetzt gesagt, welcher Abschnitt noch offen ist.
