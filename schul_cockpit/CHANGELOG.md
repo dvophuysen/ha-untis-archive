@@ -1,3 +1,7 @@
+## 1.7.4
+
+- Fehler behoben: Die Fortsetzung einer Vokabelliste über den Seitenwechsel sprang über Buchgrenzen. Eine Arbeitsheftseite konnte so ihre Einheit an den Anhang des Schulbuchs vererben, und von dort wanderte sie durch alle Folgeseiten — die unregelmäßigen Verben landeten in „Unit 1". Fortgesetzt wird jetzt nur von der Seite davor im selben Buch.
+
 ## 1.7.3
 
 - Fehler behoben: Beim Lesen einer Vokabelseite bekam ich die Einheit der Vorseite vorgesagt und habe sie im Zweifel abgeschrieben, statt auf den Laufkopf der Seite zu sehen. Ein einziger Fehler zog sich so durch alle Folgeseiten — bei Kind B Englisch landeten dreizehn von sechzehn Seiten in „Unit 1".

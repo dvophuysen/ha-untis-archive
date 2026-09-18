@@ -280,7 +280,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 11
+EXTRACT_VERSION = 12
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -658,20 +658,26 @@ async def compare(account_id: int, material_id: int, tiers: list[str]) -> dict:
             "title": row["title"], "results": out}
 
 
-def carry_over(account_id: int, subject: str, page: int | None) -> tuple[str, str, str]:
+def carry_over(account_id: int, subject: str, page: int | None, label: str = "") -> tuple[str, str, str]:
     """Einheit und Abschnitt, die auf der Seite davor zuletzt galten.
 
     Im Anhang beginnt ein Abschnitt mitten auf einer Seite und läuft über den
     Seitenwechsel weiter — „Story" reicht von der Mitte der S. 218 bis in die
     obere Hälfte der S. 220. Ohne diese Fortsetzung verlöre jede Seite ohne
-    eigene Überschrift ihre Zuordnung (D115)."""
+    eigene Überschrift ihre Zuordnung (D115).
+
+    Fortgesetzt wird nur von der unmittelbar vorhergehenden Seite desselben
+    Buchteils. Alles andere ist keine Fortsetzung: Zwischen Arbeitsheft S. 146
+    und Schulbuch S. 206 liegen zwei verschiedene Bücher, und die Einheit der
+    Heftseite wanderte so in den Anhang des Schulbuchs und von dort durch alle
+    Folgeseiten (D131)."""
     if not page:
         return "", "", ""
     with closing(webapp_conn()) as c:
         row = c.execute(
             "SELECT unit,section,box FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) "
-            "AND page IS NOT NULL AND page<? AND hidden=0 ORDER BY page DESC, position DESC LIMIT 1",
-            (account_id, subject, page)).fetchone()
+            "AND page=? AND COALESCE(source_label,'')=? AND hidden=0 ORDER BY position DESC LIMIT 1",
+            (account_id, subject, page - 1, label or "")).fetchone()
     return (row["unit"] or "", row["section"] or "", row["box"] or "") if row else ("", "", "")
 
 
@@ -698,7 +704,7 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
     # immer nur diese eine Seite. „School" steht auf S. 212, der Abschnitt „The
     # new boy" beginnt auf S. 211 — ohne diesen Hinweis ist auf S. 212 kein
     # Abschnitt offen, und ein Kasten wird dort zwangsläufig zum Abschnitt (D121).
-    open_at = carry_over(account_id, subject, row["source_page"])
+    open_at = carry_over(account_id, subject, row["source_page"], label)
     try:
         words = await read_words(account_id, row, tier=tier, carry=open_at)
     except ValidationError:
