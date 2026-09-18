@@ -238,18 +238,26 @@ EXTRACT = (
     "Beispielsatz aus dem Buch, falls vorhanden. Nur Wörter, die als Lernwörter dastehen: keine Wörter "
     "aus Beispielsätzen, Merkkästen oder Überschriften, keine erfundenen Bedeutungen. Reihenfolge wie "
     "im Buch. Enthält die Seite keine Lernwörter, gib eine leere Liste.\n"
-    "Gliederung: Vokabellisten im Anhang tragen Überschriften wie „Unidad 3“, „Lektion 5“, „Unit 2“ oder "
-    "„Unidad 3 / Texto A“. Trage bei jedem Wort in unit die Einheit ein, unter der es steht, und in section "
-    "den Abschnitt darunter, falls einer genannt ist (Texto A, Vocabulario, Teil B). Die Überschrift gilt für "
-    "alle folgenden Wörter, bis eine neue kommt, auch über den Seitenwechsel hinweg. Steht über den Wörtern "
-    "keine solche Überschrift, lass beide Felder leer. Erfinde keine Einheit. Nur JSON: "
+    "Gliederung: Eine Vokabelliste im Anhang ist zweistufig, und beide Stufen stehen im Text.\n"
+    "unit ist die Einheit des Buchs, unter der das Wort steht: „Unidad 3“, „Lektion 5“, „Unit 1“, aber auch "
+    "„Welcome back!“, „Media smart“ oder „Across cultures 1“ — alles, was das Buch als eigenen Teil führt. Oft "
+    "steht sie als Laufkopf oben auf der Seite. Nennt der Laufkopf zwei Einheiten („Welcome back! / Unit 1“), "
+    "gilt für jedes Wort die Überschrift, die im Text wirklich darüber steht.\n"
+    "section ist die Zwischenüberschrift innerhalb der Einheit: „The new boy“, „Station 1“, „Story“, "
+    "„Check-out“, „Holiday words“, „How were your summer holidays?“, „Texto A“. Eine solche Überschrift kann "
+    "mitten auf der Seite beginnen; alle Wörter darunter gehören dazu.\n"
+    "Beide Überschriften gelten weiter, bis eine neue kommt — auch über den Seitenwechsel hinweg. Beginnt die "
+    "Seite ohne neue Überschrift, gehören ihre ersten Wörter noch zur Einheit und zum Abschnitt der Seite "
+    "davor; dann lass die Felder leer, die App setzt sie fort. Steht nirgends eine Überschrift, lass beide "
+    "leer. Erfinde keine Einheit und keinen Abschnitt, und mach aus einer Aufgabennummer („2“) keine "
+    "Überschrift. Nur JSON: "
 )
 
 
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 2
+EXTRACT_VERSION = 3
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -532,6 +540,23 @@ async def compare(account_id: int, material_id: int, tiers: list[str]) -> dict:
             "title": row["title"], "results": out}
 
 
+def carry_over(account_id: int, subject: str, page: int | None) -> tuple[str, str]:
+    """Einheit und Abschnitt, die auf der Seite davor zuletzt galten.
+
+    Im Anhang beginnt ein Abschnitt mitten auf einer Seite und läuft über den
+    Seitenwechsel weiter — „Story" reicht von der Mitte der S. 218 bis in die
+    obere Hälfte der S. 220. Ohne diese Fortsetzung verlöre jede Seite ohne
+    eigene Überschrift ihre Zuordnung (D115)."""
+    if not page:
+        return "", ""
+    with closing(webapp_conn()) as c:
+        row = c.execute(
+            "SELECT unit,section FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) "
+            "AND page IS NOT NULL AND page<? AND hidden=0 ORDER BY page DESC, position DESC LIMIT 1",
+            (account_id, subject, page)).fetchone()
+    return (row["unit"] or "", row["section"] or "") if row else ("", "")
+
+
 async def extract(account_id: int, material_id: int, tier: str | None = None) -> int:
     """Die Lernwörter einer Seite lesen und ablegen; einmal je Textstand."""
     with closing(webapp_conn()) as c:
@@ -562,15 +587,24 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
     # Kapitel der Seite. Eine Unidad zieht sich über mehrere Anhangseiten, und
     # genau sie soll das Bündel sein, nicht die Anhangseite (D100).
     fallback = unit_label(account_id, subject, label, row["source_page"])
+    # Eine Liste läuft über den Seitenwechsel weiter: Beginnt die Seite ohne
+    # eigene Überschrift, gelten Einheit und Abschnitt der Seite davor (D115).
+    unit, part = carry_over(account_id, subject, row["source_page"])
     kept = 0
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
         for pos, (w, core) in enumerate(survivors(row, words)):
-            unit = (w.unit or "").strip() or fallback
+            fresh = (w.unit or "").strip()
+            if fresh and fresh != unit:
+                # Neue Einheit: Der Abschnitt der alten gilt nicht weiter.
+                unit, part = fresh, ""
+            if (w.section or "").strip():
+                part = (w.section or "").strip()
+            unit = unit or fallback
             c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,section,position,foreign_word,plain,meanings_json,grammar,forms_json,example,created_at) "
                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,material_id,foreign_word) DO UPDATE SET "
                       "meanings_json=excluded.meanings_json,grammar=excluded.grammar,forms_json=excluded.forms_json,example=excluded.example,position=excluded.position,unit=excluded.unit,section=excluded.section",
-                      (account_id, subject, material_id, label, row["source_page"], unit, (w.section or "").strip(), pos, w.foreign_word.strip(), core,
+                      (account_id, subject, material_id, label, row["source_page"], unit, part, pos, w.foreign_word.strip(), core,
                        json.dumps([m.strip() for m in w.meanings if m.strip()], ensure_ascii=False), w.grammar.strip(),
                        json.dumps(w.forms, ensure_ascii=False), w.example.strip(), now_iso()))
             kept += 1
@@ -637,7 +671,8 @@ def units(account_id: int, subject: str) -> list[dict]:
     found = pages(account_id, subject)
     with closing(webapp_conn()) as c:
         words = [dict(r) for r in c.execute(
-            "SELECT id,unit,section,material_id FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0", (account_id, subject))]
+            "SELECT id,unit,section,material_id,page,position FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 "
+            "ORDER BY page,position,id", (account_id, subject))]
         states = word_states(c, account_id, [w["id"] for w in words])
     # Eine Seite gehört zur Einheit ihrer Wörter, sobald sie welche hat; so bleiben
     # Seite und Wörter zusammen, auch wenn das Verzeichnis später anders benennt.
@@ -658,11 +693,19 @@ def units(account_id: int, subject: str) -> list[dict]:
         st = states.get(w["id"], {})
         u["s1"][st.get("s1", {}).get("stage", "neu")] += 1
         u["s2"][st.get("s2", {}).get("stage", "neu")] += 1
+        # Wo im Buch die Einheit steht: die früheste Stelle ihrer Wörter. Nur so
+        # stimmt die Reihenfolge der Anzeige mit dem Buch überein, auch wenn ein
+        # Abschnitt mitten auf einer Seite beginnt und über den Seitenwechsel
+        # hinweg läuft (D115).
+        at = (w["page"] or 9999, w["position"] or 0)
+        u["at"] = min(u.get("at", at), at)
         # Die Einheit ist das Standardbündel; die Abschnitte, die die Liste
         # selbst nennt, stehen als Untergliederung zur Wahl (D100).
-        if (w.get("section") or "").strip():
-            u.setdefault("sections", {}).setdefault(w["section"].strip(), 0)
-            u["sections"][w["section"].strip()] += 1
+        part = (w.get("section") or "").strip()
+        if part:
+            found_part = u.setdefault("sections", {}).setdefault(part, {"words": 0, "at": at})
+            found_part["words"] += 1
+            found_part["at"] = min(found_part["at"], at)
     # Dasselbe Kapitel unter zwei Namen zusammenführen; der ausführlichere Name
     # gewinnt, weil er dem Kind mehr sagt.
     merged: dict[str, dict] = {}
@@ -680,20 +723,30 @@ def units(account_id: int, subject: str) -> list[dict]:
         for stage in ("s1", "s2"):
             for level in STAGES:
                 first[stage][level] += u[stage][level]
-        for part, n in (u.get("sections") or {}).items():
-            first.setdefault("sections", {})
-            first["sections"][part] = first["sections"].get(part, 0) + n
+        if "at" in u:
+            first["at"] = min(first.get("at", u["at"]), u["at"])
+        for part, info in (u.get("sections") or {}).items():
+            mine = first.setdefault("sections", {}).setdefault(part, {"words": 0, "at": info["at"]})
+            mine["words"] += info["words"]
+            mine["at"] = min(mine["at"], info["at"])
         if len(u["unit"]) > len(first["unit"]):
             first["unit"] = u["unit"]
     by_unit = merged
     known = book_units(account_id, subject)
     for u in by_unit.values():
-        u["sections"] = [{"section": name, "words": n} for name, n in sorted((u.get("sections") or {}).items())]
-        # Name und Platz kommen aus dem Verzeichnis, damit alle Einheiten gleich
-        # heißen und in Buchreihenfolge stehen (D113).
+        # Abschnitte in Buchreihenfolge, nicht alphabetisch (D115).
+        u["sections"] = [{"section": name, "words": info["words"]}
+                         for name, info in sorted((u.get("sections") or {}).items(), key=lambda kv: kv[1]["at"])]
+        # Der Name kommt aus dem Verzeichnis, damit alle Einheiten gleich heißen
+        # (D113); der Platz aus der Wortliste selbst, weil sie dem Buch folgt und
+        # ein einziger Maßstab für alle Einheiten gilt (D115).
         info = next((known[k] for k in (unit_key(n) for n in u.get("_names", [u["unit"]])) if k in known), None)
         seiten = [p["page"] for p in u["pages"] if p["page"]]
-        u["order"] = info["start_page"] if info else (min(seiten) if seiten else 9999)
+        if u.get("at"):
+            u["order"] = list(u["at"])
+        else:
+            u["order"] = [min(seiten), 0] if seiten else [9999, 0]
+        u.pop("at", None)
         if info:
             # Der Name aus dem Verzeichnis gilt für alle Einheiten gleich. Die
             # Karten findet er trotzdem: Gesucht wird über die Nummer, nicht

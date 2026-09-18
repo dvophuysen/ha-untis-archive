@@ -540,8 +540,9 @@ def test_units_are_named_and_ordered_like_the_book(setup):
         Chapter(number='Unidad 1', title='Hola', start_page=10, end_page=25),
         Chapter(number='Unidad 2', title='Mi barrio', start_page=30, end_page=45),
         Chapter(number='Unidad 3', title='De paseo por España', start_page=48, end_page=59)])
-    # Die Anhangseiten stehen hinten und in umgekehrter Reihenfolge der Einheiten.
-    pages = {171: 'Unidad 3', 172: 'Unidad 2', 173: 'Unidad 1'}
+    # Der Anhang folgt dem Buch; die Seiten werden hier absichtlich in falscher
+    # Reihenfolge eingelesen, sortiert wird nach dem Platz in der Wortliste.
+    pages = {172: 'Unidad 2', 171: 'Unidad 1', 173: 'Unidad 3'}
     ids = {p: seed_page(subject="SPANISCH", text="el país — das Land", page=p, label="Schulbuch", title="Vocabulario")
            for p in pages}
 
@@ -555,3 +556,38 @@ def test_units_are_named_and_ordered_like_the_book(setup):
     assert found == ['Unidad 1 Hola', 'Unidad 2 Mi barrio', 'Unidad 3 De paseo por España'], found
     # Und unter dem neuen Namen findet der Trainer die Karten der Wortliste.
     assert len(vocab.cards(1, "SPANISCH", "Unidad 3 De paseo por España", 1, "from")) == 1
+
+
+def test_a_section_runs_across_the_page_break_and_keeps_the_book_order(setup):
+    """Im Anhang beginnt ein Abschnitt mitten auf einer Seite und läuft weiter:
+    „Story" reicht von der Mitte der S. 218 bis in die obere Hälfte der S. 220.
+    Beginnt eine Seite ohne eigene Überschrift, gelten Einheit und Abschnitt der
+    Seite davor. Angezeigt wird in der Reihenfolge des Buchs (D115)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    seiten = {218: "Story S. 218", 219: "Story S. 219", 220: "Check-out S. 220"}
+    ids = {p: seed_page(subject="ENGLISCH", text=t + "\nword — Wort\nother — anderes",
+                        page=p, label="Schulbuch", title="Vocabulary") for p, t in seiten.items()}
+    antwort = {
+        # S. 218: erst noch Station 3, ab der Mitte beginnt „Story".
+        218: [{"unit": "Unit 1", "section": "Station 3", "foreign_word": "word", "meanings": ["Wort"]},
+              {"unit": "Unit 1", "section": "Story", "foreign_word": "other", "meanings": ["anderes"]}],
+        # S. 219 trägt keine eigene Überschrift — sie gehört noch zu „Story".
+        219: [{"foreign_word": "word", "meanings": ["Wort"]},
+              {"foreign_word": "other", "meanings": ["anderes"]}],
+        # S. 220 beginnt ohne Überschrift und wechselt dann zu „Check-out".
+        220: [{"foreign_word": "word", "meanings": ["Wort"]},
+              {"unit": "Unit 1", "section": "Check-out", "foreign_word": "other", "meanings": ["anderes"]}],
+    }
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        return json.dumps({"words": antwort[context["page"]]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    for page in (218, 219, 220):
+        client.post(V + "/ENGLISCH/extract", json={"material_ids": [ids[page]]})
+    unit = next(u for u in vocab.units(1, "ENGLISCH") if u["words"])
+    assert unit["unit"] == "Unit 1" and unit["words"] == 6
+    # Abschnitte in Buchreihenfolge, nicht alphabetisch, und „Story" hat die
+    # Wörter beider Seiten plus den Rest der Seite davor.
+    assert [(s["section"], s["words"]) for s in unit["sections"]] == [
+        ("Station 3", 1), ("Story", 4), ("Check-out", 1)]
