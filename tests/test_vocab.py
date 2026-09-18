@@ -593,13 +593,20 @@ def test_a_section_runs_across_the_page_break_and_keeps_the_book_order(setup):
         ("Station 3", 1), ("Story", 4), ("Check-out", 1)]
 
 
-def test_the_instruction_says_what_to_do_with_a_box():
-    """Ein Kasten mit eigener Überschrift ist ein eigener Abschnitt („Holiday
-    words"), einer ohne gehört zu dem Abschnitt, unter dem er steht. Der Nutzer
-    nimmt die Zusammenlegung eines namenlosen Kastens ausdrücklich in Kauf;
-    erfunden werden soll für ihn nichts (D115)."""
-    assert "Kasten mit eigener Überschrift ist ein eigener Abschnitt" in vocab.EXTRACT
-    assert "erfinde für ihn keinen Namen" in vocab.EXTRACT
+def test_a_box_is_placed_at_its_level_in_the_hierarchy():
+    """Drei Ebenen: Einheit, Abschnitt, Kasten. „School" steht in „The new boy"
+    und gehört deshalb unter diesen Abschnitt, nicht daneben. Ein Kasten direkt
+    unter der Einheit ist dagegen selbst der Abschnitt („Holiday words"), und
+    ein Kasten ohne eigene Überschrift bekommt keinen Namen (D116)."""
+    assert "box ist ein Kasten mit eigener Überschrift innerhalb eines Abschnitts" in vocab.EXTRACT
+    assert "bekommt keinen Namen" in vocab.EXTRACT
+    drin, allein, leer = vocab.tidy([
+        vocab.WordIn(foreign_word='a', meanings=['x'], unit='Unit 1', section='The new boy', box='School'),
+        vocab.WordIn(foreign_word='b', meanings=['x'], unit='Welcome back!', section='', box='Holiday words'),
+        vocab.WordIn(foreign_word='c', meanings=['x'], unit='Unit 1', section='Story', box='Story')])
+    assert (drin.section, drin.box) == ('The new boy', 'School'), 'im Abschnitt: dritte Ebene'
+    assert (allein.section, allein.box) == ('Holiday words', ''), 'ohne Abschnitt: selbst der Abschnitt'
+    assert (leer.section, leer.box) == ('Story', ''), 'ein Kasten, der den Abschnitt wiederholt, ist keiner'
 
 
 def test_the_running_head_of_an_appendix_page_is_not_a_section():
@@ -617,3 +624,32 @@ def test_the_running_head_of_an_appendix_page_is_not_a_section():
     assert (c.unit, c.section) == ('', 'Story'), 'der Laufkopf ist auch keine Einheit'
     assert (d.unit, d.section) == ('Unit 1', 'Station 1'), 'eine echte Überschrift bleibt'
     assert 'Der Laufkopf einer Anhangseite ist keine Überschrift' in vocab.EXTRACT
+
+
+def test_boxes_are_listed_under_their_section_in_book_order(setup):
+    """„School" steht in „The new boy", „Feelings" in „Story". Beide sollen als
+    Unterthemen erkennbar sein, aber in der Hierarchie unter ihrem Abschnitt
+    stehen — nicht als dessen Geschwister (D116)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    mid = seed_page(subject="ENGLISCH", text="a — x\nb — y\nc — z\nd — w",
+                    page=213, label="Schulbuch", title="Vocabulary")
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        return json.dumps({"words": [
+            {"unit": "Unit 1", "section": "The new boy", "foreign_word": "a", "meanings": ["x"]},
+            {"unit": "Unit 1", "section": "The new boy", "box": "School", "foreign_word": "b", "meanings": ["y"]},
+            # Ohne eigene Angabe läuft der Kasten weiter.
+            {"foreign_word": "c", "meanings": ["z"]},
+            # Neuer Abschnitt: Der Kasten des alten gilt nicht weiter.
+            {"unit": "Unit 1", "section": "Station 1", "foreign_word": "d", "meanings": ["w"]}]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    client.post(V + "/ENGLISCH/extract", json={"material_ids": [mid]})
+    unit = next(u for u in vocab.units(1, "ENGLISCH") if u["words"])
+    assert [(s["section"], s["words"], [b["box"] for b in s["boxes"]]) for s in unit["sections"]] == [
+        ("The new boy", 3, ["School"]), ("Station 1", 1, [])]
+    assert [b["words"] for b in unit["sections"][0]["boxes"]] == [2], "der Kasten läuft weiter"
+    # Üben lässt sich jede Ebene: ganze Einheit, Abschnitt, Kasten.
+    assert len(vocab.cards(1, "ENGLISCH", "Unit 1", 1, "from")) == 4
+    assert len(vocab.cards(1, "ENGLISCH", "Unit 1", 1, "from", section="The new boy")) == 3
+    assert len(vocab.cards(1, "ENGLISCH", "Unit 1", 1, "from", section="The new boy", box="School")) == 2

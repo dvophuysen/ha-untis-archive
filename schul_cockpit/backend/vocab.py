@@ -218,6 +218,11 @@ class WordIn(InputModel):
     # Bündel des Trainers, nicht aus der Seitenzahl des Anhangs (D100).
     unit: str = Field(default="", max_length=80)
     section: str = Field(default="", max_length=80)
+    # Dritte Ebene: ein Kasten mit eigener Überschrift innerhalb eines
+    # Abschnitts („School" in „The new boy"). Steht der Kasten direkt unter der
+    # Einheit, ist er selbst der Abschnitt („Holiday words") — dann bleibt box
+    # leer (D116).
+    box: str = Field(default="", max_length=80)
     foreign_word: str = Field(min_length=1, max_length=80)
     meanings: list[str] = Field(min_length=1, max_length=8)
     grammar: str = Field(default="", max_length=60)
@@ -248,8 +253,11 @@ EXTRACT = (
     "mitten auf der Seite beginnen; alle Wörter darunter gehören dazu.\n"
     "Der Laufkopf einer Anhangseite ist keine Überschrift: „Vocabulary“, „V“, „Wortschatz“, „Vocabulario“ und der "
     "oben wiederholte Name der Einheit stehen auf jeder Seite und sind weder unit noch section.\n"
-    "Ein Kasten mit eigener Überschrift ist ein eigener Abschnitt („Holiday words“). Ein Kasten ohne eigene "
-    "Überschrift gehört zu dem Abschnitt, unter dem er steht — erfinde für ihn keinen Namen.\n"
+    "box ist ein Kasten mit eigener Überschrift innerhalb eines Abschnitts: ein Themenblock wie „School“ oder "
+    "„Feelings“, der unter einer Zwischenüberschrift steht. Steht ein solcher Kasten dagegen direkt unter der "
+    "Einheit, ohne dass ein Abschnitt offen ist, dann ist er selbst der Abschnitt („Holiday words“) und box bleibt "
+    "leer. Ein Kasten ohne eigene Überschrift bekommt keinen Namen; seine Wörter gehören zu dem Abschnitt, unter "
+    "dem er steht.\n"
     "Beide Überschriften gelten weiter, bis eine neue kommt — auch über den Seitenwechsel hinweg. Beginnt die "
     "Seite ohne neue Überschrift, gehören ihre ersten Wörter noch zur Einheit und zum Abschnitt der Seite "
     "davor; dann lass die Felder leer, die App setzt sie fort. Steht nirgends eine Überschrift, lass beide "
@@ -261,7 +269,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 5
+EXTRACT_VERSION = 6
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -490,10 +498,16 @@ def tidy(words: list) -> list:
         w.section = clean_unit(w.section)
         # Der Laufkopf ist kein Abschnitt, und ein Abschnitt, der nur die
         # Einheit wiederholt, ist auch keiner.
+        w.box = clean_unit(w.box)
         if _RUNNING_HEAD.match(w.section.strip()) or plain(w.section) == plain(w.unit):
             w.section = ""
         if _RUNNING_HEAD.match(w.unit.strip()):
             w.unit = ""
+        # Ein Kasten ohne Abschnitt darüber ist selbst der Abschnitt (D116).
+        if w.box and not w.section:
+            w.section, w.box = w.box, ""
+        if w.box and (_RUNNING_HEAD.match(w.box.strip()) or plain(w.box) in (plain(w.section), plain(w.unit))):
+            w.box = ""
         core, mark = split_mark(w.foreign_word)
         if mark:
             w.foreign_word = core
@@ -556,7 +570,7 @@ async def compare(account_id: int, material_id: int, tiers: list[str]) -> dict:
             "title": row["title"], "results": out}
 
 
-def carry_over(account_id: int, subject: str, page: int | None) -> tuple[str, str]:
+def carry_over(account_id: int, subject: str, page: int | None) -> tuple[str, str, str]:
     """Einheit und Abschnitt, die auf der Seite davor zuletzt galten.
 
     Im Anhang beginnt ein Abschnitt mitten auf einer Seite und läuft über den
@@ -564,13 +578,13 @@ def carry_over(account_id: int, subject: str, page: int | None) -> tuple[str, st
     obere Hälfte der S. 220. Ohne diese Fortsetzung verlöre jede Seite ohne
     eigene Überschrift ihre Zuordnung (D115)."""
     if not page:
-        return "", ""
+        return "", "", ""
     with closing(webapp_conn()) as c:
         row = c.execute(
-            "SELECT unit,section FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) "
+            "SELECT unit,section,box FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) "
             "AND page IS NOT NULL AND page<? AND hidden=0 ORDER BY page DESC, position DESC LIMIT 1",
             (account_id, subject, page)).fetchone()
-    return (row["unit"] or "", row["section"] or "") if row else ("", "")
+    return (row["unit"] or "", row["section"] or "", row["box"] or "") if row else ("", "", "")
 
 
 async def extract(account_id: int, material_id: int, tier: str | None = None) -> int:
@@ -605,22 +619,26 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
     fallback = unit_label(account_id, subject, label, row["source_page"])
     # Eine Liste läuft über den Seitenwechsel weiter: Beginnt die Seite ohne
     # eigene Überschrift, gelten Einheit und Abschnitt der Seite davor (D115).
-    unit, part = carry_over(account_id, subject, row["source_page"])
+    unit, part, box = carry_over(account_id, subject, row["source_page"])
     kept = 0
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
         for pos, (w, core) in enumerate(survivors(row, words)):
             fresh = (w.unit or "").strip()
             if fresh and fresh != unit:
-                # Neue Einheit: Der Abschnitt der alten gilt nicht weiter.
-                unit, part = fresh, ""
-            if (w.section or "").strip():
-                part = (w.section or "").strip()
+                # Neue Einheit: Abschnitt und Kasten der alten gelten nicht weiter.
+                unit, part, box = fresh, "", ""
+            new_part = (w.section or "").strip()
+            if new_part and new_part != part:
+                # Neuer Abschnitt: Der Kasten des alten gilt nicht weiter.
+                part, box = new_part, ""
+            if (w.box or "").strip():
+                box = (w.box or "").strip()
             unit = unit or fallback
-            c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,section,position,foreign_word,plain,meanings_json,grammar,forms_json,example,created_at) "
-                      "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,material_id,foreign_word) DO UPDATE SET "
-                      "meanings_json=excluded.meanings_json,grammar=excluded.grammar,forms_json=excluded.forms_json,example=excluded.example,position=excluded.position,unit=excluded.unit,section=excluded.section",
-                      (account_id, subject, material_id, label, row["source_page"], unit, part, pos, w.foreign_word.strip(), core,
+            c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,section,box,position,foreign_word,plain,meanings_json,grammar,forms_json,example,created_at) "
+                      "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,material_id,foreign_word) DO UPDATE SET "
+                      "meanings_json=excluded.meanings_json,grammar=excluded.grammar,forms_json=excluded.forms_json,example=excluded.example,position=excluded.position,unit=excluded.unit,section=excluded.section,box=excluded.box",
+                      (account_id, subject, material_id, label, row["source_page"], unit, part, box, pos, w.foreign_word.strip(), core,
                        json.dumps([m.strip() for m in w.meanings if m.strip()], ensure_ascii=False), w.grammar.strip(),
                        json.dumps(w.forms, ensure_ascii=False), w.example.strip(), now_iso()))
             kept += 1
@@ -687,7 +705,7 @@ def units(account_id: int, subject: str) -> list[dict]:
     found = pages(account_id, subject)
     with closing(webapp_conn()) as c:
         words = [dict(r) for r in c.execute(
-            "SELECT id,unit,section,material_id,page,position FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 "
+            "SELECT id,unit,section,box,material_id,page,position FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 "
             "ORDER BY page,position,id", (account_id, subject))]
         states = word_states(c, account_id, [w["id"] for w in words])
     # Eine Seite gehört zur Einheit ihrer Wörter, sobald sie welche hat; so bleiben
@@ -719,9 +737,15 @@ def units(account_id: int, subject: str) -> list[dict]:
         # selbst nennt, stehen als Untergliederung zur Wahl (D100).
         part = (w.get("section") or "").strip()
         if part:
-            found_part = u.setdefault("sections", {}).setdefault(part, {"words": 0, "at": at})
+            found_part = u.setdefault("sections", {}).setdefault(part, {"words": 0, "at": at, "boxes": {}})
             found_part["words"] += 1
             found_part["at"] = min(found_part["at"], at)
+            # Ein Kasten steht unter seinem Abschnitt, nicht daneben (D116).
+            box = (w.get("box") or "").strip()
+            if box:
+                found_box = found_part["boxes"].setdefault(box, {"words": 0, "at": at})
+                found_box["words"] += 1
+                found_box["at"] = min(found_box["at"], at)
     # Dasselbe Kapitel unter zwei Namen zusammenführen; der ausführlichere Name
     # gewinnt, weil er dem Kind mehr sagt.
     merged: dict[str, dict] = {}
@@ -742,17 +766,24 @@ def units(account_id: int, subject: str) -> list[dict]:
         if "at" in u:
             first["at"] = min(first.get("at", u["at"]), u["at"])
         for part, info in (u.get("sections") or {}).items():
-            mine = first.setdefault("sections", {}).setdefault(part, {"words": 0, "at": info["at"]})
+            mine = first.setdefault("sections", {}).setdefault(part, {"words": 0, "at": info["at"], "boxes": {}})
             mine["words"] += info["words"]
             mine["at"] = min(mine["at"], info["at"])
+            for box, sub in (info.get("boxes") or {}).items():
+                ours = mine["boxes"].setdefault(box, {"words": 0, "at": sub["at"]})
+                ours["words"] += sub["words"]
+                ours["at"] = min(ours["at"], sub["at"])
         if len(u["unit"]) > len(first["unit"]):
             first["unit"] = u["unit"]
     by_unit = merged
     known = book_units(account_id, subject)
     for u in by_unit.values():
         # Abschnitte in Buchreihenfolge, nicht alphabetisch (D115).
-        u["sections"] = [{"section": name, "words": info["words"]}
-                         for name, info in sorted((u.get("sections") or {}).items(), key=lambda kv: kv[1]["at"])]
+        u["sections"] = [
+            {"section": name, "words": info["words"],
+             "boxes": [{"box": b, "words": sub["words"]}
+                       for b, sub in sorted((info.get("boxes") or {}).items(), key=lambda kv: kv[1]["at"])]}
+            for name, info in sorted((u.get("sections") or {}).items(), key=lambda kv: kv[1]["at"])]
         # Der Name kommt aus dem Verzeichnis, damit alle Einheiten gleich heißen
         # (D113); der Platz aus der Wortliste selbst, weil sie dem Buch folgt und
         # ein einziger Maßstab für alle Einheiten gilt (D115).
@@ -798,7 +829,7 @@ def rank(state: dict, direction_stage: str) -> tuple:
 
 
 def cards(account_id: int, subject: str, unit: str, stage: int, direction: str, limit: int = 40,
-          section: str = "") -> list[dict]:
+          section: str = "", box: str = "") -> list[dict]:
     """Die Karten einer Einheit, Wackler und fällige zuerst; für Stufe 2 nur Wörter,
     deren Bedeutung schon sitzt oder gefestigt ist.
 
@@ -813,6 +844,8 @@ def cards(account_id: int, subject: str, unit: str, stage: int, direction: str, 
     words = [w for w in words if w["unit"] in family]
     if (section or "").strip():
         words = [w for w in words if (w["section"] or "").strip() == section.strip()]
+    if (box or "").strip():
+        words = [w for w in words if (w["box"] or "").strip() == box.strip()]
     with closing(webapp_conn()) as c:
         states = word_states(c, account_id, [w["id"] for w in words])
     key = "s2" if stage == 2 else "s1"
