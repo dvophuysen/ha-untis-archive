@@ -165,6 +165,20 @@ def context(account_id,session):
         with closing(webapp_conn()) as c:
             task=c.execute('SELECT id,title,notes,subject_name,status,due_date FROM tasks WHERE id=? AND account_id=?',(source.get('task_id'),account_id)).fetchone()
         source={**source,'task':dict(task)} if task else {**source,'unavailable':True}
+        # Die bestätigte Bearbeitung ist die Lösung: gedruckte Seite und
+        # Eintragungen des Kindes getrennt, damit die Antworten des Kindes nicht
+        # als Buchinhalt gelten (D98, D123).
+        chosen=source.get('solution') or {}
+        if chosen.get('confirmed'):
+            from .materials import detail, pupil_only
+            page=detail(account_id,chosen['material_id']) or {}
+            if page:
+                source['loesung']={'wo':' '.join(x for x in (chosen.get('label'),f"S. {chosen['page']}" if chosen.get('page') else '') if x) or page.get('title'),
+                                   'abgelegt_am':chosen.get('date'),'titel':page.get('title'),
+                                   'gedruckte_seite':(page.get('printed_text') or '')[:6000],
+                                   'eintragungen_des_kindes':pupil_only(page.get('content_text') or '')[:120],
+                                   'volltext':(page.get('content_text') or '')[:8000],
+                                   'hinweis':'Diese Bearbeitung liegt als Bild bei. Sie ist die Lösung des Kindes; frage nicht nach einem Foto.'}
     lesson_materials=[]
     if source.get('lesson_id'):
         focus=next((r for r in s['lessons'] if (r.get('untis_period_id')==source['untis_period_id'] if source.get('untis_period_id') else r['id']==source['lesson_id'])),None)

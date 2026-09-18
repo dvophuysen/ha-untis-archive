@@ -279,7 +279,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 8
+EXTRACT_VERSION = 9
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -511,6 +511,11 @@ def tidy(words: list, open_unit: str = "", open_section: str = "") -> list:
     for w in words:
         w.unit = clean_unit(w.unit)
         w.section = clean_unit(w.section)
+        # „la fruta:" und „la fruta" sind dieselbe Überschrift. Der Doppelpunkt
+        # steht im Buch als Ankündigung der Liste, nicht als Teil des Namens;
+        # ohne dieses Abschneiden stand jeder Kasten zweimal da (D124).
+        for field in ("unit", "section", "box"):
+            setattr(w, field, (getattr(w, field) or "").strip().rstrip(":;.,").strip())
         # Der Laufkopf ist kein Abschnitt, und ein Abschnitt, der nur die
         # Einheit wiederholt, ist auch keiner.
         w.box = clean_unit(w.box)
@@ -676,6 +681,17 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
     unit, part, box = open_at
     kept = 0
     seen: list[str] = []
+    # Ein Wort behält seine Zeile und damit seinen Übungsverlauf, auch wenn die
+    # neue Lesung es anders schreibt: „servus m" und „servus" sind dasselbe Wort
+    # (D125). Verglichen wird die vereinfachte Form, die der Trainer ohnehin zum
+    # Bewerten nimmt.
+    with closing(webapp_conn()) as c:
+        known = {}
+        for r in c.execute("SELECT id,foreign_word,plain FROM vocab_words WHERE account_id=? AND material_id=?",
+                           (account_id, material_id)):
+            # Verglichen wird ohne die nachgestellte Marke: „las gafas de sol pl."
+            # aus der alten Lesung ist dasselbe Wort wie „las gafas de sol".
+            known.setdefault(plain(split_mark(r["foreign_word"])[0]) or r["plain"], (r["id"], r["foreign_word"]))
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
         for pos, (w, core) in enumerate(survivors(row, words)):
@@ -684,12 +700,23 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
                 # Neue Einheit: Abschnitt und Kasten der alten gelten nicht weiter.
                 unit, part, box = fresh, "", ""
             new_part = (w.section or "").strip()
+            # Läuft ein Kasten über den Seitenrand, meldet die Folgeseite seine
+            # Überschrift gern als Abschnitt. Dann geht der Kasten weiter, statt
+            # neben seinem eigenen Abschnitt ein zweites Mal aufzutauchen (D124).
+            if new_part and box and plain(new_part) == plain(box):
+                new_part = ""
             if new_part and new_part != part:
                 # Neuer Abschnitt: Der Kasten des alten gilt nicht weiter.
                 part, box = new_part, ""
             if (w.box or "").strip():
                 box = (w.box or "").strip()
             unit = unit or fallback
+            # Dieselbe Vokabel, neu geschrieben: Die vorhandene Zeile wird
+            # umbenannt statt gelöscht und neu angelegt — sonst fiele mit ihr
+            # der gelernte Stand weg (D125).
+            same = known.get(core)
+            if same and same[1] != w.foreign_word.strip():
+                c.execute("UPDATE vocab_words SET foreign_word=? WHERE id=?", (w.foreign_word.strip(), same[0]))
             c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,section,box,position,foreign_word,plain,meanings_json,grammar,forms_json,example,created_at) "
                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,material_id,foreign_word) DO UPDATE SET "
                       "meanings_json=excluded.meanings_json,grammar=excluded.grammar,forms_json=excluded.forms_json,example=excluded.example,position=excluded.position,unit=excluded.unit,section=excluded.section,box=excluded.box",
@@ -706,14 +733,17 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
         # keine gelernten Wörter samt Verlauf löschen.
         if seen:
             marks = ",".join("?" * len(seen))
+            # Geübte Wörter bleiben, immer. Eine Lesung ist kein Beleg dafür,
+            # dass ein Wort nie auf der Seite stand, und der Verlauf eines
+            # gelernten Wortes ist durch nichts wiederherzustellen (D125).
             gone = [r[0] for r in c.execute(
-                f"SELECT id FROM vocab_words WHERE account_id=? AND material_id=? AND foreign_word NOT IN ({marks})",
+                f"SELECT id FROM vocab_words WHERE account_id=? AND material_id=? AND foreign_word NOT IN ({marks}) "
+                "AND id NOT IN (SELECT word_id FROM vocab_attempts)",
                 (account_id, material_id, *seen))]
             if gone:
                 holes = ",".join("?" * len(gone))
-                c.execute(f"DELETE FROM vocab_attempts WHERE word_id IN ({holes})", gone)
                 c.execute(f"DELETE FROM vocab_words WHERE id IN ({holes})", gone)
-                LOG.info("Vokabeln: %s Wörter der alten Lesung von Material %s entfernt", len(gone), material_id)
+                LOG.info("Vokabeln: %s ungeübte Wörter der alten Lesung von Material %s entfernt", len(gone), material_id)
         c.execute("INSERT OR REPLACE INTO vocab_extractions(material_id,account_id,text_hash,words,error,updated_at) VALUES(?,?,?,?,NULL,?)",
                   (material_id, account_id, digest, kept, now_iso()))
     LOG.info("Vokabeln: %s Wörter aus Material %s (%s)", kept, material_id, fallback)

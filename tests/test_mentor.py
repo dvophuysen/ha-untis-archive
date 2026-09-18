@@ -867,3 +867,52 @@ def test_the_mentor_may_invent_tasks_but_not_sources():
     assert 'Das Kind sieht das Material nicht' in rule
     assert 'im Material steht' in rule and 'erfundene Quelle ist ein Fehler' in rule
     assert 'Frag nie um Erlaubnis weiterzumachen' in rule
+
+
+def test_the_check_offers_the_filed_solution_instead_of_asking_for_a_photo(setup):
+    """Die Bearbeitung liegt oft längst im Bestand: „Ah S. 74" und Arbeitsheft
+    S. 74 mit den Eintragungen des Kindes. Die Kontrolle zeigt sie und fragt
+    kurz nach, statt ein Foto zu verlangen (D123)."""
+    from contextlib import closing
+    from backend import db, sources
+    client, state, patch = setup
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO tasks(id,account_id,title,notes,subject_name,status,source,created_at,updated_at) "
+                  "VALUES(910,1,'Ah S. 74, Aufg. 2 und 3','','DEUTSCH','open','untis','2026-09-17','2026-09-17')")
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,content_text,source_label,source_page,"
+                  "pupil_entries,handwritten,analysis_state,document_date,created_at,updated_at) "
+                  "VALUES(1,'workbook','DEUTSCH','Wechsel des s-Lauts','1 a) das Gras ___ [Kind: Gräser]',"
+                  "'Arbeitsheft',74,1,1,'ready','2026-09-17','2026-09-17','2026-09-17')")
+        mid = c.execute("SELECT max(id) FROM materials").fetchone()[0]
+        # Die gedruckte Seite derselben Aufgabe ist nicht die Bearbeitung.
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,content_text,source_label,source_page,"
+                  "pupil_entries,handwritten,analysis_state,created_at,updated_at) "
+                  "VALUES(1,'workbook','DEUTSCH','Regeln','1 a) das Gras ___','Arbeitsheft',74,0,0,'ready','2026-09-16','2026-09-16')")
+    found = sources.solution_for_task(1, 910)
+    assert found and found["material_id"] == mid and found["label"] == "Arbeitsheft"
+    r = client.post(B + "/sessions", json={"subject": "DEUTSCH", "homework_task_id": 910, "check": True})
+    assert r.status_code == 200, r.text
+    welcome = r.json()["messages"][0]
+    assert "Arbeitsheft S. 74" in welcome["text"] and "neuester Stand" in welcome["text"]
+    assert welcome["payload"]["material"]["id"] == mid
+    assert welcome["payload"]["choices"][0].startswith("Ja")
+    # „Nein" wirft die gefundene Seite weg und bittet um ein Foto — ohne Modellaufruf.
+    r = send(client, r.json(), text="Nein, ich zeige ein neues Foto", kind="message")
+    assert r.status_code == 200, r.text
+    assert "Foto" in r.json()["messages"][-1]["text"]
+
+
+def test_a_page_without_the_childs_writing_is_not_a_solution(setup):
+    """Ohne Eintragungen ist es die gedruckte Aufgabe, nicht die Lösung."""
+    from contextlib import closing
+    from backend import db, sources
+    client, state, patch = setup
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO tasks(id,account_id,title,notes,subject_name,status,source,created_at,updated_at) "
+                  "VALUES(911,1,'Ah S. 74, Aufg. 2','','DEUTSCH','open','untis','2026-09-17','2026-09-17')")
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,content_text,source_label,source_page,"
+                  "pupil_entries,handwritten,analysis_state,created_at,updated_at) "
+                  "VALUES(1,'workbook','DEUTSCH','Regeln','1 a) das Gras ___','Arbeitsheft',74,0,0,'ready','2026-09-16','2026-09-16')")
+    assert sources.solution_for_task(1, 911) is None
+    r = client.post(B + "/sessions", json={"subject": "DEUTSCH", "homework_task_id": 911, "check": True})
+    assert "Zeig mir deine fertige Lösung" in r.json()["messages"][0]["text"]

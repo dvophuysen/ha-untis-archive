@@ -633,6 +633,65 @@ def task_candidates(account_id: int, task_id: int, limit: int = 12) -> list[dict
     return out[:limit]
 
 
+def solution_for_task(account_id: int, task_id: int) -> dict | None:
+    """Die abgelegte Bearbeitung des Kindes zu dieser Hausaufgabe (D123).
+
+    Die Kontrolle fragte bisher immer nach einem Foto, obwohl die bearbeitete
+    Seite längst eingelesen war — bei „Ah S. 74" lag Arbeitsheft S. 74 mit den
+    Eintragungen des Kindes im Bestand, nur am Thema statt an der Aufgabe.
+    Gesucht wird deshalb beides: was an der Aufgabe hängt und was eine im
+    Auftrag genannte Stelle zeigt. Eintragungen des Kindes muss es tragen —
+    ohne sie ist es die gedruckte Aufgabe, nicht die Lösung. Eine abgerufene
+    Buchseite ist nie die Bearbeitung.
+    """
+    from .materials import canonical_subject
+    with closing(webapp_conn()) as conn:
+        task = conn.execute("SELECT id,title,notes,subject_name,due_date,created_at FROM tasks WHERE id=? AND account_id=?",
+                            (task_id, account_id)).fetchone()
+        if not task:
+            return None
+        task = dict(task)
+        linked = {r[0] for r in conn.execute(
+            "SELECT material_id FROM material_links WHERE kind='task' AND target_id=?", (task_id,))}
+        keys = {r[1] for r in conn.execute("PRAGMA table_info(materials)")}
+        if "pupil_entries" not in keys:
+            return None
+        subject = canonical_subject(account_id, task["subject_name"] or "") or (task["subject_name"] or "")
+        rows = [dict(r) for r in conn.execute(
+            "SELECT id,title,kind,source_label,source_page,printed_pages,document_date,created_at,origin,"
+            "pupil_entries,handwritten FROM materials WHERE account_id=? AND hidden=0 AND analysis_state='ready' "
+            "AND COALESCE(origin,'')!='book_fetch' AND kind NOT IN ('exam_notice','toc') "
+            "AND lower(COALESCE(subject_name,''))=lower(?) ORDER BY id DESC", (account_id, subject))] if subject else []
+    wanted = citations(task_text(task), task.get("subject_name") or "")
+    best = None
+    for row in rows:
+        if not (row["pupil_entries"] or row["handwritten"] or row["kind"] == "own_work"):
+            continue
+        pages = set()
+        for value in (row["source_page"], *(str(row["printed_pages"] or "").split(","))):
+            try:
+                pages.add(int(str(value).strip()))
+            except (TypeError, ValueError):
+                continue
+        label = (row["source_label"] or "").strip()
+        hit = next((w for w in wanted if pages & set(w["pages"]) and serves(label, w["label"])), None)
+        day = (row["document_date"] or row["created_at"] or "")[:10]
+        if hit:
+            rank, why = (0, f"{hit['label']} {page_list(sorted(pages & set(hit['pages'])))}")
+        elif row["id"] in linked:
+            rank, why = (1, "hängt an dieser Hausaufgabe")
+        else:
+            continue
+        found = {"material_id": row["id"], "title": row["title"] or "", "kind": row["kind"],
+                 "label": label, "page": row["source_page"], "date": day, "reason": why,
+                 "linked": row["id"] in linked, "_rank": (rank, -(row["id"]))}
+        if best is None or found["_rank"] < best["_rank"]:
+            best = found
+    if best:
+        best.pop("_rank")
+    return best
+
+
 def _sheet_near(sheets: dict, subject: str, entry_date: str, days: int = 5) -> int | None:
     from datetime import date, timedelta
     try:
