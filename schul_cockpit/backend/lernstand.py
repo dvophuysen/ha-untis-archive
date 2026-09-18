@@ -459,7 +459,7 @@ def _row_label(row) -> str:
     return {"workbook": "Arbeitsheft", "worksheet": "Arbeitsblatt"}.get(row["kind"], "")
 
 
-def merge_places(places: list[dict]) -> list[dict]:
+def merge_places(places: list[dict], subject: str = "") -> list[dict]:
     """Stellen zusammenführen, die dieselbe Seite desselben Buchs meinen.
 
     Ein Unterrichtseintrag schreibt „Buch S. 48", ein anderer „Schulbuch S. 48".
@@ -473,7 +473,7 @@ def merge_places(places: list[dict]) -> list[dict]:
         # „Schulbuch", „AH". serves() kennt nur die Anzeigenamen, deshalb erst
         # durch dieselbe Mustertabelle schicken, die auch beim Einlesen gilt.
         name = (name or "").strip()
-        return part_of(name)[0] or name
+        return part_of(name, subject)[0] or name
     merged: list[dict] = []
     for place in places:
         label = canonical(place.get("label"))
@@ -495,7 +495,7 @@ def merge_places(places: list[dict]) -> list[dict]:
 def _matching_rows(account_id: int, subject: str, places: list[dict]) -> list[dict]:
     """Die abgelegten Seiten, die eine der Stellen belegen."""
     from .sources import serves
-    places = merge_places(places)
+    places = merge_places(places, subject)
     if not places:
         # Ohne Stellenangabe stand der Mentor bisher ohne Material da und hat sich
         # eine Buchseite ausgedacht, obwohl Arbeitsheft und Buch des Fachs im
@@ -531,7 +531,7 @@ def _matching_rows(account_id: int, subject: str, places: list[dict]) -> list[di
 def place_status(account_id: int, subject: str, places: list[dict]) -> dict:
     """Wie viele Stellen eines Themas als Foto oder Buchseite vorliegen."""
     from .sources import page_list
-    places = merge_places(places)
+    places = merge_places(places, subject)
     total = sum(len(p.get("pages", [])) for p in places)
     if not total:
         return {"total": 0, "have": 0, "missing": [], "missing_label": ""}
@@ -660,9 +660,9 @@ def material_for(account_id: int, subject: str, places: list[dict], budget: int 
     return out
 
 
-def places_label(places: list[dict]) -> str:
+def places_label(places: list[dict], subject: str = "") -> str:
     from .sources import page_list
-    places = merge_places(places)
+    places = merge_places(places, subject)
     return " · ".join(f"{p.get('label') or 'Buch'} {page_list(p.get('pages', []))}" for p in places if p.get("pages"))
 
 
@@ -683,7 +683,7 @@ def public(topic: dict) -> dict:
     places = json.loads(topic.get("places_json") or "[]")
     return {k: topic.get(k) for k in ("id", "exam_key", "subject", "position", "title", "detail", "origin", "stale",
                                      "stage", "reason", "note", "self_view", "sat_at", "checks", "next_check", "updated_at")} | {
-        "label": LABELS.get(topic.get("stage"), ""), "places": places, "places_label": places_label(places)}
+        "label": LABELS.get(topic.get("stage"), ""), "places": places, "places_label": places_label(places, topic.get("subject") or "")}
 
 
 def chapter_context(account_id: int, subject: str, places: list[dict]) -> dict | None:
@@ -821,7 +821,7 @@ def context_for(account_id: int, topic_id: int, session_id: int | None = None) -
     this_unit = [a for a in answers if session_id and a["session_id"] == session_id]
     reached = replay(answers)["stage"] if answers else topic["stage"]
     return {
-        "title": topic["title"], "detail": topic["detail"], "places": places_label(places) or "keine Stelle genannt",
+        "title": topic["title"], "detail": topic["detail"], "places": places_label(places, topic["subject"]) or "keine Stelle genannt",
         "stage": topic["stage"], "stage_label": LABELS.get(topic["stage"]), "reason": topic["reason"], "note": topic["note"],
         "self_view": f"Das Kind sagt über dieses Thema: {topic['self_view']} (nur Gefühl, kein Beleg)" if topic.get("self_view") else None,
         "check": is_check(topic), "reached": reached,

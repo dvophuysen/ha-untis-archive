@@ -14,7 +14,7 @@ _LOGGER=logging.getLogger("schul_cockpit.textbooks")
 CACHE_DAYS=30
 CACHE_KEEP=60
 
-def page_numbers(text: str) -> list[int]:
+def page_numbers(text: str, subject: str = "") -> list[int]:
     """Die Schulbuchseiten einer Aufgabe, mit demselben Erkenner wie die
     Quellenbilanz: „p. 50" zählt wie „S. 50", Arbeitsheftseiten bleiben
     draußen, eine Spanne über zehn Seiten ist ein Tippfehler."""
@@ -22,7 +22,7 @@ def page_numbers(text: str) -> list[int]:
     pages=[];wide=wide_spans(text or "")
     for start,_,found in page_hits(text or ""):
         if len(found)>10 or start in wide: continue
-        label,kind=part_of(text[:start])
+        label,kind=part_of(text[:start],subject)
         # Der Begleitband ist ein anderes Buch als das digitale im Regal.
         if kind in ("","book") and book_serves("",label): pages.extend(found)
     return list(dict.fromkeys(pages))[:6]
@@ -143,7 +143,7 @@ def _image_parts(shots):
 
 
 async def homework_page_images(account_id:int,subject:str,task_text:str):
-    pages=page_numbers(task_text)
+    pages=page_numbers(task_text,subject)
     if not pages:return [],{"status":"no_pages"}
     book,credentials=book_and_credentials(account_id,subject=subject)
     if not book or not credentials:return [],{"status":"not_configured","pages":pages}

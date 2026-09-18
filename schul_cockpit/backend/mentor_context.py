@@ -220,7 +220,7 @@ def book_context(account_id,subject,source):
     try:
         from .textbook_context import book_and_credentials, page_numbers
         from .book_structure import chapters_of, chapter_of, companions
-        pages=page_numbers(text)
+        pages=page_numbers(text,subject)
         if not pages:return None
         book,_=book_and_credentials(account_id,subject=subject)
         if not book:return None

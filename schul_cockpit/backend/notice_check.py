@@ -24,11 +24,11 @@ LOG = logging.getLogger("schul_cockpit.notice_check")
 CONFUSIONS = {"1": "7", "7": "1", "0": "6", "6": "0", "4": "9", "9": "4"}
 
 
-def taught_places(texts: list[str]) -> dict[str, set[int]]:
+def taught_places(texts: list[str], subject: str = "") -> dict[str, set[int]]:
     """Alle genannten Stellen aus Stunden- und Hausaufgabentexten, je Buchteil."""
     known: dict[str, set[int]] = {}
     for text in texts:
-        for cite in citations(text):
+        for cite in citations(text, subject):
             pages = {p for p in cite["pages"] if p > 0}
             if pages:
                 known.setdefault(cite["label"], set()).update(pages)
@@ -60,13 +60,13 @@ def variants(page: int) -> list[int]:
     return out
 
 
-def check(text: str, known: dict[str, set[int]]) -> dict:
+def check(text: str, known: dict[str, set[int]], subject: str = "") -> dict:
     """Die Stellen eines Zettels gegen die bekannten Stellen des Fachs halten."""
     cited, unknown = 0, []
     # span nummeriert die Seitenangabe im Text: „S. 70, 71“ ist eine, und ihre
     # Seiten werden zusammen berichtigt, weil der Parser nach der ersten
     # Berichtigung („S. 10, 71“) die zweite nicht mehr als Aufzählung liest.
-    for span, cite in enumerate(citations(text or "")):
+    for span, cite in enumerate(citations(text or "", subject)):
         for page in cite["pages"]:
             if page <= 0:
                 continue
@@ -79,7 +79,7 @@ def check(text: str, known: dict[str, set[int]]) -> dict:
             "known_pages": sum(len(p) for p in known.values())}
 
 
-def replace_pages(text: str, fixes: list[dict]) -> str | None:
+def replace_pages(text: str, fixes: list[dict], subject: str = "") -> str | None:
     """Falsch gelesene Seiten durch die Vorschläge ersetzen, alle in einem
     Durchgang über den ursprünglichen Text: nur innerhalb der Seitenangabe des
     passenden Buchteils, nie eine Aufgabennummer, eine Lektion oder ein Datum.
@@ -88,7 +88,7 @@ def replace_pages(text: str, fixes: list[dict]) -> str | None:
     changed = False
     # Von hinten nach vorn, damit die Positionen der früheren Treffer gültig bleiben.
     for start, end, pages in reversed(page_hits(out)):
-        have, _ = part_of(out[:start])
+        have, _ = part_of(out[:start], subject)
         label = have or "Unbekannte Quelle"
         piece = out[start:end]
         for fix in fixes:
@@ -120,7 +120,7 @@ def checker(account_id: int):
         key = subject_key(subject)
         if key not in cache:
             cache[key] = taught_places([m["text"] for m in found
-                                        if m["kind"] in ("lesson", "homework") and subject_key(m["subject"]) == key])
-        return check(text, cache[key])
+                                        if m["kind"] in ("lesson", "homework") and subject_key(m["subject"]) == key], subject)
+        return check(text, cache[key], subject)
 
     return run
