@@ -341,7 +341,12 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
     key=reserve(account_id,purpose,session_id,upper_input,max_output,settings=config)
     result=None
     try:
-        async with httpx.AsyncClient(timeout=90,follow_redirects=False) as client:
+        # Die Wartezeit wächst mit dem Ausgabebudget: Ein Gespräch antwortet in
+        # Sekunden, eine dichte Heftseite mit 14.000 Token schreibt minutenlang.
+        # Fest 90 Sekunden hieß, dass ein bezahlter Aufruf kurz vor dem Ergebnis
+        # abgeschnitten wurde (D119).
+        patience=min(300,max(90,round(max_output/50)))
+        async with httpx.AsyncClient(timeout=patience,follow_redirects=False) as client:
             response=await client.post(endpoint,json=payload,headers={'api-key':api_key})
             response.raise_for_status();result=response.json()
         if not isinstance(result,dict): raise ValueError('Invalid envelope')

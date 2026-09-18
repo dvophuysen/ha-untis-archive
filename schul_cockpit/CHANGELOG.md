@@ -1,3 +1,7 @@
+## 1.5.2
+
+- Fehler behoben: Eine lange Lesung wurde nach 90 Sekunden abgeschnitten. Die Wartezeit richtet sich jetzt danach, wie viel zu schreiben ist.
+
 ## 1.5.1
 
 - Fehler behoben: Eine vollgeschriebene Heftseite ließ sich nicht mehr lesen. Das Denken des Modells zählt in dasselbe Budget wie der Text, und seit die Lesung auch ihre unsicheren Stellen nennt, reichte es nicht mehr — die Antwort kam leer zurück, bei vollen Kosten. Eine Lesung hat jetzt knapp doppelt so viel Platz.
