@@ -305,6 +305,33 @@ def bundle_keys(name: str) -> set[str]:
     return keys or {f"={(name or '').strip()}"}
 
 
+# Eine Überschrift, die nur aus einer Nummer besteht: Green Line schreibt in
+# seiner Wortliste „1", „2", „3" für die Units und stellt daneben „Unit 1 On the
+# move". Dieselbe Unit, also ein Bündel — aber nur, wenn im selben Fach genau
+# eine nummerierte Reihe vorkommt; „TS 1" und „AC 2" bleiben eigene Reihen.
+BARE_NUMBER = re.compile(r"^0*(\d{1,2})$")
+
+
+def _attach_bare_numbers(groups: list[tuple[set[str], list[str]]]) -> None:
+    """Bloße Nummern der einzigen nummerierten Reihe des Fachs zuschlagen."""
+    named = {n: unit_key(n) for keys, members in groups for n in members}
+    series = {key.split()[0] for key in named.values() if key}
+    if len(series) != 1:
+        return
+    word = series.pop()
+    for group in list(groups):
+        bare = [BARE_NUMBER.match(n.strip()) for n in group[1]]
+        if not all(bare):
+            continue
+        wanted = f"{word} {int(bare[0].group(1))}"
+        host = next((g for g in groups if g is not group and any(named.get(n) == wanted for n in g[1])), None)
+        if not host:
+            continue
+        host[0].update(group[0])
+        host[1].extend(group[1])
+        groups.remove(group)
+
+
 def group_units(names) -> dict[str, str]:
     """Jeden Namen einer Gruppe zuordnen. Zwei Namen gehören zusammen, wenn sie
     einen Schlüssel teilen — auch über einen dritten Namen hinweg."""
@@ -322,6 +349,7 @@ def group_units(names) -> dict[str, str]:
             first[0].update(other[0])
             first[1].extend(other[1])
             groups.remove(other)
+    _attach_bare_numbers(groups)
     out = {}
     for keys, members in groups:
         lead = sorted(keys)[0]

@@ -506,3 +506,20 @@ def test_one_unit_is_one_bundle_even_under_two_names(setup):
         == {"Unidad 3": "de paseo por espana", "3 De paseo por España": "de paseo por espana",
             "Unidad 3 De paseo por España": "de paseo por espana", "Unidad 4": "unidad 4"}
     assert "el país" in vocab.prompt_for(1, "SPANISCH", "Unidad 3 De paseo por España", "into")
+
+
+def test_a_bare_number_belongs_to_the_unit_of_the_same_name():
+    """Green Line schreibt in seiner Wortliste nur „1", „2", „3" und stellt
+    daneben „Unit 1 On the move". Dieselbe Unit, also ein Bündel. „TS 1" und
+    „AC 2" sind eigene Reihen des Buchs und bleiben getrennt (D110)."""
+    from collections import defaultdict
+    found = defaultdict(list)
+    for name, key in vocab.group_units(
+            ['1', '2', '3', 'Unit 1 On the move', 'Unit 2', 'Unit 3', 'TS 1', 'TS 2', 'AC 2']).items():
+        found[key].append(name)
+    groups = sorted(sorted(v) for v in found.values())
+    assert groups == [['1', 'Unit 1 On the move'], ['2', 'Unit 2'], ['3', 'Unit 3'],
+                      ['AC 2'], ['TS 1'], ['TS 2']], groups
+    # Ohne eindeutige Reihe bleibt die bloße Nummer für sich: Sonst riete die App.
+    zwei = vocab.group_units(['1', 'Unit 1 On the move', 'Lektion 1 Anfang'])
+    assert len({zwei['1'], zwei['Unit 1 On the move']}) == 2
