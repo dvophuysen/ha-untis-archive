@@ -297,7 +297,12 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
     endpoint,api_key=config['url'],config['key'];url=urlsplit(endpoint)
     if not api_key or not config['model'] or url.scheme!='https' or not url.hostname or url.username or url.password:
         raise HTTPException(503,'Die KI-Verbindung ist noch nicht eingerichtet.')
-    if not 256<=max_output<=8000: raise ValueError('Invalid output boundary')
+    # Die Denkschritte zählen mit in dieses Budget. Eine dichte Heftseite
+    # braucht für ihren Text allein mehrere tausend Token; bei 8000 kam von
+    # einer vollgeschriebenen Seite nur noch „incomplete: max_output_tokens"
+    # zurück, also gar nichts, bei vollen Kosten (D119). Abgerechnet wird
+    # ohnehin der Verbrauch, die Grenze bucht nur vor.
+    if not 256<=max_output<=16000: raise ValueError('Invalid output boundary')
     images=images or []
     normalized=[]
     # Chat und Übung: zwei Bilder. Der Quellenbestand liest ein fotografiertes

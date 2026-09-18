@@ -364,7 +364,7 @@ async def extract(account_id: int, row, tier: str | None = None, effort: str | N
         context["dokumenttext"] = text[:20000]
     raw, _, key = await ai.complete(
         account_id, _purpose(row), INSTRUCTION + json.dumps(Insight.model_json_schema()),
-        context, images, max_output=8000, **({"tier": tier} if tier else {}), **({"effort": effort} if effort else {}))
+        context, images, max_output=14000, **({"tier": tier} if tier else {}), **({"effort": effort} if effort else {}))
     return Insight.model_validate_json(raw), key
 
 
