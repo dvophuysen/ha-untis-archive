@@ -1,3 +1,7 @@
+## 1.7.2
+
+- Fehler behoben: Eine Vokabelseite blieb ungelesen, wenn dieselbe Vokabel in der alten Lesung zweimal stand — einmal mit und einmal ohne grammatische Marke. Die Seite meldete keinen Fehler, sie blieb einfach, wie sie war.
+
 ## 1.7.1
 
 - Die Vokabellisten werden vom kleinen Modell gelesen. Es findet dieselben Wörter und gliedert sie richtig; die Seiten werden dafür einmal neu gelesen.
