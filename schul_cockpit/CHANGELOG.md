@@ -1,3 +1,7 @@
+## 1.8.1
+
+- Fehler behoben: Ließ sich eine Grenzseite nicht mit dem gründlichen Modell nachlesen, ging die ganze Seite verloren, statt bei der ersten Lesung zu bleiben.
+
 ## 1.8.0
 
 - Wo im Anhang zwei Einheiten auf einer Seite aneinanderstoßen, lese ich die Seite ein zweites Mal mit dem gründlichen Modell. Dieser Schnitt steht nicht im Text, sondern im Satz der Seite — das kleine Modell schreibt so eine Seite sonst einer einzigen Einheit zu. Betroffen sind wenige Seiten je Buch.

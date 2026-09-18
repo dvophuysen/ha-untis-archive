@@ -933,3 +933,25 @@ def test_a_page_where_the_unit_changes_is_read_again_on_the_careful_tier(setup):
     client.post(V + "/LATEIN/extract", json={"material_ids": [grenze]})
     assert stufen[-1] == vocab.CAREFUL_TIER, "die Grenzseite wird auf der hohen Stufe nachgelesen"
     assert len(stufen) == 2, "genau einmal nachlesen, nicht öfter"
+
+
+def test_an_unreachable_careful_tier_does_not_cost_the_page(setup):
+    """Die hohe Stufe ist ein Zugewinn, keine Bedingung: Ist sie nicht
+    erreichbar — leeres Kontingent, Zeitüberschreitung —, bleibt die erste
+    Lesung stehen, statt die Seite zu verlieren (D132)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    erste = seed_page(page=10)
+    grenze = seed_page(page=11)
+    patch.setattr(vocab, 'ai_tier_for_vocab', lambda: 'klein')
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        if kw.get('tier') == vocab.CAREFUL_TIER:
+            raise RuntimeError('kein Kontingent')
+        einheit = 'Lektion 1' if context['page'] == 10 else 'Lektion 2'
+        return json.dumps({"words": [{**w, "unit": einheit} for w in WORDS["words"][:2]]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    client.post(V + "/LATEIN/extract", json={"material_ids": [erste]})
+    r = client.post(V + "/LATEIN/extract", json={"material_ids": [grenze]})
+    assert r.status_code == 200, r.text
+    assert list(r.json()["words"].values()) == [2], "die erste Lesung bleibt stehen"

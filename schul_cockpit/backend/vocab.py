@@ -736,7 +736,14 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
         # wechselt; sie kosten das Zehnfache und sind es wert (D132).
         if boundary_page(open_at[0], words) and (tier or ai_tier_for_vocab()) != CAREFUL_TIER:
             LOG.info("Grenzseite %s: noch einmal auf der hohen Stufe", material_id)
-            words = await read_words(account_id, row, tier=CAREFUL_TIER, carry=open_at)
+            try:
+                words = await read_words(account_id, row, tier=CAREFUL_TIER, carry=open_at)
+            except Exception as exc:
+                # Die hohe Stufe ist ein Zugewinn, keine Bedingung. Ist sie
+                # nicht erreichbar — leeres Kontingent, Zeitüberschreitung —,
+                # bleibt die erste Lesung stehen, statt die Seite zu verlieren.
+                LOG.warning("Grenzseite %s: hohe Stufe nicht verfügbar (%s), erste Lesung gilt",
+                            material_id, getattr(exc, "detail", exc))
     except ValidationError:
         with closing(webapp_conn()) as c, c:
             c.execute("INSERT OR REPLACE INTO vocab_extractions(material_id,account_id,text_hash,words,error,updated_at) VALUES(?,?,?,?,?,?)",
