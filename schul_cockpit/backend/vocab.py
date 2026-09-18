@@ -280,7 +280,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 12
+EXTRACT_VERSION = 13
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -602,6 +602,26 @@ def page_image(account_id: int, material_id: int) -> list[dict]:
         "detail": "high"}}]
 
 
+# Die Stufe, die einen Seitenschnitt noch richtig legt (gemessen 18.09.).
+CAREFUL_TIER = "hoch"
+
+
+def ai_tier_for_vocab() -> str:
+    from . import ai_gateway as ai
+    return ai.tier_for(ai.VOCAB)
+
+
+def boundary_page(open_unit: str, words: list) -> bool:
+    """Ob auf dieser Seite eine Einheit endet und eine andere beginnt.
+
+    Zwei Anzeichen: Die Seite nennt eine andere Einheit als die Seite davor,
+    oder sie nennt selbst mehrere. Ohne Vorseite gibt es keine Grenze."""
+    genannt = {(w.unit or "").strip() for w in words if (w.unit or "").strip()}
+    if not open_unit or not genannt:
+        return False
+    return len(genannt) > 1 or open_unit not in genannt
+
+
 async def read_words(account_id: int, row: dict, tier: str | None = None,
                      carry: tuple[str, str, str] | None = None):
     """Eine Seite vom Modell in Lernwörter zerlegen, ohne etwas abzulegen."""
@@ -707,6 +727,16 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
     open_at = carry_over(account_id, subject, row["source_page"], label)
     try:
         words = await read_words(account_id, row, tier=tier, carry=open_at)
+        # Auf einer Grenzseite entscheidet die hohe Stufe. Wo zwei Einheiten
+        # aneinanderstoßen, liegt der Schnitt nicht im Text, sondern im Satz der
+        # Seite: „Holiday words" steht oben auf S. 211 und gehört noch zu
+        # „Welcome back!", darunter beginnt Unit 1. Die kleinen Stufen schreiben
+        # so eine Seite einer einzigen Einheit zu — gemessen an S. 211 und 221.
+        # Betroffen sind die wenigen Seiten je Buch, auf denen die Einheit
+        # wechselt; sie kosten das Zehnfache und sind es wert (D132).
+        if boundary_page(open_at[0], words) and (tier or ai_tier_for_vocab()) != CAREFUL_TIER:
+            LOG.info("Grenzseite %s: noch einmal auf der hohen Stufe", material_id)
+            words = await read_words(account_id, row, tier=CAREFUL_TIER, carry=open_at)
     except ValidationError:
         with closing(webapp_conn()) as c, c:
             c.execute("INSERT OR REPLACE INTO vocab_extractions(material_id,account_id,text_hash,words,error,updated_at) VALUES(?,?,?,?,?,?)",

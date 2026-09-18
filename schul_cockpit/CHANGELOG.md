@@ -1,3 +1,7 @@
+## 1.8.0
+
+- Wo im Anhang zwei Einheiten auf einer Seite aneinanderstoßen, lese ich die Seite ein zweites Mal mit dem gründlichen Modell. Dieser Schnitt steht nicht im Text, sondern im Satz der Seite — das kleine Modell schreibt so eine Seite sonst einer einzigen Einheit zu. Betroffen sind wenige Seiten je Buch.
+
 ## 1.7.4
 
 - Fehler behoben: Die Fortsetzung einer Vokabelliste über den Seitenwechsel sprang über Buchgrenzen. Eine Arbeitsheftseite konnte so ihre Einheit an den Anhang des Schulbuchs vererben, und von dort wanderte sie durch alle Folgeseiten — die unregelmäßigen Verben landeten in „Unit 1". Fortgesetzt wird jetzt nur von der Seite davor im selben Buch.
