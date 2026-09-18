@@ -26,7 +26,7 @@ def photo(width=900):
 
 
 def test_latin_has_two_books_and_a_page_list_reads_every_number():
-    got = [(c["label"], c["pages"]) for c in sources.citations(NOTE)]
+    got = [(c["label"], c["pages"]) for c in sources.citations(NOTE, 'LATEIN')]
     assert got == [("Unbekannte Quelle", [10, 11]), ("Begleitband", [13]), ("Begleitband", [13, 14, 15]),
                    ("Begleitband", [14]), ("Textband", [10, 11, 14, 15])]
     # Eine Aufzählung endet, wo die Zahl nicht mehr aufsteigt oder eine Aufgabe ist.

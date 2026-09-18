@@ -44,9 +44,16 @@ def test_only_an_explicit_page_marker_counts_as_a_page():
 
 
 def test_each_page_keeps_the_book_part_it_was_named_with():
-    got = sources.citations('Wortschatztraining Lektion 1, Übungen zu debere und Infinitiven '
-                            '(TB S. 13 Aufg. C, AH S. 7 Aufg. C und Z)')
+    # „TB" ist nur in Latein der Textband; im Englischen ist es das Text Book,
+    # also das Schulbuch. Ohne Fach gilt die allgemeine Lesart (D114).
+    latein = ('Wortschatztraining Lektion 1, Übungen zu debere und Infinitiven '
+              '(TB S. 13 Aufg. C, AH S. 7 Aufg. C und Z)')
+    got = sources.citations(latein, 'LATEIN')
     assert [(c['label'], c['pages']) for c in got] == [('Textband', [13]), ('Arbeitsheft', [7])]
+    assert sources.citations(latein, 'ENGLISCH')[0]['label'] == 'Schulbuch'
+    assert sources.citations('Vocabulary TB p. 24', 'ENGLISCH')[0]['label'] == 'Schulbuch'
+    assert sources.citations('Substantive BB S. 73', 'LATEIN')[0]['label'] == 'Begleitband'
+    assert sources.citations('Substantive BB S. 73', 'ENGLISCH')[0]['label'] == 'Unbekannte Quelle'
     # Der zuletzt genannte Teil gilt weiter, auch über einen Satz hinweg.
     got = sources.citations('Buch, S.30-32. lest M6 und den Infokasten. Bearbeitet Aufgabe 1 auf S. 34')
     assert [(c['label'], c['pages']) for c in got] == [('Schulbuch', [30, 31, 32]), ('Schulbuch', [34])]
@@ -170,3 +177,18 @@ def test_the_same_page_under_two_names_is_one_place():
     # Seiten derselben Nennung werden vereinigt, nicht verdoppelt.
     assert merge_places([{"label": "Buch", "pages": [48]}, {"label": None, "pages": [49]}]) \
         == [{"label": "Buch", "pages": [48, 49]}]
+
+
+def test_the_same_short_form_means_different_books_in_different_subjects():
+    """Bei Josia stand in Englisch „Textband", weil „TB" wie in Latein gelesen
+    wurde. „TB" ist im Englischen das Text Book, also das Schulbuch; nur Latein
+    hat einen Textband und einen Begleitband (D114)."""
+    for subject in ('ENGLISCH', 'Englisch', 'SPANISCH', 'MATHEMATIK', ''):
+        assert sources.part_of('TB S. 24', subject) == ('Schulbuch', 'book'), subject
+    for subject in ('LATEIN', 'Latein bilingual', 'LA', 'la'):
+        assert sources.part_of('TB S. 24', subject) == ('Textband', 'book'), subject
+        assert sources.part_of('BB S. 24', subject) == ('Begleitband', 'book'), subject
+    # Ein Kürzel wird genau verglichen, nie als Teilwort.
+    assert sources.part_of('TB S. 24', 'Klassenlehrerstunde') == ('Schulbuch', 'book')
+    # Ausgeschrieben bleibt es in jedem Fach eindeutig.
+    assert sources.part_of('Textband S. 24', 'ENGLISCH') == ('Textband', 'book')

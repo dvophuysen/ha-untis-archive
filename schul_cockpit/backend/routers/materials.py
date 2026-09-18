@@ -376,7 +376,8 @@ def apply_suggestion(account_id: int, material_id: int, body: SuggestionsIn, bac
     found = store.detail(account_id, material_id)
     if not found:
         raise HTTPException(404, "Material nicht gefunden.")
-    text = notice_check.replace_pages(found.get("content_text") or "", [f.model_dump() for f in body.fixes])
+    text = notice_check.replace_pages(found.get("content_text") or "", [f.model_dump() for f in body.fixes],
+                                      found.get("subject_name") or "")
     if text is None:
         raise HTTPException(409, "Diese Stelle steht so nicht mehr im Text. Bitte neu laden.")
     fixed = store.update(account_id, material_id, {"content_text": text}, by_parent=True)

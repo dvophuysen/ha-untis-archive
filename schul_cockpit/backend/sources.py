@@ -28,6 +28,7 @@ from .db import history_conn, webapp_conn
 from .learning import now_iso, today_local
 from .mentor_context import rows, school_start
 from .queries import _subject_short_from_payload
+from .subject_names import key as subject_key
 
 import logging
 
@@ -40,14 +41,26 @@ log = logging.getLogger("schul_cockpit.sources")
 # Annahme; sie steht in der Anzeige, damit sie widersprochen werden kann.
 PARTS: list[tuple[str, str, str]] = [
     # (Muster, Anzeigename, Art)
-    (r"begleitband|\bBB\b", "Begleitband", "book"),
-    (r"textband|\bTB\b", "Textband", "book"),
-    (r"lehrbuch|schulbuch|kursbuch|textbook|\bSB\b|\blibro\b|\bbuch\b", "Schulbuch", "book"),
+    (r"begleitband", "Begleitband", "book"),
+    (r"textband", "Textband", "book"),
+    # „TB" heißt im Englischen Text Book, also das Schulbuch. Nur in Latein ist
+    # es der Textband; das steht in SUBJECT_PARTS und geht hier vor (D114).
+    (r"lehrbuch|schulbuch|kursbuch|textbook|\bSB\b|\bTB\b|\blibro\b|\bbuch\b", "Schulbuch", "book"),
     (r"vocabulario|wordbank|wortschatzteil", "Schulbuch, Vokabelteil", "book"),
     (r"arbeitsheft|\bA-?Heft\b|\bAH\b|workbook|cuaderno|\bcda\b|übungsheft|uebungsheft|arbeitsbuch", "Arbeitsheft", "workbook"),
     (r"grammatikheft|grammatisches beiheft|beiheft", "Grammatikheft", "workbook"),
     (r"arbeitsblatt|\bAB\b|handout|merkblatt|kopie", "Arbeitsblatt", "worksheet"),
 ]
+# Kürzel, die je Fach etwas anderes bedeuten. Sie gelten vor der allgemeinen
+# Tabelle. Latein hat zwei Bücher, Textband („TB") und Begleitband („BB"); im
+# Englischen ist „TB" das Text Book und „BB" nichts Bekanntes (D114).
+SUBJECT_PARTS: dict[str, list[tuple[str, str, str]]] = {
+    "latein": [(r"\bTB\b", "Textband", "book"), (r"\bBB\b", "Begleitband", "book")],
+}
+# Solange keine Stunde das Kürzel auflöst, steht in einer Hausaufgabe nur „LA".
+# Ein Kürzel wird genau verglichen, nie als Teilwort: „la" steckt auch in
+# „Klassenlehrerstunde".
+SUBJECT_SHORTS = {"la": "latein", "lat": "latein"}
 PART_LABELS = [label for _, label, _ in PARTS]
 BOOK_LABELS = {label for _, label, kind in PARTS if kind == "book"}
 # Ein Buchteil, den es nur als eigenes Buch gibt: Eine Seite des Textbands
@@ -131,11 +144,26 @@ def _hits(text: str) -> list[tuple[int, int, list[int], bool]]:
     return out
 
 
-def part_of(text: str) -> tuple[str, str]:
-    """Der zuletzt genannte Buchteil vor einer Seitenangabe."""
+def _subject_parts(subject: str) -> list[tuple[str, str, str]]:
+    """Die Sonderkürzel eines Fachs, auch wenn es „Latein bilingual" heißt."""
+    folded = subject_key(subject)
+    named = SUBJECT_SHORTS.get(folded)
+    if named:
+        return SUBJECT_PARTS[named]
+    for name, rules in SUBJECT_PARTS.items():
+        if name in folded:
+            return rules
+    return []
+
+
+def part_of(text: str, subject: str = "") -> tuple[str, str]:
+    """Der zuletzt genannte Buchteil vor einer Seitenangabe.
+
+    Mit `subject` gelten zuerst die Kürzel dieses Fachs: „TB" ist in Latein der
+    Textband, im Englischen das Text Book, also das Schulbuch (D114)."""
     best = ("", "")
     at = -1
-    for pattern, label, kind in PARTS:
+    for pattern, label, kind in _subject_parts(subject) + PARTS:
         for hit in re.finditer(pattern, text, re.I):
             if hit.start() > at:
                 at, best = hit.start(), (label, kind)
@@ -147,24 +175,24 @@ def part_of(text: str) -> tuple[str, str]:
 SHEET = re.compile(PARTS[-1][0], re.I)
 
 
-def sheet_mentions(text: str) -> list[re.Match]:
+def sheet_mentions(text: str, subject: str = "") -> list[re.Match]:
     """Arbeitsblätter, die ohne Seitenangabe genannt sind."""
     text = text or ""
-    covered = {start for start, _, _ in page_hits(text) if part_of(text[:start])[1] == "worksheet"}
+    covered = {start for start, _, _ in page_hits(text) if part_of(text[:start], subject)[1] == "worksheet"}
     if covered:
         return []
     return list(SHEET.finditer(text))
 
 
-def citations(text: str) -> list[dict]:
+def citations(text: str, subject: str = "") -> list[dict]:
     """Jede Seitenangabe mit dem Buchteil, der davor steht, dazu Blätter ohne Seite."""
     found = []
     for start, _, pages in page_hits(text):
         # Der zuletzt genannte Teil gilt weiter: In „Buch, S. 30-32 … Aufgabe 1
         # auf S. 34" gehört auch die 34 ins Buch.
-        label, kind = part_of(text[:start])
+        label, kind = part_of(text[:start], subject)
         found.append({"label": label or "Unbekannte Quelle", "kind": kind or "unknown", "pages": pages})
-    if sheet_mentions(text):
+    if sheet_mentions(text, subject):
         found.append({"label": "Arbeitsblatt", "kind": "worksheet", "pages": [0]})
     return found
 
@@ -266,7 +294,7 @@ def sync_links(account_id: int) -> dict:
     count = 0
     with closing(webapp_conn()) as conn, conn:
         for entry in found:
-            for cite in citations(entry["text"]):
+            for cite in citations(entry["text"], entry["subject"]):
                 for page in cite["pages"]:
                     conn.execute(
                         "INSERT INTO source_links(account_id,entry_kind,entry_id,entry_date,subject_name,part_label,"
@@ -324,7 +352,7 @@ def _scanned_pages(account_id: int) -> dict[str, dict[tuple[str, int], int]]:
                     pages.setdefault((label, page), row["id"])
                 continue
             text = " ".join(filter(None, (row["title"], row["summary"])))
-            for cite in citations(text):
+            for cite in citations(text, row["subject_name"]):
                 for page in cite["pages"]:
                     if page:
                         pages.setdefault((label or (cite["label"] if cite["label"] != "Unbekannte Quelle" else ""), page), row["id"])
@@ -537,7 +565,7 @@ def task_candidates(account_id: int, task_id: int, limit: int = 12) -> list[dict
         linked = {r[0] for r in conn.execute(
             "SELECT material_id FROM material_links WHERE kind='task' AND target_id=?", (task_id,))}
     subject = canonical_subject(account_id, task["subject_name"] or "") or (task["subject_name"] or "")
-    wanted = citations(task_text(task))
+    wanted = citations(task_text(task), task.get("subject_name") or "")
     anchor_day = (task["due_date"] or task["created_at"] or "")[:10]
     with closing(webapp_conn()) as conn:
         rows = [dict(r) for r in conn.execute(
@@ -926,7 +954,7 @@ def photo_requests(account_id: int, exams: list[dict], day: str, days_ahead: int
 _TAG = re.compile(r"\[([A-Za-zÄÖÜäöüß]{1,5})(\d+)\]")
 
 
-def segments(text: str) -> list[dict]:
+def segments(text: str, subject: str = "") -> list[dict]:
     """Den Text in Stücke zerlegen: Fließtext und Seitenangaben mit Buchteil."""
     text = text or ""
     out: list[dict] = []
@@ -934,13 +962,13 @@ def segments(text: str) -> list[dict]:
     for start, end, pages in page_hits(text):
         if start > pos:
             out.append({"text": text[pos:start]})
-        label, kind = part_of(text[:start])
+        label, kind = part_of(text[:start], subject)
         out.append({"text": text[start:end], "pages": pages,
                     "label": label or "Unbekannte Quelle", "kind": kind or "unknown"})
         pos = end
     if pos < len(text):
         out.append({"text": text[pos:]})
-    sheets = sheet_mentions(text)
+    sheets = sheet_mentions(text, subject)
     if sheets:
         first = sheets[0]
         # Das erste genannte Blatt wird zum Link; sein Stück Text wird geteilt.
@@ -980,7 +1008,7 @@ def _worst(states: list[str | None]) -> str | None:
     return None
 
 
-def _decorate(text: str, links: list[dict], analysis: dict[int, str]) -> tuple[list[dict], str | None, list[int]]:
+def _decorate(text: str, links: list[dict], analysis: dict[int, str], subject: str = "") -> tuple[list[dict], str | None, list[int]]:
     """Segmente mit Stand und Material versehen; dazu der Gesamtstand."""
     by_page: dict[tuple[str, int], dict] = {}
     for link in links:
@@ -989,7 +1017,7 @@ def _decorate(text: str, links: list[dict], analysis: dict[int, str]) -> tuple[l
     states: list[str | None] = []
     materials: list[int] = []
     out = []
-    for seg in segments(text):
+    for seg in segments(text, subject):
         if "pages" not in seg:
             out.append(seg)
             continue
@@ -1056,7 +1084,7 @@ def annotate_lessons(account_id: int, lessons: list[dict], key: str = "lstext", 
     for lesson in lessons:
         if not lesson.get(key):
             continue
-        segs, state, _ = _decorate(lesson[key], by_lesson.get(lesson[id_key], []), analysis)
+        segs, state, _ = _decorate(lesson[key], by_lesson.get(lesson[id_key], []), analysis, lesson.get("subject_name") or "")
         lesson[f"{key}_segments"] = segs
         lesson["source_state"] = state
 
@@ -1142,7 +1170,7 @@ def annotate_tasks(account_id: int, tasks: list[dict]) -> None:
     for task in tasks:
         hw = homework_ids.get(task["id"])
         body = task_text(task)
-        segs, state, materials = _decorate(body, by_homework.get(hw, []) if hw else [], analysis)
+        segs, state, materials = _decorate(body, by_homework.get(hw, []) if hw else [], analysis, task.get("subject_name") or "")
         for extra in attached.get(task["id"], []):
             if extra not in materials:
                 materials.append(extra)

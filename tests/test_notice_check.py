@@ -12,7 +12,7 @@ LESSONS = [
 
 
 def test_the_lessons_places_are_collected_per_part():
-    known = nc.taught_places(LESSONS)
+    known = nc.taught_places(LESSONS, 'LATEIN')
     assert known["Textband"] == {10, 11, 13, 14, 15} and known["Arbeitsheft"] == {7}
     assert known["Begleitband"] == {10, 11, 13, 14, 15}
 
@@ -24,9 +24,9 @@ def test_variants_are_single_digit_confusions():
 
 
 def test_a_misread_notice_is_flagged_with_the_taught_page_as_suggestion():
-    known = nc.taught_places(LESSONS)
+    known = nc.taught_places(LESSONS, 'LATEIN')
     misread = "Voc. 7. Lektion S. 70, 77\nSubstantive: a/o-Deklination BB. S. 73\nVerben a/e/i-Konjugation BB S. 73-75\nSubjekt im Prädikat BB S. 74\nGefahr im C.M. TB S. 70, 77, 74, 75"
-    result = nc.check(misread, known)
+    result = nc.check(misread, known, 'LATEIN')
     # „TB S. 70, 77, 74, 75“: der Parser nimmt nur die aufsteigende Aufzählung (70, 77), also neun Stellen.
     assert result["checked"] and result["cited"] == 9
     flagged = {(u["label"], u["page"]): u["suggest"] for u in result["unknown"]}
@@ -36,9 +36,9 @@ def test_a_misread_notice_is_flagged_with_the_taught_page_as_suggestion():
     assert all(v is not None for v in flagged.values())
     # Die richtige Lesung hat nichts zu beanstanden.
     right = "Voc. 1. Lektion S. 10, 11\nSubstantive: a/o-Deklination BB. S. 13\nVerben a/e/i-Konjugation BB S. 13-15\nSubjekt im Prädikat BB. S. 14\nGefahr im C.M. TB S. 10, 11, 14, 15"
-    assert nc.check(right, known)["unknown"] == []
+    assert nc.check(right, known, 'LATEIN')["unknown"] == []
     # Ohne Unterricht wird nichts behauptet.
-    assert nc.check(right, {})["checked"] is False
+    assert nc.check(right, {}, 'LATEIN')["checked"] is False
 
 
 def test_the_review_card_gets_the_check_for_notices_only(env):
@@ -67,13 +67,13 @@ def test_the_review_card_gets_the_check_for_notices_only(env):
 
 def test_suggestions_replace_only_those_pages_of_that_part():
     misread = "Voc. 7. Lektion S. 70, 71\nSubstantive BB. S. 73\nVerben BB S. 73-75\nAufgabe 70 wiederholen"
-    fixed = nc.replace_pages(misread, [{"label": "Unbekannte Quelle", "page": 70, "suggest": 10}, {"label": "Unbekannte Quelle", "page": 71, "suggest": 11}])
+    fixed = nc.replace_pages(misread, [{"label": "Unbekannte Quelle", "page": 70, "suggest": 10}, {"label": "Unbekannte Quelle", "page": 71, "suggest": 11}], 'LATEIN')
     # Die Lektionsnummer 7 und „Aufgabe 70“ bleiben; nur die Seitenangabe wird berichtigt, beide Seiten zugleich.
     assert fixed == "Voc. 7. Lektion S. 10, 11\nSubstantive BB. S. 73\nVerben BB S. 73-75\nAufgabe 70 wiederholen"
-    assert nc.replace_pages(fixed, [{"label": "Begleitband", "page": 73, "suggest": 13}]) == "Voc. 7. Lektion S. 10, 11\nSubstantive BB. S. 13\nVerben BB S. 13-75\nAufgabe 70 wiederholen"
+    assert nc.replace_pages(fixed, [{"label": "Begleitband", "page": 73, "suggest": 13}], "LATEIN") == "Voc. 7. Lektion S. 10, 11\nSubstantive BB. S. 13\nVerben BB S. 13-75\nAufgabe 70 wiederholen"
     # Ein falscher Buchteil oder eine Seite, die nicht mehr da ist: nichts geändert.
-    assert nc.replace_pages(fixed, [{"label": "Textband", "page": 73, "suggest": 13}]) is None
-    assert nc.replace_pages(fixed, [{"label": "Unbekannte Quelle", "page": 70, "suggest": 10}]) is None
+    assert nc.replace_pages(fixed, [{"label": "Textband", "page": 73, "suggest": 13}], "LATEIN") is None
+    assert nc.replace_pages(fixed, [{"label": "Unbekannte Quelle", "page": 70, "suggest": 10}], "LATEIN") is None
 
 
 def test_the_review_card_applies_suggestions_as_a_parent_correction(env):

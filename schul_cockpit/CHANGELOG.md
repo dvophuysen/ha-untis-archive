@@ -1,3 +1,7 @@
+## 1.2.2
+
+- Fehler behoben: „TB" wurde in jedem Fach als Textband gelesen. Das stimmt nur in Latein — im Englischen heißt „TB" Text Book, also das Schulbuch. Dasselbe gilt für „BB", den Begleitband. Kürzel werden jetzt fachabhängig gelesen, und die bereits falsch abgelegten Zuordnungen werden einmalig berichtigt.
+
 ## 1.2.1
 
 - Die Einheiten im Vokabeltrainer heißen jetzt einheitlich wie im Inhaltsverzeichnis des Buchs — „Unidad 3 De paseo por España" statt mal mit, mal ohne Titel — und stehen in Buchreihenfolge. Sortiert wurde bisher nach der ersten Seite eines Bündels; das ist nach dem Zusammenführen mal die Anhangseite und mal die Kapitelseite, weshalb die Reihenfolge verrutschte.

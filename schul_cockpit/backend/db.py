@@ -977,6 +977,21 @@ _MIGRATIONS.append(("source_links_reset_attempts_d112",
                     "UPDATE source_links SET attempts=0 WHERE status='pending' AND attempts>0"))
 
 
+# Einmalige Berichtigung: „TB" wurde überall als Textband gelesen, auch im
+# Englischen, wo es Text Book heißt, also das Schulbuch. Nur Latein hat einen
+# Textband; in jedem anderen Fach war die Zuordnung falsch (D114).
+_NOT_LATIN = ("lower(COALESCE(subject_name,'')) NOT LIKE '%latein%' "
+              "AND lower(COALESCE(subject_name,'')) NOT IN ('la','lat')")
+_MIGRATIONS.append(("source_links_tb_is_textbook_d114",
+                    f"UPDATE source_links SET part_label='Schulbuch' WHERE part_label='Textband' AND {_NOT_LATIN}"))
+_MIGRATIONS.append(("materials_tb_is_textbook_d114",
+                    f"UPDATE materials SET source_label='Schulbuch' WHERE source_label='Textband' AND {_NOT_LATIN}"))
+_MIGRATIONS.append(("source_claims_tb_is_textbook_d114",
+                    "UPDATE source_claims SET part_label='Schulbuch' WHERE part_label='Textband' "
+                    "AND lower(COALESCE(subject_key,'')) NOT LIKE '%latein%' "
+                    "AND lower(COALESCE(subject_key,'')) NOT IN ('la','lat')"))
+
+
 def init_webapp_db() -> None:
     """Apply base schema + pending migrations (idempotent)."""
     schema_sql = _SCHEMA_FILE.read_text()
