@@ -105,3 +105,13 @@ def test_what_the_reading_was_sure_of_may_disappear_into_the_gap():
     eng = "a) ___ [Kind: 1]\nb) ___ [Kind: 7]\nc) weit weg\nd) weit weg\ne) weit weg\nf) ___ [Kind: 9]"
     nah = proofread.view(eng, [{"text": "[Kind: 1]", "alternative": "[Kind: 7]", "reason": "1 oder 7"}])
     assert [s["text"] for s in nah["segments"] if s["kind"] == "mark"] == ["[Kind: 1]", "[Kind: 7]"]
+
+
+def test_only_a_page_number_the_child_wrote_is_checked_against_the_lessons():
+    """Die Plausibilitätsprüfung ist gegen die Handschrift gemacht (D79). Ein
+    gedruckter Querverweis im Arbeitsheft steht selten in einem Stundentext und
+    wäre sonst dauernd „unbekannt", ohne dass etwas falsch wäre (D118)."""
+    from backend.notice_check import handwritten_pages
+    heft = "¡Acércate! ▶ S. 48\na) Wo warst du? ___ [Kind: en la página 70]"
+    assert handwritten_pages(heft) == {70}
+    assert handwritten_pages("Nur gedruckt: S. 48 und S. 50") == set()

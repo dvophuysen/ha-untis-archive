@@ -1,3 +1,7 @@
+## 1.5.4
+
+- Fehler behoben: Gedruckte Querverweise im Arbeitsheft („▶ S. 48") galten als zweifelhafte Seitenzahl und schickten die Seite zum Gegenlesen. Geprüft wird jetzt nur, was das Kind selbst geschrieben hat — dafür war die Prüfung gedacht.
+
 ## 1.5.3
 
 - Der Auszug richtet sich jetzt nach den Stellen, bei denen ich unsicher war. Was ich sicher gelesen habe, darf in der Lücke verschwinden — auf einer ganz ausgefüllten Heftseite war sonst wieder fast alles zu sehen. Markiert bleibt es, wo es ohnehin dasteht.

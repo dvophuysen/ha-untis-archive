@@ -100,6 +100,25 @@ def replace_pages(text: str, fixes: list[dict], subject: str = "") -> str | None
     return out if changed else None
 
 
+def handwritten_pages(text: str) -> set[int]:
+    """Welche der genannten Seitenzahlen das Kind selbst geschrieben hat.
+
+    Die Prüfung ist gegen die Handschrift gemacht: Eine 1, die wie eine 7
+    aussieht. Eine gedruckte Seitenzahl ist dagegen sicher gelesen, und ein
+    gedruckter Querverweis („▶ S. 48") steht selten in einem Stundentext — er
+    wäre also dauernd „unbekannt", ohne dass irgendetwas falsch wäre (D118).
+    Zählt deshalb nur, was innerhalb einer Eintragung des Kindes steht."""
+    from .proofread import PUPIL
+    spans = [(hit.start(), hit.end()) for hit in PUPIL.finditer(text or "")]
+    if not spans:
+        return set()
+    out: set[int] = set()
+    for start, _, pages in page_hits(text or ""):
+        if any(first <= start < last for first, last in spans):
+            out.update(pages)
+    return out
+
+
 def checker(account_id: int):
     """Einmal je Anfrage die Stellen des Schuljahrs lesen, dann je Zettel prüfen."""
     cache: dict[str, dict[str, set[int]]] = {}

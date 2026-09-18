@@ -178,8 +178,12 @@ def index(
             if m["kind"] == "exam_notice" or m.get("handwritten") or m.get("pupil_entries"):
                 m["plausibility"] = run(m)
                 # Eine genannte Seite, die es im Fach nie gab, ist ein Zweifel,
-                # auch wenn die Lesung sich sicher war (D118).
-                if (m["plausibility"] or {}).get("unknown"):
+                # auch wenn die Lesung sich sicher war — aber nur, wenn das Kind
+                # sie geschrieben hat. Ein gedruckter Querverweis ist sicher
+                # gelesen und steht selten in einem Stundentext (D118).
+                unknown = (m["plausibility"] or {}).get("unknown") or []
+                if unknown and (m["kind"] == "exam_notice" or
+                                {u["page"] for u in unknown} & notice_check.handwritten_pages(m.get("content_text") or "")):
                     store.call_for_review(m)
     # Ein loses Blatt bekommt Vorschläge, zu welchem Eintrag es gehören könnte;
     # zugeordnet wird mit einem Tipp, von Kind oder Eltern (D85).
