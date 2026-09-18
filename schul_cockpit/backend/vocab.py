@@ -606,6 +606,32 @@ def pages(account_id: int, subject: str) -> list[dict]:
     return out
 
 
+def book_units(account_id: int, subject: str) -> dict[str, dict]:
+    """Die Einheiten des Buchs mit Nummer, Titel und Anfangsseite.
+
+    Das Verzeichnis ist die einheitliche Quelle für Benennung und Reihenfolge.
+    Die Wortliste schreibt mal „Unidad 3", mal „3 De paseo por España", und ein
+    Bündel nach der ersten Seite zu sortieren verrutscht, sobald Anhangseite und
+    Kapitelseite im selben Bündel liegen (D113)."""
+    from .book_structure import chapters_of, paper_books
+    from .sources import _shelf
+    titles = []
+    shelf = _shelf(account_id).get((subject or "").casefold())
+    if shelf:
+        titles.append(shelf["title"])
+    titles += [paper["title"] for paper in paper_books(account_id, subject)]
+    out: dict[str, dict] = {}
+    for title in titles:
+        for c in chapters_of(account_id, title):
+            if c["kind"] != "chapter" or not (c["number"] or "").strip():
+                continue
+            name = f"{c['number']} {c['title']}".strip()
+            key = unit_key(name) or unit_key(c["number"])
+            if key and key not in out:
+                out[key] = {"name": name, "start_page": c["start_page"]}
+    return out
+
+
 def units(account_id: int, subject: str) -> list[dict]:
     """Je Lektion oder Unit: Seiten, Wörter und wie viele je Stufe sitzen."""
     found = pages(account_id, subject)
@@ -647,6 +673,7 @@ def units(account_id: int, subject: str) -> list[dict]:
         if not first:
             merged[key] = u
             continue
+        first.setdefault("_names", [first["unit"]]).append(name)
         first["words"] += u["words"]
         first["unread"] += u["unread"]
         first["pages"] += u["pages"]
@@ -659,8 +686,20 @@ def units(account_id: int, subject: str) -> list[dict]:
         if len(u["unit"]) > len(first["unit"]):
             first["unit"] = u["unit"]
     by_unit = merged
+    known = book_units(account_id, subject)
     for u in by_unit.values():
         u["sections"] = [{"section": name, "words": n} for name, n in sorted((u.get("sections") or {}).items())]
+        # Name und Platz kommen aus dem Verzeichnis, damit alle Einheiten gleich
+        # heißen und in Buchreihenfolge stehen (D113).
+        info = next((known[k] for k in (unit_key(n) for n in u.get("_names", [u["unit"]])) if k in known), None)
+        seiten = [p["page"] for p in u["pages"] if p["page"]]
+        u["order"] = info["start_page"] if info else (min(seiten) if seiten else 9999)
+        if info:
+            # Der Name aus dem Verzeichnis gilt für alle Einheiten gleich. Die
+            # Karten findet er trotzdem: Gesucht wird über die Nummer, nicht
+            # über die Schreibweise.
+            u["unit"] = info["name"]
+        u.pop("_names", None)
         u["page_only"] = bool(PAGE_UNIT.match(u["unit"]))
     # Geübt werden Einheiten, nicht einzelne Seiten aus dem Unterricht (D100).
     # Ein Bündel, das nur eine Seitenzahl ist, steht für eine Heftseite, die
@@ -671,7 +710,7 @@ def units(account_id: int, subject: str) -> list[dict]:
     # Ein Bündel ohne Wörter, an dem auch nichts mehr zu lesen ist, hat keine
     # hergegeben — es gehört nicht in die Auswahl.
     offered = [u for u in offered if u["words"] or u["unread"]]
-    return sorted(offered, key=lambda u: (u["pages"][0]["page"] if u["pages"] and u["pages"][0]["page"] else 9999, u["unit"]))
+    return sorted(offered, key=lambda u: (u["order"], u["unit"]))
 
 
 def public_word(w: dict, state: dict | None = None) -> dict:
