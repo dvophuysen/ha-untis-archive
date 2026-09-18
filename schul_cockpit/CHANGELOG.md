@@ -1,3 +1,7 @@
+## 1.3.2
+
+- Fehler behoben: „Vocabulary" stand als eigener Abschnitt in der Wortliste. Das ist der Laufkopf, der über jeder Anhangseite steht — er sammelte Wörter ein, die zum Abschnitt davor gehören. Ebenso ein Abschnitt, der nur den Namen der Einheit wiederholt.
+
 ## 1.3.1
 
 - Die Vokabelliste wird jetzt so zerlegt, wie sie im Buch steht: Einheit und Abschnitt getrennt, und beides läuft über den Seitenwechsel weiter. Ein Abschnitt, der mitten auf einer Seite beginnt und erst auf der übernächsten endet, bleibt ein Abschnitt. Beginnt eine Seite ohne eigene Überschrift, gehört sie noch zum Abschnitt davor.

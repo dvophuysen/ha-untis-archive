@@ -600,3 +600,20 @@ def test_the_instruction_says_what_to_do_with_a_box():
     erfunden werden soll für ihn nichts (D115)."""
     assert "Kasten mit eigener Überschrift ist ein eigener Abschnitt" in vocab.EXTRACT
     assert "erfinde für ihn keinen Namen" in vocab.EXTRACT
+
+
+def test_the_running_head_of_an_appendix_page_is_not_a_section():
+    """Über jeder Anhangseite steht „Vocabulary" und der Name der Einheit. Als
+    Abschnitt gelesen sammelt der Laufkopf Wörter ein, die in Wahrheit zum
+    Abschnitt davor gehören — bei Josias Englisch stand „Vocabulary" als eigener
+    Abschnitt neben „Story" und „Check-out" (D115)."""
+    ws = [vocab.WordIn(foreign_word='a', meanings=['x'], unit='Unit 1', section='Vocabulary'),
+          vocab.WordIn(foreign_word='b', meanings=['x'], unit='Unit 1', section='Unit 1'),
+          vocab.WordIn(foreign_word='c', meanings=['x'], unit='V', section='Story'),
+          vocab.WordIn(foreign_word='d', meanings=['x'], unit='Unit 1', section='Station 1')]
+    a, b, c, d = vocab.tidy(ws)
+    assert (a.unit, a.section) == ('Unit 1', ''), 'der Laufkopf ist kein Abschnitt'
+    assert (b.unit, b.section) == ('Unit 1', ''), 'ein Abschnitt, der die Einheit wiederholt, ist keiner'
+    assert (c.unit, c.section) == ('', 'Story'), 'der Laufkopf ist auch keine Einheit'
+    assert (d.unit, d.section) == ('Unit 1', 'Station 1'), 'eine echte Überschrift bleibt'
+    assert 'Der Laufkopf einer Anhangseite ist keine Überschrift' in vocab.EXTRACT
