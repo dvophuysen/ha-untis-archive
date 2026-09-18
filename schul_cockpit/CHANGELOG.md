@@ -1,3 +1,9 @@
+## 1.4.1
+
+- Fehler behoben: In Englisch wurde „WB" nicht als Arbeitsheft erkannt. Eine solche Stelle erbte den zuletzt genannten Buchteil und stand als Schulbuchseite in der Liste.
+- „Voc." ist in den Fremdsprachen der Vokabelteil im Anhang des Schulbuchs. In Latein bleibt die Kurzform unbestimmt, weil der Wortschatz dort im Begleitband steht.
+- „pp. 216/7" heißt Seite 216 und 217 — die zweite Zahl ist die abgekürzte Folgeseite. Hinter „S. 60/1" steht dagegen weiterhin die Aufgabe, nicht die nächste Seite.
+
 ## 1.4.0
 
 - Der Vokabeltrainer kennt jetzt drei Ebenen: Einheit, Abschnitt und Themenkasten. Ein Kasten mit eigener Überschrift — „School" in „The new boy", „Feelings" in „Story" — ist ein eigenes Unterthema, steht aber unter seinem Abschnitt und nicht daneben. Ein Kasten direkt unter der Einheit, wie „Holiday words", ist weiterhin selbst ein Abschnitt.
