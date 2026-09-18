@@ -258,7 +258,8 @@ EXTRACT = (
     "Einheit, ohne dass ein Abschnitt offen ist, dann ist er selbst der Abschnitt („Holiday words“) und box bleibt "
     "leer. Ein Kasten ohne eigene Überschrift bekommt keinen Namen; seine Wörter gehören zu dem Abschnitt, unter "
     "dem er steht.\n"
-    "Du siehst immer nur diese eine Seite, die Liste läuft aber über den Seitenwechsel. Steht in "
+    "Du siehst immer nur diese eine Seite, die Liste läuft aber über den Seitenwechsel. Die Einheit liest du "
+    "immer von dieser Seite ab, nie aus dem Hinweis. Steht in "
     "offen_von_der_seite_davor ein Abschnitt, ist er auf dieser Seite noch offen, auch wenn seine Überschrift "
     "hier nirgends steht: Ein Kasten mit eigener Überschrift gehört dann in diesen Abschnitt — trag ihn in box "
     "ein und den Abschnitt aus offen_von_der_seite_davor in section, statt aus dem Kasten einen neuen Abschnitt "
@@ -279,7 +280,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 10
+EXTRACT_VERSION = 11
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -500,7 +501,26 @@ _JUST_A_NUMBER = re.compile(r"^(nr\.?\s*)?[a-z]?\s*\d{1,3}\s*[a-z]?[).]?$", re.I
 _RUNNING_HEAD = re.compile(r"^(v|voc|vocabulary|vocabulario|vocabulaire|wortschatz|lernwörter|lernwoerter|words)$", re.I)
 
 
-def tidy(words: list, open_unit: str = "", open_section: str = "") -> list:
+# Manche Anhangseiten tragen zwei Namen im Laufkopf: „Unit 1 / Media smart".
+# Gemeint ist der, unter dem die Wörter wirklich stehen (D130).
+_DOUBLE_HEAD = re.compile(r"\s*[/|·]\s*|\s+[–—]\s+")
+
+
+def split_head(unit: str, title: str = "") -> str:
+    """Aus einem doppelten Laufkopf den Teil nehmen, den die Seite selbst nennt.
+
+    Der Titel der Seite stammt aus dem Lesen des Bildes und sagt, worum es auf
+    ihr geht: „Media smart – Searching for information online". Passt einer der
+    beiden Teile dazu, ist er gemeint; sonst bleibt der Laufkopf, wie er ist."""
+    parts = [p.strip() for p in _DOUBLE_HEAD.split(unit or "") if p.strip()]
+    if len(parts) < 2 or not title:
+        return unit
+    flat = plain(title)
+    passend = [p for p in parts if plain(p) and plain(p) in flat]
+    return passend[-1] if len(passend) == 1 else unit
+
+
+def tidy(words: list, open_unit: str = "", open_section: str = "", title: str = "") -> list:
     """Die Felder in die Form bringen, auf die sich der Trainer verlässt.
 
     Modelle halten sich unterschiedlich streng an die Anweisung: Das eine trennt
@@ -512,7 +532,7 @@ def tidy(words: list, open_unit: str = "", open_section: str = "") -> list:
     part = (open_section or "").strip()
     here = (open_unit or "").strip()
     for w in words:
-        w.unit = clean_unit(w.unit)
+        w.unit = split_head(clean_unit(w.unit), title)
         w.section = clean_unit(w.section)
         # „la fruta:" und „la fruta" sind dieselbe Überschrift. Der Doppelpunkt
         # steht im Buch als Ankündigung der Liste, nicht als Teil des Namens;
@@ -593,12 +613,16 @@ async def read_words(account_id: int, row: dict, tier: str | None = None,
         images = []
     context = {"subject": row["subject_name"] or "", "page": row["source_page"],
                "text": (row["content_text"] or "")[:24000]}
-    if carry and any(carry):
-        context["offen_von_der_seite_davor"] = {"unit": carry[0], "section": carry[1], "box": carry[2]}
+    if carry and (carry[1] or carry[2]):
+        # Nur Abschnitt und Kasten. Die Einheit steht als Laufkopf auf der Seite
+        # selbst; sie im Hinweis mitzugeben hieß, dem Modell die Antwort
+        # vorzusagen — ein schwächeres schrieb sie ab, statt hinzusehen, und ein
+        # einziger Fehler wanderte so durch alle Folgeseiten (D130).
+        context["offen_von_der_seite_davor"] = {"section": carry[1], "box": carry[2]}
     raw, _, _ = await ai.complete(account_id, ai.VOCAB, EXTRACT + json.dumps(WordsOut.model_json_schema()),
                                   context, images=images, max_output=10000, tier=tier)
     offen = carry or ("", "", "")
-    return tidy(WordsOut.model_validate_json(raw).words, offen[0], offen[1])
+    return tidy(WordsOut.model_validate_json(raw).words, offen[0], offen[1], row.get("title") or "")
 
 
 async def compare(account_id: int, material_id: int, tiers: list[str]) -> dict:

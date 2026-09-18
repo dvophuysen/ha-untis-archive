@@ -707,7 +707,8 @@ def test_the_reading_is_told_which_section_is_still_open(setup):
     # Auf der ersten Seite ist noch nichts offen.
     assert gesehen[0] is None
     client.post(V + "/LATEIN/extract", json={"material_ids": [zweite]})
-    assert gesehen[1] == {"unit": "Lektion 1", "section": "A", "box": ""}
+    # Die Einheit steht auf der Seite selbst und gehört nicht in den Hinweis (D130).
+    assert gesehen[1] == {"section": "A", "box": ""}
     # Der Kasten der zweiten Seite hängt unter dem offenen Abschnitt, nicht daneben.
     units = client.get(V + "/LATEIN/units").json()["units"]
     lektion = next(u for u in units if u["unit"] == "Lektion 1")
@@ -853,3 +854,36 @@ def test_two_spellings_of_one_word_do_not_break_the_page(setup):
     with closing(db.webapp_conn()) as c:
         namen = sorted(x[0] for x in c.execute("SELECT foreign_word FROM vocab_words WHERE material_id=?", (mid,)))
     assert 'servus' in namen
+
+
+def test_the_unit_is_read_from_the_page_not_from_the_hint(setup):
+    """Der Hinweis auf die Vorseite trägt Abschnitt und Kasten, nicht die
+    Einheit. Sie steht als Laufkopf auf der Seite; sie mitzugeben hieß, dem
+    Modell die Antwort vorzusagen — ein schwächeres schrieb sie ab, und ein
+    einziger Fehler wanderte durch alle Folgeseiten (D130)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    erste = seed_page(page=10)
+    zweite = seed_page(page=11)
+    gesehen = []
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        gesehen.append(context.get("offen_von_der_seite_davor"))
+        return json.dumps({"words": [{**w, "unit": "Lektion 1", "section": "A"}
+                                     for w in WORDS["words"][:2]]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    client.post(V + "/LATEIN/extract", json={"material_ids": [erste]})
+    client.post(V + "/LATEIN/extract", json={"material_ids": [zweite]})
+    assert gesehen[1] == {"section": "A", "box": ""}, "die Einheit gehört nicht in den Hinweis"
+
+
+def test_a_double_running_head_is_resolved_by_the_page_itself():
+    """„Unit 1 / Media smart" steht über einer Anhangseite, gemeint ist der
+    Teil, unter dem die Wörter stehen. Der Titel der Seite sagt es (D130)."""
+    assert vocab.split_head('Unit 1 / Media smart', 'Media smart – Searching for information online') == 'Media smart'
+    assert vocab.split_head('Welcome back! / Unit 1', 'Welcome back! – Vocabulary') == 'Welcome back!'
+    # Ohne Anhaltspunkt wird nicht geraten.
+    assert vocab.split_head('Unit 1 / Media smart', '') == 'Unit 1 / Media smart'
+    assert vocab.split_head('Unit 1 / Media smart', 'Vocabulary') == 'Unit 1 / Media smart'
+    # Ein einfacher Laufkopf bleibt unangetastet, auch mit Bindestrich im Namen.
+    assert vocab.split_head('Across cultures 1', 'Vocabulary: Across cultures') == 'Across cultures 1'
