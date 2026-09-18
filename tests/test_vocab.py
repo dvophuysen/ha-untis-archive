@@ -591,3 +591,12 @@ def test_a_section_runs_across_the_page_break_and_keeps_the_book_order(setup):
     # Wörter beider Seiten plus den Rest der Seite davor.
     assert [(s["section"], s["words"]) for s in unit["sections"]] == [
         ("Station 3", 1), ("Story", 4), ("Check-out", 1)]
+
+
+def test_the_instruction_says_what_to_do_with_a_box():
+    """Ein Kasten mit eigener Überschrift ist ein eigener Abschnitt („Holiday
+    words"), einer ohne gehört zu dem Abschnitt, unter dem er steht. Der Nutzer
+    nimmt die Zusammenlegung eines namenlosen Kastens ausdrücklich in Kauf;
+    erfunden werden soll für ihn nichts (D115)."""
+    assert "Kasten mit eigener Überschrift ist ein eigener Abschnitt" in vocab.EXTRACT
+    assert "erfinde für ihn keinen Namen" in vocab.EXTRACT

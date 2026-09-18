@@ -246,6 +246,8 @@ EXTRACT = (
     "section ist die Zwischenüberschrift innerhalb der Einheit: „The new boy“, „Station 1“, „Story“, "
     "„Check-out“, „Holiday words“, „How were your summer holidays?“, „Texto A“. Eine solche Überschrift kann "
     "mitten auf der Seite beginnen; alle Wörter darunter gehören dazu.\n"
+    "Ein Kasten mit eigener Überschrift ist ein eigener Abschnitt („Holiday words“). Ein Kasten ohne eigene "
+    "Überschrift gehört zu dem Abschnitt, unter dem er steht — erfinde für ihn keinen Namen.\n"
     "Beide Überschriften gelten weiter, bis eine neue kommt — auch über den Seitenwechsel hinweg. Beginnt die "
     "Seite ohne neue Überschrift, gehören ihre ersten Wörter noch zur Einheit und zum Abschnitt der Seite "
     "davor; dann lass die Felder leer, die App setzt sie fort. Steht nirgends eine Überschrift, lass beide "
@@ -257,7 +259,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 3
+EXTRACT_VERSION = 4
 
 
 def looks_like_vocab(row: dict) -> bool:
