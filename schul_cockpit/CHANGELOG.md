@@ -1,3 +1,8 @@
+## 1.2.0
+
+- Fehler behoben: Der Seitenabruf stand still und sah dabei nur langsam aus. Eine Browsersitzung schafft rund neun Seiten, ein Lauf bestellte aber bis zu vierzig. Jede Seite, die die Sitzung zeitlich nicht mehr erreichte, wurde als Fehlversuch gezählt — nach drei Läufen galt sie als aussichtslos und wurde nie wieder geholt, stand in der Bilanz aber weiter als offen. Zuletzt holten acht Läufe hintereinander keine einzige Seite mehr.
+- Ein Lauf bestellt jetzt höchstens so viele Seiten, wie eine Sitzung schafft; was sie nicht erreicht, wartet auf die nächste Runde statt Versuche zu verbrauchen. Seiten, die auf diese Weise ausgeschieden waren, bekommen ihre Versuche einmalig zurück.
+
 ## 1.1.7
 
 - Englische Units werden richtig gebündelt. Die Wortliste von Green Line überschreibt ihre Units nur mit „1", „2", „3", während das Inhaltsverzeichnis „Unit 1 On the move" sagt — im Trainer standen sie dadurch getrennt. Eine bloße Nummer gehört jetzt zur nummerierten Reihe des Fachs; die eigenen Reihen des Buchs wie „Text smart" und „Across cultures" bleiben eigene Bündel.

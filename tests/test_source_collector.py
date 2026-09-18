@@ -271,3 +271,36 @@ def test_pages_of_open_homework_and_exam_subjects_come_first(env):
     priority = {"homework_pages": set(), "exam_subjects": {"spanisch"}}
     groups = collector.wanted_pages(1, priority)
     assert groups[0]["subject"] == "SPANISCH" and groups[0]["order"][0] in (50, 70)
+
+
+async def test_pages_the_session_never_reached_keep_their_attempts(env, monkeypatch):
+    """Eine Browsersitzung hat ein Zeitbudget. Was sie nicht mehr geschafft hat,
+    darf nicht als Fehlversuch der Seite zählen: Sonst verbraucht eine große
+    Bestellung die drei Versuche der hinteren Seiten, ohne dass sie je geöffnet
+    wurden, und sie werden nie wieder geholt. Genau daran stand der Abruf der
+    englischen Vokabelseiten still, während die Bilanz sie als offen führte (D112)."""
+    history(homework=[(1, 'SN', 'libro p. 50, 51, 52', '2026-09-10')])
+    shelf()
+    calls = []
+
+    async def capture(portal, user, password, title, pages, launch_url=None, survey=False, budget=240.0):
+        calls.append(list(pages))
+        # Nur die erste Seite schafft die Sitzung, dann ist die Zeit um.
+        return CaptureResult(shots=[PageShot(pages[0], png(pages[0]))], note="Zeitbudget erreicht")
+    monkeypatch.setattr(ctx, "capture_pages", capture)
+    fake_analysis(monkeypatch)
+    summary = await collector.collect(1)
+    assert summary["deferred"] == 2 and summary["failed"] == 0
+    with closing(db.webapp_conn()) as conn:
+        attempts = {r["page"]: r["attempts"] for r in conn.execute(
+            "SELECT page,attempts FROM source_links WHERE account_id=1 AND page IN (50,51,52)")}
+    assert attempts == {50: 0, 51: 0, 52: 0}, attempts
+    # Eine Sitzung bestellt nicht mehr, als sie schafft.
+    assert all(len(c) <= collector.PAGES_PER_SESSION for c in calls), calls
+    # Eine Seite, die der Viewer wirklich nicht liefert, zählt weiterhin.
+    async def empty(portal, user, password, title, pages, launch_url=None, survey=False, budget=240.0):
+        return CaptureResult(shots=[], note="")
+    monkeypatch.setattr(ctx, "capture_pages", empty)
+    await collector.collect(1)
+    with closing(db.webapp_conn()) as conn:
+        assert conn.execute("SELECT MAX(attempts) FROM source_links WHERE account_id=1").fetchone()[0] >= 1

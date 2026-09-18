@@ -970,6 +970,13 @@ _MIGRATIONS.append(("textbook_access_toc_version",
                     "ALTER TABLE digital_textbook_access ADD COLUMN toc_version INTEGER NOT NULL DEFAULT 0"))
 
 
+# Einmalige Reparatur: Seiten, deren Versuche nur deshalb aufgebraucht waren,
+# weil eine Sitzung ihr Zeitbudget erreichte, bevor sie an die Reihe kamen. Sie
+# wurden nie wieder geholt, standen aber weiter als offen in der Bilanz (D112).
+_MIGRATIONS.append(("source_links_reset_attempts_d112",
+                    "UPDATE source_links SET attempts=0 WHERE status='pending' AND attempts>0"))
+
+
 def init_webapp_db() -> None:
     """Apply base schema + pending migrations (idempotent)."""
     schema_sql = _SCHEMA_FILE.read_text()
