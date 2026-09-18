@@ -15,6 +15,7 @@ import subprocess
 from contextlib import closing
 from datetime import datetime, timezone
 
+from . import proofread
 from .db import webapp_conn
 
 _LOGGER = logging.getLogger("schul_cockpit.materials")
@@ -270,6 +271,23 @@ REVIEW_KINDS = ("exam_notice", "toc")
 REVIEW_CONFIDENCE = 0.7
 
 
+def doubts_of(row) -> list[dict]:
+    """Die Zweifelsstellen einer Lesung, ob als JSON in der Zeile oder schon
+    ausgelesen in einem fertigen Eintrag."""
+    keys = row.keys() if hasattr(row, "keys") else row
+    if "doubts" not in keys:
+        return []
+    found = row["doubts"]
+    if isinstance(found, str):
+        try:
+            found = json.loads(found or "[]")
+        except ValueError:
+            return []
+    if not isinstance(found, list):
+        return []
+    return [d for d in found if isinstance(d, dict) and (d.get("text") or "").strip()]
+
+
 def needs_review(row) -> bool:
     keys = row.keys() if hasattr(row, "keys") else row
     if (row["origin"] if "origin" in keys else "") == "book_fetch":
@@ -278,12 +296,16 @@ def needs_review(row) -> bool:
         return False
     if row["kind"] in REVIEW_KINDS:
         return True
-    # Handschrift immer gegenlesen: Eine 1 wird zur 7, egal wie sicher sich das
-    # Modell fühlt (D77). Dass eine im Heft gedruckte Musterlösung in
-    # Schreibschrift keinen Blick kostet, regelt die Lesung selbst: Für sie
-    # bleibt handwritten false (D98). Hat das Kind geschrieben, zählt das auch
-    # dann, wenn die Lesung die Handschrift nicht als solche gemeldet hat.
-    if ("handwritten" in keys and row["handwritten"]) or ("pupil_entries" in keys and row["pupil_entries"]):
+    # Gegengelesen wird, wo die Lesung unsicher ist, nicht wo Handschrift steht
+    # (D118). Handschrift allein verlangte bisher immer einen Blick (D77); bei
+    # einer Arbeitsheftseite mit drei eingetragenen Brüchen unter sechzig Zeilen
+    # führte das zum Bestätigen ohne Hinsehen. Eine sauber gelesene Eintragung
+    # kostet jetzt keinen Blick mehr, eine unleserliche Stelle schon: Sie ist
+    # das Eingeständnis, nicht gelesen zu haben.
+    if doubts_of(row):
+        return True
+    text = row["content_text"] if "content_text" in keys else ""
+    if proofread.UNREADABLE.search(text or ""):
         return True
     confidence = row["confidence"] if "confidence" in keys else None
     return confidence is not None and confidence < REVIEW_CONFIDENCE
@@ -299,10 +321,27 @@ def _public(row, with_links=None) -> dict:
     keys = row.keys()
     if "content_text" in keys:
         result["printed_text"] = printed_only(row["content_text"])
+    # Was gegenzulesen ist, kommt fertig gekürzt aus dem Backend: die
+    # Zweifelsstellen mit einer Zeile Zusammenhang, dazwischen die Lücke (D118).
+    if "doubts" in keys:
+        result["doubts"] = doubts_of(row)
+    if result["needs_review"] and "content_text" in keys:
+        result["review"] = proofread.view(row["content_text"] or "", result.get("doubts") or [])
     result["blurry"] = bool("sharpness" in keys and row["sharpness"] is not None and row["sharpness"] < BLURRY_BELOW)
     if with_links is not None:
         result["links"] = with_links
     return result
+
+
+def call_for_review(item: dict) -> dict:
+    """Ein Material nachträglich zum Gegenlesen stellen. Die Plausibilitäts-
+    prüfung kennt den Unterricht und sieht damit Zweifel, die der Lesung allein
+    entgehen: eine Seitenzahl, die es im Fach nie gab (D79)."""
+    item["needs_review"] = True
+    item.setdefault("doubts", [])
+    if "review" not in item:
+        item["review"] = proofread.view(item.get("content_text") or "", item["doubts"])
+    return item
 
 
 def listing(account_id: int, *, subject: str | None = None, kind: str | None = None,
@@ -343,7 +382,11 @@ def listing(account_id: int, *, subject: str | None = None, kind: str | None = N
             "captured_at,created_by,filename,mime_type,page_count,verified,contains_solutions,hidden,"
             "locked_fields,analysis_state,analysis_model,analysis_version,analyzed_at,analysis_error,"
             "confidence,created_at,updated_at,origin,source_book,source_page,source_label,printed_pages,page_type,handwritten,"
-            "CASE WHEN verified=0 AND (kind IN ('exam_notice','notes') OR handwritten=1) THEN content_text ELSE '' END AS content_text, "
+            "pupil_entries,doubts,"
+            # Der gelesene Text gehört in die Liste, wo er gegengelesen werden
+            # soll — sonst hätte die Karte nichts zu zeigen.
+            "CASE WHEN verified=0 AND (kind IN ('exam_notice','notes','toc') OR handwritten=1 OR pupil_entries=1 "
+            "OR COALESCE(doubts,'') NOT IN ('','[]')) THEN content_text ELSE '' END AS content_text, "
             "length(file_bytes) AS file_size "
             "FROM materials WHERE " + " AND ".join(where) +
             " ORDER BY COALESCE(document_date,substr(created_at,1,10)) DESC, id DESC LIMIT ? OFFSET ?",

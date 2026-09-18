@@ -39,6 +39,9 @@
   let picker = $state(null);
   let ledger = $state(null);
   let camera = $state(null);
+  // Welches Foto gerade groß ist und wo der ganze Text statt des Auszugs steht.
+  let big = $state(null);
+  let whole = $state(new Set());
   let timer = null;
 
   const base = $derived(`/api/accounts/${accountId}/materials`);
@@ -466,11 +469,45 @@
 {#if data?.can_manage && (data.materials ?? []).some((m) => m.needs_review)}
   <div class="card review">
     <strong>Bitte gegenlesen</strong>
-    <p class="lead">Aus diesen Lesungen leite ich Stellen oder Kapitel ab. Handschrift lese ich nicht sicher; ein Blick genügt.</p>
+    <p class="lead">Gezeigt wird nur, wo ich beim Lesen unsicher war — <mark>markiert</mark>, mit einer Zeile Zusammenhang.
+      Sauber Gelesenes steht nicht hier. Themenlisten und Inhaltsverzeichnisse zeige ich immer, weil daraus Stellen und Kapitel entstehen.</p>
     {#each (data.materials ?? []).filter((m) => m.needs_review && m.kind !== 'toc') as m (m.id)}
       <div class="review-item">
         <div><strong>{m.title || 'Ohne Titel'}</strong> <small class="muted">· {KIND_NAMES[m.kind] ?? m.kind}{m.subject_name ? ` · ${subjectStyle(m.subject_name).name}` : ''}{m.source_label ? ` · ${m.source_label}` : ''}</small></div>
-        <p class="preserve">{m.content_text || m.summary || '(kein Text erkannt)'}</p>
+        <!-- Ohne die Quelle daneben lässt sich nichts gegenlesen. Ein Tipp aufs
+             Foto macht es groß, ein zweiter wieder klein. -->
+        {#if m.mime_type?.startsWith('image/')}
+          <button class="shot" class:big={big === m.id} onclick={() => (big = big === m.id ? null : m.id)}>
+            <img src={`.${base}/${m.id}/file`} alt="Foto der Seite" loading="lazy" />
+            <span class="hint">{big === m.id ? 'kleiner' : 'größer'}</span>
+          </button>
+        {:else if m.filename}
+          <a href={`.${base}/${m.id}/file`} target="_blank" rel="noreferrer">{m.filename} öffnen</a>
+        {/if}
+        <!-- Gezeigt wird, was zu prüfen ist: die unsicheren Stellen mit einer
+             Zeile Zusammenhang. Der Rest steht auf Tipp bereit (D118). -->
+        {#if m.review?.segments?.length && !whole.has(m.id)}
+          <p class="preserve reading">{#each m.review.segments as seg, i (i)}{#if seg.kind === 'gap'}<button class="gap" onclick={() => (whole = new Set([...whole, m.id]))}>[…] {seg.lines} Zeilen</button>{:else if seg.kind === 'mark'}<mark class:flagged={seg.source === 'read'} title={seg.reason}>{seg.text}</mark>{:else}{seg.text}{/if}{/each}</p>
+        {:else}
+          <p class="preserve reading">{m.content_text || m.summary || '(kein Text erkannt)'}</p>
+        {/if}
+        {#if m.review?.shortened && !whole.has(m.id)}
+          <button class="quiet" onclick={() => (whole = new Set([...whole, m.id]))}>Ganzen Text zeigen</button>
+        {/if}
+        <!-- Was die Lesung selbst gemeldet hat: hier steht der Vorschlag zum
+             Antippen, statt dass jemand jedes Zeichen vergleicht. -->
+        {#each m.doubts ?? [] as d (d.text)}
+          <div class="doubt-row">
+            <span>⚠ „{d.text}“{d.reason ? ` · ${d.reason}` : ''}</span>
+            {#if d.alternative}
+              <button class="quiet" disabled={busy} onclick={() => act(async () => { await api.post(`${base}/${m.id}/doubts/resolve`, { text: d.text, replace: d.alternative }); message = `Gelesen als „${d.alternative}“.`; await load(); })}>Heißt „{d.alternative}“</button>
+            {/if}
+            <button class="quiet" disabled={busy} onclick={() => act(async () => { await api.post(`${base}/${m.id}/doubts/resolve`, { text: d.text, replace: null }); await load(); })}>Stimmt so</button>
+          </div>
+        {/each}
+        {#each m.review?.loose ?? [] as d (d.text)}
+          <p class="muted">⚠ Unsicher gelesen: „{d.text}“{d.reason ? ` · ${d.reason}` : ''} — die Stelle steht nicht mehr so im Text.</p>
+        {/each}
         {#if m.plausibility?.checked}
           {#if m.plausibility.unknown.length}
             <!-- Handschrift: die 1 dieses Kindes sieht aus wie eine 7. Der Unterricht kennt die richtigen Stellen. -->
@@ -501,6 +538,14 @@
     {#each tocGroups as group (group.key)}
       <div class="review-item">
         <div><strong>Inhaltsverzeichnis {group.label}</strong> <small class="muted">· {subjectStyle(group.subject).name} · {group.items.length} {group.items.length === 1 ? 'Foto' : 'Fotos'}</small></div>
+        <div class="shots">
+          {#each group.items.filter((i) => i.mime_type?.startsWith('image/')) as i (i.id)}
+            <button class="shot" class:big={big === i.id} onclick={() => (big = big === i.id ? null : i.id)}>
+              <img src={`.${base}/${i.id}/file`} alt="Foto des Verzeichnisses" loading="lazy" />
+              <span class="hint">{big === i.id ? 'kleiner' : 'größer'}</span>
+            </button>
+          {/each}
+        </div>
         {#if group.book}
           <p class="muted">Gelesen: {group.book.units.filter((u) => u.kind === 'chapter').length} Kapitel. Stimmen die Anfangsseiten? Unten bei den Büchern lässt sich jede Seite berichtigen.</p>
         {:else}
@@ -860,6 +905,20 @@
   .units input{width:4.5rem;min-height:36px}
   .review-item{border-top:1px solid var(--border);padding:8px 0}
   .review-item .preserve{white-space:pre-wrap;margin:4px 0 8px}
+  /* Das Foto der Seite: klein als Beleg, auf Tipp so groß wie der Platz hergibt. */
+  .shot{display:block;padding:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:none;position:relative;margin:6px 0}
+  .shot img{display:block;width:100%;max-height:11rem;object-fit:cover;object-position:top}
+  .shot.big img{max-height:none;object-fit:contain}
+  .shot .hint{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.62);color:#fff;border-radius:6px;padding:2px 8px;font-size:0.78rem}
+  .shots{display:flex;flex-wrap:wrap;gap:8px}
+  .shots .shot{flex:1 1 9rem;max-width:100%}
+  /* Der Auszug: die unsichere Stelle fällt ins Auge, die Lücke ist antippbar. */
+  .reading mark{background:var(--warm-soft,#ffe9c2);color:inherit;border-radius:4px;padding:0 2px}
+  .reading mark.flagged{background:var(--rating-1-soft,#ffd4d4);box-shadow:inset 0 -2px 0 var(--rating-1)}
+  .reading .gap{display:inline;padding:0 6px;min-height:0;border:1px dashed var(--border);border-radius:6px;background:none;color:var(--fg-muted);font-size:0.85rem}
+  .doubt-row{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:2px 0 6px;font-size:0.9rem}
+  .doubt-row>span{color:var(--rating-1);font-weight:600}
+  .doubt-row button{min-height:36px;padding:4px 10px}
   .options label{display:grid;gap:2px;font-size:0.85rem;color:var(--fg-muted)}
   .options select,.options input{min-height:40px}
   .options input[type=number]{width:7rem}

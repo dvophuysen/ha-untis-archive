@@ -27,8 +27,17 @@ _LOGGER = logging.getLogger("schul_cockpit.materials")
 # run picks up everything that was filed under the older rules. Abgerufene
 # Buchseiten bleiben davon ausgenommen: ihre Felder haben sich nicht geändert,
 # und 84 Seiten neu zu lesen kostete rund elf Euro.
-ANALYSIS_VERSION = 3
+ANALYSIS_VERSION = 4
 PAGE_TYPES = ("text", "table", "handwriting", "figure", "formula", "mixed")
+
+
+class Doubt(InputModel):
+    """Eine Stelle, bei der die Lesung selbst unsicher ist (D118). `text` ist
+    die gelesene Stelle wortgetreu, damit sie im content_text wiederzufinden
+    ist; `alternative` die andere Lesart, wenn es eine gibt."""
+    text: str = Field(default="", max_length=120)
+    alternative: str = Field(default="", max_length=120)
+    reason: str = Field(default="", max_length=120)
 
 
 class Insight(InputModel):
@@ -61,6 +70,8 @@ class Insight(InputModel):
     # die am besten passt, und warum. Ein Vorschlag zum Antippen, keine Bindung (D85).
     sheet_candidate: int = Field(default=0, ge=0, le=9)
     sheet_reason: str = Field(default="", max_length=200)
+    # Wo die Lesung unsicher war: steuert allein, ob jemand gegenlesen muss (D118).
+    doubts: list[Doubt] = Field(default_factory=list, max_length=12)
 
 
 INSTRUCTION = (
@@ -124,6 +135,16 @@ INSTRUCTION = (
     "Überschrift, Aufgabennummern oder ein aufgedrucktes Datum. Ein aufgedrucktes Ausgabedatum wiegt am schwersten. "
     "Findest du keinen belastbaren Beleg, bleibt sheet_candidate 0; rate nicht nach Datumsnähe, das kann die App selbst. "
     "Die Zuordnung trifft ein Mensch mit einem Tipp, du bereitest sie nur vor.\n"
+    "doubts sind die Stellen, an denen du dir beim Lesen nicht sicher warst. Nur sie kosten einen Menschen "
+    "einen Blick, also melde sie ernsthaft und sparsam. text ist die unsichere Stelle wortgetreu so, wie du sie "
+    "in content_text geschrieben hast, mit so viel Umgebung, dass sie dort eindeutig wiederzufinden ist; "
+    "alternative die andere Lesart, wenn es eine plausible gibt, sonst leer; reason in wenigen Worten, warum. "
+    "Hinein gehören: handschriftliche Ziffern, die sich ähneln (1 und 7, 0 und 6, 4 und 9), Einzelbuchstaben und "
+    "Abkürzungen in Handschrift, Überschriebenes, Verblasstes oder Angeschnittenes, und jede Stelle, die du mit "
+    "[…] als unleserlich gekennzeichnet hast. Nicht hinein gehört sauber und eindeutig lesbare Handschrift, "
+    "nur weil sie Handschrift ist: Dann ist die Lesung sicher und niemand muss sie nachprüfen. Ebenso wenig "
+    "gedruckter Text, es sei denn, er ist beschädigt oder verdeckt. Ist dir eine ganze Seite unsicher, sind es "
+    "trotzdem einzelne Stellen, nicht die Seite.\n"
     "JSON-Schema: "
 )
 
@@ -287,6 +308,11 @@ def _apply(conn, account_id: int, row, insight: Insight, tier_used: str | None =
     else:
         values["sheet_hint"] = None
     values["pupil_entries"] = int(insight.pupil_entries)
+    # Die Zweifelsstellen der Lesung. Eine Stelle, die im gelesenen Text gar
+    # nicht vorkommt, hilft niemandem beim Suchen und fällt hier weg.
+    doubts = [d.model_dump() for d in insight.doubts if (d.text or "").strip()]
+    if "content_text" not in locked:
+        values["doubts"] = json.dumps(doubts, ensure_ascii=False) if doubts else ""
     values.update(
         analysis_state="ready",
         analysis_model=ai.model_name(tier_used or ai.tier_for(_purpose(row))),
