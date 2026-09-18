@@ -712,3 +712,32 @@ def test_the_reading_is_told_which_section_is_still_open(setup):
     units = client.get(V + "/LATEIN/units").json()["units"]
     lektion = next(u for u in units if u["unit"] == "Lektion 1")
     assert [(s["section"], [b["box"] for b in s["boxes"]]) for s in lektion["sections"]] == [("A", ["Tiere"])]
+
+
+def test_rereading_a_page_clears_what_the_old_reading_left_behind(setup):
+    """Ein Wort, das die neue Lesung nicht mehr nennt, gehört nicht mehr zur
+    Seite. Blieb es stehen, bildete es mit seiner alten Gliederung einen zweiten
+    Abschnitt neben dem berichtigten — „School" mit einem Wort neben „School"
+    mit fünfundzwanzig (D122)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    mid = seed_page()
+    stand = {"n": 0}
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        stand["n"] += 1
+        if stand["n"] == 1:
+            return json.dumps({"words": [{**w, "unit": "Lektion 1", "section": "Kasten"}
+                                         for w in WORDS["words"][:3]]}), {}, "fake"
+        return json.dumps({"words": [{**w, "unit": "Lektion 1", "section": "A"}
+                                     for w in WORDS["words"][:2]]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
+    assert [s["section"] for s in client.get(V + "/LATEIN/units").json()["units"][0]["sections"]] == ["Kasten"]
+    # Denselben Text noch einmal lesen: Die Seite trägt danach nur noch, was die
+    # neue Lesung nennt.
+    patch.setattr(vocab, "EXTRACT_VERSION", vocab.EXTRACT_VERSION + 1)
+    client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
+    unit = client.get(V + "/LATEIN/units").json()["units"][0]
+    assert [s["section"] for s in unit["sections"]] == ["A"]
+    assert unit["words"] == 2
