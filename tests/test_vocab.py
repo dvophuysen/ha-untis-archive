@@ -816,3 +816,17 @@ def test_a_reread_never_costs_a_learned_word_its_history(setup):
     assert versuche == {ids["servus"], ids["esse"]}
     # Das ungeübte, nicht mehr genannte Wort ist weg.
     assert "cōgitāre" not in rows
+
+
+def test_an_exercise_number_is_no_heading():
+    """Das kleine Modell machte aus der Aufgabennummer „5" einen Abschnitt und
+    nahm „Holiday words" damit ein Wort weg. Bei der Einheit bleibt eine bloße
+    Nummer dagegen gültig: Die Wortliste von Green Line überschreibt ihre Units
+    nur mit „1", „2", „3" (D110, D128)."""
+    nummer, mit_text, einheit = vocab.tidy([
+        vocab.WordIn(foreign_word='a', meanings=['x'], unit='Welcome back!', section='5'),
+        vocab.WordIn(foreign_word='b', meanings=['x'], unit='Welcome back!', section='Holiday words', box='2a'),
+        vocab.WordIn(foreign_word='c', meanings=['x'], unit='3', section='Station 1')])
+    assert nummer.section == ''
+    assert mit_text.section == 'Holiday words' and mit_text.box == ''
+    assert einheit.unit == '3' and einheit.section == 'Station 1'

@@ -1,3 +1,8 @@
+## 1.7.1
+
+- Die Vokabellisten werden vom kleinen Modell gelesen. Es findet dieselben Wörter und gliedert sie richtig; die Seiten werden dafür einmal neu gelesen.
+- Fehler behoben: Eine Aufgabennummer wie „5" wurde als eigener Abschnitt in die Vokabelliste übernommen und nahm dem Abschnitt daneben ein Wort weg.
+
 ## 1.7.0
 
 - Eine Übungsaufgabe bringt jetzt mit, woran gearbeitet wird: der Textabschnitt, die Tabelle, die Gleichung stehen in der Aufgabe selbst. „Lies Seite 15, Zeile 3–6" schickt niemanden mehr auf Material, das er nicht vor sich hat.
