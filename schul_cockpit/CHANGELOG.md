@@ -1,3 +1,11 @@
+## 1.6.0
+
+- Die Kontrolle einer Hausaufgabe sucht die Bearbeitung jetzt selbst. Liegt die bearbeitete Seite schon eingelesen vor, zeigt der Mentor sie und fragt kurz, ob das der neueste Stand ist — statt immer ein Foto zu verlangen. „Ja" prüft sie und bindet sie an die Hausaufgabe, „Nein" bittet um ein neues Foto.
+- Geprüft wird dann die Seite selbst, nicht ihre Abschrift: Das Foto geht mit, dazu getrennt die gedruckte Seite und die Eintragungen des Kindes.
+- Ein geübtes Wort geht beim Neulesen einer Vokabelseite nie verloren. Die Liste neu zu ordnen kostet keinen Lernstand mehr, und dieselbe Vokabel in neuer Schreibweise behält ihren Verlauf.
+- Fehler behoben: Ein Themenkasten stand zweimal in der Vokabelliste, einmal mit und einmal ohne Doppelpunkt hinter der Überschrift.
+- Fehler behoben: Lief ein Kasten über den Seitenrand, stand er auf der Folgeseite noch einmal als eigener Abschnitt.
+
 ## 1.5.8
 
 - Fehler behoben: Beim Neulesen einer Vokabelseite blieben Wörter der alten Lesung stehen. Sie bildeten mit ihrer alten Zuordnung einen zweiten, fast leeren Abschnitt neben dem richtigen.
