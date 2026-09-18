@@ -51,9 +51,7 @@ def test_a_reported_doubt_carries_its_suggestion_to_the_same_spot():
     view = proofread.view(SEITE, [{"text": "[Kind: 1 4/9]", "alternative": "[Kind: 1 4/3]",
                                    "reason": "9 oder 3"}])
     marken = [s for s in view["segments"] if s["kind"] == "mark"]
-    assert len(marken) == 3
-    mit_vorschlag = [s for s in marken if s["suggest"]]
-    assert [(s["text"], s["suggest"], s["reason"]) for s in mit_vorschlag] == [
+    assert [(s["text"], s["suggest"], s["reason"]) for s in marken] == [
         ("[Kind: 1 4/9]", "[Kind: 1 4/3]", "9 oder 3")]
     # Eine gemeldete Stelle, die im Text nicht steht, hilft beim Suchen nicht
     # und wird gesondert genannt, statt stillschweigend zu verschwinden.
@@ -88,3 +86,22 @@ def test_a_correction_replaces_exactly_the_one_spot():
     assert proofread.resolve("Voc. pp.\n216/7", "Voc. pp. 216/7", "Voc. pp. 216/8") == "Voc. pp. 216/8"
     # Was nicht mehr dasteht, wird nicht geraten.
     assert proofread.resolve(text, "gibt es nicht", "x") is None
+
+
+def test_what_the_reading_was_sure_of_may_disappear_into_the_gap():
+    """Sagt die Lesung, wo sie unsicher war, bestimmen nur diese Stellen den
+    Ausschnitt. Eine sicher gelesene Eintragung ist dann eine eindeutige
+    Passage; sie bleibt markiert, wo sie ohnehin zu sehen ist, hält aber keine
+    Zeile mehr offen."""
+    view = proofread.view(SEITE, [{"text": "[Kind: 3 2/8]", "alternative": "[Kind: 3 2/3]",
+                                   "reason": "8 oder 3"}])
+    gezeigt = text_of(view["segments"])
+    assert "[Kind: 3 2/8]" in gezeigt
+    # Die beiden sicher gelesenen Eintragungen weiter oben tragen den Ausschnitt
+    # nicht mehr; die erste liegt jetzt in der Lücke.
+    assert "[Kind: 6/7]" not in gezeigt
+    assert sum(s["lines"] for s in view["segments"] if s["kind"] == "gap") > 10
+    # Markiert bleibt trotzdem jede Eintragung, die in den gezeigten Zeilen steht.
+    eng = "a) ___ [Kind: 1]\nb) ___ [Kind: 7]\nc) weit weg\nd) weit weg\ne) weit weg\nf) ___ [Kind: 9]"
+    nah = proofread.view(eng, [{"text": "[Kind: 1]", "alternative": "[Kind: 7]", "reason": "1 oder 7"}])
+    assert [s["text"] for s in nah["segments"] if s["kind"] == "mark"] == ["[Kind: 1]", "[Kind: 7]"]

@@ -1,3 +1,7 @@
+## 1.5.3
+
+- Der Auszug richtet sich jetzt nach den Stellen, bei denen ich unsicher war. Was ich sicher gelesen habe, darf in der Lücke verschwinden — auf einer ganz ausgefüllten Heftseite war sonst wieder fast alles zu sehen. Markiert bleibt es, wo es ohnehin dasteht.
+
 ## 1.5.2
 
 - Fehler behoben: Eine lange Lesung wurde nach 90 Sekunden abgeschnitten. Die Wartezeit richtet sich jetzt danach, wie viel zu schreiben ist.
