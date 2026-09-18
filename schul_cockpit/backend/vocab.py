@@ -246,6 +246,8 @@ EXTRACT = (
     "section ist die Zwischenüberschrift innerhalb der Einheit: „The new boy“, „Station 1“, „Story“, "
     "„Check-out“, „Holiday words“, „How were your summer holidays?“, „Texto A“. Eine solche Überschrift kann "
     "mitten auf der Seite beginnen; alle Wörter darunter gehören dazu.\n"
+    "Der Laufkopf einer Anhangseite ist keine Überschrift: „Vocabulary“, „V“, „Wortschatz“, „Vocabulario“ und der "
+    "oben wiederholte Name der Einheit stehen auf jeder Seite und sind weder unit noch section.\n"
     "Ein Kasten mit eigener Überschrift ist ein eigener Abschnitt („Holiday words“). Ein Kasten ohne eigene "
     "Überschrift gehört zu dem Abschnitt, unter dem er steht — erfinde für ihn keinen Namen.\n"
     "Beide Überschriften gelten weiter, bis eine neue kommt — auch über den Seitenwechsel hinweg. Beginnt die "
@@ -259,7 +261,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 4
+EXTRACT_VERSION = 5
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -471,6 +473,12 @@ def split_mark(word: str) -> tuple[str, str]:
     return word, ""
 
 
+# Was oben auf jeder Anhangseite steht und keine Überschrift ist: „Vocabulary",
+# „V", „Wortschatz". Als Abschnitt gelesen sammelt der Laufkopf Wörter ein, die
+# in Wahrheit zum Abschnitt davor gehören (D115).
+_RUNNING_HEAD = re.compile(r"^(v|voc|vocabulary|vocabulario|vocabulaire|wortschatz|lernwörter|lernwoerter|words)$", re.I)
+
+
 def tidy(words: list) -> list:
     """Die Felder in die Form bringen, auf die sich der Trainer verlässt.
 
@@ -480,6 +488,12 @@ def tidy(words: list) -> list:
     for w in words:
         w.unit = clean_unit(w.unit)
         w.section = clean_unit(w.section)
+        # Der Laufkopf ist kein Abschnitt, und ein Abschnitt, der nur die
+        # Einheit wiederholt, ist auch keiner.
+        if _RUNNING_HEAD.match(w.section.strip()) or plain(w.section) == plain(w.unit):
+            w.section = ""
+        if _RUNNING_HEAD.match(w.unit.strip()):
+            w.unit = ""
         core, mark = split_mark(w.foreign_word)
         if mark:
             w.foreign_word = core
