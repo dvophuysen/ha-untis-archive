@@ -42,6 +42,12 @@
   // Welches Foto gerade groß ist und wo der ganze Text statt des Auszugs steht.
   let big = $state(null);
   let whole = $state(new Set());
+  // Was in den Eingabefeldern der Zweifelsstellen steht. Vorbelegt ist der
+  // Vorschlag der Lesung, sonst das Gelesene: Beides lässt sich überschreiben,
+  // ohne dafür das große Korrekturformular zu öffnen.
+  let edits = $state({});
+  const doubtKey = (id, d) => `${id}\u0000${d.text}`;
+  const draft = (id, d) => edits[doubtKey(id, d)] ?? (d.alternative || d.text);
   let timer = null;
 
   const base = $derived(`/api/accounts/${accountId}/materials`);
@@ -372,7 +378,7 @@
   }
   function firstPage(m) { return pagesOf(m)[0] ?? Infinity; }
 
-  async function show(m) {
+  async function show(m, jump = false) {
     open = await api.get(`${base}/${m.id}`);
     form = data.can_manage
       ? {
@@ -388,6 +394,9 @@
           pages: pagesOf(open).join('–'),
         }
       : null;
+    // Aus der Gegenlese-Karte heraus steht das Formular weit unten in der
+    // Liste. Ungesehen geöffnet sieht es aus, als sei nichts passiert.
+    if (jump) requestAnimationFrame(() => document.getElementById(`material-${m.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   }
 
   async function save() {
@@ -499,10 +508,24 @@
         {#each m.doubts ?? [] as d (d.text)}
           <div class="doubt-row">
             <span>⚠ „{d.text}“{d.reason ? ` · ${d.reason}` : ''}</span>
-            {#if d.alternative}
-              <button class="quiet" disabled={busy} onclick={() => act(async () => { await api.post(`${base}/${m.id}/doubts/resolve`, { text: d.text, replace: d.alternative }); message = `Gelesen als „${d.alternative}“.`; await load(); })}>Heißt „{d.alternative}“</button>
-            {/if}
-            <button class="quiet" disabled={busy} onclick={() => act(async () => { await api.post(`${base}/${m.id}/doubts/resolve`, { text: d.text, replace: null }); await load(); })}>Stimmt so</button>
+          </div>
+          <!-- Berichtigt wird an Ort und Stelle: Das Feld steht schon auf dem
+               Vorschlag und lässt sich vor dem Übernehmen ändern. -->
+          <div class="doubt-fix">
+            <input value={draft(m.id, d)} disabled={busy} aria-label="So heißt die Stelle richtig"
+                   oninput={(e) => (edits = { ...edits, [doubtKey(m.id, d)]: e.currentTarget.value })} />
+            <button class="primary" disabled={busy} onclick={() => act(async () => {
+              const wanted = draft(m.id, d);
+              await api.post(`${base}/${m.id}/doubts/resolve`, { text: d.text, replace: wanted });
+              const { [doubtKey(m.id, d)]: _gone, ...rest } = edits; edits = rest;
+              message = wanted === d.text ? 'Danke, so bleibt es.' : `Gelesen als „${wanted}“.`;
+              await load();
+            })}>Übernehmen</button>
+            <button class="quiet" disabled={busy} onclick={() => act(async () => {
+              await api.post(`${base}/${m.id}/doubts/resolve`, { text: d.text, replace: null });
+              const { [doubtKey(m.id, d)]: _gone, ...rest } = edits; edits = rest;
+              await load();
+            })}>Stimmt so</button>
           </div>
         {/each}
         {#each m.review?.loose ?? [] as d (d.text)}
@@ -529,7 +552,7 @@
         {/if}
         <div class="row gap-sm">
           <button class="primary" disabled={busy} onclick={() => act(async () => { await api.post(`${base}/${m.id}/verified`, { value: true }); message = 'Danke, so gelesen bleibt es.'; await load(); })}>✓ Stimmt so</button>
-          <button disabled={busy} onclick={() => act(() => show(m))}>Korrigieren</button>
+          <button disabled={busy} onclick={() => act(() => show(m, true))}>Korrigieren</button>
         </div>
       </div>
     {/each}
@@ -674,7 +697,7 @@
 {/if}
 
 {#snippet materialRow(m)}
-  <button class="item" class:active={open?.id === m.id} onclick={() => act(() => (open?.id === m.id ? (open = null, form = null) : show(m)))}>
+  <button id={`material-${m.id}`} class="item" class:active={open?.id === m.id} onclick={() => act(() => (open?.id === m.id ? (open = null, form = null) : show(m)))}>
     {#if m.mime_type?.startsWith('image/')}
       <img src={`.${base}/${m.id}/file`} alt="" loading="lazy" />
     {:else}
@@ -919,6 +942,9 @@
   .doubt-row{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:2px 0 6px;font-size:0.9rem}
   .doubt-row>span{color:var(--rating-1);font-weight:600}
   .doubt-row button{min-height:36px;padding:4px 10px}
+  .doubt-fix{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px}
+  .doubt-fix input{flex:1 1 14rem;min-width:0;min-height:40px;margin:0}
+  .doubt-fix button{min-height:40px;padding:4px 12px}
   .options label{display:grid;gap:2px;font-size:0.85rem;color:var(--fg-muted)}
   .options select,.options input{min-height:40px}
   .options input[type=number]{width:7rem}

@@ -1,3 +1,8 @@
+## 1.5.5
+
+- Jede unsichere Stelle hat jetzt ihr eigenes Eingabefeld, vorbelegt mit dem vermuteten Inhalt. Anpassen, „Übernehmen" — fertig. Bisher gab es nur den Vorschlag zum Annehmen oder Ablehnen; für alles andere musste das große Korrekturformular am Ende der Seite herhalten.
+- „Korrigieren" springt jetzt zum Formular, statt es unbemerkt weiter unten zu öffnen.
+
 ## 1.5.4
 
 - Fehler behoben: Gedruckte Querverweise im Arbeitsheft („▶ S. 48") galten als zweifelhafte Seitenzahl und schickten die Seite zum Gegenlesen. Geprüft wird jetzt nur, was das Kind selbst geschrieben hat — dafür war die Prüfung gedacht.
