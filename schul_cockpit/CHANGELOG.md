@@ -1,3 +1,7 @@
+## 1.2.1
+
+- Die Einheiten im Vokabeltrainer heißen jetzt einheitlich wie im Inhaltsverzeichnis des Buchs — „Unidad 3 De paseo por España" statt mal mit, mal ohne Titel — und stehen in Buchreihenfolge. Sortiert wurde bisher nach der ersten Seite eines Bündels; das ist nach dem Zusammenführen mal die Anhangseite und mal die Kapitelseite, weshalb die Reihenfolge verrutschte.
+
 ## 1.2.0
 
 - Fehler behoben: Der Seitenabruf stand still und sah dabei nur langsam aus. Eine Browsersitzung schafft rund neun Seiten, ein Lauf bestellte aber bis zu vierzig. Jede Seite, die die Sitzung zeitlich nicht mehr erreichte, wurde als Fehlversuch gezählt — nach drei Läufen galt sie als aussichtslos und wurde nie wieder geholt, stand in der Bilanz aber weiter als offen. Zuletzt holten acht Läufe hintereinander keine einzige Seite mehr.

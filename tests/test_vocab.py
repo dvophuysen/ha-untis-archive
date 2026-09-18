@@ -523,3 +523,35 @@ def test_a_bare_number_belongs_to_the_unit_of_the_same_name():
     # Ohne eindeutige Reihe bleibt die bloße Nummer für sich: Sonst riete die App.
     zwei = vocab.group_units(['1', 'Unit 1 On the move', 'Lektion 1 Anfang'])
     assert len({zwei['1'], zwei['Unit 1 On the move']}) == 2
+
+
+def test_units_are_named_and_ordered_like_the_book(setup):
+    """Die Wortliste schreibt mal „Unidad 3", mal nichts weiter; im Trainer hieß
+    eine Einheit dann mit Titel und die nächste ohne. Und die Reihenfolge
+    verrutschte, weil nach der ersten Seite eines Bündels sortiert wurde — nach
+    dem Zusammenführen ist das mal die Anhangseite, mal die Kapitelseite (D113)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    from backend.book_structure import Chapter, store_chapters
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO digital_textbook_catalog(account_id,subject_name,title,discovered_at) "
+                  "VALUES(1,'spanisch','¡Apúntate! 2','now')")
+    store_chapters(1, '¡Apúntate! 2', [
+        Chapter(number='Unidad 1', title='Hola', start_page=10, end_page=25),
+        Chapter(number='Unidad 2', title='Mi barrio', start_page=30, end_page=45),
+        Chapter(number='Unidad 3', title='De paseo por España', start_page=48, end_page=59)])
+    # Die Anhangseiten stehen hinten und in umgekehrter Reihenfolge der Einheiten.
+    pages = {171: 'Unidad 3', 172: 'Unidad 2', 173: 'Unidad 1'}
+    ids = {p: seed_page(subject="SPANISCH", text="el país — das Land", page=p, label="Schulbuch", title="Vocabulario")
+           for p in pages}
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        return json.dumps({"words": [{"unit": pages[context["page"]], "foreign_word": "el país",
+                                      "meanings": ["das Land"]}]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    client.post(V + "/SPANISCH/extract", json={"material_ids": list(ids.values())})
+    found = [u["unit"] for u in vocab.units(1, "SPANISCH") if u["words"]]
+    # Einheitlich benannt wie im Verzeichnis und in Buchreihenfolge.
+    assert found == ['Unidad 1 Hola', 'Unidad 2 Mi barrio', 'Unidad 3 De paseo por España'], found
+    # Und unter dem neuen Namen findet der Trainer die Karten der Wortliste.
+    assert len(vocab.cards(1, "SPANISCH", "Unidad 3 De paseo por España", 1, "from")) == 1
