@@ -683,3 +683,32 @@ def test_the_word_reading_sees_the_page_so_a_box_stays_a_box(setup):
     gesehen.clear()
     assert client.post(V + "/LATEIN/extract", json={"material_ids": [ohne]}).status_code == 200
     assert gesehen[0] == []
+
+
+def test_the_reading_is_told_which_section_is_still_open(setup):
+    """Das Modell sieht immer nur eine Seite. „School" steht auf S. 212, der
+    Abschnitt „The new boy" beginnt auf S. 211 — ohne diesen Hinweis ist auf
+    S. 212 kein Abschnitt offen, und ein Kasten wird dort zwangsläufig selbst
+    zum Abschnitt (D121)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    erste = seed_page(page=10, text=PAGE)
+    zweite = seed_page(page=11, text=PAGE)
+    gesehen = []
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        gesehen.append(context.get("offen_von_der_seite_davor"))
+        page = context["page"]
+        return json.dumps({"words": [{**w, "unit": "Lektion 1", "section": "A" if page == 10 else "",
+                                      "box": "" if page == 10 else "Tiere"}
+                                     for w in WORDS["words"][:2]]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    client.post(V + "/LATEIN/extract", json={"material_ids": [erste]})
+    # Auf der ersten Seite ist noch nichts offen.
+    assert gesehen[0] is None
+    client.post(V + "/LATEIN/extract", json={"material_ids": [zweite]})
+    assert gesehen[1] == {"unit": "Lektion 1", "section": "A", "box": ""}
+    # Der Kasten der zweiten Seite hängt unter dem offenen Abschnitt, nicht daneben.
+    units = client.get(V + "/LATEIN/units").json()["units"]
+    lektion = next(u for u in units if u["unit"] == "Lektion 1")
+    assert [(s["section"], [b["box"] for b in s["boxes"]]) for s in lektion["sections"]] == [("A", ["Tiere"])]

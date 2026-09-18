@@ -1,3 +1,7 @@
+## 1.5.7
+
+- Fehler behoben: Ein Themenkasten auf einer Folgeseite wurde weiterhin zum eigenen Abschnitt. Ich sehe beim Lesen immer nur eine Seite — „The new boy" beginnt aber eine Seite vor „School". Ich bekomme jetzt gesagt, welcher Abschnitt noch offen ist.
+
 ## 1.5.6
 
 - Fehler behoben: Themenkästen wie „School" und „Feelings" standen weiter neben ihrem Abschnitt statt darunter. Ob eine Überschrift eine laufende Zwischenüberschrift ist oder ein abgesetzter Kasten, steht nicht im Text — ich bekomme dafür jetzt das Bild der Seite zu sehen.

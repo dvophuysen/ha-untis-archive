@@ -258,6 +258,13 @@ EXTRACT = (
     "Einheit, ohne dass ein Abschnitt offen ist, dann ist er selbst der Abschnitt („Holiday words“) und box bleibt "
     "leer. Ein Kasten ohne eigene Überschrift bekommt keinen Namen; seine Wörter gehören zu dem Abschnitt, unter "
     "dem er steht.\n"
+    "Du siehst immer nur diese eine Seite, die Liste läuft aber über den Seitenwechsel. Steht in "
+    "offen_von_der_seite_davor ein Abschnitt, ist er auf dieser Seite noch offen, auch wenn seine Überschrift "
+    "hier nirgends steht: Ein Kasten mit eigener Überschrift gehört dann in diesen Abschnitt — trag ihn in box "
+    "ein und den Abschnitt aus offen_von_der_seite_davor in section, statt aus dem Kasten einen neuen Abschnitt "
+    "zu machen. Ein wirklich neuer Abschnitt sieht anders aus als ein Kasten: Er gliedert den Gang der Einheit "
+    "(Text, Station, Story, Check-out) und läuft im Satzspiegel mit, während ein Kasten ein abgesetztes, "
+    "gerahmtes oder farbig unterlegtes Wortfeld zu einem Thema ist.\n"
     "Liegt das Bild der Seite bei, entscheidet es über die Gliederung: Ein Abschnitt ist eine laufende "
     "Zwischenüberschrift im Textfluss, ein Kasten ein eigens abgesetztes, gerahmtes oder farbig unterlegtes "
     "Wortfeld mit eigener Überschrift. Im bloßen Text sehen beide gleich aus, im Bild nicht.\n"
@@ -272,7 +279,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 7
+EXTRACT_VERSION = 8
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -490,12 +497,17 @@ def split_mark(word: str) -> tuple[str, str]:
 _RUNNING_HEAD = re.compile(r"^(v|voc|vocabulary|vocabulario|vocabulaire|wortschatz|lernwörter|lernwoerter|words)$", re.I)
 
 
-def tidy(words: list) -> list:
+def tidy(words: list, open_unit: str = "", open_section: str = "") -> list:
     """Die Felder in die Form bringen, auf die sich der Trainer verlässt.
 
     Modelle halten sich unterschiedlich streng an die Anweisung: Das eine trennt
     die grammatische Marke ab und lässt den Verweis aus der Überschrift weg, das
-    andere nicht. Darauf darf die Bündelung nicht ankommen (D107)."""
+    andere nicht. Darauf darf die Bündelung nicht ankommen (D107). `open_unit` und
+    `open_section` sind Einheit und Abschnitt, die von der Seite davor noch offen
+    sind: Ohne sie wäre ein Kasten auf einer Folgeseite zwangsläufig selbst ein
+    Abschnitt (D121)."""
+    part = (open_section or "").strip()
+    here = (open_unit or "").strip()
     for w in words:
         w.unit = clean_unit(w.unit)
         w.section = clean_unit(w.section)
@@ -506,10 +518,19 @@ def tidy(words: list) -> list:
             w.section = ""
         if _RUNNING_HEAD.match(w.unit.strip()):
             w.unit = ""
-        # Ein Kasten ohne Abschnitt darüber ist selbst der Abschnitt (D116).
-        if w.box and not w.section:
+        # Eine neue Einheit macht den Abschnitt der alten zu: Was in ihr offen
+        # war, gilt hier nicht weiter.
+        if w.unit.strip() and w.unit.strip() != here:
+            here, part = w.unit.strip(), ""
+        if w.section.strip():
+            part = w.section.strip()
+        # Ein Kasten ohne Abschnitt darüber ist selbst der Abschnitt (D116) —
+        # aber nur, wenn wirklich keiner offen ist, auch keiner von der Seite
+        # davor.
+        if w.box and not part:
             w.section, w.box = w.box, ""
-        if w.box and (_RUNNING_HEAD.match(w.box.strip()) or plain(w.box) in (plain(w.section), plain(w.unit))):
+            part = w.section.strip()
+        if w.box and (_RUNNING_HEAD.match(w.box.strip()) or plain(w.box) in (plain(w.section or part), plain(w.unit))):
             w.box = ""
         core, mark = split_mark(w.foreign_word)
         if mark:
@@ -546,7 +567,8 @@ def page_image(account_id: int, material_id: int) -> list[dict]:
         "detail": "high"}}]
 
 
-async def read_words(account_id: int, row: dict, tier: str | None = None):
+async def read_words(account_id: int, row: dict, tier: str | None = None,
+                     carry: tuple[str, str, str] | None = None):
     """Eine Seite vom Modell in Lernwörter zerlegen, ohne etwas abzulegen."""
     from . import ai_gateway as ai
     try:
@@ -554,11 +576,14 @@ async def read_words(account_id: int, row: dict, tier: str | None = None):
     except Exception:
         LOG.warning("Bild der Seite %s nicht ladbar; Wortlesung nur aus dem Text", row["id"], exc_info=True)
         images = []
+    context = {"subject": row["subject_name"] or "", "page": row["source_page"],
+               "text": (row["content_text"] or "")[:24000]}
+    if carry and any(carry):
+        context["offen_von_der_seite_davor"] = {"unit": carry[0], "section": carry[1], "box": carry[2]}
     raw, _, _ = await ai.complete(account_id, ai.VOCAB, EXTRACT + json.dumps(WordsOut.model_json_schema()),
-                                  {"subject": row["subject_name"] or "", "page": row["source_page"],
-                                   "text": (row["content_text"] or "")[:24000]}, images=images,
-                                  max_output=10000, tier=tier)
-    return tidy(WordsOut.model_validate_json(raw).words)
+                                  context, images=images, max_output=10000, tier=tier)
+    offen = carry or ("", "", "")
+    return tidy(WordsOut.model_validate_json(raw).words, offen[0], offen[1])
 
 
 async def compare(account_id: int, material_id: int, tiers: list[str]) -> dict:
@@ -630,8 +655,13 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
     # Nur eine unlesbare Antwort wird an der Seite vermerkt. Ein Ausfall der
     # Verbindung darf sie nicht als unlesbar abstempeln, sonst versucht es der
     # Hintergrundlauf nie wieder.
+    # Was von der Seite davor noch offen ist, muss das Modell wissen: Es sieht
+    # immer nur diese eine Seite. „School" steht auf S. 212, der Abschnitt „The
+    # new boy" beginnt auf S. 211 — ohne diesen Hinweis ist auf S. 212 kein
+    # Abschnitt offen, und ein Kasten wird dort zwangsläufig zum Abschnitt (D121).
+    open_at = carry_over(account_id, subject, row["source_page"])
     try:
-        words = await read_words(account_id, row, tier=tier)
+        words = await read_words(account_id, row, tier=tier, carry=open_at)
     except ValidationError:
         with closing(webapp_conn()) as c, c:
             c.execute("INSERT OR REPLACE INTO vocab_extractions(material_id,account_id,text_hash,words,error,updated_at) VALUES(?,?,?,?,?,?)",
@@ -643,7 +673,7 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
     fallback = unit_label(account_id, subject, label, row["source_page"])
     # Eine Liste läuft über den Seitenwechsel weiter: Beginnt die Seite ohne
     # eigene Überschrift, gelten Einheit und Abschnitt der Seite davor (D115).
-    unit, part, box = carry_over(account_id, subject, row["source_page"])
+    unit, part, box = open_at
     kept = 0
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
