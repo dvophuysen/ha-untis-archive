@@ -653,3 +653,33 @@ def test_boxes_are_listed_under_their_section_in_book_order(setup):
     assert len(vocab.cards(1, "ENGLISCH", "Unit 1", 1, "from")) == 4
     assert len(vocab.cards(1, "ENGLISCH", "Unit 1", 1, "from", section="The new boy")) == 3
     assert len(vocab.cards(1, "ENGLISCH", "Unit 1", 1, "from", section="The new boy", box="School")) == 2
+
+
+def test_the_word_reading_sees_the_page_so_a_box_stays_a_box(setup):
+    """Ob eine Überschrift eine laufende Zwischenüberschrift ist oder ein
+    abgesetzter Kasten, steht nicht im Text, sondern im Satz der Seite. Ohne das
+    Bild landete „School" neben „The new boy" statt darunter (D120)."""
+    import io
+    from PIL import Image
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    mid = seed_page()
+    blob = io.BytesIO()
+    Image.new("RGB", (40, 30), (250, 250, 250)).save(blob, "JPEG")
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("UPDATE materials SET file_bytes=?,mime_type='image/jpeg',filename='s10.jpg' WHERE id=?",
+                  (blob.getvalue(), mid))
+    gesehen = []
+
+    async def complete(account, purpose, instruction, context, images=None, *a, **kw):
+        gesehen.append(images or [])
+        return json.dumps(WORDS), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    assert client.post(V + "/LATEIN/extract", json={"material_ids": [mid]}).status_code == 200
+    assert len(gesehen[0]) == 1 and gesehen[0][0]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+
+    # Eine Seite ohne hinterlegte Datei wird weiter aus ihrem Text gelesen.
+    ohne = seed_page(page=11)
+    gesehen.clear()
+    assert client.post(V + "/LATEIN/extract", json={"material_ids": [ohne]}).status_code == 200
+    assert gesehen[0] == []

@@ -258,6 +258,9 @@ EXTRACT = (
     "Einheit, ohne dass ein Abschnitt offen ist, dann ist er selbst der Abschnitt („Holiday words“) und box bleibt "
     "leer. Ein Kasten ohne eigene Überschrift bekommt keinen Namen; seine Wörter gehören zu dem Abschnitt, unter "
     "dem er steht.\n"
+    "Liegt das Bild der Seite bei, entscheidet es über die Gliederung: Ein Abschnitt ist eine laufende "
+    "Zwischenüberschrift im Textfluss, ein Kasten ein eigens abgesetztes, gerahmtes oder farbig unterlegtes "
+    "Wortfeld mit eigener Überschrift. Im bloßen Text sehen beide gleich aus, im Bild nicht.\n"
     "Beide Überschriften gelten weiter, bis eine neue kommt — auch über den Seitenwechsel hinweg. Beginnt die "
     "Seite ohne neue Überschrift, gehören ihre ersten Wörter noch zur Einheit und zum Abschnitt der Seite "
     "davor; dann lass die Felder leer, die App setzt sie fort. Steht nirgends eine Überschrift, lass beide "
@@ -269,7 +272,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 6
+EXTRACT_VERSION = 7
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -528,12 +531,33 @@ def survivors(row: dict, words: list) -> list:
     return kept
 
 
+def page_image(account_id: int, material_id: int) -> list[dict]:
+    """Das Bild der Seite für die Wortlesung. Ob eine Überschrift eine laufende
+    Zwischenüberschrift oder ein abgesetzter Kasten ist, steht nicht im Text,
+    sondern im Satz der Seite — im bloßen Text sehen beide gleich aus, und
+    „School" landete deshalb neben „The new boy" statt darunter (D120)."""
+    import base64
+    from . import materials as store
+    row = store.file_of(account_id, material_id)
+    if not row or not row["file_bytes"] or (row["mime_type"] or "") not in ("image/jpeg", "image/png", "image/webp"):
+        return []
+    return [{"type": "image_url", "image_url": {
+        "url": f"data:{row['mime_type']};base64," + base64.b64encode(row["file_bytes"]).decode(),
+        "detail": "high"}}]
+
+
 async def read_words(account_id: int, row: dict, tier: str | None = None):
     """Eine Seite vom Modell in Lernwörter zerlegen, ohne etwas abzulegen."""
     from . import ai_gateway as ai
+    try:
+        images = page_image(account_id, row["id"])
+    except Exception:
+        LOG.warning("Bild der Seite %s nicht ladbar; Wortlesung nur aus dem Text", row["id"], exc_info=True)
+        images = []
     raw, _, _ = await ai.complete(account_id, ai.VOCAB, EXTRACT + json.dumps(WordsOut.model_json_schema()),
                                   {"subject": row["subject_name"] or "", "page": row["source_page"],
-                                   "text": (row["content_text"] or "")[:24000]}, max_output=6000, tier=tier)
+                                   "text": (row["content_text"] or "")[:24000]}, images=images,
+                                  max_output=10000, tier=tier)
     return tidy(WordsOut.model_validate_json(raw).words)
 
 
