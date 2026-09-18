@@ -1,8 +1,9 @@
-## 1.3.0
+## 1.3.1
 
 - Die Vokabelliste wird jetzt so zerlegt, wie sie im Buch steht: Einheit und Abschnitt getrennt, und beides läuft über den Seitenwechsel weiter. Ein Abschnitt, der mitten auf einer Seite beginnt und erst auf der übernächsten endet, bleibt ein Abschnitt. Beginnt eine Seite ohne eigene Überschrift, gehört sie noch zum Abschnitt davor.
 - Als Einheit zählt jeder eigene Teil des Buchs, nicht nur die nummerierten Units — also auch „Welcome back!", „Media smart" oder „Across cultures".
 - Die Anzeige folgt der Reihenfolge des Buchs, Einheiten wie Abschnitte. Bisher wurden Einheiten mit bekanntem Kapitel nach ihrer Kapitelseite einsortiert und alle anderen nach ihrer Anhangseite — zwei verschiedene Maßstäbe in einer Liste. Abschnitte standen alphabetisch statt in ihrer Reihenfolge.
+- Ein Kasten mit eigener Überschrift wird ein eigener Abschnitt; einer ohne gehört zu dem Abschnitt, unter dem er steht, statt einen erfundenen Namen zu bekommen.
 - Die schon gelesenen Vokabelseiten werden mit der neuen Aufteilung noch einmal gelesen.
 
 ## 1.2.2
