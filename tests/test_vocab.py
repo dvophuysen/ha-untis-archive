@@ -1210,3 +1210,20 @@ def test_the_first_real_spread_of_noahs_english_book(setup):
     assert [(s["section"], s["words"]) for s in unit["sections"]] == [("Introduction", 21)]
     karten = vocab.cards(1, "ENGLISCH", "Unit 1 On the move", 1, "from", limit=40)
     assert [c["foreign_word"] for c in karten][:3] == ["on the move", "travelling", "foreign"]
+
+
+def test_the_pronunciation_does_not_belong_in_the_headword():
+    """Green Line setzt hinter jedes Stichwort die Lautschrift: „on the move
+    [ˌɒn ðə ˈmuːv]". In Stufe 2 wäre sie mitzutippen. Erkannt wird sie an den
+    Zeichen, die nur dort vorkommen — eine eckige Klammer mit echtem Inhalt
+    bleibt stehen."""
+    a, b, c = vocab.tidy([
+        vocab.WordIn(foreign_word='on the move [ˌɒn ðə ˈmuːv]', meanings=['unterwegs']),
+        vocab.WordIn(foreign_word='luggage (no pl) [ˈlʌɡɪdʒ]', meanings=['Gepäck']),
+        vocab.WordIn(foreign_word='to go [gəʊ] pl.', meanings=['gehen'])])
+    assert a.foreign_word == 'on the move'
+    assert b.foreign_word == 'luggage (no pl)'
+    # Die grammatische Marke wird weiter abgetrennt, auch hinter der Lautschrift.
+    assert (c.foreign_word, c.grammar) == ('to go', 'pl.')
+    # Ohne Lautschriftzeichen bleibt die Klammer, wie sie ist.
+    assert vocab.strip_sound('das Modell [Baureihe]') == 'das Modell [Baureihe]'
