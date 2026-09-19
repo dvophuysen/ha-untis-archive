@@ -1008,3 +1008,72 @@ def test_words_before_the_first_heading_keep_what_was_open():
     got = vocab.apply_outline(woerter, [(3, 'Unit 1', 'einheit')], ('Welcome back!', 'Holiday words', 'places'))
     assert (got[0].unit, got[0].section, got[0].box) == ('Welcome back!', 'Holiday words', 'places')
     assert (got[2].unit, got[2].section, got[2].box) == ('Unit 1', '', '')
+
+
+def test_a_spread_delivered_twice_is_read_only_once():
+    """Kind A Englischbuch kommt als Doppelseite, und der Viewer liefert nicht
+    immer, was bestellt wurde: Vierzig Abrufe deckten fünfzehn Doppelseiten ab,
+    jede zwei- bis dreimal. Jede Dublette brachte dieselben Wörter noch einmal
+    unter einer anderen Seitenzahl und riss die Fortsetzung auseinander (D138)."""
+    rows = [
+        {"id": 260, "source_page": 162, "source_label": "Schulbuch", "printed_pages": "[162, 163]", "page_check": "ok"},
+        {"id": 261, "source_page": 158, "source_label": "Schulbuch", "printed_pages": "[158, 159]", "page_check": "ok"},
+        {"id": 265, "source_page": 167, "source_label": "Schulbuch", "printed_pages": "[162, 163]", "page_check": "mismatch"},
+    ]
+    behalten = [r["id"] for r in vocab.one_per_spread(rows)]
+    assert behalten == [261, 260], "die Dublette fällt weg, der Rest steht in Buchreihenfolge"
+
+
+def test_a_spread_nobody_else_delivered_is_kept_even_if_it_was_not_ordered():
+    """Die falsche Lieferung ist die einzige Quelle ihrer gedruckten Seiten —
+    sie wegzuwerfen hieße, die Seiten gar nicht zu lesen (D138)."""
+    rows = [
+        {"id": 260, "source_page": 162, "source_label": "Schulbuch", "printed_pages": "[162, 163]", "page_check": "ok"},
+        {"id": 261, "source_page": 163, "source_label": "Schulbuch", "printed_pages": "[158, 159]", "page_check": "mismatch"},
+    ]
+    assert [r["id"] for r in vocab.one_per_spread(rows)] == [261, 260]
+    # Ohne Angabe gilt die bestellte Seite, und zweimal dieselbe ist eine Dublette.
+    ohne = [{"id": 1, "source_page": 12, "source_label": "", "printed_pages": None, "page_check": "unknown"},
+            {"id": 2, "source_page": 12, "source_label": "", "printed_pages": "", "page_check": "unknown"}]
+    assert [r["id"] for r in vocab.one_per_spread(ohne)] == [1]
+    assert vocab.printed_of({"source_page": 12, "printed_pages": "kaputt"}) == [12]
+
+
+def test_a_double_page_continues_from_two_numbers_back():
+    """Eine Doppelseite trägt die Nummer ihrer linken Seite: Auf 160/161 folgt
+    162/163. Die Seite davor liegt damit zwei Nummern zurück (D138)."""
+    from contextlib import closing as schliessen
+    with schliessen(db.webapp_conn()) as c, c:
+        c.execute("DELETE FROM vocab_words WHERE account_id=1")
+        c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,section,position,"
+                  "foreign_word,plain,meanings_json,created_at) VALUES(1,'ENGLISCH',1,'Schulbuch',160,'Unit 1',"
+                  "'Station 1',0,'wort160','wort160','[]','now')")
+    assert vocab.carry_over(1, 'ENGLISCH', 162, 'Schulbuch') == ('Unit 1', 'Station 1', '')
+    # Die unmittelbare Vorseite hat weiter Vorrang, und die Lücke bleibt begrenzt.
+    assert vocab.carry_over(1, 'ENGLISCH', 165, 'Schulbuch') == ('', '', '')
+
+
+def test_the_words_of_a_doubled_page_go_but_a_practised_one_stays(setup):
+    """Die Dublette nur beim Lesen zu überspringen genügt nicht: Die Einheiten
+    zählen Wörter, nicht Seiten. Geübtes bleibt trotzdem stehen (D125/D138)."""
+    client, state, patch = setup
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("DELETE FROM vocab_words WHERE account_id=1")
+        c.execute("DELETE FROM materials WHERE account_id=1 AND lower(subject_name)='englisch'")
+    echt = seed_page(subject="ENGLISCH", page=162, label="Schulbuch", title="Vocabulary")
+    doppelt = seed_page(subject="ENGLISCH", page=167, label="Schulbuch", title="Vocabulary")
+    with closing(db.webapp_conn()) as c, c:
+        for mid, check in ((echt, 'ok'), (doppelt, 'mismatch')):
+            c.execute("UPDATE materials SET printed_pages='[162, 163]',page_check=? WHERE id=?", (check, mid))
+        for mid, wort in ((echt, 'echt'), (doppelt, 'dublette'), (doppelt, 'geuebt')):
+            c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,section,position,"
+                      "foreign_word,plain,meanings_json,created_at) VALUES(1,'ENGLISCH',?,'Schulbuch',162,'Unit 1','',0,?,?,'[]','now')",
+                      (mid, wort, wort))
+        wid = c.execute("SELECT id FROM vocab_words WHERE foreign_word='geuebt'").fetchone()[0]
+        c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,spoken,seconds,edits,created_at) "
+                  "VALUES(1,?,1,'from','x','correct',0,3,0,'now')", (wid,))
+    assert vocab.forget_duplicates(1, 'ENGLISCH') == 1
+    with closing(db.webapp_conn()) as c:
+        blieb = {r[0] for r in c.execute("SELECT foreign_word FROM vocab_words WHERE account_id=1 AND subject='ENGLISCH'")}
+    assert blieb == {'echt', 'geuebt'}
+    assert vocab.forget_duplicates(1, 'ENGLISCH') == 0, "ein zweiter Lauf fasst nichts mehr an"

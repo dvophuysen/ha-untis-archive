@@ -1,3 +1,9 @@
+## 1.11.1
+
+- Jede gedruckte Buchseite wird nur noch einmal in die Vokabelliste gelesen. Kind A Englischbuch kommt als Doppelseite, und der Viewer lieferte auf viele Bestellungen dieselbe Doppelseite noch einmal — vierzig Abrufe für rund fünfzehn Seiten. Jede Dublette brachte dieselben Wörter unter einer anderen Seitenzahl und riss die Fortsetzung über den Seitenwechsel auseinander; das erklärt die unbrauchbaren Listen in Englisch und Spanisch.
+- Die Wörter, die aus solchen Dubletten schon in der Liste standen, werden beim nächsten Lesedurchgang entfernt. Geübte Wörter bleiben dabei unangetastet — ein Lernstand geht nie verloren.
+- Die Fortsetzung von der Seite davor findet jetzt auch die linke Seite einer Doppelseite: Auf 160/161 folgt 162/163, die Vorseite liegt zwei Nummern zurück.
+
 ## 1.11.0
 
 - Seiten werden wieder gelesen: Der erste Durchgang läuft jetzt auf dem kleinen Modell. Zuletzt scheiterte jede Seitenauswertung, weil beide Stufen auf derselben Plattform lagen und dort das Kontingent fehlt — fünfzig Materialien standen auf „nicht gelesen".
