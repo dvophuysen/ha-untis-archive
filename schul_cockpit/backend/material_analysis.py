@@ -27,7 +27,7 @@ _LOGGER = logging.getLogger("schul_cockpit.materials")
 # run picks up everything that was filed under the older rules. Abgerufene
 # Buchseiten bleiben davon ausgenommen: ihre Felder haben sich nicht geändert,
 # und 84 Seiten neu zu lesen kostete rund elf Euro.
-ANALYSIS_VERSION = 4
+ANALYSIS_VERSION = 5
 PAGE_TYPES = ("text", "table", "handwriting", "figure", "formula", "mixed")
 
 
@@ -457,7 +457,11 @@ async def compare(account_id: int, material_id: int, tier: str, effort: str | No
 # Wertetabellen verloren selbst auf der hohen Stufe Werte, solange flach
 # nachgedacht wurde. Also liest zuerst die günstige Stufe und ordnet ein;
 # nur wo die Messung einen Verlust gezeigt hat, wird gründlicher neu gelesen.
-FIRST_TIER = "niedrig"
+# Der erste Durchgang liest eine gedruckte, saubere Seite und wird hart
+# nachgeprüft: Die gedruckte Seitenzahl muss zur bestellten passen. Das ist
+# Formatarbeit und läuft auf der kleinen Stufe, also auf der zweiten Foundry;
+# das Urteil holt die Eskalation (D137).
+FIRST_TIER = "klein"
 CAREFUL_TIER = "hoch"
 # Eigene Bearbeitungen, Arbeitshefte und Arbeitsblätter: dort steht Handschrift
 # und dort zählt jede Zeile.
@@ -500,7 +504,15 @@ async def read_material(account_id: int, row) -> tuple[Insight, str]:
     if not step:
         return insight, FIRST_TIER
     tier, effort = step
-    careful, _ = await extract(account_id, row, tier=tier, effort=effort)
+    try:
+        careful, _ = await extract(account_id, row, tier=tier, effort=effort)
+    except Exception as exc:
+        # Die gründliche Stufe ist ein Zugewinn, keine Bedingung. Ist sie nicht
+        # erreichbar, gilt die erste Lesung — sonst steht die ganze Seite auf
+        # „nicht gelesen", und mit ihr alles, was daran hängt (D137).
+        _LOGGER.warning("Zweite Lesung von Material %s nicht möglich (%s), erste Lesung gilt",
+                        row["id"], getattr(exc, "detail", exc))
+        return insight, FIRST_TIER
     return careful, tier
 
 

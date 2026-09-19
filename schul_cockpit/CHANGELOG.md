@@ -1,3 +1,8 @@
+## 1.11.0
+
+- Seiten werden wieder gelesen: Der erste Durchgang läuft jetzt auf dem kleinen Modell. Zuletzt scheiterte jede Seitenauswertung, weil beide Stufen auf derselben Plattform lagen und dort das Kontingent fehlt — fünfzig Materialien standen auf „nicht gelesen".
+- Die gründliche zweite Lesung bleibt für Handschrift, Tabellen und die naturwissenschaftlichen Fächer. Ist sie nicht möglich, gilt die erste Lesung, statt die Seite ganz zu verlieren.
+
 ## 1.10.1
 
 - Zurückgenommen: Die Gliederung der ganzen Seite als eigene Frage zu stellen war gemessen schlechter als vorher — Spaltenüberschriften und doppelte Laufköpfe wurden als Einheiten gezählt. Gefragt wird wieder nur, wo eine neue Einheit beginnt.

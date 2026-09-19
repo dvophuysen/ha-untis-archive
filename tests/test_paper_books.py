@@ -537,7 +537,7 @@ def test_the_second_pass_is_what_gets_stored(env, monkeypatch):
     monkeypatch.setattr(analysis, "extract", extract)
     import asyncio
     insight, tier = asyncio.run(analysis.read_material(1, _row()))
-    assert seen == [("niedrig", None), ("hoch", "low")]
+    assert seen == [(analysis.FIRST_TIER, None), ("hoch", "low")]
     assert insight.content_text == "Handschrift" and tier == "hoch"
 
 
