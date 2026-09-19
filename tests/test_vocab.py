@@ -1227,3 +1227,32 @@ def test_the_pronunciation_does_not_belong_in_the_headword():
     assert (c.foreign_word, c.grammar) == ('to go', 'pl.')
     # Ohne Lautschriftzeichen bleibt die Klammer, wie sie ist.
     assert vocab.strip_sound('das Modell [Baureihe]') == 'das Modell [Baureihe]'
+
+
+def test_a_heading_without_a_word_under_it_starts_where_the_next_one_starts():
+    """Auf S. 161 steht „Unit 1 On the move" und gleich darunter „Introduction";
+    unter der oberen steht kein Wort, also nennt das Modell keines. Beide
+    beginnen beim selben Wort, und die untere gilt, weil sie näher steht."""
+    words = [{"plain": "on the move"}, {"plain": "travelling"}, {"plain": "foreign"}]
+    heads = [kopf("Vocabulary", groesser=True, farbig=True),
+             kopf("Unit 1 On the move", "", groesser=True, farbig=True),
+             kopf("Introduction", "on the move [ˌɒn ðə ˈmuːv]", farbig=True)]
+    art = vocab.head_levels(heads, {})
+    cuts = vocab.page_cuts(words, {"ueberschriften": heads, "beginnt_mit_ueberschrift": True}, art)
+    assert cuts == [(0, "einheit", "Unit 1 On the move"), (0, "abschnitt", "Introduction")]
+
+
+def test_the_anchor_word_is_found_although_it_carries_its_pronunciation():
+    """Das Modell nennt als erstes Wort „on the move [ˌɒn ðə ˈmuːv]", die
+    Wortliste führt „on the move" — ohne Abgleich fiel jeder Schnitt aus, und
+    die ganze Seite landete unter ihrer Seitenzahl."""
+    words = [{"plain": "travelling"}, {"plain": "on the move"}, {"plain": "foreign"}]
+    assert vocab.anchor_at(words, "on the move [ˌɒn ðə ˈmuːv]", 0) == 1
+    assert vocab.anchor_at(words, "gibt es nicht", 0) == -1
+
+
+def test_a_dictionary_is_a_foreign_part_even_without_a_running_head():
+    """Das Modell meldet den Laufkopf einer Doppelseite oft gar nicht als
+    solchen. Ein Wörterverzeichnis bleibt trotzdem eines."""
+    art = vocab.head_levels([kopf("Across cultures 4", "a", groesser=True), kopf("Dictionary", "zebra")], {})
+    assert art["dictionary"] == "fremd"

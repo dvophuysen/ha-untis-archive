@@ -1,3 +1,7 @@
+## 1.12.2
+
+- Die Zuordnung der Wörter zu ihren Überschriften greift jetzt wirklich. Am ersten echten Lauf gemessen und drei Fehler behoben: Das erste Wort unter einer Überschrift wird mit Lautschrift genannt, die Wortliste führt es ohne — beides wird jetzt gleich behandelt. Steht unter einer Überschrift gleich die nächste („Unit 1 On the move" über „Introduction"), beginnen beide beim selben Wort. Und ein Wörterverzeichnis wird auch dann erkannt, wenn das Modell es nicht als Laufkopf meldet.
+
 ## 1.12.1
 
 - Die Gliederung wird erst gesetzt, wenn die Überschriften einer Seite gelesen sind. Vorher blieb sie, wie sie ist: Sie zu überschreiben, bevor man sie kennt, machte aus jeder Einheit eine Seitenzahl.

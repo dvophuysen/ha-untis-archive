@@ -1035,7 +1035,7 @@ def head_levels(heads: list[dict], known: dict) -> dict[str, str]:
             continue
         if _RUNNING_HEAD.match(h["titel"].strip()):
             art[key] = "laufkopf"
-        elif key in kopf and _OTHER_PART.match(h["titel"].strip()):
+        elif _OTHER_PART.match(h["titel"].strip()):
             art[key] = "fremd"
         elif unit_key(h["titel"]) or (bundle_keys(h["titel"]) & bekannt) or key in kopf:
             art[key] = "einheit"
@@ -1054,11 +1054,11 @@ def head_levels(heads: list[dict], known: dict) -> dict[str, str]:
 def anchor_at(words: list[dict], wanted: str, start: int) -> int:
     """Wo in der Wortliste der Seite das genannte erste Wort steht.
 
-    Verglichen wird der Stamm, nicht die Schreibweise: Das Modell nennt die
-    Überschrift und darunter „on the move", die Liste führt „on the move
-    [ˌɒn ðə ˈmuːv]". Gesucht wird erst ab der letzten gefundenen Stelle, damit
-    ein zweimal vorkommendes Wort nicht zurückspringt."""
-    core = plain(_PARENS.sub("", wanted or "")).strip()
+    Verglichen wird der Stamm, nicht die Schreibweise: Das Modell nennt als
+    erstes Wort „on the move [ˌɒn ðə ˈmuːv]", die Liste führt „on the move" —
+    die Lautschrift muss also auch hier weg. Gesucht wird erst ab der letzten
+    gefundenen Stelle, damit ein zweimal vorkommendes Wort nicht zurückspringt."""
+    core = plain(_PARENS.sub("", strip_sound(wanted or ""))).strip()
     core = _ARTICLES.sub("", core).strip()
     if not core:
         return -1
@@ -1075,26 +1075,36 @@ def page_cuts(words: list[dict], info: dict, art: dict) -> list[tuple[int, str, 
     Ein Laufkopf schneidet nie — er steht auf jeder Seite und sagt nichts
     darüber, wo ein Teil beginnt; ihn als Anfang zu lesen war der Fehler, der
     dreizehn von sechzehn Seiten in dieselbe Einheit warf (D130)."""
-    cuts: list[tuple[int, str, str]] = []
+    gewollt = [(plain(h["titel"]), art.get(plain(h["titel"]), "abschnitt"), h)
+               for h in (info.get("ueberschriften") or [])]
+    gewollt = [(kind, h) for key, kind, h in gewollt
+               if key and kind != "laufkopf" and (kind == "fremd" or h["wo"] != "seitenkopf")]
+    # Erst die Stellen suchen, dann schneiden: Steht unter einer Überschrift
+    # gleich die nächste — „Unit 1 On the move" und darunter „Introduction" —,
+    # nennt das Modell für die obere kein Wort. Beide beginnen dann beim selben
+    # Wort, und die untere gilt, weil sie näher an ihm steht.
+    stellen: list[int] = []
     at = 0
-    erste = True
-    for h in (info.get("ueberschriften") or []):
-        key = plain(h["titel"])
-        kind = art.get(key, "abschnitt")
-        if kind == "laufkopf" or (kind != "fremd" and h["wo"] == "seitenkopf"):
-            continue
+    for _, h in gewollt:
         found = anchor_at(words, h.get("erstes_wort") or "", at)
+        stellen.append(found)
+        if found >= 0:
+            at = found
+    for i in range(len(stellen) - 2, -1, -1):
+        if stellen[i] < 0:
+            stellen[i] = stellen[i + 1]
+    cuts: list[tuple[int, str, str]] = []
+    erste = True
+    for (kind, h), found in zip(gewollt, stellen):
         if found < 0:
-            # Ohne wiedergefundenes Wort wird nur geschnitten, wenn die Seite
-            # ohnehin unter dieser Überschrift beginnt. Sonst lieber kein
-            # Schnitt als ein falscher.
+            # Kein Wort dazu und keine Überschrift danach, die eines hätte:
+            # lieber kein Schnitt als ein falscher.
             if not (erste and info.get("beginnt_mit_ueberschrift")):
                 continue
             found = 0
-        if erste and info.get("beginnt_mit_ueberschrift") and found > 0:
+        if erste and info.get("beginnt_mit_ueberschrift"):
             found = 0
         cuts.append((found, kind, h["titel"]))
-        at = found
         erste = False
     cuts.sort(key=lambda c: c[0])
     return cuts
