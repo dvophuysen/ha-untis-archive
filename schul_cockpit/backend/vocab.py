@@ -1018,6 +1018,13 @@ def printed_of(row) -> list[int]:
     return found or ([row["source_page"]] if row.get("source_page") else [])
 
 
+def book_of(row) -> str:
+    """Zu welchem Buchteil eine Seite gehört. Seitenzahlen gelten nur innerhalb
+    eines Buches: Begleitband S. 10 und Arbeitsheft S. 10 sind zwei Seiten."""
+    return ((row.get("source_label") or "").strip()
+            or ("Schulbuch" if (row.get("origin") or "") == "book_fetch" else "")).lower()
+
+
 def one_per_spread(rows: list[dict]) -> list[dict]:
     """Jede gedruckte Seite nur einmal lesen.
 
@@ -1032,15 +1039,16 @@ def one_per_spread(rows: list[dict]) -> list[dict]:
         passend = row.get("page_check") == "ok" or (row.get("source_page") in printed)
         return (0 if passend else 1, row["id"])
 
-    belegt: set[int] = set()
+    belegt: dict[str, set[int]] = {}
     out = []
     for row in sorted(rows, key=rang):
         printed = set(printed_of(row))
-        if printed and printed <= belegt:
+        schon = belegt.setdefault(book_of(row), set())
+        if printed and printed <= schon:
             continue
-        belegt |= printed
+        schon |= printed
         out.append(row)
-    return sorted(out, key=lambda r: ((r["source_label"] or ""), min(printed_of(r) or [0]), r["id"]))
+    return sorted(out, key=lambda r: (book_of(r), min(printed_of(r) or [0]), r["id"]))
 
 
 def _page_rows(account_id: int, subject: str) -> list[dict]:
