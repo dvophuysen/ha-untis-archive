@@ -304,3 +304,34 @@ async def test_pages_the_session_never_reached_keep_their_attempts(env, monkeypa
     await collector.collect(1)
     with closing(db.webapp_conn()) as conn:
         assert conn.execute("SELECT MAX(attempts) FROM source_links WHERE account_id=1").fetchone()[0] >= 1
+
+
+def test_a_double_page_book_is_only_ordered_by_its_left_pages(env):
+    """Green Line liefert Doppelseiten: ein Bild, zwei gedruckte Seiten, die
+    Bestellung trägt die Nummer der linken. Ungerade bestellt liefert der Viewer
+    irgendetwas — vierzig Abrufe deckten fünfzehn Seiten ab, jede mehrfach
+    (D138). Erkannt wird das am Bestand, nicht geraten."""
+    with closing(db.webapp_conn()) as c, c:
+        for page, printed in ((160, [160, 161]), (162, [162, 163]), (164, [164, 165])):
+            c.execute("INSERT INTO materials(account_id,kind,subject_name,title,summary,source_book,source_page,"
+                      "printed_pages,origin,analysis_state,created_at,updated_at) "
+                      "VALUES(1,'book_page','englisch','Vocabulary','','Green Line 4',?,?,'book_fetch','ready','now','now')",
+                      (page, json.dumps(printed)))
+    assert collector.spread_left(1, 'Green Line 4') == 0
+    # Ein Buch ohne Doppelseiten bleibt unangetastet.
+    assert collector.spread_left(1, 'Gibt es nicht') is None
+    assert collector.fold_spreads([161, 163, 166, 167], 0) == [160, 162, 166]
+    assert collector.fold_spreads([161, 163, 166], None) == [161, 163, 166]
+
+
+def test_a_delivered_spread_counts_for_both_of_its_printed_pages(env):
+    """Wer 160/161 abgerufen hat, hat auch die 161 im Bestand. Sie noch einmal
+    zu bestellen brachte nur eine Dublette (D138)."""
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO materials(account_id,kind,subject_name,title,summary,source_book,source_page,"
+                  "printed_pages,page_check,origin,analysis_state,created_at,updated_at) "
+                  "VALUES(1,'book_page','englisch','Vocabulary','','Green Line 4',160,?,'ok','book_fetch','ready','now','now')",
+                  (json.dumps([160, 161]),))
+    have = sources._book_pages(1)['englisch']
+    assert 160 in have and 161 in have, 'beide gedruckten Seiten liegen vor'
+    assert have[161]['source_page'] == 160

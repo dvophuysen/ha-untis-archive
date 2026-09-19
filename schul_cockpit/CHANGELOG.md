@@ -1,3 +1,12 @@
+## 1.12.0
+
+- Die Vokabellisten werden anders gegliedert: Erst werden die Überschriften aller Seiten eines Buchteils gelesen, dann die Wörter. Welche Überschrift eine Einheit ist und welche ein Abschnitt, entscheidet der Vergleich aller Seiten — auf einer einzelnen Seite ist das gar nicht zu erkennen. Ein Laufkopf wie „Vocabulary" beginnt keinen neuen Teil mehr, ein Spaltenkopf wird nicht mehr zum Abschnitt.
+- Ein Block läuft von Überschrift zu Überschrift, über den Seitenwechsel hinweg. Beginnt eine Seite mitten in einer Liste, gehören ihre ersten Wörter noch zum Block davor.
+- Die dritte Ebene (Kasten unter Abschnitt) entfällt. Ein Themenkasten ist jetzt ein Block wie jeder andere — für das Üben macht das keinen Unterschied, für die Zuverlässigkeit schon.
+- Die Sortierung lässt sich jederzeit neu setzen, ohne eine Seite noch einmal zu lesen und ohne einen Lernstand anzufassen.
+- Das Wörterverzeichnis hinter dem Wortschatzteil (bei Green Line das Dictionary aller vier Bände) landet nicht mehr in der Liste.
+- Bücher, die Doppelseiten liefern, werden nur noch nach ihren linken Seiten bestellt: halb so viele Abrufe, keine Dubletten.
+
 ## 1.11.1
 
 - Jede gedruckte Buchseite wird nur noch einmal in die Vokabelliste gelesen. Noahs Englischbuch kommt als Doppelseite, und der Viewer lieferte auf viele Bestellungen dieselbe Doppelseite noch einmal — vierzig Abrufe für rund fünfzehn Seiten. Jede Dublette brachte dieselben Wörter unter einer anderen Seitenzahl und riss die Fortsetzung über den Seitenwechsel auseinander; das erklärt die unbrauchbaren Listen in Englisch und Spanisch.

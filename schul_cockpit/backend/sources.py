@@ -398,14 +398,30 @@ def scan_for(scanned: dict[str, dict[tuple[str, int], int]], subject: str, label
 
 
 def _book_pages(account_id: int) -> dict[str, dict[int, dict]]:
-    """Welche Buchseiten je Fach abgerufen im Bestand liegen, mit Prüfstand."""
+    """Welche Buchseiten je Fach abgerufen im Bestand liegen, mit Prüfstand.
+
+    Eine Doppelseite deckt beide gedruckten Seiten ab: Wer 160/161 bestellt hat,
+    hat auch die 161 im Bestand, und sie noch einmal zu bestellen brachte nur
+    eine Dublette (D138). Die gedruckte Zahl schlägt dabei die bestellte."""
     have: dict[str, dict[int, dict]] = {}
     with closing(webapp_conn()) as conn:
-        for row in conn.execute(
-            "SELECT id,subject_name,source_book,source_page,page_check,fits_quote,analysis_state FROM materials "
-            "WHERE account_id=? AND hidden=0 AND origin='book_fetch' AND source_page IS NOT NULL", (account_id,)):
-            subject = (row["subject_name"] or "").strip().casefold()
-            have.setdefault(subject, {})[row["source_page"]] = dict(row)
+        rows = [dict(r) for r in conn.execute(
+            "SELECT id,subject_name,source_book,source_page,printed_pages,page_check,fits_quote,analysis_state "
+            "FROM materials WHERE account_id=? AND hidden=0 AND origin='book_fetch' AND source_page IS NOT NULL",
+            (account_id,))]
+    for row in rows:
+        subject = (row["subject_name"] or "").strip().casefold()
+        have.setdefault(subject, {}).setdefault(row["source_page"], row)
+    for row in rows:
+        subject = (row["subject_name"] or "").strip().casefold()
+        try:
+            printed = [int(x) for x in json.loads(row["printed_pages"] or "[]")]
+        except (ValueError, TypeError):
+            printed = []
+        for page in printed:
+            vorhanden = have[subject].get(page)
+            if vorhanden is None or (vorhanden.get("page_check") != "ok" and row.get("page_check") == "ok"):
+                have[subject][page] = row
     return have
 
 

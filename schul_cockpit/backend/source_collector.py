@@ -278,6 +278,39 @@ def _rank(priority: dict | None, subject: str, page: int, only_chapter: bool) ->
     return (2, int(only_chapter))
 
 
+def spread_left(account_id: int, book_title: str) -> int | None:
+    """Ob das Buch Doppelseiten liefert, und welche Hälfte die Nummer trägt.
+
+    Noahs Green Line kommt als Doppelseite: ein Bild, zwei gedruckte Seiten,
+    und die Bestellung trägt die Nummer der linken. Ungerade bestellt liefert
+    der Viewer dann irgendetwas — vierzig Abrufe deckten fünfzehn Seiten ab,
+    jede mehrfach (D138). Gemessen wird am Bestand, nicht geraten: Erst ab drei
+    einheitlichen Doppelseiten gilt das Buch als Doppelseitenbuch."""
+    with closing(webapp_conn()) as conn:
+        rows = conn.execute(
+            "SELECT printed_pages FROM materials WHERE account_id=? AND origin='book_fetch' AND hidden=0 "
+            "AND source_book=? AND printed_pages IS NOT NULL", (account_id, book_title)).fetchall()
+    seiten = []
+    for row in rows:
+        try:
+            found = sorted(int(x) for x in json.loads(row[0] or "[]"))
+        except (ValueError, TypeError):
+            continue
+        if len(found) == 2 and found[1] == found[0] + 1:
+            seiten.append(found[0] % 2)
+    if len(seiten) < 3:
+        return None
+    links = max({0, 1}, key=seiten.count)
+    return links if seiten.count(links) >= 0.8 * len(seiten) else None
+
+
+def fold_spreads(pages, left: int | None) -> list[int]:
+    """Bestellungen auf die linke Hälfte ihrer Doppelseite zusammenlegen."""
+    if left is None:
+        return sorted(set(pages))
+    return sorted({p if p % 2 == left else max(1, p - 1) for p in pages})
+
+
 def wanted_pages(account_id: int, priority: dict | None = None) -> list[dict]:
     """Was noch zu holen ist, je Buch: Seiten offener Hausaufgaben, dann
     Klausurfächer, dann der Rest; genannte Seiten vor Kapitelseiten, neueste
@@ -394,7 +427,8 @@ async def _collect(account_id: int, budget: int) -> dict:
         # Kapitelseiten); geblättert wird dann in Buchreihenfolge.
         # Nicht mehr bestellen, als eine Sitzung in ihrem Zeitbudget schafft:
         # Der Rest käme ohnehin nicht dazu und wartet auf die nächste Runde.
-        pages = sorted(group["order"][:min(remaining, PAGES_PER_SESSION)])
+        pages = fold_spreads(group["order"][:min(remaining, PAGES_PER_SESSION)],
+                             spread_left(account_id, book["title"]))
         remaining -= len(pages)
         delivery = await fetch_pages(account_id, book, credentials, pages, use_cache=False,
                                      budget=90 + 25 * len(pages))
