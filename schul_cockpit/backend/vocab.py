@@ -1056,14 +1056,12 @@ def head_levels(heads: list[dict], known: dict) -> dict[str, str]:
     „Unidad 3"), im Verzeichnis des Buchs steht, oder auf irgendeiner Seite als
     Laufkopf wiederkehrt. Alles andere ist zunächst ein Abschnitt.
 
-    Danach die Optik, und zwar nur, wenn sie wirklich unterscheidet: Sieht eine
-    übrige Überschrift genauso aus wie die sicher erkannten Einheiten, ist sie
-    wohl auch eine — so kommt „Across cultures 4" zu seinem Rang, das weder eine
-    Nummer trägt noch im Verzeichnis steht. Sieht aber die Mehrheit der übrigen
-    so aus, sagt das Aussehen nichts: Ein Buch, das seine Abschnitte ebenso
-    hervorhebt wie seine Teile, machte daraus sonst lauter Einheiten."""
+    Größe, Farbe und Rahmen werden mitgeschrieben und sind in der Elternansicht
+    zu sehen, entscheiden aber nichts. Gemessen an Kind B Englisch machte die
+    Optik aus „Station 2", „Story" und „Check-out" eigene Einheiten: Das Buch
+    hebt seine Abschnitte genauso hervor wie seine Teile. Was ein Teil ist, sagt
+    das Buch selbst — im Laufkopf und im Verzeichnis, nicht im Schriftgrad."""
     art: dict[str, str] = {}
-    optik: dict[str, tuple] = {}
     bekannt = {k for name in (v["name"] for v in known.values()) for k in bundle_keys(name)}
     # Erst die Laufköpfe und die Marken, die sie nennen. Oben am Seitenrand steht
     # nie eine Überschrift, sondern immer der Laufkopf; im Text erkennt man ihn
@@ -1099,7 +1097,6 @@ def head_levels(heads: list[dict], known: dict) -> dict[str, str]:
         key = plain(h["titel"])
         if not key:
             continue
-        optik.setdefault(key, (h["groesser"], h["farbig"], h["gerahmt"]))
         if key in art:
             continue
         kurz = abbrev(h["titel"])
@@ -1112,13 +1109,6 @@ def head_levels(heads: list[dict], known: dict) -> dict[str, str]:
             art[key] = "einheit"
         else:
             art[key] = "abschnitt"
-    # Nur ein hervorgehobenes Aussehen sagt etwas; „nichts davon" haben alle.
-    sicher = {optik[k] for k, a in art.items() if a == "einheit" and any(optik.get(k, ()))}
-    rest = [k for k, a in art.items() if a == "abschnitt"]
-    passend = [k for k in rest if optik.get(k) in sicher]
-    if sicher and passend and len(passend) * 2 <= len(rest):
-        for k in passend:
-            art[k] = "einheit"
     return art
 
 

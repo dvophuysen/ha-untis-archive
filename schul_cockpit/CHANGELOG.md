@@ -1,3 +1,7 @@
+## 1.12.6
+
+- Wie eine Überschrift aussieht, entscheidet nichts mehr. An Kind B Englisch gemessen machte die Optik aus „Station 2", „Story" und „Check-out" eigene Einheiten — das Buch hebt seine Abschnitte genauso hervor wie seine Teile. Was ein Teil ist, sagt das Buch selbst: im Laufkopf und im Verzeichnis. Größe, Farbe und Rahmen werden weiter mitgeschrieben und sind in der Elternansicht zu sehen.
+
 ## 1.12.5
 
 - An Kind B Büchern nachgebessert: „Holiday words" ist eine Überschrift und kein Laufkopf, „Unit 1 / Media smart" über der Seite nennt zwei Teile, und eine bloße Nummer im Laufkopf taugt nicht als Abkürzung — sonst wurde „1. Lernen mit dem Buch" zur eigenen Einheit.

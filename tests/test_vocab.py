@@ -1151,17 +1151,23 @@ def test_the_same_page_number_in_two_books_is_not_a_duplicate():
     assert [r["id"] for r in vocab.one_per_spread(rows)] == [2, 1, 3]
 
 
-def test_a_part_without_a_number_is_recognised_by_how_it_looks():
-    """„Across cultures 4" trägt keine Nummer und steht in keinem Verzeichnis,
-    ist aber ein Teil des Buchs wie „Unit 3". Erkennbar ist das am Aussehen —
-    es sieht aus wie die Teile, die sich sicher erkennen lassen (D139)."""
+def test_how_a_heading_looks_decides_nothing():
+    """Die Optik wird mitgeschrieben und ist in der Elternansicht zu sehen, sie
+    entscheidet aber nichts. Gemessen an Kind B Englisch machte sie aus
+    „Station 2", „Story" und „Check-out" eigene Einheiten: Das Buch hebt seine
+    Abschnitte genauso hervor wie seine Teile. Was ein Teil ist, sagt das Buch
+    selbst — im Laufkopf und im Verzeichnis, nicht im Schriftgrad (D139)."""
     heads = [kopf("Unit 3", "a", groesser=True, farbig=True),
-             kopf("Station 1", "b", farbig=True),
-             kopf("Station 2", "c", farbig=True),
-             kopf("Across cultures 4", "d", groesser=True, farbig=True)]
+             kopf("Across cultures 4", "d", groesser=True, farbig=True),
+             kopf("Station 1", "b", groesser=True, farbig=True),
+             kopf("Story", "c", groesser=True, farbig=True)]
     art = vocab.head_levels(heads, {})
-    assert art["unit 3"] == "einheit" and art["across cultures 4"] == "einheit"
-    assert art["station 1"] == art["station 2"] == "abschnitt"
+    assert art["unit 3"] == "einheit", "die Nummer macht sie erkennbar"
+    assert art["across cultures 4"] == art["station 1"] == art["story"] == "abschnitt"
+    # Nennt der Laufkopf den Teil, ist er erkennbar — und nur dann.
+    art = vocab.head_levels([kopf("Vocabulary AC 4", wo="seitenkopf")] + heads, {})
+    assert art["across cultures 4"] == "einheit"
+    assert art["station 1"] == art["story"] == "abschnitt"
 
 
 def test_a_book_that_highlights_everything_gets_no_free_units():
