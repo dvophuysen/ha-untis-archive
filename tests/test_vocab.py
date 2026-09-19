@@ -1135,3 +1135,64 @@ def test_the_same_page_number_in_two_books_is_not_a_duplicate():
     # Drei Bücher: Begleitband, Arbeitsheft und das Schulbuch — die Abholung ohne
     # Etikett ist dasselbe Buch wie „Schulbuch" und damit die einzige Dublette.
     assert [r["id"] for r in vocab.one_per_spread(rows)] == [2, 1, 3]
+
+
+def test_a_part_without_a_number_is_recognised_by_how_it_looks():
+    """„Across cultures 4" trägt keine Nummer und steht in keinem Verzeichnis,
+    ist aber ein Teil des Buchs wie „Unit 3". Erkennbar ist das am Aussehen —
+    es sieht aus wie die Teile, die sich sicher erkennen lassen (D139)."""
+    heads = [kopf("Unit 3", "a", groesser=True, farbig=True),
+             kopf("Station 1", "b", farbig=True),
+             kopf("Station 2", "c", farbig=True),
+             kopf("Across cultures 4", "d", groesser=True, farbig=True)]
+    art = vocab.head_levels(heads, {})
+    assert art["unit 3"] == "einheit" and art["across cultures 4"] == "einheit"
+    assert art["station 1"] == art["station 2"] == "abschnitt"
+
+
+def test_a_book_that_highlights_everything_gets_no_free_units():
+    """Hebt ein Buch seine Abschnitte genauso hervor wie seine Teile, sagt das
+    Aussehen nichts — dann bleibt es bei dem, was sich belegen lässt (D139)."""
+    heads = [kopf("Unit 3", "a", groesser=True, farbig=True),
+             kopf("Station 1", "b", groesser=True, farbig=True),
+             kopf("Station 2", "c", groesser=True, farbig=True)]
+    art = vocab.head_levels(heads, {})
+    assert art["unit 3"] == "einheit"
+    assert art["station 1"] == art["station 2"] == "abschnitt"
+
+
+def test_the_first_real_spread_of_noahs_english_book(setup):
+    """Die erste Doppelseite des Vokabelteils von Green Line 4, wie sie wirklich
+    aussieht: links (S. 160) die Erklärseite mit den Kästen „Abkürzungen und
+    Zeichen" und „Englische Laute", rechts (S. 161) „Unit 1 On the move" mit dem
+    Abschnitt „Introduction" und einundzwanzig Wörtern."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    woerter = ["on the move", "travelling", "foreign", "seasick", "luggage", "to be afraid (of)", "plane",
+               "departure lounge", "passport", "boarding card", "desk", "visa", "passenger", "flight attendant",
+               "customs", "suitcase", "ferry", "control", "arrivals hall", "currency", "duty-free"]
+    text = "Vocabulary\nAbkürzungen und Zeichen\nEnglische Laute\n160\nUnit 1 On the move\nIntroduction\n" \
+        + "\n".join(f"{w} — Bedeutung" for w in woerter) + "\n161"
+    mid = seed_page(subject="ENGLISCH", text=text, page=160, label="Schulbuch",
+                    title="Vocabulary Unit 1: On the move")
+    ai_answers(patch,
+               {"words": [{"foreign_word": w, "meanings": ["Bedeutung"]} for w in woerter]},
+               {160: {"ueberschriften": [
+                   kopf("Vocabulary", wo="seitenkopf"),
+                   # Die Erklärseite links trägt Überschriften ohne ein Wort darunter.
+                   kopf("Vocabulary", groesser=True, farbig=True),
+                   kopf("Abkürzungen und Zeichen", gerahmt=True, farbig=True),
+                   kopf("Englische Laute", gerahmt=True, farbig=True),
+                   kopf("Unit 1 On the move", "on the move", groesser=True, farbig=True),
+                   kopf("Introduction", "on the move", farbig=True)],
+                   "beginnt_mit_ueberschrift": True}})
+    client.post(V + "/ENGLISCH/extract", json={"material_ids": [mid]})
+    found = [u for u in vocab.units(1, "ENGLISCH") if u["words"]]
+    assert len(found) == 1, [u["unit"] for u in found]
+    unit = found[0]
+    assert unit["unit"] == "Unit 1 On the move" and unit["words"] == 21
+    # Die Kästen der Erklärseite tragen keine Lernwörter und stehen deshalb auch
+    # nicht in der Liste; der eine Abschnitt hat alle einundzwanzig Wörter.
+    assert [(s["section"], s["words"]) for s in unit["sections"]] == [("Introduction", 21)]
+    karten = vocab.cards(1, "ENGLISCH", "Unit 1 On the move", 1, "from", limit=40)
+    assert [c["foreign_word"] for c in karten][:3] == ["on the move", "travelling", "foreign"]
