@@ -280,7 +280,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 14
+EXTRACT_VERSION = 15
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -312,6 +312,35 @@ UNIT_KEY = re.compile(r"^(unidad|unit|lektion|lecci[oó]n|le[cç]on|m[oó]dulo|k
 # Schulbuch nummeriert „Unidad 3", das Grammatikheft nur „3". Dann entscheidet
 # der Titel dahinter.
 _NUMBERED = re.compile(r"^(?:unidad|unit|lektion|lecci[oó]n|le[cç]on|m[oó]dulo|kapitel|chapter|module)?\s*0*\d{1,2}[.:)]?\s+(.{6,})$", re.I)
+
+
+def trim_section_tail(name: str, sections) -> str:
+    """Einen Abschnittsnamen am Ende eines Einheitsnamens abschneiden.
+
+    Nur, wenn davor noch etwas steht: „The new boy" allein bleibt, „Unit 1 The
+    new boy" wird zu „Unit 1"."""
+    flat = plain(name)
+    for part in sections:
+        tail = plain(part)
+        if not tail or flat == tail or not flat.endswith(" " + tail):
+            continue
+        cut = name[: len(name) - len(part)].strip(" –—-:·,")
+        if cut:
+            return cut
+    return name
+
+
+def trim_unit_prefix(section: str, unit: str) -> str:
+    """Den Namen der Einheit am Anfang eines Abschnitts abschneiden.
+
+    „Across cultures 1 London: A first look at a world city“ ist der Abschnitt
+    „London: A first look at a world city“ in der Einheit „Across cultures 1“;
+    die Einheit steht schon darüber (D134)."""
+    flat, head = plain(section), plain(unit)
+    if not head or flat == head or not flat.startswith(head + " "):
+        return section
+    cut = section[len(unit):].strip(" –—-:·,") if plain(section[:len(unit)]) == head else ""
+    return cut or section
 
 
 def unit_key(name: str) -> str:
@@ -621,6 +650,7 @@ BOUNDARY = (
     "ab ist die Nummer dieses ersten Wortes. Beginnt der neue Teil erst auf der nächsten Seite, ist ab 0. "
     "Steht schon das erste Wort unter der neuen Überschrift, ist ab 1. einheit ist der Name des neuen Teils, "
     "so wie er über den Wörtern steht — „Unit 1“, „Welcome back!“, „Media smart“, „Unidad 3“, „Lektion 5“. "
+    "Nur der Teil selbst, ohne die Zwischenüberschrift darunter: „Unit 1“, nicht „Unit 1 The new boy“. "
     "Rate nicht: Findest du die Grenze nicht, antworte mit ab 0 und leerer einheit. Nur JSON: ")
 
 
@@ -1006,12 +1036,19 @@ def units(account_id: int, subject: str) -> list[dict]:
                 ours["at"] = min(ours["at"], sub["at"])
         if len(u["unit"]) > len(first["unit"]):
             first["unit"] = u["unit"]
+    # Der ausführlichere Name gewinnt (D110) — aber nicht, wenn das Ausführliche
+    # ein Abschnitt dieser Einheit ist. „Unidad 3 De paseo por España" ist der
+    # Titel der Einheit, „Unit 1 The new boy" dagegen die Einheit plus einer
+    # ihrer Abschnitte; so nennt die gezielte Grenzfrage manchmal den ganzen
+    # Kopf der Seite (D134).
+    for u in merged.values():
+        u["unit"] = trim_section_tail(u["unit"], (u.get("sections") or {}).keys())
     by_unit = merged
     known = book_units(account_id, subject)
     for u in by_unit.values():
         # Abschnitte in Buchreihenfolge, nicht alphabetisch (D115).
         u["sections"] = [
-            {"section": name, "words": info["words"],
+            {"section": trim_unit_prefix(name, u["unit"]), "words": info["words"],
              "boxes": [{"box": b, "words": sub["words"]}
                        for b, sub in sorted((info.get("boxes") or {}).items(), key=lambda kv: kv[1]["at"])]}
             for name, info in sorted((u.get("sections") or {}).items(), key=lambda kv: kv[1]["at"])]

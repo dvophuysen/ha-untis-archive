@@ -957,3 +957,17 @@ def test_an_unanswerable_boundary_does_not_cost_the_page(setup):
     r = client.post(V + "/LATEIN/extract", json={"material_ids": [grenze]})
     assert r.status_code == 200, r.text
     assert list(r.json()["words"].values()) == [2], "die erste Lesung bleibt stehen"
+
+
+def test_a_unit_name_carries_no_section_and_the_other_way_round():
+    """Der ausführlichere Name gewinnt (D110) — aber nicht, wenn das
+    Ausführliche ein Abschnitt dieser Einheit ist. „Unidad 3 De paseo por
+    España" ist der Titel der Einheit, „Unit 1 The new boy" die Einheit plus
+    einem ihrer Abschnitte (D134)."""
+    assert vocab.trim_section_tail('Unit 1 The new boy', ['The new boy', 'Station 1']) == 'Unit 1'
+    assert vocab.trim_section_tail('Unidad 3 De paseo por España', ['Texto A']) == 'Unidad 3 De paseo por España'
+    # Heißt der Abschnitt wie die ganze Einheit, bleibt der Name stehen.
+    assert vocab.trim_section_tail('The new boy', ['The new boy']) == 'The new boy'
+    # Und umgekehrt: Die Einheit steht schon über dem Abschnitt.
+    assert vocab.trim_unit_prefix('Across cultures 1 London: A first look', 'Across cultures 1') == 'London: A first look'
+    assert vocab.trim_unit_prefix('Station 1', 'Unit 1') == 'Station 1'
