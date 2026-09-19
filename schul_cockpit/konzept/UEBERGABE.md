@@ -43,6 +43,12 @@ Entscheidungen D137 bis D140 in [ENTSCHEIDUNGEN.md](ENTSCHEIDUNGEN.md).
   abgeschnitten.
 - **1.12.0 (D140)** Doppelseitenbücher werden nur noch nach ihren linken Seiten
   bestellt; eine gelieferte Doppelseite deckt beide gedruckten Seiten ab.
+- **1.12.1 bis 1.12.6** Sechs Nachbesserungen, jede am echten Lauf abgelesen:
+  die Gliederung erst setzen, wenn Überschriften gelesen sind; den Anker ohne
+  Lautschrift vergleichen; eine Überschrift ohne eigenes Wort dort beginnen
+  lassen, wo die nächste beginnt; den Laufkopf mit seiner Marke lesen
+  („Vocabulary AC 3" nennt den Teil, zu dem die Seite gehört); „Holiday words"
+  ist trotz des Wortes „words" kein Laufkopf; und die Optik entscheidet nichts.
 
 ## Gemessen, nicht geschätzt
 
@@ -79,11 +85,7 @@ Zwei Regeln, die plausibel klangen und an echten Seiten scheiterten:
 
 ## Offen
 
-- Die Messung oben. Ohne sie ist 1.12.0 nur getestet, nicht bewährt.
-- Ein Teil ohne Nummer wird an seiner Optik als Einheit erkannt
-  (`head_levels`). Das ist die einzige Regel, die auf eine Beobachtung des
-  Modells baut; sie greift nur, wenn höchstens die Hälfte der übrigen
-  Überschriften genauso aussieht. Beim Messen daraufschauen.
+- Die beiden Stellen in Kind A Spanisch, oben unter „Das Nächste zuerst".
 - Eine Korrekturschnittstelle für die Gliederung wäre jetzt billig: Einheit und
   Abschnitt einer Seite von Hand setzen, ohne neu zu lesen. `regroup()` müsste
   solche Festlegungen nur achten, wie `book_chapters.locked` es vormacht.
@@ -106,7 +108,7 @@ Zwei Regeln, die plausibel klangen und an echten Seiten scheiterten:
   `CHANGELOG.md`, Entscheidung als D-Nummer. Versionsstellen: erste neue
   Architektur, zweite Feature-Sets und bedeutsame Funktionsänderungen, dritte
   Korrekturen und Optimierungen.
-- Tests `python3 -m pytest tests` (541 grün), Frontend `npm run build`.
+- Tests `python3 -m pytest tests` (550 grün), Frontend `npm run build`.
   Migrationen ans Ende von `_MIGRATIONS` in `db.py`.
 - Messen statt schätzen. Eichungen laufen über `vocab/{fach}/compare` und
   `materials/{id}/analysis/compare`, beide speichern nichts. Ein Vergleich
