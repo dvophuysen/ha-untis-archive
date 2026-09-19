@@ -1256,3 +1256,13 @@ def test_a_dictionary_is_a_foreign_part_even_without_a_running_head():
     solchen. Ein Wörterverzeichnis bleibt trotzdem eines."""
     art = vocab.head_levels([kopf("Across cultures 4", "a", groesser=True), kopf("Dictionary", "zebra")], {})
     assert art["dictionary"] == "fremd"
+
+
+def test_a_running_head_with_its_unit_number_is_still_a_running_head():
+    """Green Line schreibt „1 | Vocabulary" über jede Seite der ersten Unit. Als
+    Überschrift gelesen sammelte „Vocabulary 1" dreiundsiebzig Wörter ein, die
+    zu den Abschnitten darunter gehören (D139)."""
+    art = vocab.head_levels([kopf("Unit 1", "a", groesser=True), kopf("Vocabulary 1", "b"),
+                             kopf("Wortschatz 2", "c"), kopf("Station 1", "d")], {})
+    assert art["vocabulary 1"] == art["wortschatz 2"] == "laufkopf"
+    assert art["station 1"] == "abschnitt"

@@ -1,3 +1,8 @@
+## 1.12.3
+
+- „Vocabulary 1" ist ein Laufkopf, keine Überschrift: Green Line schreibt die Nummer der Unit daneben. Als Überschrift gelesen sammelte sie dreiundsiebzig Wörter ein, die zu den Abschnitten darunter gehören.
+- Neu in der Elternansicht: Die gelesenen Überschriften jeder Seite lassen sich mit ihrem errechneten Rang ansehen. Die Gliederung wird gerechnet, nicht gelesen — ohne diesen Blick bliebe jede Abweichung Ratesache.
+
 ## 1.12.2
 
 - Die Zuordnung der Wörter zu ihren Überschriften greift jetzt wirklich. Am ersten echten Lauf gemessen und drei Fehler behoben: Das erste Wort unter einer Überschrift wird mit Lautschrift genannt, die Wortliste führt es ohne — beides wird jetzt gleich behandelt. Steht unter einer Überschrift gleich die nächste („Unit 1 On the move" über „Introduction"), beginnen beide beim selben Wort. Und ein Wörterverzeichnis wird auch dann erkannt, wenn das Modell es nicht als Laufkopf meldet.

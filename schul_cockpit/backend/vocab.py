@@ -525,7 +525,12 @@ def split_mark(word: str) -> tuple[str, str]:
 # Eine Aufgabennummer: „5", „2a", „B3", „Nr. 7". Als Abschnitt gelesen zerreißt
 # sie den Abschnitt, in dem sie steht (D128).
 _JUST_A_NUMBER = re.compile(r"^(nr\.?\s*)?[a-z]?\s*\d{1,3}\s*[a-z]?[).]?$", re.I)
-_RUNNING_HEAD = re.compile(r"^(v|voc|vocabulary|vocabulario|vocabulaire|wortschatz|lernwörter|lernwoerter|words)$", re.I)
+# Die Nummer dahinter gehört zum Laufkopf, nicht zu einer Überschrift: Green
+# Line schreibt „1 | Vocabulary" über jede Seite der ersten Unit, und als
+# Überschrift gelesen sammelte „Vocabulary 1" dreiundsiebzig Wörter ein, die zu
+# den Abschnitten darunter gehören (D139).
+_RUNNING_HEAD = re.compile(
+    r"^(v|voc|vocabulary|vocabulario|vocabulaire|wortschatz|lernwörter|lernwoerter|words)\s*\d{0,2}$", re.I)
 
 
 # Manche Anhangseiten tragen zwei Namen im Laufkopf: „Unit 1 / Media smart".
@@ -1108,6 +1113,30 @@ def page_cuts(words: list[dict], info: dict, art: dict) -> list[tuple[int, str, 
         erste = False
     cuts.sort(key=lambda c: c[0])
     return cuts
+
+
+def outline(account_id: int, subject: str) -> list[dict]:
+    """Die gelesenen Überschriften je Seite mit ihrem Rang, ohne Modellaufruf.
+
+    Die Gliederung wird gerechnet, nicht gelesen; ohne einen Blick auf das, was
+    die Rechnung zu sehen bekommt, bliebe jede Abweichung Ratesache."""
+    found = pages(account_id, subject)
+    heads = heads_of(account_id, [p["material_id"] for p in found])
+    known = book_units(account_id, subject)
+    je_buch: dict[str, list[dict]] = {}
+    for p in found:
+        je_buch.setdefault(p["label"], []).extend((heads.get(p["material_id"]) or {}).get("ueberschriften") or [])
+    art_je_buch = {buch: head_levels(alle, known) for buch, alle in je_buch.items()}
+    out = []
+    for p in found:
+        info = heads.get(p["material_id"])
+        art = art_je_buch.get(p["label"], {})
+        out.append({"material_id": p["material_id"], "label": p["label"], "page": p["page"],
+                    "gelesen": info is not None,
+                    "beginnt_mit_ueberschrift": bool((info or {}).get("beginnt_mit_ueberschrift")),
+                    "ueberschriften": [{**h, "rang": art.get(plain(h["titel"]), "abschnitt")}
+                                       for h in (info or {}).get("ueberschriften") or []]})
+    return out
 
 
 def regroup(account_id: int, subject: str) -> int:

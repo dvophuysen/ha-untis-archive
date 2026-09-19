@@ -63,6 +63,14 @@ async def extract(account_id: int, subject: str, body: ExtractIn, user: CurrentU
     return {'words': counts, 'units': vocab.units(account_id, subject)}
 
 
+@router.get('/{subject}/outline')
+def outline(account_id: int, subject: str, user: CurrentUser = Depends(get_current_user)):
+    """Eltern: was die Gliederung zu sehen bekommt — die gelesenen Überschriften
+    je Seite mit ihrem errechneten Rang. Kostet keinen Aufruf."""
+    access(user, account_id, parent=True)
+    return {'subject': subject, 'pages': vocab.outline(account_id, subject)}
+
+
 class CompareIn(InputModel):
     material_id: int = Field(ge=1)
     tiers: list[str] = Field(min_length=1, max_length=4)
