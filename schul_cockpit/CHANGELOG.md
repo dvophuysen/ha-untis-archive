@@ -1,3 +1,8 @@
+## 1.10.0
+
+- Eine Vokabelseite wird jetzt mit zwei Fragen gelesen: erst die Wörter, dann die Gliederung der Seite. Beides zusammen war für das kleine Modell zu viel auf einmal — dieselbe Seite kam in zwei Läufen unterschiedlich gegliedert heraus, ein Themenkasten mal als Kasten, mal als eigener Abschnitt.
+- Zugeordnet wird die Gliederung in der App: Eine neue Einheit schließt Abschnitt und Kasten, ein neuer Abschnitt schließt den Kasten, und was vor der ersten Überschrift steht, gehört noch zur Seite davor.
+
 ## 1.9.1
 
 - Die Einheit heißt wieder „Unit 1" statt „Unit 1 The new boy", und ein Abschnitt trägt den Namen seiner Einheit nicht noch einmal vor sich her.
