@@ -1,3 +1,7 @@
+## 1.9.1
+
+- Die Einheit heißt wieder „Unit 1" statt „Unit 1 The new boy", und ein Abschnitt trägt den Namen seiner Einheit nicht noch einmal vor sich her.
+
 ## 1.9.0
 
 - Wo im Anhang zwei Einheiten auf einer Seite aneinanderstoßen, frage ich jetzt gezielt nach: Ab welchem Wort beginnt der neue Teil? Diese eine Frage kann auch das kleine Modell beantworten — die Seite muss dafür nicht mehr vom großen gelesen werden.
