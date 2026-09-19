@@ -280,7 +280,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 17
+EXTRACT_VERSION = 18
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -468,6 +468,7 @@ async def read_unread(account_id: int, subject: str) -> int:
     """Alle ungelesenen Wortseiten eines Fachs zerlegen; läuft im Hintergrund,
     sobald der Trainer geöffnet wird. Fehler landen an der Seite, nicht beim Kind."""
     done = 0
+    forget_duplicates(account_id, subject)
     for mid in unread_pages(account_id, subject):
         _BUSY.add(mid)
         try:
@@ -865,6 +866,13 @@ def carry_over(account_id: int, subject: str, page: int | None, label: str = "")
             "SELECT unit,section,box FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) "
             "AND page=? AND COALESCE(source_label,'')=? AND hidden=0 ORDER BY position DESC LIMIT 1",
             (account_id, subject, page - 1, label or "")).fetchone()
+        if row is None:
+            # Eine Doppelseite trägt die Nummer ihrer linken Seite; die Seite
+            # davor kann deshalb zwei Nummern zurückliegen (D138).
+            row = c.execute(
+                "SELECT unit,section,box FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) "
+                "AND page=? AND COALESCE(source_label,'')=? AND hidden=0 ORDER BY position DESC LIMIT 1",
+                (account_id, subject, page - 2, label or "")).fetchone()
     return (row["unit"] or "", row["section"] or "", row["box"] or "") if row else ("", "", "")
 
 
@@ -1000,14 +1008,77 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
 
 # ------------------------------------------------------------ Einheiten & Karten
 
-def pages(account_id: int, subject: str) -> list[dict]:
-    """Die Seiten des Fachs, die Lernwörter tragen, mit Stand der Zerlegung."""
+def printed_of(row) -> list[int]:
+    """Welche gedruckten Seiten ein Bild wirklich zeigt. Eine Doppelseite zeigt
+    zwei; ohne Angabe gilt die bestellte Seite."""
+    try:
+        found = [int(x) for x in json.loads(row.get("printed_pages") or "[]")]
+    except (ValueError, TypeError):
+        found = []
+    return found or ([row["source_page"]] if row.get("source_page") else [])
+
+
+def one_per_spread(rows: list[dict]) -> list[dict]:
+    """Jede gedruckte Seite nur einmal lesen.
+
+    Der Viewer liefert nicht immer, was bestellt wurde: Bei Noahs Englisch
+    deckten vierzig Abrufe fünfzehn Doppelseiten ab, jede zwei- bis dreimal,
+    weil auf „Seite 167“ die Seiten 162/163 kamen. Jede Dublette bringt dieselben
+    Wörter noch einmal unter einer anderen Seitenzahl, und die Fortsetzung über
+    den Seitenwechsel läuft danach quer durch den Anhang. Behalten wird die
+    Lieferung, die zur Bestellung passt; von gleichwertigen die erste (D138)."""
+    def rang(row):
+        printed = printed_of(row)
+        passend = row.get("page_check") == "ok" or (row.get("source_page") in printed)
+        return (0 if passend else 1, row["id"])
+
+    belegt: set[int] = set()
+    out = []
+    for row in sorted(rows, key=rang):
+        printed = set(printed_of(row))
+        if printed and printed <= belegt:
+            continue
+        belegt |= printed
+        out.append(row)
+    return sorted(out, key=lambda r: ((r["source_label"] or ""), min(printed_of(r) or [0]), r["id"]))
+
+
+def _page_rows(account_id: int, subject: str) -> list[dict]:
+    """Alle Materialien des Fachs, die eine Wortseite sein können — ungefiltert."""
     with closing(webapp_conn()) as c:
-        rows = [dict(r) for r in c.execute(
+        return [dict(r) for r in c.execute(
             "SELECT m.id,m.title,m.summary,m.content_text,m.source_label,m.source_page,m.origin,m.kind,"
+            "m.printed_pages,m.page_check,"
             "e.words AS extracted,e.error,e.text_hash FROM materials m LEFT JOIN vocab_extractions e ON e.material_id=m.id "
             "WHERE m.account_id=? AND m.hidden=0 AND lower(m.subject_name)=lower(?) AND m.kind NOT IN ('exam_notice','toc') "
             "ORDER BY m.source_label,m.source_page,m.id", (account_id, subject))]
+
+
+def forget_duplicates(account_id: int, subject: str) -> int:
+    """Wörter wegräumen, die aus einer doppelt gelieferten Seite stammen.
+
+    Sie beim Lesen zu überspringen genügt nicht: Die Einheiten zählen die
+    Wörter, nicht die Seiten, und die Dubletten stünden weiter in der Liste.
+    Angefasst wird nur, was das Kind noch nie geübt hat — ein Lernstand ist
+    durch nichts wiederherzustellen (D125)."""
+    rows = _page_rows(account_id, subject)
+    bleibt = {r["id"] for r in one_per_spread(rows)}
+    dubletten = [r["id"] for r in rows if r["id"] not in bleibt]
+    if not dubletten:
+        return 0
+    marks = ",".join("?" * len(dubletten))
+    with closing(webapp_conn()) as c, c:
+        gone = c.execute(
+            f"DELETE FROM vocab_words WHERE account_id=? AND material_id IN ({marks}) "
+            "AND id NOT IN (SELECT word_id FROM vocab_attempts)", (account_id, *dubletten)).rowcount
+    if gone:
+        LOG.info("%s: %s Wörter aus %s doppelt gelieferten Seiten entfernt", subject, gone, len(dubletten))
+    return gone
+
+
+def pages(account_id: int, subject: str) -> list[dict]:
+    """Die Seiten des Fachs, die Lernwörter tragen, mit Stand der Zerlegung."""
+    rows = one_per_spread(_page_rows(account_id, subject))
     out = []
     for r in rows:
         if r["extracted"] or looks_like_vocab(r):
