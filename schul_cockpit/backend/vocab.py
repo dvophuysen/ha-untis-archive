@@ -1107,12 +1107,11 @@ def regroup(account_id: int, subject: str) -> int:
     art_je_buch = {buch: head_levels(alle, known) for buch, alle in je_buch.items()}
     with closing(webapp_conn()) as c:
         rows = {}
-        for r in c.execute("SELECT id,material_id,unit,section,box,plain,position FROM vocab_words "
-                           "WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 ORDER BY material_id,position,id",
+        for r in c.execute("SELECT id,material_id,unit,section,box,hidden,plain,position FROM vocab_words "
+                           "WHERE account_id=? AND lower(subject)=lower(?) ORDER BY material_id,position,id",
                            (account_id, subject)):
             rows.setdefault(r["material_id"], []).append(dict(r))
-    ziel: dict[int, tuple[str, str]] = {}
-    draussen: list[int] = []
+    ziel: dict[int, tuple[str, str, int]] = {}
     unit = part = ""
     buch = None
     for p in found:
@@ -1124,9 +1123,9 @@ def regroup(account_id: int, subject: str) -> int:
             continue
         info = heads.get(p["material_id"]) or {}
         cuts = page_cuts(words, info, art_je_buch.get(p["label"], {}))
-        offen = {i: [] for i, _, _ in cuts}
+        offen: dict[int, list] = {}
         for i, kind, titel in cuts:
-            offen[i].append((kind, titel))
+            offen.setdefault(i, []).append((kind, titel))
         ende = len(words)
         for index, w in enumerate(words):
             for kind, titel in offen.get(index, []):
@@ -1136,33 +1135,21 @@ def regroup(account_id: int, subject: str) -> int:
                     unit, part = titel, ""
                 elif plain(titel) != plain(part):
                     part = titel
-            if index >= ende:
-                draussen.append(w["id"])
-                continue
-            ziel[w["id"]] = (unit or p["unit"], part)
+            # Hinter einem fremden Laufkopf beginnt ein anderer Teil des Buchs.
+            # Solche Wörter werden ausgeblendet, nicht gelöscht: Eine bessere
+            # Lesung der Überschriften holt sie zurück, eine Löschung wäre
+            # endgültig, weil die Wörterfrage je Textstand nur einmal läuft.
+            ziel[w["id"]] = (unit or p["unit"], part, 1 if index >= ende else 0)
     changed = 0
     with closing(webapp_conn()) as c, c:
-        for mid, words in rows.items():
+        for words in rows.values():
             for w in words:
                 will = ziel.get(w["id"])
-                if will is None:
+                if will is None or (w["unit"], w["section"], w["box"], w["hidden"]) == (*will[:2], "", will[2]):
                     continue
-                if (w["unit"], w["section"], w["box"]) == (will[0], will[1], ""):
-                    continue
-                c.execute("UPDATE vocab_words SET unit=?,section=?,box='' WHERE id=?", (will[0], will[1], w["id"]))
+                c.execute("UPDATE vocab_words SET unit=?,section=?,box='',hidden=? WHERE id=?",
+                          (will[0], will[1], will[2], w["id"]))
                 changed += 1
-        if draussen:
-            # Was hinter dem Wortschatz steht, gehört nicht in die Liste. Geübte
-            # Wörter bleiben auch hier stehen (D125).
-            marks = ",".join("?" * len(draussen))
-            gone = [r[0] for r in c.execute(
-                f"SELECT id FROM vocab_words WHERE id IN ({marks}) AND id NOT IN (SELECT word_id FROM vocab_attempts)",
-                draussen)]
-            if gone:
-                holes = ",".join("?" * len(gone))
-                c.execute(f"DELETE FROM vocab_words WHERE id IN ({holes})", gone)
-                LOG.info("%s: %s Wörter hinter dem Wortschatzteil entfernt", subject, len(gone))
-                changed += len(gone)
     if changed:
         LOG.info("%s: Gliederung neu gesetzt, %s Wörter betroffen", subject, changed)
     return changed

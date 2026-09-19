@@ -1049,23 +1049,37 @@ def test_a_foreign_part_behind_the_word_list_is_cut_off(setup):
     """Hinter dem Wortschatz beginnt bei Green Line das Dictionary: das gesamte
     Vokabular aller vier Bände, alphabetisch. Auf der Doppelseite 190/191 steht
     beides nebeneinander. Als Wortschatz gelesen schwemmte es die Liste zu —
-    Noahs „Unidad 3" hatte 1161 Wörter (D139)."""
+    Noahs „Unidad 3" hatte 1161 Wörter. Ausgeblendet, nicht gelöscht: Eine
+    bessere Lesung der Überschriften holt die Wörter zurück (D139)."""
     client, state, patch = setup
     client.app.include_router(vocab_router.router, prefix="/api")
     mid = seed_page(subject="ENGLISCH", text="a — x\nb — y\nzebra — Zebra", page=190,
                     label="Schulbuch", title="Vocabulary / Dictionary")
-    ai_answers(patch,
-               {"words": [{"foreign_word": "a", "meanings": ["x"]},
-                          {"foreign_word": "b", "meanings": ["y"]},
-                          {"foreign_word": "zebra", "meanings": ["Zebra"]}]},
-               {190: {"ueberschriften": [kopf("Vocabulary", wo="seitenkopf"),
-                                         kopf("Across cultures 4", "a", groesser=True),
-                                         kopf("Dictionary", "zebra", wo="seitenkopf")],
-                      "beginnt_mit_ueberschrift": True}})
+    fremd = {"jetzt": True}
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        if "subject" not in context:
+            heads = [kopf("Vocabulary", wo="seitenkopf"), kopf("Across cultures 4", "a", groesser=True)]
+            if fremd["jetzt"]:
+                heads.append(kopf("Dictionary", "zebra", wo="seitenkopf"))
+            return json.dumps({"ueberschriften": heads, "beginnt_mit_ueberschrift": True}), {}, "fake"
+        return json.dumps({"words": [{"foreign_word": "a", "meanings": ["x"]},
+                                     {"foreign_word": "b", "meanings": ["y"]},
+                                     {"foreign_word": "zebra", "meanings": ["Zebra"]}]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
     client.post(V + "/ENGLISCH/extract", json={"material_ids": [mid]})
+    unit = next(u for u in vocab.units(1, "ENGLISCH") if u["words"])
+    assert unit["words"] == 2, "was unter dem Dictionary steht, gehört nicht in die Liste"
+    assert [c["foreign_word"] for c in vocab.cards(1, "ENGLISCH", unit["unit"], 1, "from")] == ["a", "b"]
     with closing(db.webapp_conn()) as c:
-        namen = sorted(r[0] for r in c.execute("SELECT foreign_word FROM vocab_words"))
-    assert namen == ["a", "b"], "was unter dem Dictionary steht, gehört nicht in die Liste"
+        stand = {r[0]: r[1] for r in c.execute("SELECT foreign_word,hidden FROM vocab_words")}
+    assert stand == {"a": 0, "b": 0, "zebra": 1}, "die Zeile bleibt, nur ausgeblendet"
+    # Sagt eine spätere Lesung, dass dort kein fremder Teil beginnt, ist das Wort
+    # wieder da — gelöscht wäre es für immer weg gewesen.
+    fremd["jetzt"] = False
+    patch.setattr(vocab, "HEADS_VERSION", vocab.HEADS_VERSION + 1)
+    client.post(V + "/ENGLISCH/extract", json={"material_ids": [mid]})
+    assert next(u for u in vocab.units(1, "ENGLISCH") if u["words"])["words"] == 3
 
 
 def test_a_spread_delivered_twice_is_read_only_once():
