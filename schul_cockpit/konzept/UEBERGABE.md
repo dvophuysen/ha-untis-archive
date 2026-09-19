@@ -1,31 +1,27 @@
 # Übergabe an die nächste Session
 
-Stand 19.09.2026. Auf `main` liegt Schul-Cockpit **1.12.0**, im Store bereit;
-die laufende Instanz stand beim Schreiben noch auf 1.11.0, weil der Nutzer
-Updates selbst einspielt. Arbeitsbranch und `main` stehen gleich, 541 Tests
-grün. Keine Kindernamen, PINs oder Schlüssel in diesem Dokument (D15/D68).
+Stand 19.09.2026, abends. Live läuft Schul-Cockpit **1.12.6**, `main` und
+Arbeitsbranch stehen gleich, 550 Tests grün. Keine Kindernamen, PINs oder
+Schlüssel in diesem Dokument (D15/D68).
 
 ## Das Nächste zuerst
 
-Sobald 1.12.0 läuft, muss der neue Vokabelweg an echten Seiten gemessen werden.
-Er ist vollständig gebaut und mit Tests abgedeckt, aber noch nie mit einem
-echten Modell gelaufen — die Tests beantworten die Modellfragen selbst.
+Der neue Vokabelweg ist gebaut, ausgeliefert und an allen vier Listen gemessen.
+Offen sind zwei Stellen, beide in Kind A Spanisch:
 
-1. Trainer für Englisch (Konto 1) öffnen, dabei laufen beide Lesedurchgänge und
-   `regroup()` an. Der Lauf ist durch `_BUSY` gegen Doppelläufe gesichert; keine
-   eigenen Parallelskripte daneben starten, das ging schon einmal schief.
-2. `/vocab/ENGLISCH/units` gegen das Buch halten: Green Line 4, Wortschatzteil
-   S. 160–190. Erwartet werden Einheiten wie „Unit 1 On the move" mit den
-   Abschnitten „Introduction", „Station 1", „Station 2", nicht fünfzehn
-   zusammenhanglose Bündel.
-3. Prüfen, ob das Dictionary ab S. 191 draußen bleibt (die Wörter sind dann
-   `hidden=1`, nicht gelöscht).
-4. Dasselbe für Spanisch (Konto 1) und Englisch (Konto 2).
+- „Unidad 1 ¡Bienvenidos a mi barrio!" trägt 451 Wörter. Der Laufkopf dieser
+  Seiten nennt keine Marke, also fehlt der Hinweis, wo die nächste Unidad
+  beginnt. Die Elternansicht `GET /learning/vocab/SPANISCH/outline` zeigt ohne
+  Modellaufruf, was die Gliederung zu sehen bekommt — dort anfangen.
+- „Lista cronológica" (86 Wörter) ist ein eigener Anhangteil, kein Wortschatz
+  einer Einheit. Dafür gibt es `_OTHER_PART`; der Name steht nur noch nicht
+  darin, und ob er allgemein genug ist, gehört geprüft.
 
-Geht etwas schief, liegt der Hebel fast immer in der Antwort auf die
-Überschriftenfrage. Sie steht je Seite in `vocab_headings.heads` und lässt sich
-dort ansehen, ohne einen Aufruf zu kosten. `regroup()` kostet nichts und kann
-beliebig oft laufen.
+Kleinere Beobachtungen: In Kind A Englisch hat S. 164/165 keine einzige
+Überschrift gemeldet, deshalb hängen dort 77 Wörter an „Station 2: Idiot
+nephew?". Bei Kind B steht „Irregular verbs" unter „Unit 1" statt unter dem
+Grammatikanhang, weil „Grammar" nur als Laufkopf vorkommt und ein Laufkopf nie
+einen Block öffnet.
 
 ## Was diese Session gebaut hat
 
@@ -50,18 +46,36 @@ Entscheidungen D137 bis D140 in [ENTSCHEIDUNGEN.md](ENTSCHEIDUNGEN.md).
 
 ## Gemessen, nicht geschätzt
 
-- Die erste Vokabel-Doppelseite von Green Line 4 (Material 251, gedruckt
-  160/161) hat das kleine Modell fehlerfrei gelesen: 21 von 21 Wörtern in der
-  richtigen Reihenfolge, richtige Bedeutungen, und von der Erklärseite links
-  kein einziges Wort — auch nicht aus der Lauttabelle, die wie eine Wortliste
-  aussieht. Am Modell lag es also nicht.
-- Kind A Englisch: 40 abgerufene Materialien, 24 verschiedene Doppelseiten.
-  Gerade Bestellungen kamen richtig, ungerade um vier Seiten versetzt.
-  S. 186/187 und 188/189 fehlen bis heute.
-- Vokabelbestand vor dem Umbau: Konto 1 Englisch 1217 Wörter in 15 Einheiten,
-  Spanisch 1523 in 9; Konto 2 Englisch 424 in 5, Latein 57 in 3. Geübt ist
-  ausschließlich Latein (42 Wörter) — die englischen und spanischen Listen
-  durften deshalb gefahrlos neu entstehen.
+Alle vier Listen am Abend des 19.09., nach sechs Nachbesserungen, die jede am
+echten Lauf abgelesen ist:
+
+- Kind A Englisch: 9 Einheiten, 550 Wörter, genau die Gliederung des Buchs
+  (Unit 1, Across cultures 1, Text smart 1, Across cultures 2, Unit 2, Text
+  smart 2, Across cultures 3, Unit 3, Across cultures 4) mit den Abschnitten in
+  Buchreihenfolge. Vorher: 15 zusammenhanglose Bündel, 1217 Wörter.
+- Kind B Englisch: 4 Einheiten, 381 Wörter.
+- Kind B Latein: 54 Wörter, davon die 42 geübten mit vollem Verlauf. Der
+  Lernstand hat den ganzen Umbau überstanden.
+- Kind A Spanisch: 7 Einheiten, 671 Wörter statt 1523.
+- Die erste Vokabel-Doppelseite (Material 251, gedruckt 160/161) liest das
+  kleine Modell fehlerfrei: 21 von 21 Wörtern, richtige Reihenfolge, richtige
+  Bedeutungen, und von der Erklärseite links kein einziges Wort — auch nicht
+  aus der Lauttabelle, die wie eine Wortliste aussieht.
+- Kind A Englisch kam in 40 Abrufen für 24 verschiedene Doppelseiten; gerade
+  Bestellungen richtig, ungerade um vier Seiten versetzt. Gedruckt 186–189
+  fehlen bis heute.
+
+## Was sich dabei als falsch erwiesen hat
+
+Zwei Regeln, die plausibel klangen und an echten Seiten scheiterten:
+
+- **Die Optik entscheidet nichts.** „Größer, farbig, gerahmt" wird
+  mitgeschrieben, aber ein Buch, das seine Abschnitte genauso hervorhebt wie
+  seine Teile, macht daraus lauter Einheiten — bei Kind B wurden „Station 2",
+  „Story" und „Check-out" zu eigenen Einheiten.
+- **Eine Überschrift am Seitenkopf ist nicht automatisch eine Einheit.** Sie ist
+  der Laufkopf und öffnet nie einen Block; sie nennt aber die Marke des Teils,
+  und das ist der stärkste Hinweis überhaupt.
 
 ## Offen
 
