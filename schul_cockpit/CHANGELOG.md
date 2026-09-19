@@ -1,3 +1,8 @@
+## 1.12.1
+
+- Die Gliederung wird erst gesetzt, wenn die Überschriften einer Seite gelesen sind. Vorher blieb sie, wie sie ist: Sie zu überschreiben, bevor man sie kennt, machte aus jeder Einheit eine Seitenzahl.
+- Der Trainer zählt die offenen Seiten wieder richtig und startet den Lesedurchgang. Gezählt wird an den Seiten statt an den Bündeln — eine Seite, die noch zu lesen ist, hängt oft an einem Bündel, das die Auswahl gar nicht anbietet.
+
 ## 1.12.0
 
 - Die Vokabellisten werden anders gegliedert: Erst werden die Überschriften aller Seiten eines Buchteils gelesen, dann die Wörter. Welche Überschrift eine Einheit ist und welche ein Abschnitt, entscheidet der Vergleich aller Seiten — auf einer einzelnen Seite ist das gar nicht zu erkennen. Ein Laufkopf wie „Vocabulary" beginnt keinen neuen Teil mehr, ein Spaltenkopf wird nicht mehr zum Abschnitt.

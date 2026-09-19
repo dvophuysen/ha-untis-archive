@@ -83,9 +83,11 @@ Entscheidungen D137 bis D140 in [ENTSCHEIDUNGEN.md](ENTSCHEIDUNGEN.md).
 
 - Vor jeder Änderung den Plan abstimmen und auf ein ausdrückliches Ok warten
   (CLAUDE.md). Reine Lese- und Diagnoseschritte sind ausgenommen.
-- Immer auf `main` ausliefern: auf der Arbeitsbranch entwickeln,
-  `git merge --ff-only`, beide pushen, dann `/store/reload` über
-  `scripts/ha_supervisor.mjs`. **Das Update selbst spielt der Nutzer ein.**
+- Immer auf `main` ausliefern und selbst einspielen: auf der Arbeitsbranch
+  entwickeln, `git merge --ff-only`, beide pushen, dann `/store/reload post`
+  und `/addons/e54108c7_schul_cockpit/update post` über
+  `scripts/ha_supervisor.mjs`. Der Update-Aufruf antwortet mit
+  `unknown_error`, obwohl er anläuft; auf die Version warten.
 - Jede sichtbare Änderung: Version in `schul_cockpit/config.yaml`, Eintrag in
   `CHANGELOG.md`, Entscheidung als D-Nummer. Versionsstellen: erste neue
   Architektur, zweite Feature-Sets und bedeutsame Funktionsänderungen, dritte

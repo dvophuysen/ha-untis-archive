@@ -30,7 +30,11 @@ def units(account_id: int, subject: str, background: BackgroundTasks, user: Curr
     access(user, account_id)
     lang = vocab.language_of(subject)
     found = vocab.units(account_id, subject)
-    reading = sum(u['unread'] for u in found)
+    # Gezählt wird an den Seiten, nicht an den Bündeln: Eine Seite, die noch
+    # gelesen werden muss, hängt oft an einem Bündel, das die Auswahl gar nicht
+    # anbietet — dann stünde die Ansicht auf „nichts zu tun", und der
+    # Hintergrundlauf liefe nie an.
+    reading = len([p for p in vocab.pages(account_id, subject) if vocab.page_open(p)])
     if reading and lang:
         background.add_task(vocab.read_unread, account_id, subject)
     return {'subject': subject, 'language': lang, 'units': found, 'reading': reading,

@@ -28,8 +28,11 @@
   HA-Websocket-API (Kommando `supervisor/api`). Textantworten wie Logs kann
   dieser Weg nicht liefern, dafür den REST-Proxy nehmen. Die Add-on-API
   selbst (Verläufe, Materialien, Aufgaben) ist über eine Ingress-Sitzung
-  erreichbar; der Kopf des Skripts zeigt den Weg. Add-on-Updates nie selbst
-  auslösen; der Nutzer spielt sie ein.
+  erreichbar; der Kopf des Skripts zeigt den Weg. Add-on-Updates immer selbst
+  einspielen, außer der Nutzer sagt ausdrücklich etwas anderes: nach dem Push
+  `/store/reload post`, dann `/addons/e54108c7_schul_cockpit/update post`. Der
+  Update-Aufruf antwortet mit `unknown_error`, obwohl er anläuft — auf die
+  Version warten, nicht abbrechen.
 - Stand und offene Punkte für eine neue Session:
   [schul_cockpit/konzept/UEBERGABE.md](schul_cockpit/konzept/UEBERGABE.md).
 - `.mcp.json` bindet zusätzlich den HA-MCP-Server der Instanz ein

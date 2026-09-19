@@ -1119,7 +1119,7 @@ def regroup(account_id: int, subject: str) -> int:
     # gleichlautende Überschrift im Arbeitsheft (D131).
     je_buch: dict[str, list[dict]] = {}
     for p in found:
-        je_buch.setdefault(p["label"], []).extend(heads.get(p["material_id"], {}).get("ueberschriften") or [])
+        je_buch.setdefault(p["label"], []).extend((heads.get(p["material_id"]) or {}).get("ueberschriften") or [])
     art_je_buch = {buch: head_levels(alle, known) for buch, alle in je_buch.items()}
     with closing(webapp_conn()) as c:
         rows = {}
@@ -1137,7 +1137,14 @@ def regroup(account_id: int, subject: str) -> int:
             buch, unit, part = p["label"], "", ""
         if not words:
             continue
-        info = heads.get(p["material_id"]) or {}
+        info = heads.get(p["material_id"])
+        if info is None:
+            # Von dieser Seite ist noch keine Überschrift gelesen. Dann bleibt
+            # alles, wie es ist: Die Gliederung zu überschreiben, bevor man sie
+            # kennt, macht aus jeder Einheit eine Seitenzahl — und der Block
+            # dieser Seite läuft auch nicht weiter, denn wo er endet, ist unklar.
+            unit = part = ""
+            continue
         cuts = page_cuts(words, info, art_je_buch.get(p["label"], {}))
         offen: dict[int, list] = {}
         for i, kind, titel in cuts:
