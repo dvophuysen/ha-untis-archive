@@ -91,6 +91,10 @@ def test_words_come_from_the_page_once_and_must_stand_in_its_text(setup):
     calls = []
 
     async def complete(account, purpose, instruction, context, *a, **kw):
+        # Die Gliederungsfrage ist ein eigener, kleiner Aufruf (D135); gezählt
+        # wird hier nur das Lesen der Wörter.
+        if 'woerter' in context:
+            return json.dumps({"headings": []}), {}, "fake"
         calls.append((purpose, context))
         return json.dumps(WORDS), {}, "fake"
     patch.setattr(ai, "complete", complete)
@@ -204,6 +208,8 @@ def test_opening_the_trainer_reads_word_pages_by_itself_and_empty_pages_stay_qui
     calls = []
 
     async def complete(account, purpose, instruction, context, *a, **kw):
+        if 'woerter' in context:
+            return json.dumps({"headings": []}), {}, "fake"
         calls.append(context["page"])
         return json.dumps(WORDS if context["page"] == 10 else {"words": []}), {}, "fake"
     patch.setattr(ai, "complete", complete)
@@ -432,6 +438,8 @@ def test_a_changed_reading_instruction_reads_the_page_again(setup):
     calls = []
 
     async def complete(account, purpose, instruction, context, *a, **kw):
+        if 'woerter' in context:
+            return json.dumps({"headings": []}), {}, "fake"
         calls.append(1)
         return json.dumps({"words": [{"foreign_word": "ecce", "meanings": ["Schau!"]}]}), {}, "fake"
     patch.setattr(ai, "complete", complete)
@@ -697,6 +705,8 @@ def test_the_reading_is_told_which_section_is_still_open(setup):
     gesehen = []
 
     async def complete(account, purpose, instruction, context, *a, **kw):
+        if 'woerter' in context:
+            return json.dumps({"headings": []}), {}, "fake"
         gesehen.append(context.get("offen_von_der_seite_davor"))
         page = context["page"]
         return json.dumps({"words": [{**w, "unit": "Lektion 1", "section": "A" if page == 10 else "",
@@ -868,6 +878,8 @@ def test_the_unit_is_read_from_the_page_not_from_the_hint(setup):
     gesehen = []
 
     async def complete(account, purpose, instruction, context, *a, **kw):
+        if 'woerter' in context:
+            return json.dumps({"headings": []}), {}, "fake"
         gesehen.append(context.get("offen_von_der_seite_davor"))
         return json.dumps({"words": [{**w, "unit": "Lektion 1", "section": "A"}
                                      for w in WORDS["words"][:2]]}), {}, "fake"
@@ -908,11 +920,10 @@ def test_the_continuation_stops_at_the_book_and_at_the_page_before():
     assert vocab.carry_over(1, 'ENGLISCH', 206, 'Schulbuch') == ('Grammar', 'Irregular verbs', '')
 
 
-def test_a_page_where_the_unit_changes_is_asked_where_exactly(setup):
-    """Wo zwei Einheiten aneinanderstoßen, liegt der Schnitt im Satz der Seite.
-    Statt ein stärkeres Modell zu rufen, wird eine kleinere Frage gestellt: Ab
-    welchem Wort gilt der neue Teil? Die Wörter davor behalten die Einheit der
-    Vorseite, die danach bekommen die neue (D133)."""
+def test_the_outline_places_a_unit_boundary_inside_a_page(setup):
+    """Wo zwei Einheiten auf einer Seite aneinanderstoßen, sagt die Gliederung,
+    ab welchem Wort der neue Teil gilt. Die Wörter davor behalten die Einheit
+    der Vorseite (D133, D135)."""
     client, state, patch = setup
     client.app.include_router(vocab_router.router, prefix="/api")
     erste = seed_page(page=10)
@@ -920,20 +931,18 @@ def test_a_page_where_the_unit_changes_is_asked_where_exactly(setup):
     fragen = []
 
     async def complete(account, purpose, instruction, context, *a, **kw):
-        fragen.append(context)
         if 'woerter' in context:
-            # Die gezielte Frage: Der neue Teil beginnt beim dritten Wort.
-            return json.dumps({"ab": 3, "einheit": "Lektion 2"}), {}, "fake"
-        einheit = 'Lektion 1' if context['page'] == 10 else 'Lektion 2'
-        return json.dumps({"words": [{**w, "unit": einheit, "section": "A"} for w in WORDS["words"][:4]]}), {}, "fake"
+            fragen.append(context['woerter'])
+            if context['seite'] == 11:
+                return json.dumps({"headings": [{"ab": 3, "titel": "Lektion 2", "art": "einheit"}]}), {}, "fake"
+            return json.dumps({"headings": [{"ab": 1, "titel": "Lektion 1", "art": "einheit"}]}), {}, "fake"
+        return json.dumps({"words": [{**w, "unit": "Lektion 1"} for w in WORDS["words"][:4]]}), {}, "fake"
     patch.setattr(ai, "complete", complete)
     client.post(V + "/LATEIN/extract", json={"material_ids": [erste]})
-    assert len(fragen) == 1, "die erste Seite hat keine Vorseite und keine Grenze"
     client.post(V + "/LATEIN/extract", json={"material_ids": [grenze]})
-    assert 'woerter' in fragen[-1], "auf der Grenzseite wird gezielt nachgefragt"
+    assert len(fragen) == 2, "je Seite eine Gliederungsfrage"
     with closing(db.webapp_conn()) as c:
         rows = {r[0]: r[1] for r in c.execute("SELECT foreign_word,unit FROM vocab_words WHERE material_id=?", (grenze,))}
-    # Die ersten zwei Wörter gehören noch zur alten Einheit, ab dem dritten die neue.
     assert rows['ecce'] == 'Lektion 1' and rows['esse'] == 'Lektion 1'
     assert rows['servus'] == 'Lektion 2' and rows['cōgitāre'] == 'Lektion 2'
 
@@ -971,3 +980,31 @@ def test_a_unit_name_carries_no_section_and_the_other_way_round():
     # Und umgekehrt: Die Einheit steht schon über dem Abschnitt.
     assert vocab.trim_unit_prefix('Across cultures 1 London: A first look', 'Across cultures 1') == 'London: A first look'
     assert vocab.trim_unit_prefix('Station 1', 'Unit 1') == 'Station 1'
+
+
+def test_the_page_outline_is_its_own_question_and_the_app_assigns_it():
+    """Die Wörter liest ein kleines Modell stabil, die Gliederung nicht: Sie
+    kippte zwischen zwei Läufen, „Feelings" einmal als Kasten unter „Story",
+    einmal als Abschnitt daneben. Als eigene Frage mit nummerierter Wortliste
+    ist sie stabil, und zugeordnet wird in der App (D135)."""
+    woerter = [vocab.WordIn(foreign_word=f'w{i}', meanings=['x']) for i in range(1, 9)]
+    outline = [(1, 'Unit 1', 'einheit'), (3, 'The new boy', 'abschnitt'), (5, 'School', 'kasten'),
+               (7, 'Station 1', 'abschnitt')]
+    got = vocab.apply_outline(woerter, outline, ('Welcome back!', 'Holiday words', ''))
+    stand = [(w.unit, w.section, w.box) for w in got]
+    # Vor der ersten Überschrift gilt, was von der Seite davor läuft.
+    assert stand[0] == ('Unit 1', '', '')
+    assert stand[2] == ('Unit 1', 'The new boy', '')
+    # Der Kasten hängt unter seinem Abschnitt, nicht daneben.
+    assert stand[4] == ('Unit 1', 'The new boy', 'School')
+    # Ein neuer Abschnitt schließt den Kasten.
+    assert stand[6] == ('Unit 1', 'Station 1', '')
+
+
+def test_words_before_the_first_heading_keep_what_was_open():
+    """Beginnt die Seite mitten in einem Abschnitt, gehören ihre ersten Wörter
+    noch dorthin — das ist die Fortsetzung aus D115, jetzt über die Gliederung."""
+    woerter = [vocab.WordIn(foreign_word=f'w{i}', meanings=['x']) for i in range(1, 5)]
+    got = vocab.apply_outline(woerter, [(3, 'Unit 1', 'einheit')], ('Welcome back!', 'Holiday words', 'places'))
+    assert (got[0].unit, got[0].section, got[0].box) == ('Welcome back!', 'Holiday words', 'places')
+    assert (got[2].unit, got[2].section, got[2].box) == ('Unit 1', '', '')

@@ -280,7 +280,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 15
+EXTRACT_VERSION = 16
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -654,6 +654,92 @@ BOUNDARY = (
     "Rate nicht: Findest du die Grenze nicht, antworte mit ab 0 und leerer einheit. Nur JSON: ")
 
 
+class Heading(InputModel):
+    """Eine Überschrift auf der Seite, mit dem ersten Wort darunter."""
+    ab: int = Field(default=1, ge=1, le=400)
+    titel: str = Field(default="", max_length=90)
+    art: str = Field(default="abschnitt", max_length=12)
+
+
+class OutlineOut(InputModel):
+    headings: list[Heading] = Field(default_factory=list, max_length=12)
+
+
+OUTLINE = (
+    "Beantworte eine einzige Frage zu dieser Buchseite: Wie ist sie gegliedert? Die Lernwörter stehen unten in "
+    "ihrer Reihenfolge, nummeriert. Nenne jede Überschrift der Seite von oben nach unten, mit der Nummer des "
+    "ersten Wortes, das darunter steht.\n"
+    "art sagt, was für eine Überschrift es ist. „einheit“: der Teil des Buchs, meist der Laufkopf oben — „Unit 1“, "
+    "„Welcome back!“, „Media smart“, „Unidad 3“, „Lektion 5“. „abschnitt“: eine Zwischenüberschrift im Textfluss "
+    "darunter — „The new boy“, „Station 1“, „Story“, „Check-out“, „Texto A“. „kasten“: ein abgesetztes, gerahmtes "
+    "oder farbig unterlegtes Wortfeld zu einem Thema — „School“, „Feelings“, „la fruta“. Im Bild sieht man den "
+    "Unterschied: Ein Kasten ist vom Text abgesetzt, ein Abschnitt läuft im Satzspiegel mit.\n"
+    "titel ist die Überschrift, wie sie dasteht, ohne Zusätze und ohne die Überschrift darüber zu wiederholen. "
+    "Der Laufkopf einer Anhangseite („Vocabulary“, „V“, „Wortschatz“) ist keine Überschrift, eine Aufgabennummer "
+    "(„5“, „2a“) auch nicht. Beginnt die Seite unter einer Überschrift, die schon auf der Seite davor stand, nenne "
+    "sie nicht noch einmal — {offen}\n"
+    "Sieh im Bild nach, nicht nur im Text: Die Reihenfolge und die Art stehen im Satz der Seite. Erfinde nichts; "
+    "steht keine Überschrift auf der Seite, gib eine leere Liste. Nur JSON: ")
+
+
+async def page_outline(account_id: int, row: dict, words: list, open_at: tuple, tier: str | None = None):
+    """Die Gliederung der Seite als eigene Frage, getrennt vom Lesen der Wörter.
+
+    Die volle Leseanweisung verlangt Wort, Bedeutungen, Marke, Formen, Beispiel
+    und drei Gliederungsebenen auf einmal. Die Wörter liest ein kleines Modell
+    dabei zuverlässig — gemessen über mehrere Läufe identisch —, die Gliederung
+    nicht: Sie kippte zwischen zwei Läufen, „Feelings“ einmal als Kasten unter
+    „Story“, einmal als Abschnitt daneben. Als eigene, kleine Frage mit dem Bild
+    und der nummerierten Wortliste ist sie stabil, und zugeordnet wird in der
+    App (D135)."""
+    from . import ai_gateway as ai
+    liste = "\n".join(f"{i}. {w.foreign_word}" for i, w in enumerate(words, 1))
+    offen = ", ".join(x for x in (f"Einheit „{open_at[0]}“" if open_at[0] else "",
+                                  f"Abschnitt „{open_at[1]}“" if open_at[1] else "",
+                                  f"Kasten „{open_at[2]}“" if open_at[2] else "") if x)
+    offen = f"von der Seite davor läuft noch: {offen}." if offen else "von der Seite davor läuft nichts weiter."
+    try:
+        raw, _, _ = await ai.complete(
+            account_id, ai.VOCAB, OUTLINE.format(offen=offen) + json.dumps(OutlineOut.model_json_schema()),
+            {"seite": row.get("source_page"), "titel": row.get("title") or "", "woerter": liste},
+            images=page_image(account_id, row["id"]), max_output=2500, tier=tier)
+        found = OutlineOut.model_validate_json(raw)
+    except Exception as exc:
+        LOG.warning("Gliederung der Seite %s nicht bestimmbar: %s", row.get("source_page"), getattr(exc, "detail", exc))
+        return None
+    clean = []
+    for h in found.headings:
+        titel = clean_unit((h.titel or "").strip().rstrip(":;.,").strip())
+        if not titel or _RUNNING_HEAD.match(titel) or _JUST_A_NUMBER.match(titel) or not 1 <= h.ab <= len(words):
+            continue
+        art = h.art.strip().lower()
+        clean.append((h.ab, titel, art if art in ("einheit", "abschnitt", "kasten") else "abschnitt"))
+    clean.sort(key=lambda x: x[0])
+    return clean
+
+
+def apply_outline(words: list, outline: list, open_at: tuple) -> list:
+    """Die gefundene Gliederung auf die Wörter legen. Jedes Wort bekommt die
+    Überschriften, unter denen es steht — eine neue Einheit schließt Abschnitt
+    und Kasten, ein neuer Abschnitt schließt den Kasten (D116)."""
+    unit, part, box = open_at
+    stellen = {ab: [] for ab, _, _ in outline}
+    for ab, titel, art in outline:
+        stellen[ab].append((titel, art))
+    for index, w in enumerate(words, 1):
+        for titel, art in stellen.get(index, []):
+            if art == "einheit":
+                unit, part, box = titel, "", ""
+            elif art == "abschnitt":
+                part, box = titel, ""
+            elif part:
+                box = titel
+            else:
+                part, box = titel, ""
+        w.unit, w.section, w.box = unit, part, box
+    return words
+
+
 async def split_units(account_id: int, row: dict, open_unit: str, words: list, tier: str | None = None):
     """Die Grenze zwischen zwei Einheiten auf einer Seite, als eigene Frage.
 
@@ -815,9 +901,13 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
         # so eine Seite einer einzigen Einheit zu — gemessen an S. 211 und 221.
         # Betroffen sind die wenigen Seiten je Buch, auf denen die Einheit
         # wechselt; sie kosten das Zehnfache und sind es wert (D132).
-        if boundary_page(open_at[0], words):
-            # Nicht ein stärkeres Modell, sondern eine kleinere Frage: Wo genau
-            # beginnt der neue Teil? Das kann auch eine kleine Stufe (D133).
+        # Zwei kleine Fragen statt einer großen: erst die Wörter, dann die
+        # Gliederung der Seite. Die Wörter liest auch ein kleines Modell stabil,
+        # die Gliederung nur, wenn man sie einzeln fragt (D135).
+        outline = await page_outline(account_id, row, words, open_at, tier) if words else None
+        if outline:
+            words = apply_outline(words, outline, open_at)
+        elif boundary_page(open_at[0], words):
             words = await split_units(account_id, row, open_at[0], words, tier)
     except ValidationError:
         with closing(webapp_conn()) as c, c:
