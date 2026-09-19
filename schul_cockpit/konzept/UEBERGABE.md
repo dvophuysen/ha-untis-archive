@@ -1,112 +1,102 @@
 # Übergabe an die nächste Session
 
-Stand 17.09.2026, nachmittags. Live läuft Schul-Cockpit 0.90.0, Add-on-Log ohne
-Fehler. `main` ist ausgeliefert, Arbeitsbranch und `main` stehen gleich. Keine
-Kindernamen, PINs oder Schlüssel in diesem Dokument (D15/D68).
+Stand 19.09.2026. Auf `main` liegt Schul-Cockpit **1.12.0**, im Store bereit;
+die laufende Instanz stand beim Schreiben noch auf 1.11.0, weil der Nutzer
+Updates selbst einspielt. Arbeitsbranch und `main` stehen gleich, 541 Tests
+grün. Keine Kindernamen, PINs oder Schlüssel in diesem Dokument (D15/D68).
 
-## Was diese Session ausgeliefert hat (0.82.0 bis 0.90.0)
+## Das Nächste zuerst
 
-Entscheidungen D87 bis D94 in [ENTSCHEIDUNGEN.md](ENTSCHEIDUNGEN.md), Belege je
-Release oben in [UMSETZUNGSSTAND.md](UMSETZUNGSSTAND.md).
+Sobald 1.12.0 läuft, muss der neue Vokabelweg an echten Seiten gemessen werden.
+Er ist vollständig gebaut und mit Tests abgedeckt, aber noch nie mit einem
+echten Modell gelaufen — die Tests beantworten die Modellfragen selbst.
 
-- 0.82/0.83 KI-Einrichtung an einer Stelle (D87, D88): zwei Azure-Foundry-Zugänge,
-  vier Modellstufen (hoch, mittel, niedrig, transkription) mit Modellname,
-  optionalem Bereitstellungsnamen, Foundry-Auswahl und eigenen Kostensätzen. Die
-  App kennt nur Stufen. Zwei Pannen dabei: ein falsches Optionsschema (0.82.1)
-  und ein 503 in den Übersichten (0.83.1), beide mit Test abgesichert.
-- 0.83.2 „Kapitel prüfen" springt zum Buch statt auf eine leere Seite.
-- 0.84.0 Richtwerte statt Sperren (D89): kein Aufruf scheitert mehr an einem
-  Rahmen, Hochrechnung auf den Monat, Warnung ab 60 €, Freigabe von
-  Reservierungen, die der Anbieter nie angenommen hat.
-- 0.85.0 Zwei Durchgänge beim Materiallesen (D90): günstig lesen, bei
-  Handschrift, Arbeitsheft, Tabelle, MINT-Fach oder Unlesbarem gründlich
-  nachlesen, Tabellen zusätzlich mit hoher Reasoning-Tiefe.
-- 0.86.0 Bestand einer Abfrage in der App (D91): der Merkzettel wird geführt
-  statt jede Runde neu geschrieben; Buchseiten gehen nur noch mit, solange kein
-  Bestand steht.
-- 0.87.0 Arbeitsblätter Stufe 2 und 3 (D92): Vorsortierung durch die Auswertung
-  mit Beleg vom Blatt, Kennung „AB GE 16.09. Titel", Mentor bittet bei fehlendem
-  Bezug um ein Foto.
-- 0.88.0 Verfassung des Kindes (D93): einsilbige Antworten, viele Hinweise oder
-  späte Stunde führen zu kleineren Schritten und einem Pausenangebot.
-- 0.89.0/0.89.1 Eichwerkzeug für die Unterrichtsauswertung.
-- 0.90.0 Unterrichtsauswertung auf der niedrigen Stufe (D94), mit eigener
-  Einstellung getrennt vom Abschreiben.
+1. Trainer für Englisch (Konto 1) öffnen, dabei laufen beide Lesedurchgänge und
+   `regroup()` an. Der Lauf ist durch `_BUSY` gegen Doppelläufe gesichert; keine
+   eigenen Parallelskripte daneben starten, das ging schon einmal schief.
+2. `/vocab/ENGLISCH/units` gegen das Buch halten: Green Line 4, Wortschatzteil
+   S. 160–190. Erwartet werden Einheiten wie „Unit 1 On the move" mit den
+   Abschnitten „Introduction", „Station 1", „Station 2", nicht fünfzehn
+   zusammenhanglose Bündel.
+3. Prüfen, ob das Dictionary ab S. 191 draußen bleibt (die Wörter sind dann
+   `hidden=1`, nicht gelöscht).
+4. Dasselbe für Spanisch (Konto 1) und Englisch (Konto 2).
 
-## Messwerte, auf die sich das stützt
+Geht etwas schief, liegt der Hebel fast immer in der Antwort auf die
+Überschriftenfrage. Sie steht je Seite in `vocab_headings.heads` und lässt sich
+dort ansehen, ohne einen Aufruf zu kosten. `regroup()` kostet nichts und kann
+beliebig oft laufen.
 
-Alle 630 Aufrufe im September: 50,06 € gebucht, real rund 26 $ zum Listenpreis.
-Laufender Betrieb 1,75 $/Tag, davon 62 % Automatik ohne Kind, 34 % die Kinder.
-Ein Mentor-Zug 0,023 $, eine Buchseite 0,054 $, eine Aufnahme 0,0008 $, die
-36-zügige Verben-Abfrage 1,69 $. Eichungen an zehn Materialseiten und zwölf
-Unterrichtsstunden: Zahlen in UMSETZUNGSSTAND.md. Die Buchung liegt bewusst
-rund beim Doppelten der Azure-Rechnung und warnt deshalb früh.
+## Was diese Session gebaut hat
+
+Entscheidungen D137 bis D140 in [ENTSCHEIDUNGEN.md](ENTSCHEIDUNGEN.md).
+
+- **1.11.0 (D137)** Der erste Lesedurchgang jeder Seite läuft auf der Stufe
+  „klein", also auf der zweiten Foundry. Die gründliche zweite Lesung ist ein
+  Zugewinn, keine Bedingung: Scheitert sie, gilt die erste. Anlass waren fünfzig
+  Materialien mit 502, weil beide Stufen auf der ersten Foundry lagen.
+- **1.11.1 (D138)** Jede gedruckte Seite wird nur einmal gelesen. Noahs
+  Englischbuch kommt als Doppelseite, und der Viewer lieferte auf jede ungerade
+  Bestellung eine um vier Seiten versetzte Doppelseite: vierzig Abrufe für rund
+  fünfzehn Seiten. Das allein erklärt die unbrauchbaren Listen.
+- **1.12.0 (D139)** Die Gliederung entsteht aus dem Vergleich aller Seiten eines
+  Buchteils. Zwei getrennte Fragen je Seite — erst die Überschriften, dann die
+  Wörter —, eingeordnet wird in der App. Die dritte Ebene (Kasten) entfällt,
+  `regroup()` setzt die Sortierung ohne Modellaufruf und ohne einen Lernstand
+  anzufassen, und das Wörterverzeichnis hinter dem Wortschatzteil wird
+  abgeschnitten.
+- **1.12.0 (D140)** Doppelseitenbücher werden nur noch nach ihren linken Seiten
+  bestellt; eine gelieferte Doppelseite deckt beide gedruckten Seiten ab.
+
+## Gemessen, nicht geschätzt
+
+- Die erste Vokabel-Doppelseite von Green Line 4 (Material 251, gedruckt
+  160/161) hat das kleine Modell fehlerfrei gelesen: 21 von 21 Wörtern in der
+  richtigen Reihenfolge, richtige Bedeutungen, und von der Erklärseite links
+  kein einziges Wort — auch nicht aus der Lauttabelle, die wie eine Wortliste
+  aussieht. Am Modell lag es also nicht.
+- Noahs Englisch: 40 abgerufene Materialien, 24 verschiedene Doppelseiten.
+  Gerade Bestellungen kamen richtig, ungerade um vier Seiten versetzt.
+  S. 186/187 und 188/189 fehlen bis heute.
+- Vokabelbestand vor dem Umbau: Konto 1 Englisch 1217 Wörter in 15 Einheiten,
+  Spanisch 1523 in 9; Konto 2 Englisch 424 in 5, Latein 57 in 3. Geübt ist
+  ausschließlich Latein (42 Wörter) — die englischen und spanischen Listen
+  durften deshalb gefahrlos neu entstehen.
 
 ## Offen
 
-- Erste echte Kontrolle mit Foto beobachten (D80): Es gibt weiterhin keine.
-- Foto ohne Frage im Hilfegespräch als Auslöser der Kontrolle (Konzept, offen).
-- Grundsatzfragen beim Nutzer: Oberthema übbar
-  ([LERNEINHEITEN.md](LERNEINHEITEN.md)), Kostensätze vor dem 01.12.2026.
-- Der Sensor „Hausaufgaben offen" ist geklärt und kein Defekt: In UNTIS lässt
-  sich nichts abhaken, der Sensor trägt alle Hausaufgaben, das Sync-Skript
-  filtert auf das Fällige.
-- Hochrechnung steht bei rund 150 € gebucht im Monat. Der Siebentageschnitt
-  enthält die Eichungen dieses Tages und das einmalige Einlesen; die Wirkung der
-  günstigen Stufen zeigt sich erst in normalen Tagen.
+- Die Messung oben. Ohne sie ist 1.12.0 nur getestet, nicht bewährt.
+- Ein Teil ohne Nummer wird an seiner Optik als Einheit erkannt
+  (`head_levels`). Das ist die einzige Regel, die auf eine Beobachtung des
+  Modells baut; sie greift nur, wenn höchstens die Hälfte der übrigen
+  Überschriften genauso aussieht. Beim Messen daraufschauen.
+- Eine Korrekturschnittstelle für die Gliederung wäre jetzt billig: Einheit und
+  Abschnitt einer Seite von Hand setzen, ohne neu zu lesen. `regroup()` müsste
+  solche Festlegungen nur achten, wie `book_chapters.locked` es vormacht.
+- Zwei Vokabelseiten scheitern weiter mit einem Lesefehler; ein paar Materialien
+  stehen nicht auf „ready".
+- Zielbild Mentor (D126), Stufe 2: Lagebesprechung und Lagebild für die Eltern.
+  Entwurf steht, Bau war vom Nutzer zurückgestellt.
+- Antwort-Chips und der Prüfungs-Kapitelindex, beide aus früheren Sessions.
 
 ## Arbeitsweise
 
-- Immer auf `main` ausliefern, Updates sofort einspielen (Nutzerwunsch
-  17.09.): `git merge --ff-only`, beide pushen, dann `/store/reload` und
-  `/addons/<slug>/update` über `scripts/ha_supervisor.mjs`. Der Update-Aufruf
-  antwortet mit `unknown_error`, obwohl er anläuft; auf die Version warten.
+- Vor jeder Änderung den Plan abstimmen und auf ein ausdrückliches Ok warten
+  (CLAUDE.md). Reine Lese- und Diagnoseschritte sind ausgenommen.
+- Immer auf `main` ausliefern: auf der Arbeitsbranch entwickeln,
+  `git merge --ff-only`, beide pushen, dann `/store/reload` über
+  `scripts/ha_supervisor.mjs`. **Das Update selbst spielt der Nutzer ein.**
 - Jede sichtbare Änderung: Version in `schul_cockpit/config.yaml`, Eintrag in
-  `CHANGELOG.md`, Abschnitt oben in UMSETZUNGSSTAND.md, Entscheidung als D-Nummer.
-- Tests `python3 -m pytest tests` (463 grün), Frontend `npm run build`.
+  `CHANGELOG.md`, Entscheidung als D-Nummer. Versionsstellen: erste neue
+  Architektur, zweite Feature-Sets und bedeutsame Funktionsänderungen, dritte
+  Korrekturen und Optimierungen.
+- Tests `python3 -m pytest tests` (541 grün), Frontend `npm run build`.
   Migrationen ans Ende von `_MIGRATIONS` in `db.py`.
-- Messen statt schätzen: Der Lese-Schlüssel steht in den Add-on-Optionen, die
-  Aufrufe in `mentor_ai_calls` über die Lese-API (READ_ACCESS.md). Eichungen
-  laufen über `materials/{id}/analysis/compare` und
-  `learning/discovery/compare`, beide speichern nichts.
+- Messen statt schätzen. Eichungen laufen über `vocab/{fach}/compare` und
+  `materials/{id}/analysis/compare`, beide speichern nichts. Ein Vergleich
+  zweier Modellstufen darf nie über das Umstellen der Stufe und erneutes
+  Einlesen laufen: Der Textstand enthält das Modell nicht, es käme der
+  gespeicherte Stand zurück (D129).
 - Der Nutzer entscheidet Grundsatzfragen, will Vorschläge mit Empfehlung und
   konsequentes Abarbeiten ohne Rückfragen bei allem anderen. Qualität steht weit
   vor Kosten.
-
-## Warteschlange: Antwort-Chips und doppelte Aufgabenstellung (18.09.)
-
-Nutzerrückmeldung mit Bildschirmfoto, Thema „Spanische Texte verstehen und
-erschließen". Noch nicht gebaut, nur festgehalten.
-
-**Befund aus dem Code.** Die drei Chips sind keine Absicht, sondern ein
-Höchstwert: `Reply.choices` erlaubt bis zu drei, `turn()` schneidet zusätzlich
-auf drei ab. Wie viele es tatsächlich werden und was daraufsteht, entscheidet
-das Modell frei; die App prüft nur, dass kein Chip die Lösung verrät
-(`safe_choices`, D95) und ersetzt sie nach zwei Hinweisen durch „Anderes
-Beispiel / Für heute fertig". Es gibt keine Regel, was ein Chip sein soll —
-deshalb steht unter einer Auswahlaufgabe mit a/b/c so etwas wie „Auf den
-Satzbau achten", das als Antwort sinnlos ist.
-
-**Fragen des Nutzers.**
-
-- Warum immer drei? Nur weil drei die Obergrenze ist. Kein didaktischer Grund.
-- Warum nicht a | b | c | „Ich benötige Hilfe"? Weil D95 Chips verbietet, die
-  die Lösung enthalten — der Anlass war eine angetippte richtige Antwort, die
-  als eigene Leistung gebucht wurde. Bei einer Auswahlaufgabe sind die Buchstaben
-  aber gerade keine verratene Lösung, sondern die Aufgabe selbst. Die Sperre ist
-  hier zu grob: Sie müsste den Buchstaben (a/b/c) vom Lösungstext trennen.
-- Was soll „Auf den Satzbau achten" für eine Antwort sein? Nichts. Ein Chip muss
-  entweder eine Antwort auf die gestellte Aufgabe sein oder ein Weg weiterzureden
-  („Erst kurz erklären", „Weiß ich nicht"). Ein Lerntipp ist beides nicht.
-
-**Zweite Beobachtung.** Der Mentor leitet die Aufgabe zweimal ein: einmal im
-Fließtext der Nachricht, einmal im Kasten „Deine Aufgabe" aus `task.prompt`.
-Die Ansicht zeigt beides untereinander (`Mentor.svelte`, `m.payload.task`).
-Entweder stellt die Nachricht die Aufgabe und der Kasten entfällt, oder die
-Nachricht führt nur hin und die Aufgabe steht allein im Kasten. Heute steht
-sie doppelt, in leicht abweichender Formulierung.
-
-**Vorschlag für später.** Chips bekommen eine Rolle: bei einer Auswahlaufgabe
-die Antwortmöglichkeiten als Buchstaben, sonst höchstens zwei Wege
-weiterzureden, und immer „Weiß ich nicht". Die Anweisung sagt außerdem, dass
-die Nachricht zur Aufgabe hinführt und sie nicht wiederholt.
