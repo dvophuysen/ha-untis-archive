@@ -280,7 +280,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 13
+EXTRACT_VERSION = 14
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -602,8 +602,59 @@ def page_image(account_id: int, material_id: int) -> list[dict]:
         "detail": "high"}}]
 
 
-# Die Stufe, die einen Seitenschnitt noch richtig legt (gemessen 18.09.).
+# Die Stufe, die einen Seitenschnitt auch ohne gezielte Frage richtig legt.
 CAREFUL_TIER = "hoch"
+
+
+class BoundaryOut(InputModel):
+    """Wo auf einer Grenzseite der neue Teil beginnt."""
+    ab: int = Field(default=0, ge=0, le=400)
+    einheit: str = Field(default="", max_length=80)
+
+
+BOUNDARY = (
+    "Auf dieser Seite treffen zwei Teile des Buchs aufeinander. Beantworte genau eine Frage: Ab welchem Wort "
+    "gilt der neue Teil?\n"
+    "Die Seite davor endete im Teil „{offen}“. Unten stehen die Lernwörter dieser Seite in ihrer Reihenfolge, "
+    "nummeriert. Sieh im Bild nach, wo die neue Überschrift steht, und ordne ihr das erste Wort zu, das "
+    "darunter steht.\n"
+    "ab ist die Nummer dieses ersten Wortes. Beginnt der neue Teil erst auf der nächsten Seite, ist ab 0. "
+    "Steht schon das erste Wort unter der neuen Überschrift, ist ab 1. einheit ist der Name des neuen Teils, "
+    "so wie er über den Wörtern steht — „Unit 1“, „Welcome back!“, „Media smart“, „Unidad 3“, „Lektion 5“. "
+    "Rate nicht: Findest du die Grenze nicht, antworte mit ab 0 und leerer einheit. Nur JSON: ")
+
+
+async def split_units(account_id: int, row: dict, open_unit: str, words: list, tier: str | None = None):
+    """Die Grenze zwischen zwei Einheiten auf einer Seite, als eigene Frage.
+
+    Die volle Leseanweisung verlangt viel auf einmal — Wort, Bedeutungen,
+    Formen, Beispiel, drei Gliederungsebenen —, und die eine Entscheidung, wo
+    ein neuer Teil beginnt, geht darin unter: Die kleinen Stufen schreiben die
+    ganze Seite einer Einheit zu. Als einzelne Frage, mit dem Bild und der
+    nummerierten Wortliste, ist dieselbe Entscheidung klein genug (D133)."""
+    from . import ai_gateway as ai
+    liste = "\n".join(f"{i}. {w.foreign_word}" for i, w in enumerate(words, 1))
+    try:
+        raw, _, _ = await ai.complete(
+            account_id, ai.VOCAB, BOUNDARY.format(offen=open_unit) + json.dumps(BoundaryOut.model_json_schema()),
+            {"seite": row.get("source_page"), "titel": row.get("title") or "", "woerter": liste},
+            images=page_image(account_id, row["id"]), max_output=2000, tier=tier)
+        found = BoundaryOut.model_validate_json(raw)
+    except Exception as exc:
+        LOG.warning("Grenze auf Seite %s nicht bestimmbar: %s", row.get("source_page"), getattr(exc, "detail", exc))
+        return words
+    if not 1 < found.ab <= len(words) or not found.einheit.strip():
+        # 0 heißt „beginnt hier nicht“, 1 heißt „gleich das erste Wort" — in
+        # beiden Fällen ist nichts zu teilen.
+        if found.ab == 0 and open_unit:
+            for w in words:
+                w.unit = open_unit
+        return words
+    neu = clean_unit(found.einheit.strip())
+    LOG.info("Seite %s: neuer Teil „%s“ ab Wort %s von %s", row.get("source_page"), neu, found.ab, len(words))
+    for index, w in enumerate(words, 1):
+        w.unit = open_unit if index < found.ab else neu
+    return words
 
 
 def ai_tier_for_vocab() -> str:
@@ -734,16 +785,10 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
         # so eine Seite einer einzigen Einheit zu — gemessen an S. 211 und 221.
         # Betroffen sind die wenigen Seiten je Buch, auf denen die Einheit
         # wechselt; sie kosten das Zehnfache und sind es wert (D132).
-        if boundary_page(open_at[0], words) and (tier or ai_tier_for_vocab()) != CAREFUL_TIER:
-            LOG.info("Grenzseite %s: noch einmal auf der hohen Stufe", material_id)
-            try:
-                words = await read_words(account_id, row, tier=CAREFUL_TIER, carry=open_at)
-            except Exception as exc:
-                # Die hohe Stufe ist ein Zugewinn, keine Bedingung. Ist sie
-                # nicht erreichbar — leeres Kontingent, Zeitüberschreitung —,
-                # bleibt die erste Lesung stehen, statt die Seite zu verlieren.
-                LOG.warning("Grenzseite %s: hohe Stufe nicht verfügbar (%s), erste Lesung gilt",
-                            material_id, getattr(exc, "detail", exc))
+        if boundary_page(open_at[0], words):
+            # Nicht ein stärkeres Modell, sondern eine kleinere Frage: Wo genau
+            # beginnt der neue Teil? Das kann auch eine kleine Stufe (D133).
+            words = await split_units(account_id, row, open_at[0], words, tier)
     except ValidationError:
         with closing(webapp_conn()) as c, c:
             c.execute("INSERT OR REPLACE INTO vocab_extractions(material_id,account_id,text_hash,words,error,updated_at) VALUES(?,?,?,?,?,?)",

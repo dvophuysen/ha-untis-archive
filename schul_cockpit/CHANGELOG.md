@@ -1,3 +1,8 @@
+## 1.9.0
+
+- Wo im Anhang zwei Einheiten auf einer Seite aneinanderstoßen, frage ich jetzt gezielt nach: Ab welchem Wort beginnt der neue Teil? Diese eine Frage kann auch das kleine Modell beantworten — die Seite muss dafür nicht mehr vom großen gelesen werden.
+- Bleibt die Frage ohne Antwort, bleibt die erste Lesung stehen. Die Seite geht nie verloren.
+
 ## 1.8.1
 
 - Fehler behoben: Ließ sich eine Grenzseite nicht mit dem gründlichen Modell nachlesen, ging die ganze Seite verloren, statt bei der ersten Lesung zu bleiben.
