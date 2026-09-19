@@ -6,7 +6,7 @@ from pydantic import Field
 from ..auth import CurrentUser, get_current_user
 from ..db import webapp_conn
 from ..learning import InputModel
-from .. import ai_gateway as ai, vocab
+from .. import ai_gateway as ai, vocab, vocab_catalog
 from .learning import access
 
 router = APIRouter(prefix='/accounts/{account_id}/learning/vocab', tags=['vocab'])
@@ -25,18 +25,12 @@ def languages(account_id: int, user: CurrentUser = Depends(get_current_user)):
 
 @router.get('/{subject}/units')
 def units(account_id: int, subject: str, background: BackgroundTasks, user: CurrentUser = Depends(get_current_user)):
-    """Die Einheiten des Fachs. Ungelesene Wortseiten werden dabei im Hintergrund
-    zerlegt; die Antwort sagt, wie viele noch laufen, damit die Ansicht nachlädt."""
+    """Read the active corpus. Opening the trainer never starts an import."""
     access(user, account_id)
     lang = vocab.language_of(subject)
     found = vocab.units(account_id, subject)
-    # Gezählt wird an den Seiten, nicht an den Bündeln: Eine Seite, die noch
-    # gelesen werden muss, hängt oft an einem Bündel, das die Auswahl gar nicht
-    # anbietet — dann stünde die Ansicht auf „nichts zu tun", und der
-    # Hintergrundlauf liefe nie an.
-    reading = len([p for p in vocab.pages(account_id, subject) if vocab.page_open(p)])
-    if reading and lang:
-        background.add_task(vocab.read_unread, account_id, subject)
+    # Imports are explicit parent actions and stay separate from this GET.
+    reading = 0
     return {'subject': subject, 'language': lang, 'units': found, 'reading': reading,
             'speech': bool(ai.transcribe_url()), 'hesitation_seconds': vocab.HESITATION_SECONDS}
 
@@ -46,6 +40,8 @@ async def extract(account_id: int, subject: str, body: ExtractIn, user: CurrentU
     """Die genannten Seiten lesen: Wörter und Überschriften, je Seite und
     Textstand einmal. Die Gliederung setzt danach `regroup()` über alle Seiten."""
     access(user, account_id, write=True)
+    if vocab_catalog.active(account_id, subject):
+        raise HTTPException(409, 'Für dieses Fach ist ein geprüfter Buchbestand aktiv. Neue Seiten zuerst in einem Prüfbestand einlesen.')
     with closing(webapp_conn()) as c:
         allowed = {r[0] for r in c.execute(
             'SELECT id FROM materials WHERE account_id=? AND lower(subject_name)=lower(?) AND hidden=0', (account_id, subject))}
@@ -60,6 +56,7 @@ async def extract(account_id: int, subject: str, body: ExtractIn, user: CurrentU
             # Die Überschriften sind ein Zugewinn, keine Bedingung: Ohne sie
             # behält die Seite die Gliederung, die sie hat.
             vocab.note_error('vocab_headings', mid, account_id, exc)
+    vocab.regroup(account_id, subject)
     return {'words': counts, 'units': vocab.units(account_id, subject)}
 
 
@@ -88,6 +85,92 @@ async def compare(account_id: int, subject: str, body: CompareIn, user: CurrentU
     if not allowed:
         raise HTTPException(404, 'Seite nicht gefunden.')
     return await vocab.compare(account_id, body.material_id, body.tiers)
+
+
+class CatalogIn(InputModel):
+    payload: dict
+
+
+class ActivateCatalogIn(InputModel):
+    digest: str = Field(min_length=64, max_length=64)
+
+
+class CaptureCatalogIn(InputModel):
+    pages: list[int] = Field(min_length=1, max_length=4)
+
+
+class ReadCatalogIn(InputModel):
+    start_page: int = Field(ge=1, le=2000)
+    pages: list[dict] = Field(min_length=1, max_length=100)
+
+
+@router.post('/{subject}/catalog-read')
+def read_catalog(account_id: int, subject: str, body: ReadCatalogIn, user: CurrentUser = Depends(get_current_user)):
+    access(user, account_id, write=True, parent=True)
+    from ..vocab_mini import PageSpec, mini_tier, read_sequence
+    from ..textbook_context import start_job
+    try:
+        mini_tier()
+        specs = [PageSpec.model_validate(p) for p in body.pages]
+        if sorted(p.number for p in specs) != list(range(body.start_page, body.start_page + len(specs))):
+            raise ValueError('Seitenfolge ist nicht lückenlos.')
+    except (ValueError, vocab_catalog.CatalogError) as exc:
+        raise HTTPException(422, str(exc)) from None
+    return start_job((account_id, 'vocab-read', subject.casefold()),
+                     lambda: read_sequence(account_id, subject, specs, body.start_page))
+
+
+@router.get('/{subject}/catalog-read')
+def catalog_read_status(account_id: int, subject: str, user: CurrentUser = Depends(get_current_user)):
+    access(user, account_id, parent=True)
+    from ..textbook_context import job_state
+    return job_state((account_id, 'vocab-read', subject.casefold()))
+
+
+@router.post('/{subject}/catalog-capture')
+def capture_catalog(account_id: int, subject: str, body: CaptureCatalogIn, user: CurrentUser = Depends(get_current_user)):
+    access(user, account_id, write=True, parent=True)
+    if any(p < 1 or p > 2000 for p in body.pages):
+        raise HTTPException(422, 'Ungültige Seitenzahl.')
+    from ..textbook_context import start_job
+    return start_job((account_id, 'vocab-capture', subject.casefold()),
+                     lambda: vocab_catalog.capture_sources(account_id, subject, body.pages))
+
+
+@router.get('/{subject}/catalog-capture')
+def catalog_capture_status(account_id: int, subject: str, user: CurrentUser = Depends(get_current_user)):
+    access(user, account_id, parent=True)
+    from ..textbook_context import job_state
+    return job_state((account_id, 'vocab-capture', subject.casefold()))
+
+
+@router.post('/{subject}/catalogs')
+def stage_catalog(account_id: int, subject: str, body: CatalogIn, user: CurrentUser = Depends(get_current_user)):
+    access(user, account_id, write=True, parent=True)
+    try:
+        return vocab_catalog.stage(account_id, subject, body.payload)
+    except (vocab_catalog.CatalogError, KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(422, f'Prüfbestand ungültig: {exc}') from None
+
+
+@router.post('/{subject}/catalogs/{run_id}/activate')
+def activate_catalog(account_id: int, subject: str, run_id: str, body: ActivateCatalogIn,
+                     user: CurrentUser = Depends(get_current_user)):
+    access(user, account_id, write=True, parent=True)
+    with closing(webapp_conn()) as c:
+        if not c.execute('SELECT 1 FROM vocab_catalog_runs WHERE id=? AND account_id=? AND subject=?',
+                         (run_id, account_id, subject.casefold())).fetchone():
+            raise HTTPException(404, 'Prüfbestand nicht gefunden.')
+    try:
+        return vocab_catalog.activate(account_id, run_id, body.digest)
+    except vocab_catalog.CatalogError as exc:
+        raise HTTPException(409, str(exc)) from None
+
+
+@router.get('/{subject}/word-list')
+def word_list(account_id: int, subject: str, unit: str, section: str = '', user: CurrentUser = Depends(get_current_user)):
+    access(user, account_id)
+    return {'words': vocab_catalog.cards(account_id, subject, unit, 1, 10000, section, book_order=True)}
 
 
 @router.get('/{subject}/cards')

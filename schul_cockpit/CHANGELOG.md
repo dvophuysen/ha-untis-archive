@@ -1,3 +1,11 @@
+## 1.13.0
+
+- Neuer isolierter Prüfbestand für Vokabellisten: Originale, Seitenfolge, Überschriften und Kastenenden werden vor einer Aktivierung geprüft. Fehlende Vorgängerseiten, ungeklärte Zuordnungen und veränderte Originale sperren die Freigabe.
+- Lernwörter und Fundstellen sind getrennt. Wiederholte Wörter teilen ihren Lernstand; die Auswahl eines Abschnitts enthält jedes Wort einmal in seiner dortigen Buchreihenfolge. Bestehende Wort-IDs und Lernversuche bleiben erhalten, frühere Buchbestände werden archiviert.
+- Neue Modelllesung ausschließlich mit gpt-5-mini in Foundry 2, in vergrößerten Ausschnitten physischer Einzelseiten. Ergebnisse bleiben bis zum Quellenabgleich im Prüfbestand. Kein stiller Rückfall auf andere Modelle oder OCR-Alttexte.
+- Öffnen des Trainers startet keine Modellaufrufe und verändert die Gliederung nicht. Eltern können geprüfte Bestände getrennt prüfen und aktivieren sowie fehlende digitale Originale zusätzlich abrufen, ohne alte Aufnahmen zu überschreiben.
+- Die Buchbestände werden einzeln nach bestandener Quellenprüfung umgestellt. Dieses Update allein ersetzt keine vorhandene Wortliste.
+
 ## 1.12.7
 
 - Lesende Bestandsprüfung für den Vokabelimport: Quellen, Wortvorkommen,

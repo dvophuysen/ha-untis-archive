@@ -197,16 +197,21 @@ def replay(attempts: list[dict]) -> dict:
 def word_states(c, account_id: int, word_ids: list[int]) -> dict[int, dict]:
     if not word_ids:
         return {}
-    marks = ",".join("?" * len(word_ids))
+    aliases = {r['word_id']: r['canonical_id'] for r in c.execute(
+        'SELECT word_id,canonical_id FROM vocab_learning_aliases WHERE account_id=?', (account_id,))}
+    wanted = {aliases.get(wid, wid) for wid in word_ids}
+    source_ids = sorted(set(word_ids) | {wid for wid, canonical in aliases.items() if canonical in wanted} | wanted)
+    marks = ",".join("?" * len(source_ids))
     rows = [dict(r) for r in c.execute(
         f"SELECT word_id,stage,result,seconds,created_at FROM vocab_attempts WHERE account_id=? AND word_id IN ({marks}) ORDER BY created_at,id",
-        (account_id, *word_ids))]
+        (account_id, *source_ids))]
     grouped: dict[tuple[int, int], list[dict]] = {}
     for r in rows:
-        grouped.setdefault((r["word_id"], r["stage"]), []).append(r)
+        grouped.setdefault((aliases.get(r["word_id"], r["word_id"]), r["stage"]), []).append(r)
     out = {}
     for wid in word_ids:
-        out[wid] = {"s1": replay(grouped.get((wid, 1), [])), "s2": replay(grouped.get((wid, 2), []))}
+        canonical = aliases.get(wid, wid)
+        out[wid] = {"s1": replay(grouped.get((canonical, 1), [])), "s2": replay(grouped.get((canonical, 2), []))}
     return out
 
 
@@ -1277,10 +1282,11 @@ def regroup(account_id: int, subject: str) -> int:
 
 def units(account_id: int, subject: str) -> list[dict]:
     """Je Lektion oder Unit: Seiten, Wörter und wie viele je Stufe sitzen."""
-    # Die Gliederung steht nicht an den Wörtern, sie wird aus den Überschriften
-    # aller Seiten errechnet. Das kostet keinen Modellaufruf, also wird es hier
-    # gemacht, statt auf den nächsten Hintergrundlauf zu warten (D139).
-    regroup(account_id, subject)
+    from . import vocab_catalog
+    if vocab_catalog.active(account_id, subject):
+        return vocab_catalog.units(account_id, subject)
+    # Reading the trainer must not rewrite the active corpus. Legacy regrouping
+    # remains an explicit import operation; verified catalogs are immutable.
     found = pages(account_id, subject)
     with closing(webapp_conn()) as c:
         words = [dict(r) for r in c.execute(
@@ -1422,6 +1428,9 @@ def cards(account_id: int, subject: str, unit: str, stage: int, direction: str, 
     Die Einheit ist das Standardbündel. `section` schränkt auf einen Abschnitt
     ein, den die Vokabelliste selbst nennt („Texto A"); leer heißt: die ganze
     Einheit, also alle Abschnitte zusammen (D100)."""
+    from . import vocab_catalog
+    if vocab_catalog.active(account_id, subject):
+        return vocab_catalog.cards(account_id, subject, unit, stage, limit, section)
     with closing(webapp_conn()) as c:
         words = [dict(r) for r in c.execute(
             "SELECT * FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 "
@@ -1477,7 +1486,8 @@ def attempt(account_id: int, body: AttemptIn) -> dict:
         w = c.execute("SELECT * FROM vocab_words WHERE id=? AND account_id=?", (body.word_id, account_id)).fetchone()
     if not w:
         raise HTTPException(404, "Wort nicht gefunden.")
-    w = dict(w)
+    from . import vocab_catalog
+    w = vocab_catalog.effective_word(account_id, dict(w))
     meanings = json.loads(w["meanings_json"] or "[]")
     lang = language_of(w["subject"]) or {"into": True}
     if body.stage == 2 and body.direction != "into":
@@ -1565,4 +1575,3 @@ def languages(account_id: int) -> list[dict]:
                     "words": sum(u["words"] for u in found), "pages": sum(len(u["pages"]) for u in found),
                     "reading": sum(u["unread"] for u in found)})
     return out
-

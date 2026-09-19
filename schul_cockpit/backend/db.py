@@ -1017,6 +1017,9 @@ CREATE TABLE IF NOT EXISTS vocab_headings (
 )"""))
 
 
+_MIGRATIONS.append(("vocab_004_catalog", (Path(__file__).parent / "vocab_catalog_schema.sql").read_text()))
+
+
 def init_webapp_db() -> None:
     """Apply base schema + pending migrations (idempotent)."""
     schema_sql = _SCHEMA_FILE.read_text()

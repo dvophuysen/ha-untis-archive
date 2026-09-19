@@ -227,32 +227,22 @@ def test_vocab_topic_of_the_list_takes_its_stage_from_the_words(setup):
     assert not lernstand.is_vocab_topic({"title": "Substantive: a/o-Deklination"}) and lernstand.is_vocab_topic({"title": "Voc. 1. Lektion"})
 
 
-def test_opening_the_trainer_reads_word_pages_by_itself_and_empty_pages_stay_quiet(setup):
+def test_opening_the_trainer_is_read_only_and_import_is_explicit(setup):
     client, state, patch = setup
     client.app.include_router(vocab_router.router, prefix="/api")
     mid = seed_page()
-    grammar = seed_page(text="servus — der Sklave\n" * 3 + "Die a-Deklination …", page=13, title="Substantive der a-/o-Deklination")
     calls = []
-
-    async def complete(account, purpose, instruction, context, *a, **kw):
-        if 'woerter' in context:
-            return json.dumps({"headings": []}), {}, "fake"
-        calls.append(context["page"])
-        return json.dumps(WORDS if context["page"] == 10 else {"words": []}), {}, "fake"
-    patch.setattr(ai, "complete", complete)
-    r = client.get(V + "/LATEIN/units")
-    assert r.status_code == 200 and r.json()["reading"] == 1
-    # Der Hintergrundlauf ist nach der Antwort durch: Seite 10 gelesen, die Grammatikseite gar nicht angeboten.
+    ai_answers(patch, woerter=WORDS, gesehen=calls)
+    assert client.get(V + "/LATEIN/units").json()["reading"] == 0
+    assert calls == []
+    assert client.post(V + "/LATEIN/extract", json={"material_ids": [mid]}).status_code == 200
     assert calls == [10]
-    r = client.get(V + "/LATEIN/units").json()
-    assert r["reading"] == 0 and r["units"][0]["words"] == 4 and r["units"][0]["unread"] == 0
-    # Eine gelesene Seite ohne Lernwörter gilt nicht als ungelesen.
-    with closing(db.webapp_conn()) as c, c:
-        c.execute("UPDATE materials SET title='Wortschatz – Vokabeln sichern' WHERE id=?", (grammar,))
-    r = client.get(V + "/LATEIN/units").json()
-    assert r["reading"] == 1 and calls == [10, 13]
-    r = client.get(V + "/LATEIN/units").json()
-    assert r["reading"] == 0 and all(u["unread"] == 0 for u in r["units"])
+    with closing(db.webapp_conn()) as c:
+        before = [dict(r) for r in c.execute("SELECT * FROM vocab_words ORDER BY id")]
+    assert client.get(V + "/LATEIN/units").json()["reading"] == 0
+    with closing(db.webapp_conn()) as c:
+        assert [dict(r) for r in c.execute("SELECT * FROM vocab_words ORDER BY id")] == before
+    assert calls == [10]
 
 
 def test_language_overview_lists_only_foreign_languages_with_their_state(setup):
@@ -481,12 +471,13 @@ def test_a_changed_reading_instruction_reads_the_page_again(setup):
     client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
     assert len(calls) == 1, "derselbe Text, dieselbe Anweisung: kein zweiter Aufruf"
     patch.setattr(vocab, "EXTRACT_VERSION", vocab.EXTRACT_VERSION + 1)
-    # Die Seite gilt jetzt als veraltet, und der Hintergrundlauf holt sie sich.
+    # Die Seite gilt jetzt als veraltet; erst ein expliziter Import liest sie neu.
     # Ohne das käme eine Änderung der Anweisung bei schon gelesenen Seiten nie
     # an: Er sah nur Seiten an, die noch gar nicht gelesen waren (D108).
     assert [p["stale"] for p in vocab.pages(1, "LATEIN")] == [True]
     assert vocab.unread_pages(1, "LATEIN") == [mid]
-    assert client.get(V + "/LATEIN/units").json()["reading"] == 1
+    assert client.get(V + "/LATEIN/units").json()["reading"] == 0
+    assert len(calls) == 1, "Öffnen des Trainers liest auch veraltete Seiten nicht neu ein"
     client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
     assert len(calls) == 2, "neue Anweisung: die Seite wird noch einmal gelesen"
     assert vocab.unread_pages(1, "LATEIN") == [], "danach ist sie wieder aktuell"

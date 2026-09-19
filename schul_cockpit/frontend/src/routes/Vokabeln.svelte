@@ -17,6 +17,8 @@
   let cards = $state([]), index = $state(0), answer = $state(''), spoken = $state(false), edits = $state(0), shownAt = $state(0);
   let verdict = $state(null), pending = $state(null), done = $state(false), tally = $state({ correct: 0, slow: 0, wrong: 0 });
   let answerInput = $state(null);
+  let bookWords = $state(null), importDraft = $state(null), importFile = $state(null);
+  let capturePage = $state(1), captureJob = $state(null);
 
   const lang = $derived(data?.language);
   const langName = $derived(lang?.name ?? subject);
@@ -26,8 +28,8 @@
   const sections = $derived(currentUnit?.sections || []);
   // Kästen gehören unter ihren Abschnitt, nicht daneben (D116).
   const boxes = $derived(sections.find((s) => s.section === section)?.boxes || []);
-  function chooseUnit(name) { if (unit !== name) { unit = name; section = ''; box = ''; } }
-  function chooseSection(name) { if (section !== name) { section = name; box = ''; } }
+  function chooseUnit(name) { if (unit !== name) { unit = name; section = ''; box = ''; bookWords = null; } }
+  function chooseSection(name) { if (section !== name) { section = name; box = ''; bookWords = null; } }
 
   // Wortseiten werden beim Öffnen automatisch in Wörter zerlegt; solange das
   // läuft, lädt die Ansicht alle paar Sekunden nach.
@@ -38,7 +40,7 @@
     try {
       if (!subject) { languages = (await api.get(`${base}/languages`)).languages; data = null; return; }
       data = await api.get(`${base}/${encodeURIComponent(subject)}/units`);
-      if (!unit && data.units.length) unit = data.units[0].unit;
+      if (data.units.length && !data.units.some(u => u.unit === unit)) unit = (data.units.find(u => u.label === unit) || data.units[0]).unit;
       clearTimeout(pollTimer);
       if (data.reading && polls < 20) { polls += 1; pollTimer = setTimeout(load, 4000); } else polls = 0;
     } catch (e) { error = e.message; }
@@ -81,6 +83,32 @@
   }
   // Eltern: Probeläufe wieder auf Null setzen.
   const canManage = $derived(!!(appState.me && (appState.me.is_admin || appState.me.role === 'parent')));
+  async function showBookWords() {
+    busy = true; error = '';
+    try { bookWords = (await api.get(`${base}/${encodeURIComponent(subject)}/word-list?unit=${encodeURIComponent(unit)}&section=${encodeURIComponent(section)}`)).words; }
+    catch (e) { error = e.message; } finally { busy = false; }
+  }
+  async function checkImport() {
+    if (!importFile) return;
+    busy = true; error = ''; importDraft = null;
+    try { importDraft = await api.post(`${base}/${encodeURIComponent(subject)}/catalogs`, {payload: JSON.parse(await importFile.text())}); }
+    catch (e) { error = e.message; } finally { busy = false; }
+  }
+  async function activateImport() {
+    if (!importDraft?.valid) return;
+    busy = true; error = '';
+    try {
+      await api.post(`${base}/${encodeURIComponent(subject)}/catalogs/${importDraft.id}/activate`, {digest: importDraft.content_digest});
+      importDraft = null; importFile = null; bookWords = null; section = ''; box = ''; await load();
+    } catch (e) { error = e.message; } finally { busy = false; }
+  }
+  async function captureOriginal(start = false) {
+    busy = true; error = '';
+    try {
+      const url = `${base}/${encodeURIComponent(subject)}/catalog-capture`;
+      captureJob = start ? await api.post(url, {pages: [Number(capturePage)]}) : await api.get(url);
+    } catch (e) { error = e.message; } finally { busy = false; }
+  }
   async function resetAll() {
     if (!confirm(`Alle Versuche in ${langName} löschen? Die Wörter bleiben, der Stand beginnt bei neu.`)) return;
     busy = true;
@@ -146,8 +174,8 @@
         <div class="units">
           {#each data.units as u (u.unit)}
             <button class="unit" class:chosen={unit === u.unit} onclick={() => chooseUnit(u.unit)}>
-              <strong>{u.unit}</strong>
-              <span>{u.words ? `${u.words} Wörter · Bedeutung: ${unitSummary(u, 's1')}` : u.unread ? 'wird gerade gelesen …' : 'keine Lernwörter auf diesen Seiten'}</span>
+              <strong>{u.label || u.unit}</strong>
+              <span>{u.words ? `${u.words} Wörter · Bedeutung: ${unitSummary(u, 's1')}` : u.unread ? 'Quelle noch nicht freigegeben' : 'keine Lernwörter auf diesen Seiten'}</span>
               {#if u.words && lang.into}<span>Schreibweise: {unitSummary(u, 's2')}</span>{/if}
             </button>
           {/each}
@@ -160,7 +188,7 @@
             </button>
             {#each sections as part (part.section)}
               <button class="unit" class:chosen={section === part.section} onclick={() => chooseSection(part.section)}>
-                <strong>{part.section}</strong><span>{part.words} {part.words === 1 ? 'Wort' : 'Wörter'}</span>
+                <strong>{part.label || part.section}</strong><span>{part.words} {part.words === 1 ? 'Wort' : 'Wörter'}</span>
               </button>
             {/each}
           </div>
@@ -180,8 +208,21 @@
         {/if}
       </section>
       {#if currentUnit}
+        {#if currentUnit.catalog}
+          <section class="card">
+            <p class="muted">{currentUnit.book} · Mehrfach vorkommende Wörter teilen sich einen Lernstand.</p>
+            <button disabled={busy} onclick={showBookWords}>Wörter in Buchreihenfolge ansehen</button>
+            {#if bookWords}
+              <ol class="book-words">
+                {#each bookWords as w (w.id)}
+                  <li><strong>{w.foreign_word}</strong> — {w.meanings.join('; ')} <small>(S. {w.page})</small></li>
+                {/each}
+              </ol>
+            {/if}
+          </section>
+        {/if}
         {#if currentUnit.unread}
-          <p class="muted reading" role="status">Ich lese gerade noch {currentUnit.unread === 1 ? 'eine Seite' : `${currentUnit.unread} Seiten`} dieser Einheit … Die Wörter kommen gleich dazu.</p>
+          <p class="muted reading" role="status">{currentUnit.unread === 1 ? 'Eine Quellenseite ist' : `${currentUnit.unread} Quellenseiten sind`} noch nicht neu geprüft. Der vorhandene Lernbestand bleibt bis zur Freigabe erhalten.</p>
         {/if}
         {#if currentUnit.words}
           <section class="card">
@@ -252,6 +293,26 @@
       {/if}
       <p class="muted small">{stage === 2 ? 'Ohne Autokorrektur, ohne Vorschläge. Großschreibung zählt nur, wo sie zum Wort gehört.' : 'Zögern und zweite Anläufe merkt sich der Trainer als „wackelt“.'}</p>
     </section>
+  {/if}
+
+  {#if canManage && subject && !cards.length}
+    <details class="card">
+      <summary>Geprüften Buchbestand übernehmen (Eltern)</summary>
+      <p>Der neue Bestand wird zuerst getrennt geprüft. Bestehende Lernversuche bleiben erhalten. Ungeklärte Seiten oder Zuordnungen verhindern die Freigabe.</p>
+      <label>Fehlende digitale Buchseite <input type="number" min="1" max="2000" bind:value={capturePage} /></label>
+      <button disabled={busy || captureJob?.state === 'running'} onclick={() => captureOriginal(true)}>Original getrennt abrufen</button>
+      {#if captureJob}
+        <button disabled={busy} onclick={() => captureOriginal()}>Abrufstatus prüfen</button>
+        <p role="status">{captureJob.state === 'running' ? 'Buchseite wird abgerufen …' : captureJob.result?.sources?.length ? 'Originalaufnahme liegt zur Prüfung vor. Die gedruckte Seitenzahl muss noch geprüft werden.' : 'Keine bestätigte Aufnahme. Bitte Abruf prüfen.'}</p>
+      {/if}
+      <label>Geprüfte Importdatei <input type="file" accept="application/json,.json" onchange={e => { importFile = e.target.files?.[0] || null; importDraft = null; }} /></label>
+      <button disabled={busy || !importFile} onclick={checkImport}>Import prüfen</button>
+      {#if importDraft}
+        <p role="status">{importDraft.pages} Seiten · {importDraft.occurrences} Fundstellen · {importDraft.issues.length} offene Prüfpunkte</p>
+        {#if importDraft.valid}<button class="primary" disabled={busy} onclick={activateImport}>Geprüften Bestand aktivieren</button>
+        {:else}<p>Dieser Prüfbestand ist noch nicht freigegeben.</p>{/if}
+      {/if}
+    </details>
   {/if}
 </div>
 
