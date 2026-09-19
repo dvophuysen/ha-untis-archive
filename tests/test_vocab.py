@@ -920,10 +920,10 @@ def test_the_continuation_stops_at_the_book_and_at_the_page_before():
     assert vocab.carry_over(1, 'ENGLISCH', 206, 'Schulbuch') == ('Grammar', 'Irregular verbs', '')
 
 
-def test_the_outline_places_a_unit_boundary_inside_a_page(setup):
-    """Wo zwei Einheiten auf einer Seite aneinanderstoßen, sagt die Gliederung,
-    ab welchem Wort der neue Teil gilt. Die Wörter davor behalten die Einheit
-    der Vorseite (D133, D135)."""
+def test_the_boundary_question_places_a_unit_boundary_inside_a_page(setup):
+    """Wo zwei Einheiten auf einer Seite aneinanderstoßen, sagt die gezielte
+    Frage, ab welchem Wort der neue Teil gilt. Die Wörter davor behalten die
+    Einheit der Vorseite (D133)."""
     client, state, patch = setup
     client.app.include_router(vocab_router.router, prefix="/api")
     erste = seed_page(page=10)
@@ -933,14 +933,14 @@ def test_the_outline_places_a_unit_boundary_inside_a_page(setup):
     async def complete(account, purpose, instruction, context, *a, **kw):
         if 'woerter' in context:
             fragen.append(context['woerter'])
-            if context['seite'] == 11:
-                return json.dumps({"headings": [{"ab": 3, "titel": "Lektion 2", "art": "einheit"}]}), {}, "fake"
-            return json.dumps({"headings": [{"ab": 1, "titel": "Lektion 1", "art": "einheit"}]}), {}, "fake"
-        return json.dumps({"words": [{**w, "unit": "Lektion 1"} for w in WORDS["words"][:4]]}), {}, "fake"
+            return json.dumps({"ab": 3, "einheit": "Lektion 2"}), {}, "fake"
+        einheit = 'Lektion 1' if context['page'] == 10 else 'Lektion 2'
+        return json.dumps({"words": [{**w, "unit": einheit} for w in WORDS["words"][:4]]}), {}, "fake"
     patch.setattr(ai, "complete", complete)
     client.post(V + "/LATEIN/extract", json={"material_ids": [erste]})
+    assert not fragen, "die erste Seite hat keine Vorseite und keine Grenze"
     client.post(V + "/LATEIN/extract", json={"material_ids": [grenze]})
-    assert len(fragen) == 2, "je Seite eine Gliederungsfrage"
+    assert len(fragen) == 1, "nur die Grenzseite wird gefragt"
     with closing(db.webapp_conn()) as c:
         rows = {r[0]: r[1] for r in c.execute("SELECT foreign_word,unit FROM vocab_words WHERE material_id=?", (grenze,))}
     assert rows['ecce'] == 'Lektion 1' and rows['esse'] == 'Lektion 1'

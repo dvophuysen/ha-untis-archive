@@ -1,3 +1,7 @@
+## 1.10.1
+
+- Zurückgenommen: Die Gliederung der ganzen Seite als eigene Frage zu stellen war gemessen schlechter als vorher — Spaltenüberschriften und doppelte Laufköpfe wurden als Einheiten gezählt. Gefragt wird wieder nur, wo eine neue Einheit beginnt.
+
 ## 1.10.0
 
 - Eine Vokabelseite wird jetzt mit zwei Fragen gelesen: erst die Wörter, dann die Gliederung der Seite. Beides zusammen war für das kleine Modell zu viel auf einmal — dieselbe Seite kam in zwei Läufen unterschiedlich gegliedert heraus, ein Themenkasten mal als Kasten, mal als eigener Abschnitt.
