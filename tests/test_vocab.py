@@ -1077,3 +1077,17 @@ def test_the_words_of_a_doubled_page_go_but_a_practised_one_stays(setup):
         blieb = {r[0] for r in c.execute("SELECT foreign_word FROM vocab_words WHERE account_id=1 AND subject='ENGLISCH'")}
     assert blieb == {'echt', 'geuebt'}
     assert vocab.forget_duplicates(1, 'ENGLISCH') == 0, "ein zweiter Lauf fasst nichts mehr an"
+
+
+def test_the_same_page_number_in_two_books_is_not_a_duplicate():
+    """Seitenzahlen gelten nur innerhalb eines Buches: Begleitband S. 10 und
+    Arbeitsheft S. 10 sind zwei Seiten, keine Dublette (D138)."""
+    rows = [
+        {"id": 1, "source_page": 10, "source_label": "Begleitband", "printed_pages": "[10]", "page_check": "ok"},
+        {"id": 2, "source_page": 10, "source_label": "Arbeitsheft", "printed_pages": "[10]", "page_check": "ok"},
+        {"id": 3, "source_page": 10, "source_label": "", "origin": "book_fetch", "printed_pages": "[10]", "page_check": "ok"},
+        {"id": 4, "source_page": 10, "source_label": "Schulbuch", "printed_pages": "[10]", "page_check": "ok"},
+    ]
+    # Drei Bücher: Begleitband, Arbeitsheft und das Schulbuch — die Abholung ohne
+    # Etikett ist dasselbe Buch wie „Schulbuch" und damit die einzige Dublette.
+    assert [r["id"] for r in vocab.one_per_spread(rows)] == [2, 1, 3]
