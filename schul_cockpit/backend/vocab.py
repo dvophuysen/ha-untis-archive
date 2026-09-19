@@ -535,6 +535,12 @@ _RUNNING_HEAD = re.compile(
     r"^(v|voc|vocabulary|vocabulario|vocabulaire|wortschatz|lernwörter|lernwoerter|words)\s*\d{0,2}$", re.I)
 
 
+# Was neben dem Wort „Vocabulary" noch im Laufkopf stehen darf: nichts, eine
+# Nummer, oder eine kurze Marke wie „TS 2", „AC 4", „V". Alles andere ist eine
+# Überschrift, die das Wort zufällig enthält — „Holiday words" etwa.
+_MARK = re.compile(r"^[A-Z]{0,3}\.?\s*\d{0,2}$")
+
+
 def running_mark(titel: str) -> str | None:
     """Ist die Überschrift ein Laufkopf, und welchen Teil nennt sie?
 
@@ -544,7 +550,7 @@ def running_mark(titel: str) -> str | None:
     if not _VOC_WORD.search(titel or ""):
         return None
     rest = re.sub(r"[\s|·/–—-]+", " ", _VOC_WORD.sub(" ", titel or "")).strip(" |·/–—-")
-    return rest if len(rest) <= 12 else None
+    return rest if _MARK.match(rest) else None
 
 
 def abbrev(titel: str) -> str:
@@ -1076,14 +1082,19 @@ def head_levels(heads: list[dict], known: dict) -> dict[str, str]:
             marken.add(mark)
         elif h["wo"] == "seitenkopf" and mark is None:
             # Oben am Seitenrand steht der Laufkopf, auch ohne das Wort
-            # „Vocabulary": „TS 1", „Welcome back!". Dass er dort steht, macht
-            # den Namen aber nicht überall zum Laufkopf — im Text ist derselbe
-            # Name die Überschrift des Teils (D130).
-            marken.add(h["titel"].strip())
+            # „Vocabulary": „TS 1", „Welcome back!", „Unit 1 / Media smart".
+            # Dass er dort steht, macht den Namen aber nicht überall zum
+            # Laufkopf — im Text ist derselbe Name die Überschrift des Teils
+            # (D130). Ein doppelter Laufkopf nennt zwei Teile.
+            marken.update(x.strip() for x in _DOUBLE_HEAD.split(h["titel"]) if x.strip())
     namen = {plain(m) for m in marken}
-    kuerzel = {re.sub(r"\s+", "", m).upper() for m in marken}
-    reihen = {k for k in (re.match(r"^[A-Z]+", x) for x in kuerzel) if k}
+    # Nur eine Marke mit Buchstaben taugt als Abkürzung: Eine bloße „1" träfe
+    # jeden nummerierten Listenpunkt („1. Lernen mit dem Buch").
+    kuerzel = {k for k in (re.sub(r"\s+", "", m).upper() for m in marken) if re.match(r"^[A-Z]+\d", k)}
     reihen = {m.group(0) for m in (re.match(r"^[A-Z]+", x) for x in kuerzel) if m}
+    # Beginnt eine Überschrift mit einer Marke, ist sie ihr Teil: „Media smart
+    # Searching for information online" unter dem Laufkopf „Unit 1 / Media smart".
+    vorn = sorted((plain(m) for m in marken if len(m.strip()) >= 3), key=len, reverse=True)
     for h in heads:
         key = plain(h["titel"])
         if not key:
@@ -1096,7 +1107,8 @@ def head_levels(heads: list[dict], known: dict) -> dict[str, str]:
         if _OTHER_PART.search(h["titel"].strip()):
             art[key] = "fremd"
         elif (unit_key(h["titel"]) or (bundle_keys(h["titel"]) & bekannt) or key in namen
-              or (kurz and kurz in kuerzel) or (serie and serie.group(0) in reihen)):
+              or (kurz and kurz in kuerzel) or (serie and serie.group(0) in reihen)
+              or any(key == m or key.startswith(m + " ") for m in vorn)):
             art[key] = "einheit"
         else:
             art[key] = "abschnitt"

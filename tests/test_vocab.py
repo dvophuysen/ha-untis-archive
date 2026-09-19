@@ -1306,3 +1306,35 @@ def test_a_page_number_line_is_no_heading():
     found = vocab.clean_heads(vocab.HeadsOut.model_validate({"ueberschriften": [
         {"titel": "184 one hundred and eighty-four"}, {"titel": "Station 2", "erstes_wort": "to lift"}]}))
     assert [h["titel"] for h in found["ueberschriften"]] == ["Station 2"]
+
+
+def test_a_heading_that_merely_contains_the_word_words_is_no_running_head():
+    """„Holiday words" ist eine Überschrift, kein Laufkopf. Neben dem Wort
+    „Vocabulary" steht im Laufkopf nichts oder eine kurze Marke — sonst ist es
+    eine Überschrift, die das Wort zufällig enthält."""
+    assert vocab.running_mark('Holiday words') is None
+    assert vocab.running_mark('Vocabulary V') == ''
+    assert vocab.running_mark('V Vocabulary') == ''
+    assert vocab.running_mark('WORTSCHATZ 1') == '1'
+
+
+def test_a_double_running_head_names_two_parts_and_a_mark_opens_its_part():
+    """Über S. 221 steht „Unit 1 / Media smart". Genannt sind zwei Teile, und
+    „Media smart Searching for information online" im Text gehört zum zweiten
+    (D130)."""
+    heads = [kopf('Unit 1 / Media smart', wo='seitenkopf'), kopf('Vocabulary V', wo='seitenkopf'),
+             kopf('Media smart Searching for information online', 'to search for', groesser=True, farbig=True),
+             kopf('Station 3', 'both', groesser=True, farbig=True)]
+    art = vocab.head_levels(heads, {})
+    assert art['media smart searching for information online'] == 'einheit'
+    assert art['station 3'] == 'abschnitt'
+
+
+def test_a_bare_number_in_the_running_head_is_no_abbreviation():
+    """„WORTSCHATZ 1" nennt die Marke „1". Als Abkürzung genommen träfe sie
+    jeden nummerierten Listenpunkt — „1. Lernen mit dem Buch" wurde so zur
+    eigenen Einheit."""
+    art = vocab.head_levels([kopf('WORTSCHATZ 1', wo='seitenkopf'),
+                             kopf('1. Lernen mit dem Buch', 'a', groesser=True, farbig=True),
+                             kopf('2. Lernen mit dem Vokabelheft', 'b', groesser=True, farbig=True)], {})
+    assert art['1. lernen mit dem buch'] == art['2. lernen mit dem vokabelheft'] == 'abschnitt'

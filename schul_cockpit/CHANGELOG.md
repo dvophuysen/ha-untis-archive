@@ -1,3 +1,8 @@
+## 1.12.5
+
+- An Kind B Büchern nachgebessert: „Holiday words" ist eine Überschrift und kein Laufkopf, „Unit 1 / Media smart" über der Seite nennt zwei Teile, und eine bloße Nummer im Laufkopf taugt nicht als Abkürzung — sonst wurde „1. Lernen mit dem Buch" zur eigenen Einheit.
+- Beginnt eine Überschrift mit dem Namen aus dem Laufkopf, gehört sie zu diesem Teil: „Media smart Searching for information online" unter „Unit 1 / Media smart".
+
 ## 1.12.4
 
 - Der Laufkopf nennt den Teil, zu dem eine Seite gehört: „Vocabulary AC 3", „TS 2 Vocabulary", „1 | Vocabulary". Daran erkennt die App jetzt, dass „Across cultures 3" eine eigene Einheit ist und „Station 1" nicht — beide sehen im Buch gleich aus, und keines trägt eine Nummer wie „Unit 3".
