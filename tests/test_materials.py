@@ -1,5 +1,6 @@
 """Central material storage: upload, corrections, analysis and context choice."""
 
+import asyncio
 import io
 import json
 from contextlib import closing
@@ -381,3 +382,23 @@ def test_a_doubt_can_simply_be_confirmed_without_changing_the_text(env):
     assert kept["doubts"] == [] and kept["needs_review"] is False
     # Ohne Änderung bleibt der Text frei für eine spätere, bessere Lesung.
     assert "content_text" not in kept["locked_fields"]
+
+
+def test_the_page_is_read_on_the_small_tier_and_the_careful_one_is_a_bonus(env, monkeypatch):
+    """Der erste Durchgang liest eine gedruckte Seite und wird hart nachgeprüft;
+    er läuft auf der kleinen Stufe. Die gründliche Stufe holt das Urteil, wo es
+    nötig ist — ist sie nicht erreichbar, gilt die erste Lesung, statt die Seite
+    auf „nicht gelesen" stehen zu lassen (D137)."""
+    assert analysis.FIRST_TIER == "klein"
+    stufen = []
+
+    async def extract(account_id, row, tier=None, effort=None):
+        stufen.append(tier)
+        if tier == analysis.CAREFUL_TIER:
+            raise RuntimeError("kein Kontingent")
+        return analysis.Insight(kind="workbook", content_text="Text", confidence=0.9, handwritten=True), tier
+    monkeypatch.setattr(analysis, "extract", extract)
+    row = {"id": 7, "kind": "workbook", "subject_name": "DEUTSCH", "origin": ""}
+    insight, tier = asyncio.run(analysis.read_material(1, row))
+    assert stufen == ["klein", "hoch"], "erst klein, dann die gründliche Stufe"
+    assert tier == "klein" and insight.content_text == "Text"
