@@ -280,7 +280,7 @@ EXTRACT = (
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 16
+EXTRACT_VERSION = 17
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -901,13 +901,12 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
         # so eine Seite einer einzigen Einheit zu — gemessen an S. 211 und 221.
         # Betroffen sind die wenigen Seiten je Buch, auf denen die Einheit
         # wechselt; sie kosten das Zehnfache und sind es wert (D132).
-        # Zwei kleine Fragen statt einer großen: erst die Wörter, dann die
-        # Gliederung der Seite. Die Wörter liest auch ein kleines Modell stabil,
-        # die Gliederung nur, wenn man sie einzeln fragt (D135).
-        outline = await page_outline(account_id, row, words, open_at, tier) if words else None
-        if outline:
-            words = apply_outline(words, outline, open_at)
-        elif boundary_page(open_at[0], words):
+        # Die Gliederung als ganze eigene Frage zu stellen war gemessen
+        # schlechter als die Felder am Wort: Das kleine Modell zählte Spalten-
+        # köpfe und doppelte Laufköpfe als Überschriften mit („Grammar/German",
+        # „Unit 1 / Media smart"). Gefragt wird deshalb nur die eine Entscheidung,
+        # die es zuverlässig trifft: wo eine neue Einheit beginnt (D133, D136).
+        if boundary_page(open_at[0], words):
             words = await split_units(account_id, row, open_at[0], words, tier)
     except ValidationError:
         with closing(webapp_conn()) as c, c:
