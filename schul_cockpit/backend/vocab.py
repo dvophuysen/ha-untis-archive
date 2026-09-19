@@ -998,17 +998,24 @@ def head_levels(heads: list[dict], known: dict) -> dict[str, str]:
 
     Einheit ist eine Überschrift, wenn sie eine Nummer trägt („Unit 1",
     „Unidad 3"), im Verzeichnis des Buchs steht, oder auf irgendeiner Seite als
-    Laufkopf wiederkehrt. Alles andere ist ein Abschnitt. Größe, Farbe und
-    Rahmen werden mitgeschrieben, entscheiden aber nichts: Sie sagen, wie eine
-    Überschrift aussieht, nicht welchen Rang sie hat, und ein Buch, das seine
-    Abschnitte ebenso hervorhebt wie seine Teile, machte daraus lauter
-    Einheiten."""
+    Laufkopf wiederkehrt. Alles andere ist zunächst ein Abschnitt.
+
+    Danach die Optik, und zwar nur, wenn sie wirklich unterscheidet: Sieht eine
+    übrige Überschrift genauso aus wie die sicher erkannten Einheiten, ist sie
+    wohl auch eine — so kommt „Across cultures 4" zu seinem Rang, das weder eine
+    Nummer trägt noch im Verzeichnis steht. Sieht aber die Mehrheit der übrigen
+    so aus, sagt das Aussehen nichts: Ein Buch, das seine Abschnitte ebenso
+    hervorhebt wie seine Teile, machte daraus sonst lauter Einheiten."""
     art: dict[str, str] = {}
     kopf = {plain(h["titel"]) for h in heads if h["wo"] == "seitenkopf" and plain(h["titel"])}
+    optik: dict[str, tuple] = {}
     bekannt = {k for name in (v["name"] for v in known.values()) for k in bundle_keys(name)}
     for h in heads:
         key = plain(h["titel"])
-        if not key or key in art:
+        if not key:
+            continue
+        optik.setdefault(key, (h["groesser"], h["farbig"], h["gerahmt"]))
+        if key in art:
             continue
         if _RUNNING_HEAD.match(h["titel"].strip()):
             art[key] = "laufkopf"
@@ -1018,6 +1025,13 @@ def head_levels(heads: list[dict], known: dict) -> dict[str, str]:
             art[key] = "einheit"
         else:
             art[key] = "abschnitt"
+    # Nur ein hervorgehobenes Aussehen sagt etwas; „nichts davon" haben alle.
+    sicher = {optik[k] for k, a in art.items() if a == "einheit" and any(optik.get(k, ()))}
+    rest = [k for k, a in art.items() if a == "abschnitt"]
+    passend = [k for k in rest if optik.get(k) in sicher]
+    if sicher and passend and len(passend) * 2 <= len(rest):
+        for k in passend:
+            art[k] = "einheit"
     return art
 
 
@@ -1085,8 +1099,12 @@ def regroup(account_id: int, subject: str) -> int:
     found = pages(account_id, subject)
     heads = heads_of(account_id, [p["material_id"] for p in found])
     known = book_units(account_id, subject)
-    alle = [h for p in found for h in (heads.get(p["material_id"], {}).get("ueberschriften") or [])]
-    art = head_levels(alle, known)
+    # Je Buchteil eigen: Ein Laufkopf des Schulbuchs sagt nichts über eine
+    # gleichlautende Überschrift im Arbeitsheft (D131).
+    je_buch: dict[str, list[dict]] = {}
+    for p in found:
+        je_buch.setdefault(p["label"], []).extend(heads.get(p["material_id"], {}).get("ueberschriften") or [])
+    art_je_buch = {buch: head_levels(alle, known) for buch, alle in je_buch.items()}
     with closing(webapp_conn()) as c:
         rows = {}
         for r in c.execute("SELECT id,material_id,unit,section,box,plain,position FROM vocab_words "
@@ -1105,7 +1123,7 @@ def regroup(account_id: int, subject: str) -> int:
         if not words:
             continue
         info = heads.get(p["material_id"]) or {}
-        cuts = page_cuts(words, info, art)
+        cuts = page_cuts(words, info, art_je_buch.get(p["label"], {}))
         offen = {i: [] for i, _, _ in cuts}
         for i, kind, titel in cuts:
             offen[i].append((kind, titel))
