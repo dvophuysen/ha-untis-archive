@@ -525,12 +525,39 @@ def split_mark(word: str) -> tuple[str, str]:
 # Eine Aufgabennummer: „5", „2a", „B3", „Nr. 7". Als Abschnitt gelesen zerreißt
 # sie den Abschnitt, in dem sie steht (D128).
 _JUST_A_NUMBER = re.compile(r"^(nr\.?\s*)?[a-z]?\s*\d{1,3}\s*[a-z]?[).]?$", re.I)
-# Die Nummer dahinter gehört zum Laufkopf, nicht zu einer Überschrift: Green
-# Line schreibt „1 | Vocabulary" über jede Seite der ersten Unit, und als
-# Überschrift gelesen sammelte „Vocabulary 1" dreiundsiebzig Wörter ein, die zu
-# den Abschnitten darunter gehören (D139).
+# Das Wort, mit dem eine Anhangseite ihren Laufkopf schreibt. Green Line setzt
+# die Marke des Teils daneben: „1 | Vocabulary", „Vocabulary TS 2",
+# „AC 4 Vocabulary". Als Überschrift gelesen sammelte „Vocabulary 1"
+# dreiundsiebzig Wörter ein, die zu den Abschnitten darunter gehören (D139).
+_VOC_WORD = re.compile(
+    r"\b(v|voc|vocab|vocabulary|vocabulario|vocabulaire|wortschatz|lernwörter|lernwoerter|words)\b", re.I)
 _RUNNING_HEAD = re.compile(
     r"^(v|voc|vocabulary|vocabulario|vocabulaire|wortschatz|lernwörter|lernwoerter|words)\s*\d{0,2}$", re.I)
+
+
+def running_mark(titel: str) -> str | None:
+    """Ist die Überschrift ein Laufkopf, und welchen Teil nennt sie?
+
+    Übrig bleibt die Marke des Teils, zu dem die Seite gehört — „1", „TS 2",
+    „AC 4". Sie ist der beste Hinweis darauf, was in diesem Buch eine Einheit
+    ist, denn sie steht auf jeder Seite des Teils und nirgends sonst."""
+    if not _VOC_WORD.search(titel or ""):
+        return None
+    rest = re.sub(r"[\s|·/–—-]+", " ", _VOC_WORD.sub(" ", titel or "")).strip(" |·/–—-")
+    return rest if len(rest) <= 12 else None
+
+
+def abbrev(titel: str) -> str:
+    """Die Abkürzung, mit der ein Buch seine Teile im Laufkopf nennt:
+    „Across cultures 3 School life" → „AC3", „Text smart 1 Drama" → „TS1"."""
+    kopf: list[str] = []
+    for teil in re.findall(r"[^\W\d_]+|\d+", titel or ""):
+        if teil.isdigit():
+            return ("".join(x[0] for x in kopf).upper() + teil) if kopf else teil
+        if len(kopf) >= 3:
+            return ""
+        kopf.append(teil)
+    return ""
 
 
 # Manche Anhangseiten tragen zwei Namen im Laufkopf: „Unit 1 / Media smart".
@@ -674,7 +701,9 @@ def clean_heads(found: HeadsOut) -> dict:
     out = []
     for h in found.ueberschriften:
         titel = clean_unit((h.titel or "").strip().rstrip(":;.,").strip())
-        if not titel or _JUST_A_NUMBER.match(titel):
+        # „184 one hundred and eighty-four" ist die Fußzeile, keine Überschrift:
+        # Eine Einheit trägt nie eine dreistellige Nummer.
+        if not titel or _JUST_A_NUMBER.match(titel) or re.match(r"^\d{3,}\b", titel):
             continue
         out.append({"titel": titel, "erstes_wort": (h.erstes_wort or "").strip(),
                     "wo": "seitenkopf" if (h.wo or "").strip().lower().startswith("seiten") else "im_text",
@@ -1028,9 +1057,33 @@ def head_levels(heads: list[dict], known: dict) -> dict[str, str]:
     so aus, sagt das Aussehen nichts: Ein Buch, das seine Abschnitte ebenso
     hervorhebt wie seine Teile, machte daraus sonst lauter Einheiten."""
     art: dict[str, str] = {}
-    kopf = {plain(h["titel"]) for h in heads if h["wo"] == "seitenkopf" and plain(h["titel"])}
     optik: dict[str, tuple] = {}
     bekannt = {k for name in (v["name"] for v in known.values()) for k in bundle_keys(name)}
+    # Erst die Laufköpfe und die Marken, die sie nennen. Oben am Seitenrand steht
+    # nie eine Überschrift, sondern immer der Laufkopf; im Text erkennt man ihn
+    # am Wort „Vocabulary" mit höchstens einer Marke daneben.
+    marken: set[str] = set()
+    for h in heads:
+        key = plain(h["titel"])
+        if not key:
+            continue
+        mark = running_mark(h["titel"])
+        if mark is not None:
+            # „Vocabulary", „Vocabulary TS 2", „1 | Vocabulary": ein Laufkopf,
+            # wo immer er steht.
+            art[key] = "laufkopf"
+        if mark:
+            marken.add(mark)
+        elif h["wo"] == "seitenkopf" and mark is None:
+            # Oben am Seitenrand steht der Laufkopf, auch ohne das Wort
+            # „Vocabulary": „TS 1", „Welcome back!". Dass er dort steht, macht
+            # den Namen aber nicht überall zum Laufkopf — im Text ist derselbe
+            # Name die Überschrift des Teils (D130).
+            marken.add(h["titel"].strip())
+    namen = {plain(m) for m in marken}
+    kuerzel = {re.sub(r"\s+", "", m).upper() for m in marken}
+    reihen = {k for k in (re.match(r"^[A-Z]+", x) for x in kuerzel) if k}
+    reihen = {m.group(0) for m in (re.match(r"^[A-Z]+", x) for x in kuerzel) if m}
     for h in heads:
         key = plain(h["titel"])
         if not key:
@@ -1038,11 +1091,12 @@ def head_levels(heads: list[dict], known: dict) -> dict[str, str]:
         optik.setdefault(key, (h["groesser"], h["farbig"], h["gerahmt"]))
         if key in art:
             continue
-        if _RUNNING_HEAD.match(h["titel"].strip()):
-            art[key] = "laufkopf"
-        elif _OTHER_PART.match(h["titel"].strip()):
+        kurz = abbrev(h["titel"])
+        serie = re.match(r"^[A-Z]+", kurz)
+        if _OTHER_PART.search(h["titel"].strip()):
             art[key] = "fremd"
-        elif unit_key(h["titel"]) or (bundle_keys(h["titel"]) & bekannt) or key in kopf:
+        elif (unit_key(h["titel"]) or (bundle_keys(h["titel"]) & bekannt) or key in namen
+              or (kurz and kurz in kuerzel) or (serie and serie.group(0) in reihen)):
             art[key] = "einheit"
         else:
             art[key] = "abschnitt"
@@ -1096,7 +1150,9 @@ def page_cuts(words: list[dict], info: dict, art: dict) -> list[tuple[int, str, 
         if found >= 0:
             at = found
     for i in range(len(stellen) - 2, -1, -1):
-        if stellen[i] < 0:
+        # Ein fremder Teil erbt keine Stelle: Ihn falsch zu setzen blendet den
+        # Rest der Seite aus, und das wiegt schwerer als eine fehlende Grenze.
+        if stellen[i] < 0 and gewollt[i][0] != "fremd":
             stellen[i] = stellen[i + 1]
     cuts: list[tuple[int, str, str]] = []
     erste = True

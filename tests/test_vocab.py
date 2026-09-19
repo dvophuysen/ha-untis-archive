@@ -1266,3 +1266,43 @@ def test_a_running_head_with_its_unit_number_is_still_a_running_head():
                              kopf("Wortschatz 2", "c"), kopf("Station 1", "d")], {})
     assert art["vocabulary 1"] == art["wortschatz 2"] == "laufkopf"
     assert art["station 1"] == "abschnitt"
+
+
+def test_the_running_head_names_the_part_the_page_belongs_to():
+    """Green Line schreibt „Vocabulary AC 3" und „TS 2 Vocabulary" über seine
+    Anhangseiten. Die Marke daneben nennt den Teil, zu dem die Seite gehört —
+    und damit lässt sich „Across cultures 3" von „Station 1" unterscheiden,
+    obwohl beide gleich aussehen und keines eine Nummer im Sinne von „Unit 3"
+    trägt (D139)."""
+    assert vocab.running_mark('1 | Vocabulary') == '1'
+    assert vocab.running_mark('Vocabulary TS 2') == 'TS 2'
+    assert vocab.running_mark('AC 4 Vocabulary') == 'AC 4'
+    assert vocab.running_mark('Vocabulary') == ''
+    assert vocab.running_mark('Station 1: Idiot nephew?') is None
+    assert vocab.abbrev('Across cultures 3 School life – dos and don’ts') == 'AC3'
+    assert vocab.abbrev('Text smart 1 Drama') == 'TS1'
+    assert vocab.abbrev('Station 1: You told us there was free wifi!') == 'S1'
+    assert vocab.abbrev('Introduction') == ''
+
+    heads = [kopf('Vocabulary AC 3', wo='seitenkopf'), kopf('TS 2 Vocabulary', wo='seitenkopf'),
+             kopf('Across cultures 3 School life', 'corridor', groesser=True, farbig=True),
+             kopf('Across cultures 1 Dos and don’ts', 'dos', groesser=True, farbig=True),
+             kopf('Text smart 2 Advertisements', 'ad', groesser=True, farbig=True),
+             kopf('Station 1: Living here', 'movie', groesser=True, farbig=True),
+             kopf('Introduction', 'kid', groesser=True, farbig=True)]
+    art = vocab.head_levels(heads, {})
+    assert art['vocabulary ac 3'] == art['ts 2 vocabulary'] == 'laufkopf'
+    # Genau getroffen, und über die Reihe auch die Nummern, die kein Laufkopf nennt.
+    assert art['across cultures 3 school life'] == 'einheit'
+    assert art['across cultures 1 dos and don’ts'] == 'einheit'
+    assert art['text smart 2 advertisements'] == 'einheit'
+    # Die Abschnitte bleiben Abschnitte, obwohl sie genauso aussehen.
+    assert art['station 1: living here'] == 'abschnitt'
+    assert art['introduction'] == 'abschnitt'
+
+
+def test_a_page_number_line_is_no_heading():
+    """„184 one hundred and eighty-four" ist die Fußzeile der Seite."""
+    found = vocab.clean_heads(vocab.HeadsOut.model_validate({"ueberschriften": [
+        {"titel": "184 one hundred and eighty-four"}, {"titel": "Station 2", "erstes_wort": "to lift"}]}))
+    assert [h["titel"] for h in found["ueberschriften"]] == ["Station 2"]

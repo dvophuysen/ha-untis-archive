@@ -1,3 +1,9 @@
+## 1.12.4
+
+- Der Laufkopf nennt den Teil, zu dem eine Seite gehört: „Vocabulary AC 3", „TS 2 Vocabulary", „1 | Vocabulary". Daran erkennt die App jetzt, dass „Across cultures 3" eine eigene Einheit ist und „Station 1" nicht — beide sehen im Buch gleich aus, und keines trägt eine Nummer wie „Unit 3".
+- Dieselbe Überschrift kann oben am Seitenrand der Laufkopf sein und im Text die Überschrift ihres Teils. Beides wird jetzt unterschieden.
+- Die Fußzeile („184 one hundred and eighty-four") zählt nicht mehr als Überschrift.
+
 ## 1.12.3
 
 - „Vocabulary 1" ist ein Laufkopf, keine Überschrift: Green Line schreibt die Nummer der Unit daneben. Als Überschrift gelesen sammelte sie dreiundsiebzig Wörter ein, die zu den Abschnitten darunter gehören.
