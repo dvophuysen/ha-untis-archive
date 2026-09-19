@@ -11,7 +11,7 @@ Home-Assistant-App-Optionen:
 
 Der Schlüssel wird in der bestehenden HA-App-Konfiguration gespeichert, bleibt über Neustarts/Updates erhalten und ist mit HA-Backups zu schützen. Passwortfeld bedeutet maskierte Darstellung, kein Versprechen zusätzlicher Verschlüsselung im Supervisor. Leeren/Wechseln des Schlüssels oder Änderung der Kontoliste mit anschließendem App-Neustart widerruft/ändert den Zugang.
 
-Der Dienst kann ausschließlich festgelegte Daten lesen. Er kann weder Aufgaben ändern noch SQL ausführen, keine Benutzer-/PIN-/Sitzungstabellen lesen und keine Azure- oder Benachrichtigungsschlüssel abrufen. SQLite wird mit `mode=ro` und `query_only=ON` geöffnet. Rohdaten-Payloads und Binärdateien werden nicht ausgegeben. Der Schlüssel ist kein PIN- oder Administratorkonto und funktioniert nicht als Anmeldung an normalen schreibenden App-Routen.
+Der Dienst kann ausschließlich festgelegte Daten lesen. Er kann weder Aufgaben ändern noch SQL ausführen, keine Benutzer-/PIN-/Sitzungstabellen lesen und keine Azure- oder Benachrichtigungsschlüssel abrufen. SQLite wird mit `mode=ro` und `query_only=ON` geöffnet. Provider-Rohdaten-Payloads werden nicht ausgegeben. Ab 1.12.7 sind Schulmaterialien und Vokabelverläufe für die autorisierte Qualitätsprüfung enthalten. `GET /api/integration/learning/materials/{id}/file?account_id=…` liefert ausschließlich ein Originalmaterial des freigegebenen Kindes als Download. Dieselbe Schlüssel- und Kontoprüfung gilt, keine Fremdkonto- oder Dateipfadabfragen. Der Schlüssel ist kein PIN- oder Administratorkonto und funktioniert nicht als Anmeldung an normalen schreibenden App-Routen.
 
 ## Abruf mit bestehender Home-Assistant-Verbindung
 

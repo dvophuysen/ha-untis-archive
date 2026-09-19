@@ -1,3 +1,10 @@
+## 1.12.7
+
+- Lesende Bestandsprüfung für den Vokabelimport: Quellen, Wortvorkommen,
+  Überschriften und Lernversuche sind über den vorhandenen, nach Kind
+  begrenzten Lesezugang prüfbar. Originaldateien unterliegen derselben
+  Kontoprüfung. Der Abruf startet keinen Import und verändert keinen Lernstand.
+
 ## 1.12.6
 
 - Wie eine Überschrift aussieht, entscheidet nichts mehr. An Kind B Englisch gemessen machte die Optik aus „Station 2", „Story" und „Check-out" eigene Einheiten — das Buch hebt seine Abschnitte genauso hervor wie seine Teile. Was ein Teil ist, sagt das Buch selbst: im Laufkopf und im Verzeichnis. Größe, Farbe und Rahmen werden weiter mitgeschrieben und sind in der Elternansicht zu sehen.

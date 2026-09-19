@@ -1,6 +1,7 @@
 """Persistently authenticated, read-only, account-scoped analysis API.
 
-No arbitrary SQL, credentials, raw provider payloads or file downloads.
+No arbitrary SQL, credentials or raw provider payloads. Original school
+materials are available only inside the explicitly allowed account scope.
 """
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ import sqlite3
 from contextlib import closing
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from ..config import SETTINGS
 
 router = APIRouter(prefix='/integration/learning', tags=['learning-read-access'])
@@ -56,6 +57,15 @@ dataset('digital_textbook_access','app','account_id book_title status page print
 dataset('digital_textbook_catalog','app','id account_id title provider subject_name discovered_at','discovered_at')
 dataset('book_chapters','app','id account_id book_title number title kind level start_page end_page belongs_to locked created_at','created_at')
 
+# Original evidence and learning history for a non-mutating vocabulary audit.
+# Explicit allowlists: never expose users, sessions, provider tokens or options.
+dataset('materials','app','id account_id kind subject_name title summary content_text source_label source_page printed_pages page_check origin filename mime_type verified hidden analysis_state analysis_model analysis_version analysis_error created_at updated_at','created_at','updated_at')
+dataset('vocab_words','app','id account_id subject material_id source_label page unit section box position foreign_word plain meanings_json grammar forms_json example hidden created_at','created_at')
+dataset('vocab_attempts','app','id account_id word_id stage direction answer result spoken seconds edits created_at','created_at')
+dataset('vocab_headings','app','material_id account_id text_hash heads error updated_at',modified='updated_at')
+dataset('vocab_extractions','app','material_id account_id text_hash words error updated_at',modified='updated_at')
+
+
 dataset('learning_day_preferences','app','account_id day load updated_at','day','updated_at')
 dataset('learning_plan_links','app','account_id goal_key skill_id')
 dataset('learning_plan_blocks','app','account_id day session_id goal_key minutes','day')
@@ -97,6 +107,23 @@ def open_readonly(source):
         install_attendance_view(conn)
     conn.execute('PRAGMA query_only=ON')
     return conn
+
+
+@router.get('/materials/{material_id}/file')
+def source_file(material_id: int, account_id: int = Query(ge=1),
+                allowed: set[int] = Depends(authenticate)):
+    """Read an original within the owner's existing account-scoped grant."""
+    if account_id not in allowed:
+        raise HTTPException(403, 'Kind ist für diesen Lesezugang nicht freigegeben')
+    with closing(open_readonly('app')) as c:
+        row = c.execute('SELECT mime_type,file_bytes FROM materials WHERE id=? AND account_id=?',
+                        (material_id, account_id)).fetchone()
+    if not row or not row['file_bytes']:
+        raise HTTPException(404, 'Original nicht vorhanden')
+    return Response(bytes(row['file_bytes']), media_type='application/octet-stream',
+                    headers={'Cache-Control': 'private, no-store',
+                             'X-Content-Type-Options': 'nosniff',
+                             'Content-Disposition': 'attachment; filename="source.bin"'})
 
 
 @router.get('')
