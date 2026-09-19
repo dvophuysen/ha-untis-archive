@@ -213,16 +213,8 @@ def word_states(c, account_id: int, word_ids: list[int]) -> dict[int, dict]:
 # ------------------------------------------------------------ Wörter lesen
 
 class WordIn(InputModel):
-    # Die Vokabelliste im Anhang gliedert sich selbst: „Unidad 3 / Texto A ▸ p. 51“
-    # steht als Überschrift über den Wörtern, die dazugehören. Daraus entstehen die
-    # Bündel des Trainers, nicht aus der Seitenzahl des Anhangs (D100).
-    unit: str = Field(default="", max_length=80)
-    section: str = Field(default="", max_length=80)
-    # Dritte Ebene: ein Kasten mit eigener Überschrift innerhalb eines
-    # Abschnitts („School" in „The new boy"). Steht der Kasten direkt unter der
-    # Einheit, ist er selbst der Abschnitt („Holiday words") — dann bleibt box
-    # leer (D116).
-    box: str = Field(default="", max_length=80)
+    # Ohne Gliederungsfelder: Wo ein Wort hingehört, entscheidet der
+    # Überschriftenlauf über das ganze Buch, nicht diese eine Frage (D139).
     foreign_word: str = Field(min_length=1, max_length=80)
     meanings: list[str] = Field(min_length=1, max_length=8)
     grammar: str = Field(default="", max_length=60)
@@ -243,44 +235,16 @@ EXTRACT = (
     "Beispielsatz aus dem Buch, falls vorhanden. Nur Wörter, die als Lernwörter dastehen: keine Wörter "
     "aus Beispielsätzen, Merkkästen oder Überschriften, keine erfundenen Bedeutungen. Reihenfolge wie "
     "im Buch. Enthält die Seite keine Lernwörter, gib eine leere Liste.\n"
-    "Gliederung: Eine Vokabelliste im Anhang ist zweistufig, und beide Stufen stehen im Text.\n"
-    "unit ist die Einheit des Buchs, unter der das Wort steht: „Unidad 3“, „Lektion 5“, „Unit 1“, aber auch "
-    "„Welcome back!“, „Media smart“ oder „Across cultures 1“ — alles, was das Buch als eigenen Teil führt. Oft "
-    "steht sie als Laufkopf oben auf der Seite. Nennt der Laufkopf zwei Einheiten („Welcome back! / Unit 1“), "
-    "gilt für jedes Wort die Überschrift, die im Text wirklich darüber steht.\n"
-    "section ist die Zwischenüberschrift innerhalb der Einheit: „The new boy“, „Station 1“, „Story“, "
-    "„Check-out“, „Holiday words“, „How were your summer holidays?“, „Texto A“. Eine solche Überschrift kann "
-    "mitten auf der Seite beginnen; alle Wörter darunter gehören dazu.\n"
-    "Der Laufkopf einer Anhangseite ist keine Überschrift: „Vocabulary“, „V“, „Wortschatz“, „Vocabulario“ und der "
-    "oben wiederholte Name der Einheit stehen auf jeder Seite und sind weder unit noch section.\n"
-    "box ist ein Kasten mit eigener Überschrift innerhalb eines Abschnitts: ein Themenblock wie „School“ oder "
-    "„Feelings“, der unter einer Zwischenüberschrift steht. Steht ein solcher Kasten dagegen direkt unter der "
-    "Einheit, ohne dass ein Abschnitt offen ist, dann ist er selbst der Abschnitt („Holiday words“) und box bleibt "
-    "leer. Ein Kasten ohne eigene Überschrift bekommt keinen Namen; seine Wörter gehören zu dem Abschnitt, unter "
-    "dem er steht.\n"
-    "Du siehst immer nur diese eine Seite, die Liste läuft aber über den Seitenwechsel. Die Einheit liest du "
-    "immer von dieser Seite ab, nie aus dem Hinweis. Steht in "
-    "offen_von_der_seite_davor ein Abschnitt, ist er auf dieser Seite noch offen, auch wenn seine Überschrift "
-    "hier nirgends steht: Ein Kasten mit eigener Überschrift gehört dann in diesen Abschnitt — trag ihn in box "
-    "ein und den Abschnitt aus offen_von_der_seite_davor in section, statt aus dem Kasten einen neuen Abschnitt "
-    "zu machen. Ein wirklich neuer Abschnitt sieht anders aus als ein Kasten: Er gliedert den Gang der Einheit "
-    "(Text, Station, Story, Check-out) und läuft im Satzspiegel mit, während ein Kasten ein abgesetztes, "
-    "gerahmtes oder farbig unterlegtes Wortfeld zu einem Thema ist.\n"
-    "Liegt das Bild der Seite bei, entscheidet es über die Gliederung: Ein Abschnitt ist eine laufende "
-    "Zwischenüberschrift im Textfluss, ein Kasten ein eigens abgesetztes, gerahmtes oder farbig unterlegtes "
-    "Wortfeld mit eigener Überschrift. Im bloßen Text sehen beide gleich aus, im Bild nicht.\n"
-    "Beide Überschriften gelten weiter, bis eine neue kommt — auch über den Seitenwechsel hinweg. Beginnt die "
-    "Seite ohne neue Überschrift, gehören ihre ersten Wörter noch zur Einheit und zum Abschnitt der Seite "
-    "davor; dann lass die Felder leer, die App setzt sie fort. Steht nirgends eine Überschrift, lass beide "
-    "leer. Erfinde keine Einheit und keinen Abschnitt, und mach aus einer Aufgabennummer („2“) keine "
-    "Überschrift. Nur JSON: "
+    "Überschriften gehören nicht in die Liste: Wo ein Wort hingehört, wird getrennt gefragt. Gib nur die "
+    "Wörter, lückenlos und in der Reihenfolge der Seite, von oben nach unten und bei zwei Spalten erst die "
+    "linke, dann die rechte. Die Reihenfolge ist wichtig, denn an ihr hängt die Zuordnung. Nur JSON: "
 )
 
 
 # Stand der Leseanweisung. Eine Seite wird je Textstand einmal gelesen; ändert
 # sich die Anweisung, muss sie neu gelesen werden, sonst tragen die alten Wörter
 # für immer die alte Gliederung. Bei jeder Änderung an EXTRACT hochzählen (D108).
-EXTRACT_VERSION = 18
+EXTRACT_VERSION = 19
 
 
 def looks_like_vocab(row: dict) -> bool:
@@ -457,30 +421,62 @@ def unit_label(account_id: int, subject: str, label: str, page: int | None) -> s
 _BUSY: set[int] = set()
 
 
+def page_open(p: dict) -> bool:
+    """Ob an dieser Seite noch etwas zu lesen ist — Wörter oder Überschriften."""
+    if not p["readable"] or p["material_id"] in _BUSY:
+        return False
+    woerter = (p["extracted"] is None or p["stale"]) and not p["error"]
+    koepfe = p["heads_stale"] and not p["heads_error"]
+    return bool(woerter or koepfe)
+
+
 def unread_pages(account_id: int, subject: str) -> list[int]:
-    """Seiten des Fachs mit Lernwörtern, die noch nie zerlegt wurden."""
-    return [p["material_id"] for p in pages(account_id, subject)
-            if (p["extracted"] is None or p["stale"]) and p["readable"] and not p["error"]
-            and p["material_id"] not in _BUSY]
+    """Seiten des Fachs mit Lernwörtern, an denen noch etwas offen ist."""
+    return [p["material_id"] for p in pages(account_id, subject) if page_open(p)]
+
+
+def note_error(table: str, material_id: int, account_id: int, exc: Exception) -> None:
+    """Einen Fehler an der Seite vermerken, damit der Hintergrundlauf ihn nicht
+    ewig wiederholt."""
+    spalte = "words" if table == "vocab_extractions" else "heads"
+    leer = 0 if table == "vocab_extractions" else "{}"
+    with closing(webapp_conn()) as c, c:
+        c.execute(f"INSERT OR REPLACE INTO {table}(material_id,account_id,text_hash,{spalte},error,updated_at) "
+                  "VALUES(?,?,?,?,?,?)",
+                  (material_id, account_id, "", leer, str(getattr(exc, "detail", exc))[:200], now_iso()))
 
 
 async def read_unread(account_id: int, subject: str) -> int:
-    """Alle ungelesenen Wortseiten eines Fachs zerlegen; läuft im Hintergrund,
-    sobald der Trainer geöffnet wird. Fehler landen an der Seite, nicht beim Kind."""
+    """Alle offenen Wortseiten eines Fachs lesen; läuft im Hintergrund, sobald
+    der Trainer geöffnet wird. Fehler landen an der Seite, nicht beim Kind.
+
+    Zwei Durchgänge je Seite: die Wörter und die Überschriften. Am Ende legt
+    `regroup()` die Gliederung des ganzen Buchteils über alle Wörter — erst
+    dann steht fest, welche Überschrift eine Einheit ist (D139)."""
     done = 0
     forget_duplicates(account_id, subject)
-    for mid in unread_pages(account_id, subject):
+    for p in pages(account_id, subject):
+        if not page_open(p):
+            continue
+        mid = p["material_id"]
         _BUSY.add(mid)
         try:
-            await extract(account_id, mid)
-            done += 1
-        except Exception as exc:
-            LOG.warning("Wortseite %s nicht zerlegbar: %s", mid, exc)
-            with closing(webapp_conn()) as c, c:
-                c.execute("INSERT OR REPLACE INTO vocab_extractions(material_id,account_id,text_hash,words,error,updated_at) VALUES(?,?,?,?,?,?)",
-                          (mid, account_id, "", 0, str(getattr(exc, "detail", exc))[:200], now_iso()))
+            if (p["extracted"] is None or p["stale"]) and not p["error"]:
+                try:
+                    await extract(account_id, mid)
+                    done += 1
+                except Exception as exc:
+                    LOG.warning("Wortseite %s nicht zerlegbar: %s", mid, exc)
+                    note_error("vocab_extractions", mid, account_id, exc)
+            if p["heads_stale"] and not p["heads_error"]:
+                try:
+                    await read_heads(account_id, mid)
+                except Exception as exc:
+                    LOG.warning("Überschriften der Seite %s nicht lesbar: %s", mid, exc)
+                    note_error("vocab_headings", mid, account_id, exc)
         finally:
             _BUSY.discard(mid)
+    regroup(account_id, subject)
     return done
 
 
@@ -550,53 +546,13 @@ def split_head(unit: str, title: str = "") -> str:
     return passend[-1] if len(passend) == 1 else unit
 
 
-def tidy(words: list, open_unit: str = "", open_section: str = "", title: str = "") -> list:
-    """Die Felder in die Form bringen, auf die sich der Trainer verlässt.
+def tidy(words: list) -> list:
+    """Die Wörter in die Form bringen, auf die sich der Trainer verlässt.
 
     Modelle halten sich unterschiedlich streng an die Anweisung: Das eine trennt
-    die grammatische Marke ab und lässt den Verweis aus der Überschrift weg, das
-    andere nicht. Darauf darf die Bündelung nicht ankommen (D107). `open_unit` und
-    `open_section` sind Einheit und Abschnitt, die von der Seite davor noch offen
-    sind: Ohne sie wäre ein Kasten auf einer Folgeseite zwangsläufig selbst ein
-    Abschnitt (D121)."""
-    part = (open_section or "").strip()
-    here = (open_unit or "").strip()
+    die grammatische Marke ab, das andere nicht. Darauf darf die Bündelung nicht
+    ankommen (D107)."""
     for w in words:
-        w.unit = split_head(clean_unit(w.unit), title)
-        w.section = clean_unit(w.section)
-        # „la fruta:" und „la fruta" sind dieselbe Überschrift. Der Doppelpunkt
-        # steht im Buch als Ankündigung der Liste, nicht als Teil des Namens;
-        # ohne dieses Abschneiden stand jeder Kasten zweimal da (D124).
-        for field in ("unit", "section", "box"):
-            setattr(w, field, (getattr(w, field) or "").strip().rstrip(":;.,").strip())
-        # Der Laufkopf ist kein Abschnitt, und ein Abschnitt, der nur die
-        # Einheit wiederholt, ist auch keiner.
-        w.box = clean_unit(w.box)
-        if _RUNNING_HEAD.match(w.section.strip()) or plain(w.section) == plain(w.unit):
-            w.section = ""
-        # Eine bloße Nummer ist eine Aufgabennummer, keine Zwischenüberschrift:
-        # „5" stand als eigener Abschnitt neben „Holiday words" und nahm ihm ein
-        # Wort weg. Bei der Einheit ist es umgekehrt — die Wortliste von Green
-        # Line überschreibt ihre Units nur mit „1", „2", „3" (D110, D128).
-        for field in ("section", "box"):
-            if _JUST_A_NUMBER.match((getattr(w, field) or "").strip()):
-                setattr(w, field, "")
-        if _RUNNING_HEAD.match(w.unit.strip()):
-            w.unit = ""
-        # Eine neue Einheit macht den Abschnitt der alten zu: Was in ihr offen
-        # war, gilt hier nicht weiter.
-        if w.unit.strip() and w.unit.strip() != here:
-            here, part = w.unit.strip(), ""
-        if w.section.strip():
-            part = w.section.strip()
-        # Ein Kasten ohne Abschnitt darüber ist selbst der Abschnitt (D116) —
-        # aber nur, wenn wirklich keiner offen ist, auch keiner von der Seite
-        # davor.
-        if w.box and not part:
-            w.section, w.box = w.box, ""
-            part = w.section.strip()
-        if w.box and (_RUNNING_HEAD.match(w.box.strip()) or plain(w.box) in (plain(w.section or part), plain(w.unit))):
-            w.box = ""
         core, mark = split_mark(w.foreign_word)
         if mark:
             w.foreign_word = core
@@ -632,146 +588,113 @@ def page_image(account_id: int, material_id: int) -> list[dict]:
         "detail": "high"}}]
 
 
-# Die Stufe, die einen Seitenschnitt auch ohne gezielte Frage richtig legt.
-CAREFUL_TIER = "hoch"
+# ------------------------------------------------------------ Überschriften lesen
 
-
-class BoundaryOut(InputModel):
-    """Wo auf einer Grenzseite der neue Teil beginnt."""
-    ab: int = Field(default=0, ge=0, le=400)
-    einheit: str = Field(default="", max_length=80)
-
-
-BOUNDARY = (
-    "Auf dieser Seite treffen zwei Teile des Buchs aufeinander. Beantworte genau eine Frage: Ab welchem Wort "
-    "gilt der neue Teil?\n"
-    "Die Seite davor endete im Teil „{offen}“. Unten stehen die Lernwörter dieser Seite in ihrer Reihenfolge, "
-    "nummeriert. Sieh im Bild nach, wo die neue Überschrift steht, und ordne ihr das erste Wort zu, das "
-    "darunter steht.\n"
-    "ab ist die Nummer dieses ersten Wortes. Beginnt der neue Teil erst auf der nächsten Seite, ist ab 0. "
-    "Steht schon das erste Wort unter der neuen Überschrift, ist ab 1. einheit ist der Name des neuen Teils, "
-    "so wie er über den Wörtern steht — „Unit 1“, „Welcome back!“, „Media smart“, „Unidad 3“, „Lektion 5“. "
-    "Nur der Teil selbst, ohne die Zwischenüberschrift darunter: „Unit 1“, nicht „Unit 1 The new boy“. "
-    "Rate nicht: Findest du die Grenze nicht, antworte mit ab 0 und leerer einheit. Nur JSON: ")
-
-
-class Heading(InputModel):
-    """Eine Überschrift auf der Seite, mit dem ersten Wort darunter."""
-    ab: int = Field(default=1, ge=1, le=400)
+class HeadIn(InputModel):
+    """Eine Überschrift auf der Seite, beschrieben statt eingeordnet."""
     titel: str = Field(default="", max_length=90)
-    art: str = Field(default="abschnitt", max_length=12)
+    erstes_wort: str = Field(default="", max_length=80)
+    # Wo sie steht: ganz oben am Seitenrand (Laufkopf) oder mitten im Text.
+    wo: str = Field(default="im_text", max_length=12)
+    groesser: bool = Field(default=False)
+    farbig: bool = Field(default=False)
+    gerahmt: bool = Field(default=False)
 
 
-class OutlineOut(InputModel):
-    headings: list[Heading] = Field(default_factory=list, max_length=12)
+class HeadsOut(InputModel):
+    ueberschriften: list[HeadIn] = Field(default_factory=list, max_length=16)
+    beginnt_mit_ueberschrift: bool = Field(default=False)
 
 
-OUTLINE = (
-    "Beantworte eine einzige Frage zu dieser Buchseite: Wie ist sie gegliedert? Die Lernwörter stehen unten in "
-    "ihrer Reihenfolge, nummeriert. Nenne jede Überschrift der Seite von oben nach unten, mit der Nummer des "
-    "ersten Wortes, das darunter steht.\n"
-    "art sagt, was für eine Überschrift es ist. „einheit“: der Teil des Buchs, meist der Laufkopf oben — „Unit 1“, "
-    "„Welcome back!“, „Media smart“, „Unidad 3“, „Lektion 5“. „abschnitt“: eine Zwischenüberschrift im Textfluss "
-    "darunter — „The new boy“, „Station 1“, „Story“, „Check-out“, „Texto A“. „kasten“: ein abgesetztes, gerahmtes "
-    "oder farbig unterlegtes Wortfeld zu einem Thema — „School“, „Feelings“, „la fruta“. Im Bild sieht man den "
-    "Unterschied: Ein Kasten ist vom Text abgesetzt, ein Abschnitt läuft im Satzspiegel mit.\n"
-    "titel ist die Überschrift, wie sie dasteht, ohne Zusätze und ohne die Überschrift darüber zu wiederholen. "
-    "Der Laufkopf einer Anhangseite („Vocabulary“, „V“, „Wortschatz“) ist keine Überschrift, eine Aufgabennummer "
-    "(„5“, „2a“) auch nicht. Beginnt die Seite unter einer Überschrift, die schon auf der Seite davor stand, nenne "
-    "sie nicht noch einmal — {offen}\n"
-    "Sieh im Bild nach, nicht nur im Text: Die Reihenfolge und die Art stehen im Satz der Seite. Erfinde nichts; "
-    "steht keine Überschrift auf der Seite, gib eine leere Liste. Nur JSON: ")
+HEADS = (
+    "Beantworte eine einzige Frage zu dieser Buchseite: Welche Überschriften stehen darauf? Die Wörter selbst "
+    "interessieren hier nicht.\n"
+    "Nenne jede Überschrift von oben nach unten, bei zwei Spalten erst die linke Spalte, dann die rechte. "
+    "Zu jeder Überschrift:\n"
+    "titel — der Text der Überschrift, genau wie er dasteht, ohne Zusätze und ohne die Überschrift darüber zu "
+    "wiederholen.\n"
+    "erstes_wort — das erste Fremdwort, das darunter steht, wörtlich wie im Buch. Steht darunter kein Wort, "
+    "lass es leer.\n"
+    "wo — „seitenkopf“, wenn sie oben am Seitenrand steht, abgesetzt vom Text, und auf dieser Art Seite immer "
+    "wieder vorkommt (der Laufkopf). Sonst „im_text“.\n"
+    "groesser, farbig, gerahmt — beschreibe nur, was du siehst: Ist die Schrift größer als die der Wörter? Hat "
+    "sie eine eigene Farbe? Steht sie in einem Rahmen oder auf farbigem Grund? Ordne nichts ein, benenne keine "
+    "Ebene; das macht die App.\n"
+    "beginnt_mit_ueberschrift — steht über dem allerersten Wort der Seite eine Überschrift dieser Seite? Nein, "
+    "wenn die Seite mitten in einer Liste beginnt, die auf der Seite davor angefangen hat.\n"
+    "Eine Aufgabennummer („5“, „2a“, „B3“) ist keine Überschrift. Ein Spaltenkopf einer Tabelle („English“, "
+    "„German“) ist keine Überschrift. Erfinde nichts; steht keine Überschrift auf der Seite, gib eine leere "
+    "Liste. Nur JSON: ")
 
 
-async def page_outline(account_id: int, row: dict, words: list, open_at: tuple, tier: str | None = None):
-    """Die Gliederung der Seite als eigene Frage, getrennt vom Lesen der Wörter.
+# Stand der Überschriftenfrage; wie EXTRACT_VERSION der Anlass, eine Seite neu
+# zu befragen (D108).
+HEADS_VERSION = 1
 
-    Die volle Leseanweisung verlangt Wort, Bedeutungen, Marke, Formen, Beispiel
-    und drei Gliederungsebenen auf einmal. Die Wörter liest ein kleines Modell
-    dabei zuverlässig — gemessen über mehrere Läufe identisch —, die Gliederung
-    nicht: Sie kippte zwischen zwei Läufen, „Feelings“ einmal als Kasten unter
-    „Story“, einmal als Abschnitt daneben. Als eigene, kleine Frage mit dem Bild
-    und der nummerierten Wortliste ist sie stabil, und zugeordnet wird in der
-    App (D135)."""
+
+async def ask_heads(account_id: int, row: dict, tier: str | None = None) -> HeadsOut:
+    """Die Überschriften einer Seite, ohne die Wörter. Ein kleiner Aufruf.
+
+    Getrennt gefragt, weil beides zusammen zu viel auf einmal ist, und ohne
+    Einordnung, weil die auf einer einzelnen Seite gar nicht zu treffen ist: Ob
+    „Vocabulary“ ein Laufkopf und „German“ ein Spaltenkopf ist, zeigt erst der
+    Vergleich aller Seiten (D139)."""
     from . import ai_gateway as ai
-    liste = "\n".join(f"{i}. {w.foreign_word}" for i, w in enumerate(words, 1))
-    offen = ", ".join(x for x in (f"Einheit „{open_at[0]}“" if open_at[0] else "",
-                                  f"Abschnitt „{open_at[1]}“" if open_at[1] else "",
-                                  f"Kasten „{open_at[2]}“" if open_at[2] else "") if x)
-    offen = f"von der Seite davor läuft noch: {offen}." if offen else "von der Seite davor läuft nichts weiter."
-    try:
-        raw, _, _ = await ai.complete(
-            account_id, ai.VOCAB, OUTLINE.format(offen=offen) + json.dumps(OutlineOut.model_json_schema()),
-            {"seite": row.get("source_page"), "titel": row.get("title") or "", "woerter": liste},
-            images=page_image(account_id, row["id"]), max_output=2500, tier=tier)
-        found = OutlineOut.model_validate_json(raw)
-    except Exception as exc:
-        LOG.warning("Gliederung der Seite %s nicht bestimmbar: %s", row.get("source_page"), getattr(exc, "detail", exc))
-        return None
-    clean = []
-    for h in found.headings:
+    raw, _, _ = await ai.complete(
+        account_id, ai.VOCAB, HEADS + json.dumps(HeadsOut.model_json_schema()),
+        {"seite": row.get("source_page"), "titel": row.get("title") or "",
+         "text": (row.get("content_text") or "")[:12000]},
+        images=page_image(account_id, row["id"]), max_output=3000, tier=tier)
+    return HeadsOut.model_validate_json(raw)
+
+
+def clean_heads(found: HeadsOut) -> dict:
+    """Die Antwort in die Form bringen, mit der die Gliederung rechnet."""
+    out = []
+    for h in found.ueberschriften:
         titel = clean_unit((h.titel or "").strip().rstrip(":;.,").strip())
-        if not titel or _RUNNING_HEAD.match(titel) or _JUST_A_NUMBER.match(titel) or not 1 <= h.ab <= len(words):
+        if not titel or _JUST_A_NUMBER.match(titel):
             continue
-        art = h.art.strip().lower()
-        clean.append((h.ab, titel, art if art in ("einheit", "abschnitt", "kasten") else "abschnitt"))
-    clean.sort(key=lambda x: x[0])
-    return clean
+        out.append({"titel": titel, "erstes_wort": (h.erstes_wort or "").strip(),
+                    "wo": "seitenkopf" if (h.wo or "").strip().lower().startswith("seiten") else "im_text",
+                    "groesser": bool(h.groesser), "farbig": bool(h.farbig), "gerahmt": bool(h.gerahmt)})
+    return {"ueberschriften": out, "beginnt_mit_ueberschrift": bool(found.beginnt_mit_ueberschrift)}
 
 
-def apply_outline(words: list, outline: list, open_at: tuple) -> list:
-    """Die gefundene Gliederung auf die Wörter legen. Jedes Wort bekommt die
-    Überschriften, unter denen es steht — eine neue Einheit schließt Abschnitt
-    und Kasten, ein neuer Abschnitt schließt den Kasten (D116)."""
-    unit, part, box = open_at
-    stellen = {ab: [] for ab, _, _ in outline}
-    for ab, titel, art in outline:
-        stellen[ab].append((titel, art))
-    for index, w in enumerate(words, 1):
-        for titel, art in stellen.get(index, []):
-            if art == "einheit":
-                unit, part, box = titel, "", ""
-            elif art == "abschnitt":
-                part, box = titel, ""
-            elif part:
-                box = titel
-            else:
-                part, box = titel, ""
-        w.unit, w.section, w.box = unit, part, box
-    return words
+async def read_heads(account_id: int, material_id: int, tier: str | None = None) -> dict:
+    """Die Überschriften einer Seite lesen und ablegen; einmal je Textstand."""
+    row = _page(account_id, material_id)
+    digest = mc.fingerprint([HEADS_VERSION, row["content_text"] or ""])
+    with closing(webapp_conn()) as c:
+        done = c.execute("SELECT text_hash,heads FROM vocab_headings WHERE material_id=?", (material_id,)).fetchone()
+    if done and done["text_hash"] == digest:
+        return json.loads(done["heads"] or "{}")
+    if not (row["content_text"] or "").strip():
+        raise HTTPException(409, "Diese Seite ist noch nicht gelesen. Bitte die Auswertung abwarten.")
+    heads = clean_heads(await ask_heads(account_id, row, tier=tier))
+    with closing(webapp_conn()) as c, c:
+        c.execute("INSERT OR REPLACE INTO vocab_headings(material_id,account_id,text_hash,heads,error,updated_at) "
+                  "VALUES(?,?,?,?,NULL,?)",
+                  (material_id, account_id, digest, json.dumps(heads, ensure_ascii=False), now_iso()))
+    LOG.info("Überschriften: %s auf Material %s", len(heads["ueberschriften"]), material_id)
+    return heads
 
 
-async def split_units(account_id: int, row: dict, open_unit: str, words: list, tier: str | None = None):
-    """Die Grenze zwischen zwei Einheiten auf einer Seite, als eigene Frage.
-
-    Die volle Leseanweisung verlangt viel auf einmal — Wort, Bedeutungen,
-    Formen, Beispiel, drei Gliederungsebenen —, und die eine Entscheidung, wo
-    ein neuer Teil beginnt, geht darin unter: Die kleinen Stufen schreiben die
-    ganze Seite einer Einheit zu. Als einzelne Frage, mit dem Bild und der
-    nummerierten Wortliste, ist dieselbe Entscheidung klein genug (D133)."""
-    from . import ai_gateway as ai
-    liste = "\n".join(f"{i}. {w.foreign_word}" for i, w in enumerate(words, 1))
-    try:
-        raw, _, _ = await ai.complete(
-            account_id, ai.VOCAB, BOUNDARY.format(offen=open_unit) + json.dumps(BoundaryOut.model_json_schema()),
-            {"seite": row.get("source_page"), "titel": row.get("title") or "", "woerter": liste},
-            images=page_image(account_id, row["id"]), max_output=2000, tier=tier)
-        found = BoundaryOut.model_validate_json(raw)
-    except Exception as exc:
-        LOG.warning("Grenze auf Seite %s nicht bestimmbar: %s", row.get("source_page"), getattr(exc, "detail", exc))
-        return words
-    if not 1 < found.ab <= len(words) or not found.einheit.strip():
-        # 0 heißt „beginnt hier nicht“, 1 heißt „gleich das erste Wort" — in
-        # beiden Fällen ist nichts zu teilen.
-        if found.ab == 0 and open_unit:
-            for w in words:
-                w.unit = open_unit
-        return words
-    neu = clean_unit(found.einheit.strip())
-    LOG.info("Seite %s: neuer Teil „%s“ ab Wort %s von %s", row.get("source_page"), neu, found.ab, len(words))
-    for index, w in enumerate(words, 1):
-        w.unit = open_unit if index < found.ab else neu
-    return words
+def heads_of(account_id: int, material_ids: list[int]) -> dict[int, dict]:
+    """Die abgelegten Überschriften mehrerer Seiten."""
+    if not material_ids:
+        return {}
+    marks = ",".join("?" * len(material_ids))
+    with closing(webapp_conn()) as c:
+        rows = c.execute(f"SELECT material_id,heads FROM vocab_headings WHERE account_id=? AND material_id IN ({marks})",
+                         (account_id, *material_ids)).fetchall()
+    out = {}
+    for r in rows:
+        try:
+            out[r["material_id"]] = json.loads(r["heads"] or "{}")
+        except ValueError:
+            continue
+    return out
 
 
 def ai_tier_for_vocab() -> str:
@@ -779,20 +702,11 @@ def ai_tier_for_vocab() -> str:
     return ai.tier_for(ai.VOCAB)
 
 
-def boundary_page(open_unit: str, words: list) -> bool:
-    """Ob auf dieser Seite eine Einheit endet und eine andere beginnt.
+async def read_words(account_id: int, row: dict, tier: str | None = None):
+    """Eine Seite vom Modell in Lernwörter zerlegen, ohne etwas abzulegen.
 
-    Zwei Anzeichen: Die Seite nennt eine andere Einheit als die Seite davor,
-    oder sie nennt selbst mehrere. Ohne Vorseite gibt es keine Grenze."""
-    genannt = {(w.unit or "").strip() for w in words if (w.unit or "").strip()}
-    if not open_unit or not genannt:
-        return False
-    return len(genannt) > 1 or open_unit not in genannt
-
-
-async def read_words(account_id: int, row: dict, tier: str | None = None,
-                     carry: tuple[str, str, str] | None = None):
-    """Eine Seite vom Modell in Lernwörter zerlegen, ohne etwas abzulegen."""
+    Gefragt werden nur die Wörter in ihrer Reihenfolge. Wohin sie gehören,
+    entscheidet der Überschriftenlauf über alle Seiten (D139)."""
     from . import ai_gateway as ai
     try:
         images = page_image(account_id, row["id"])
@@ -801,16 +715,9 @@ async def read_words(account_id: int, row: dict, tier: str | None = None,
         images = []
     context = {"subject": row["subject_name"] or "", "page": row["source_page"],
                "text": (row["content_text"] or "")[:24000]}
-    if carry and (carry[1] or carry[2]):
-        # Nur Abschnitt und Kasten. Die Einheit steht als Laufkopf auf der Seite
-        # selbst; sie im Hinweis mitzugeben hieß, dem Modell die Antwort
-        # vorzusagen — ein schwächeres schrieb sie ab, statt hinzusehen, und ein
-        # einziger Fehler wanderte so durch alle Folgeseiten (D130).
-        context["offen_von_der_seite_davor"] = {"section": carry[1], "box": carry[2]}
     raw, _, _ = await ai.complete(account_id, ai.VOCAB, EXTRACT + json.dumps(WordsOut.model_json_schema()),
                                   context, images=images, max_output=10000, tier=tier)
-    offen = carry or ("", "", "")
-    return tidy(WordsOut.model_validate_json(raw).words, offen[0], offen[1], row.get("title") or "")
+    return tidy(WordsOut.model_validate_json(raw).words)
 
 
 async def compare(account_id: int, material_id: int, tiers: list[str]) -> dict:
@@ -830,8 +737,10 @@ async def compare(account_id: int, material_id: int, tiers: list[str]) -> dict:
         try:
             words = await read_words(account_id, row, tier=tier)
             kept = survivors(row, words)
-            entry |= {"words": [{"foreign_word": w.foreign_word, "meanings": w.meanings, "grammar": w.grammar,
-                                 "unit": w.unit, "section": w.section} for w, _ in kept],
+            heads = clean_heads(await ask_heads(account_id, row, tier=tier))
+            entry |= {"words": [{"foreign_word": w.foreign_word, "meanings": w.meanings, "grammar": w.grammar}
+                                for w, _ in kept],
+                      "headings": heads["ueberschriften"],
                       "found": len(words), "kept": len(kept), "dropped": len(words) - len(kept)}
         except Exception as exc:
             entry["error"] = str(getattr(exc, "detail", exc))[:200]
@@ -846,38 +755,11 @@ async def compare(account_id: int, material_id: int, tiers: list[str]) -> dict:
             "title": row["title"], "results": out}
 
 
-def carry_over(account_id: int, subject: str, page: int | None, label: str = "") -> tuple[str, str, str]:
-    """Einheit und Abschnitt, die auf der Seite davor zuletzt galten.
-
-    Im Anhang beginnt ein Abschnitt mitten auf einer Seite und läuft über den
-    Seitenwechsel weiter — „Story" reicht von der Mitte der S. 218 bis in die
-    obere Hälfte der S. 220. Ohne diese Fortsetzung verlöre jede Seite ohne
-    eigene Überschrift ihre Zuordnung (D115).
-
-    Fortgesetzt wird nur von der unmittelbar vorhergehenden Seite desselben
-    Buchteils. Alles andere ist keine Fortsetzung: Zwischen Arbeitsheft S. 146
-    und Schulbuch S. 206 liegen zwei verschiedene Bücher, und die Einheit der
-    Heftseite wanderte so in den Anhang des Schulbuchs und von dort durch alle
-    Folgeseiten (D131)."""
-    if not page:
-        return "", "", ""
-    with closing(webapp_conn()) as c:
-        row = c.execute(
-            "SELECT unit,section,box FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) "
-            "AND page=? AND COALESCE(source_label,'')=? AND hidden=0 ORDER BY position DESC LIMIT 1",
-            (account_id, subject, page - 1, label or "")).fetchone()
-        if row is None:
-            # Eine Doppelseite trägt die Nummer ihrer linken Seite; die Seite
-            # davor kann deshalb zwei Nummern zurückliegen (D138).
-            row = c.execute(
-                "SELECT unit,section,box FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) "
-                "AND page=? AND COALESCE(source_label,'')=? AND hidden=0 ORDER BY position DESC LIMIT 1",
-                (account_id, subject, page - 2, label or "")).fetchone()
-    return (row["unit"] or "", row["section"] or "", row["box"] or "") if row else ("", "", "")
-
-
 async def extract(account_id: int, material_id: int, tier: str | None = None) -> int:
-    """Die Lernwörter einer Seite lesen und ablegen; einmal je Textstand."""
+    """Die Lernwörter einer Seite lesen und ablegen; einmal je Textstand.
+
+    Abgelegt werden nur die Wörter in ihrer Reihenfolge. Einheit und Abschnitt
+    setzt `regroup()` aus der Gliederung des ganzen Buchs (D139)."""
     with closing(webapp_conn()) as c:
         row = c.execute("SELECT id,subject_name,title,summary,content_text,source_label,source_page,kind,origin FROM materials "
                         "WHERE id=? AND account_id=? AND hidden=0", (material_id, account_id)).fetchone()
@@ -895,39 +777,13 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
     # Nur eine unlesbare Antwort wird an der Seite vermerkt. Ein Ausfall der
     # Verbindung darf sie nicht als unlesbar abstempeln, sonst versucht es der
     # Hintergrundlauf nie wieder.
-    # Was von der Seite davor noch offen ist, muss das Modell wissen: Es sieht
-    # immer nur diese eine Seite. „School" steht auf S. 212, der Abschnitt „The
-    # new boy" beginnt auf S. 211 — ohne diesen Hinweis ist auf S. 212 kein
-    # Abschnitt offen, und ein Kasten wird dort zwangsläufig zum Abschnitt (D121).
-    open_at = carry_over(account_id, subject, row["source_page"], label)
     try:
-        words = await read_words(account_id, row, tier=tier, carry=open_at)
-        # Auf einer Grenzseite entscheidet die hohe Stufe. Wo zwei Einheiten
-        # aneinanderstoßen, liegt der Schnitt nicht im Text, sondern im Satz der
-        # Seite: „Holiday words" steht oben auf S. 211 und gehört noch zu
-        # „Welcome back!", darunter beginnt Unit 1. Die kleinen Stufen schreiben
-        # so eine Seite einer einzigen Einheit zu — gemessen an S. 211 und 221.
-        # Betroffen sind die wenigen Seiten je Buch, auf denen die Einheit
-        # wechselt; sie kosten das Zehnfache und sind es wert (D132).
-        # Die Gliederung als ganze eigene Frage zu stellen war gemessen
-        # schlechter als die Felder am Wort: Das kleine Modell zählte Spalten-
-        # köpfe und doppelte Laufköpfe als Überschriften mit („Grammar/German",
-        # „Unit 1 / Media smart"). Gefragt wird deshalb nur die eine Entscheidung,
-        # die es zuverlässig trifft: wo eine neue Einheit beginnt (D133, D136).
-        if boundary_page(open_at[0], words):
-            words = await split_units(account_id, row, open_at[0], words, tier)
+        words = await read_words(account_id, row, tier=tier)
     except ValidationError:
         with closing(webapp_conn()) as c, c:
             c.execute("INSERT OR REPLACE INTO vocab_extractions(material_id,account_id,text_hash,words,error,updated_at) VALUES(?,?,?,?,?,?)",
                       (material_id, account_id, digest, 0, "unlesbar", now_iso()))
         raise HTTPException(502, "Die Wörter dieser Seite ließen sich nicht lesen.")
-    # Die Einheit kommt aus der Liste selbst; nur wenn dort keine steht, gilt das
-    # Kapitel der Seite. Eine Unidad zieht sich über mehrere Anhangseiten, und
-    # genau sie soll das Bündel sein, nicht die Anhangseite (D100).
-    fallback = unit_label(account_id, subject, label, row["source_page"])
-    # Eine Liste läuft über den Seitenwechsel weiter: Beginnt die Seite ohne
-    # eigene Überschrift, gelten Einheit und Abschnitt der Seite davor (D115).
-    unit, part, box = open_at
     kept = 0
     seen: list[str] = []
     # Ein Wort behält seine Zeile und damit seinen Übungsverlauf, auch wenn die
@@ -944,22 +800,6 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
         for pos, (w, core) in enumerate(survivors(row, words)):
-            fresh = (w.unit or "").strip()
-            if fresh and fresh != unit:
-                # Neue Einheit: Abschnitt und Kasten der alten gelten nicht weiter.
-                unit, part, box = fresh, "", ""
-            new_part = (w.section or "").strip()
-            # Läuft ein Kasten über den Seitenrand, meldet die Folgeseite seine
-            # Überschrift gern als Abschnitt. Dann geht der Kasten weiter, statt
-            # neben seinem eigenen Abschnitt ein zweites Mal aufzutauchen (D124).
-            if new_part and box and plain(new_part) == plain(box):
-                new_part = ""
-            if new_part and new_part != part:
-                # Neuer Abschnitt: Der Kasten des alten gilt nicht weiter.
-                part, box = new_part, ""
-            if (w.box or "").strip():
-                box = (w.box or "").strip()
-            unit = unit or fallback
             # Dieselbe Vokabel, neu geschrieben: Die vorhandene Zeile wird
             # umbenannt statt gelöscht und neu angelegt — sonst fiele mit ihr
             # der gelernte Stand weg (D125).
@@ -973,10 +813,13 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
                                   (account_id, material_id, w.foreign_word.strip())).fetchone()
                 if not taken:
                     c.execute("UPDATE vocab_words SET foreign_word=? WHERE id=?", (w.foreign_word.strip(), same[0]))
+            # unit und section bleiben, wie sie sind: Sie gehören der Gliederung,
+            # und die wird nach dem Lesen aller Seiten gesetzt. Eine neue Zeile
+            # bekommt sie leer.
             c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,section,box,position,foreign_word,plain,meanings_json,grammar,forms_json,example,created_at) "
-                      "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,material_id,foreign_word) DO UPDATE SET "
-                      "meanings_json=excluded.meanings_json,grammar=excluded.grammar,forms_json=excluded.forms_json,example=excluded.example,position=excluded.position,unit=excluded.unit,section=excluded.section,box=excluded.box",
-                      (account_id, subject, material_id, label, row["source_page"], unit, part, box, pos, w.foreign_word.strip(), core,
+                      "VALUES(?,?,?,?,?,'','','',?,?,?,?,?,?,?,?) ON CONFLICT(account_id,material_id,foreign_word) DO UPDATE SET "
+                      "meanings_json=excluded.meanings_json,grammar=excluded.grammar,forms_json=excluded.forms_json,example=excluded.example,position=excluded.position",
+                      (account_id, subject, material_id, label, row["source_page"], pos, w.foreign_word.strip(), core,
                        json.dumps([m.strip() for m in w.meanings if m.strip()], ensure_ascii=False), w.grammar.strip(),
                        json.dumps(w.forms, ensure_ascii=False), w.example.strip(), now_iso()))
             kept += 1
@@ -1002,7 +845,7 @@ async def extract(account_id: int, material_id: int, tier: str | None = None) ->
                 LOG.info("Vokabeln: %s ungeübte Wörter der alten Lesung von Material %s entfernt", len(gone), material_id)
         c.execute("INSERT OR REPLACE INTO vocab_extractions(material_id,account_id,text_hash,words,error,updated_at) VALUES(?,?,?,?,NULL,?)",
                   (material_id, account_id, digest, kept, now_iso()))
-    LOG.info("Vokabeln: %s Wörter aus Material %s (%s)", kept, material_id, fallback)
+    LOG.info("Vokabeln: %s Wörter aus Material %s (S. %s)", kept, material_id, row["source_page"])
     return kept
 
 
@@ -1057,7 +900,10 @@ def _page_rows(account_id: int, subject: str) -> list[dict]:
         return [dict(r) for r in c.execute(
             "SELECT m.id,m.title,m.summary,m.content_text,m.source_label,m.source_page,m.origin,m.kind,"
             "m.printed_pages,m.page_check,"
-            "e.words AS extracted,e.error,e.text_hash FROM materials m LEFT JOIN vocab_extractions e ON e.material_id=m.id "
+            "e.words AS extracted,e.error,e.text_hash,"
+            "h.text_hash AS heads_hash,h.error AS heads_error "
+            "FROM materials m LEFT JOIN vocab_extractions e ON e.material_id=m.id "
+            "LEFT JOIN vocab_headings h ON h.material_id=m.id "
             "WHERE m.account_id=? AND m.hidden=0 AND lower(m.subject_name)=lower(?) AND m.kind NOT IN ('exam_notice','toc') "
             "ORDER BY m.source_label,m.source_page,m.id", (account_id, subject))]
 
@@ -1096,8 +942,12 @@ def pages(account_id: int, subject: str) -> list[dict]:
             # sonst käme eine Änderung der Anweisung bei ihnen nie an (D108).
             stale = bool(r["extracted"] is not None
                          and r["text_hash"] != mc.fingerprint([EXTRACT_VERSION, r["content_text"] or ""]))
+            # Der Überschriftenlauf ist der zweite Stand je Seite: eigene Frage,
+            # eigener Versionszähler, eigener Fehler (D139).
+            heads_stale = bool(r["heads_hash"] != mc.fingerprint([HEADS_VERSION, r["content_text"] or ""]))
             out.append({"material_id": r["id"], "title": r["title"], "label": label, "page": r["source_page"],
                         "extracted": r["extracted"], "error": r["error"], "stale": stale,
+                        "heads_stale": heads_stale, "heads_error": r["heads_error"],
                         "readable": bool((r["content_text"] or "").strip()),
                         "unit": unit_label(account_id, subject, label, r["source_page"])})
     return out
@@ -1129,8 +979,183 @@ def book_units(account_id: int, subject: str) -> dict[str, dict]:
     return out
 
 
+# Ein anderer Teil des Buchs, der hinter dem Wortschatz beginnt: Das Dictionary
+# von Green Line führt das gesamte Vokabular aller vier Bände alphabetisch. Als
+# Wortschatz gelesen schwemmt es die Liste zu — Kind A „Unidad 3" hatte 1161
+# Wörter (D139).
+_OTHER_PART = re.compile(
+    r"^(dictionary|diccionario|glosario|glossar|w[oö]rterverzeichnis|wortverzeichnis|index|namen|names)\b", re.I)
+
+
+def head_levels(heads: list[dict], known: dict) -> dict[str, str]:
+    """Welche Überschrift eine Einheit ist, welche ein Abschnitt, welche keine.
+
+    Alle drei Merkmale sind erst im Vergleich aller Seiten sichtbar, und genau
+    daran scheiterte die Frage je Seite (D136): „Vocabulary" steht oben auf
+    jeder Seite, „German" ist ein Spaltenkopf, und ob „Media smart" ein Teil des
+    Buchs oder eine Zwischenüberschrift ist, sagt erst, dass es anderswo als
+    Laufkopf wiederkehrt.
+
+    Einheit ist eine Überschrift, wenn sie eine Nummer trägt („Unit 1",
+    „Unidad 3"), im Verzeichnis des Buchs steht, oder auf irgendeiner Seite als
+    Laufkopf wiederkehrt. Alles andere ist ein Abschnitt. Größe, Farbe und
+    Rahmen werden mitgeschrieben, entscheiden aber nichts: Sie sagen, wie eine
+    Überschrift aussieht, nicht welchen Rang sie hat, und ein Buch, das seine
+    Abschnitte ebenso hervorhebt wie seine Teile, machte daraus lauter
+    Einheiten."""
+    art: dict[str, str] = {}
+    kopf = {plain(h["titel"]) for h in heads if h["wo"] == "seitenkopf" and plain(h["titel"])}
+    bekannt = {k for name in (v["name"] for v in known.values()) for k in bundle_keys(name)}
+    for h in heads:
+        key = plain(h["titel"])
+        if not key or key in art:
+            continue
+        if _RUNNING_HEAD.match(h["titel"].strip()):
+            art[key] = "laufkopf"
+        elif key in kopf and _OTHER_PART.match(h["titel"].strip()):
+            art[key] = "fremd"
+        elif unit_key(h["titel"]) or (bundle_keys(h["titel"]) & bekannt) or key in kopf:
+            art[key] = "einheit"
+        else:
+            art[key] = "abschnitt"
+    return art
+
+
+def anchor_at(words: list[dict], wanted: str, start: int) -> int:
+    """Wo in der Wortliste der Seite das genannte erste Wort steht.
+
+    Verglichen wird der Stamm, nicht die Schreibweise: Das Modell nennt die
+    Überschrift und darunter „on the move", die Liste führt „on the move
+    [ˌɒn ðə ˈmuːv]". Gesucht wird erst ab der letzten gefundenen Stelle, damit
+    ein zweimal vorkommendes Wort nicht zurückspringt."""
+    core = plain(_PARENS.sub("", wanted or "")).strip()
+    core = _ARTICLES.sub("", core).strip()
+    if not core:
+        return -1
+    for i in range(max(start, 0), len(words)):
+        mine = words[i]["plain"] or ""
+        if mine == core or mine.startswith(core + " ") or core.startswith(mine + " "):
+            return i
+    return -1
+
+
+def page_cuts(words: list[dict], info: dict, art: dict) -> list[tuple[int, str, str]]:
+    """Die Schnitte einer Seite: ab welchem Wort welche Überschrift gilt.
+
+    Ein Laufkopf schneidet nie — er steht auf jeder Seite und sagt nichts
+    darüber, wo ein Teil beginnt; ihn als Anfang zu lesen war der Fehler, der
+    dreizehn von sechzehn Seiten in dieselbe Einheit warf (D130)."""
+    cuts: list[tuple[int, str, str]] = []
+    at = 0
+    erste = True
+    for h in (info.get("ueberschriften") or []):
+        key = plain(h["titel"])
+        kind = art.get(key, "abschnitt")
+        if kind == "laufkopf" or (kind != "fremd" and h["wo"] == "seitenkopf"):
+            continue
+        found = anchor_at(words, h.get("erstes_wort") or "", at)
+        if found < 0:
+            # Ohne wiedergefundenes Wort wird nur geschnitten, wenn die Seite
+            # ohnehin unter dieser Überschrift beginnt. Sonst lieber kein
+            # Schnitt als ein falscher.
+            if not (erste and info.get("beginnt_mit_ueberschrift")):
+                continue
+            found = 0
+        if erste and info.get("beginnt_mit_ueberschrift") and found > 0:
+            found = 0
+        cuts.append((found, kind, h["titel"]))
+        at = found
+        erste = False
+    cuts.sort(key=lambda c: c[0])
+    return cuts
+
+
+def regroup(account_id: int, subject: str) -> int:
+    """Einheit und Abschnitt aller Wörter des Fachs neu setzen.
+
+    Ohne Modellaufruf und ohne ein Wort anzufassen: Gelesen wird die Gliederung
+    aus den Überschriften aller Seiten, gelaufen wird in Buchreihenfolge, und
+    geschrieben werden nur die beiden Felder. Ein Lernstand kann dabei nicht
+    verlorengehen — das war die Bedingung, unter der die Bündelung überhaupt
+    neu gebaut werden durfte (D125, D139).
+
+    Der Seitenumbruch ist kein Blockumbruch: Beginnt eine Seite nicht unter
+    einer eigenen Überschrift, gehören ihre ersten Wörter noch zum Block der
+    Seite davor (D115)."""
+    found = pages(account_id, subject)
+    heads = heads_of(account_id, [p["material_id"] for p in found])
+    known = book_units(account_id, subject)
+    alle = [h for p in found for h in (heads.get(p["material_id"], {}).get("ueberschriften") or [])]
+    art = head_levels(alle, known)
+    with closing(webapp_conn()) as c:
+        rows = {}
+        for r in c.execute("SELECT id,material_id,unit,section,box,plain,position FROM vocab_words "
+                           "WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 ORDER BY material_id,position,id",
+                           (account_id, subject)):
+            rows.setdefault(r["material_id"], []).append(dict(r))
+    ziel: dict[int, tuple[str, str]] = {}
+    draussen: list[int] = []
+    unit = part = ""
+    buch = None
+    for p in found:
+        words = rows.get(p["material_id"]) or []
+        if p["label"] != buch:
+            # Zwei Bücher sind keine Fortsetzung (D131).
+            buch, unit, part = p["label"], "", ""
+        if not words:
+            continue
+        info = heads.get(p["material_id"]) or {}
+        cuts = page_cuts(words, info, art)
+        offen = {i: [] for i, _, _ in cuts}
+        for i, kind, titel in cuts:
+            offen[i].append((kind, titel))
+        ende = len(words)
+        for index, w in enumerate(words):
+            for kind, titel in offen.get(index, []):
+                if kind == "fremd":
+                    ende = min(ende, index)
+                elif kind == "einheit":
+                    unit, part = titel, ""
+                elif plain(titel) != plain(part):
+                    part = titel
+            if index >= ende:
+                draussen.append(w["id"])
+                continue
+            ziel[w["id"]] = (unit or p["unit"], part)
+    changed = 0
+    with closing(webapp_conn()) as c, c:
+        for mid, words in rows.items():
+            for w in words:
+                will = ziel.get(w["id"])
+                if will is None:
+                    continue
+                if (w["unit"], w["section"], w["box"]) == (will[0], will[1], ""):
+                    continue
+                c.execute("UPDATE vocab_words SET unit=?,section=?,box='' WHERE id=?", (will[0], will[1], w["id"]))
+                changed += 1
+        if draussen:
+            # Was hinter dem Wortschatz steht, gehört nicht in die Liste. Geübte
+            # Wörter bleiben auch hier stehen (D125).
+            marks = ",".join("?" * len(draussen))
+            gone = [r[0] for r in c.execute(
+                f"SELECT id FROM vocab_words WHERE id IN ({marks}) AND id NOT IN (SELECT word_id FROM vocab_attempts)",
+                draussen)]
+            if gone:
+                holes = ",".join("?" * len(gone))
+                c.execute(f"DELETE FROM vocab_words WHERE id IN ({holes})", gone)
+                LOG.info("%s: %s Wörter hinter dem Wortschatzteil entfernt", subject, len(gone))
+                changed += len(gone)
+    if changed:
+        LOG.info("%s: Gliederung neu gesetzt, %s Wörter betroffen", subject, changed)
+    return changed
+
+
 def units(account_id: int, subject: str) -> list[dict]:
     """Je Lektion oder Unit: Seiten, Wörter und wie viele je Stufe sitzen."""
+    # Die Gliederung steht nicht an den Wörtern, sie wird aus den Überschriften
+    # aller Seiten errechnet. Das kostet keinen Modellaufruf, also wird es hier
+    # gemacht, statt auf den nächsten Hintergrundlauf zu warten (D139).
+    regroup(account_id, subject)
     found = pages(account_id, subject)
     with closing(webapp_conn()) as c:
         words = [dict(r) for r in c.execute(
@@ -1148,7 +1173,7 @@ def units(account_id: int, subject: str) -> list[dict]:
         u["pages"].append({k: p[k] for k in ("material_id", "label", "page", "extracted", "readable", "error", "stale")})
         # Ungelesen heißt: noch nie zerlegt oder mit einer älteren Anweisung
         # gelesen. Eine gelesene Seite ohne Lernwörter zählt nicht.
-        if (p["extracted"] is None or p["stale"]) and p["readable"] and not p["error"]:
+        if page_open(p) or (p["material_id"] in _BUSY):
             u["unread"] += 1
     for w in words:
         u = by_unit.setdefault(w["unit"], {"unit": w["unit"], "pages": [], "words": 0, "s1": {s: 0 for s in STAGES}, "s2": {s: 0 for s in STAGES}, "unread": 0})

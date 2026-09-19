@@ -1008,6 +1008,13 @@ _MIGRATIONS.append(("materials_001_doubts", "ALTER TABLE materials ADD COLUMN do
 _MIGRATIONS.append(("materials_002_reread_doubtful_d118",
                     "UPDATE materials SET verified=0 WHERE verified=1 AND COALESCE(origin,'')!='book_fetch' "
                     "AND (handwritten=1 OR pupil_entries=1 OR kind IN ('exam_notice','toc'))"))
+# Die Überschriften einer Vokabelseite, getrennt von ihren Wörtern gelesen. Aus
+# ihnen entsteht die Gliederung des ganzen Buchteils, nicht aus einer Seite (D139).
+_MIGRATIONS.append(("vocab_003_headings", """
+CREATE TABLE IF NOT EXISTS vocab_headings (
+ material_id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL, text_hash TEXT NOT NULL,
+ heads TEXT NOT NULL DEFAULT '{}', error TEXT, updated_at TEXT NOT NULL
+)"""))
 
 
 def init_webapp_db() -> None:

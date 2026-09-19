@@ -39,7 +39,8 @@ def units(account_id: int, subject: str, background: BackgroundTasks, user: Curr
 
 @router.post('/{subject}/extract')
 async def extract(account_id: int, subject: str, body: ExtractIn, user: CurrentUser = Depends(get_current_user)):
-    """Die Lernwörter der genannten Seiten lesen (einmal je Seite und Textstand)."""
+    """Die genannten Seiten lesen: Wörter und Überschriften, je Seite und
+    Textstand einmal. Die Gliederung setzt danach `regroup()` über alle Seiten."""
     access(user, account_id, write=True)
     with closing(webapp_conn()) as c:
         allowed = {r[0] for r in c.execute(
@@ -49,6 +50,12 @@ async def extract(account_id: int, subject: str, body: ExtractIn, user: CurrentU
         if mid not in allowed:
             raise HTTPException(404, 'Seite nicht gefunden.')
         counts[mid] = await vocab.extract(account_id, mid)
+        try:
+            await vocab.read_heads(account_id, mid)
+        except Exception as exc:
+            # Die Überschriften sind ein Zugewinn, keine Bedingung: Ohne sie
+            # behält die Seite die Gliederung, die sie hat.
+            vocab.note_error('vocab_headings', mid, account_id, exc)
     return {'words': counts, 'units': vocab.units(account_id, subject)}
 
 

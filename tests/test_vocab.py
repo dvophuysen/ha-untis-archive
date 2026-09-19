@@ -36,6 +36,33 @@ WORDS = {"words": [
 ]}
 
 
+def ai_answers(patch, woerter=None, koepfe=None, gesehen=None):
+    """Beide Fragen einer Vokabelseite beantworten: Wörter und Überschriften.
+
+    Jede Antwort ist entweder fest oder je Seitenzahl gestaffelt. Erkannt wird
+    die Frage am Zusammenhang: Die Wörterfrage bekommt das Fach mit."""
+    def pick(table, page, leer):
+        if table is None:
+            return leer
+        if isinstance(table, dict) and not (set(table) & {"words", "ueberschriften", "beginnt_mit_ueberschrift"}):
+            return table.get(page, leer)
+        return table
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        if "subject" in context:
+            if gesehen is not None:
+                gesehen.append(context["page"])
+            return json.dumps(pick(woerter, context["page"], {"words": []})), {}, "fake"
+        return json.dumps(pick(koepfe, context["seite"], {"ueberschriften": []})), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    return complete
+
+
+def kopf(titel, erstes_wort="", wo="im_text", groesser=False, farbig=False, gerahmt=False):
+    return {"titel": titel, "erstes_wort": erstes_wort, "wo": wo,
+            "groesser": groesser, "farbig": farbig, "gerahmt": gerahmt}
+
+
 def test_meaning_judgement_is_lenient_about_form_but_not_about_sense():
     assert vocab.judge_meaning("Sklave", ["der Sklave", "der Diener"]) == ("correct", "der Sklave")
     assert vocab.judge_meaning("der diener", ["der Sklave", "der Diener"]) == ("correct", "der Diener")
@@ -91,10 +118,10 @@ def test_words_come_from_the_page_once_and_must_stand_in_its_text(setup):
     calls = []
 
     async def complete(account, purpose, instruction, context, *a, **kw):
-        # Die Gliederungsfrage ist ein eigener, kleiner Aufruf (D135); gezählt
+        # Die Überschriftenfrage ist ein eigener, kleiner Aufruf (D139); gezählt
         # wird hier nur das Lesen der Wörter.
-        if 'woerter' in context:
-            return json.dumps({"headings": []}), {}, "fake"
+        if "subject" not in context:
+            return json.dumps({"ueberschriften": []}), {}, "fake"
         calls.append((purpose, context))
         return json.dumps(WORDS), {}, "fake"
     patch.setattr(ai, "complete", complete)
@@ -289,30 +316,35 @@ la tienda — der Laden
 
 def test_a_unit_is_one_bundle_across_several_appendix_pages(setup):
     """Eine Unidad zieht sich über mehrere Anhangseiten; genau sie ist das
-    Bündel, nicht die Anhangseite. Die Überschriften der Vokabelliste sagen,
-    wohin ein Wort gehört, und gelten über den Seitenwechsel hinweg (D100)."""
+    Bündel, nicht die Anhangseite. Die Überschriften sagen, wohin ein Wort
+    gehört, und gelten über den Seitenwechsel hinweg (D100, D139)."""
     client, state, patch = setup
     client.app.include_router(vocab_router.router, prefix="/api")
     first = seed_page(subject="SPANISCH", text=LIST_A, page=171, label="", title="Vocabulario")
     second = seed_page(subject="SPANISCH", text=LIST_B, page=172, label="", title="Vocabulario")
-    answers = {
-        first: {"words": [
-            {"unit": "Unidad 3", "section": "Texto A", "foreign_word": "el país", "meanings": ["das Land"]},
-            {"unit": "Unidad 3", "section": "Texto A", "foreign_word": "limitar con", "meanings": ["grenzen an"]}]},
-        second: {"words": [
-            {"unit": "Unidad 3", "section": "Texto B", "foreign_word": "el río", "meanings": ["der Fluss"]},
-            {"unit": "Unidad 4", "section": "Texto A", "foreign_word": "la tienda", "meanings": ["der Laden"]}]},
+    woerter = {
+        171: {"words": [{"foreign_word": "el país", "meanings": ["das Land"]},
+                        {"foreign_word": "limitar con", "meanings": ["grenzen an"]}]},
+        172: {"words": [{"foreign_word": "el río", "meanings": ["der Fluss"]},
+                        {"foreign_word": "la tienda", "meanings": ["der Laden"]}]},
     }
-    seen = []
-
-    async def complete(account, purpose, instruction, context, *a, **kw):
-        seen.append(context["page"])
-        return json.dumps(answers[first if context["page"] == 171 else second]), {}, "fake"
-    patch.setattr(ai, "complete", complete)
+    koepfe = {
+        171: {"ueberschriften": [kopf("Vocabulario", wo="seitenkopf"),
+                                 kopf("Unidad 3", "el país", groesser=True),
+                                 kopf("Texto A ▸ p. 51", "el país")],
+              "beginnt_mit_ueberschrift": True},
+        172: {"ueberschriften": [kopf("Texto B ▸ p. 53", "el río"),
+                                 kopf("Unidad 4", "la tienda", groesser=True),
+                                 kopf("Texto A ▸ p. 62", "la tienda")],
+              "beginnt_mit_ueberschrift": True},
+    }
+    ai_answers(patch, woerter, koepfe)
     r = client.post(V + "/SPANISCH/extract", json={"material_ids": [first, second]})
     assert r.status_code == 200, r.text
     units = {u["unit"]: u for u in r.json()["units"] if u["words"]}
     # Zwei Anhangseiten, aber die Unidad ist das Bündel: drei Wörter in Unidad 3.
+    # „el río" steht unter „Texto B" auf der Folgeseite und gehört noch dazu,
+    # weil dort keine neue Einheit beginnt.
     assert units["Unidad 3"]["words"] == 3 and units["Unidad 4"]["words"] == 1
     assert [s["section"] for s in units["Unidad 3"]["sections"]] == ["Texto A", "Texto B"]
     assert [s["words"] for s in units["Unidad 3"]["sections"]] == [2, 1]
@@ -388,14 +420,18 @@ def test_parents_can_compare_tiers_on_one_page_without_storing_anything(setup):
 
     async def complete(account, purpose, instruction, context, *a, **kw):
         seen.append((purpose, kw.get('tier')))
+        if "subject" not in context:
+            return json.dumps({"ueberschriften": [kopf("Lektion 1", "ecce", groesser=True)]}), {}, "fake"
         return json.dumps(by_tier[kw.get('tier')]), {}, "fake"
     patch.setattr(ai, "complete", complete)
     r = client.post(V + "/LATEIN/compare", json={'material_id': mid, 'tiers': ['niedrig', 'klein']})
     assert r.status_code == 200, r.text
     body = r.json()
-    assert [p for p, _ in seen] == ['vocab', 'vocab']
+    assert [p for p, _ in seen] == ['vocab'] * 4, 'je Stufe die Wörter und die Überschriften'
     low, small = body['results']
     assert low['tier'] == 'niedrig' and low['kept'] == 2 and low['dropped'] == 0
+    # Mitgeeicht wird die Gliederung, denn an ihr hängt die Bündelung.
+    assert [h['titel'] for h in low['headings']] == ['Lektion 1']
     # „amare" steht nicht auf der Seite und fällt an der Prüfung heraus.
     assert small['kept'] == 1 and small['dropped'] == 1
     assert small['missing'] == ['esse'] and small['extra'] == []
@@ -403,6 +439,7 @@ def test_parents_can_compare_tiers_on_one_page_without_storing_anything(setup):
     with closing(db.webapp_conn()) as c:
         assert c.execute("SELECT COUNT(*) FROM vocab_words").fetchone()[0] == 0
         assert c.execute("SELECT COUNT(*) FROM vocab_extractions").fetchone()[0] == 0
+        assert c.execute("SELECT COUNT(*) FROM vocab_headings").fetchone()[0] == 0
     # Kinder eichen nicht.
     child(state)
     assert client.post(V + "/LATEIN/compare", json={'material_id': mid, 'tiers': ['klein']}).status_code == 403
@@ -412,18 +449,15 @@ def test_the_fields_are_tidied_so_the_bundling_does_not_depend_on_the_model():
     """Die Eichung zeigte: Beide Stufen finden dieselben Wörter, halten sich aber
     unterschiedlich streng an die Feldkonventionen. Das eine Modell schrieb
     „las gafas de sol pl." als Stichwort — in Stufe 2 nur zu tippen, wenn das
-    Kind auch „pl." schreibt — und schleppte den Verweis „▶ p. 48" in den Namen
-    der Einheit, was ein Kapitel in mehrere Bündel zerfallen ließe (D107)."""
-    words = [vocab.WordIn(foreign_word='las gafas de sol pl.', meanings=['die Sonnenbrille'],
-                          unit='Unidad 3 ¡Acércate!  ▶ p. 48', section=''),
-             vocab.WordIn(foreign_word='el país', meanings=['das Land'], unit='Unidad 3', section='Texto A ▸ p. 51'),
-             vocab.WordIn(foreign_word='el/la siguiente (sust.)', meanings=['der folgende'], grammar='m/f', unit='Unidad 3')]
-    a, b, c = vocab.tidy(words)
-    assert (a.foreign_word, a.grammar, a.unit) == ('las gafas de sol', 'pl.', 'Unidad 3 ¡Acércate!')
-    assert (b.unit, b.section) == ('Unidad 3', 'Texto A')
+    Kind auch „pl." schreibt (D107)."""
+    a, b = vocab.tidy([
+        vocab.WordIn(foreign_word='las gafas de sol pl.', meanings=['die Sonnenbrille']),
+        vocab.WordIn(foreign_word='el/la siguiente (sust.)', meanings=['der folgende'], grammar='m/f')])
+    assert (a.foreign_word, a.grammar) == ('las gafas de sol', 'pl.')
     # Eine Marke in Klammern ist schon getrennt; eine vorhandene Angabe bleibt.
-    assert (c.foreign_word, c.grammar) == ('el/la siguiente (sust.)', 'm/f')
-    # Beide Schreibweisen derselben Liste landen damit in einem Bündel.
+    assert (b.foreign_word, b.grammar) == ('el/la siguiente (sust.)', 'm/f')
+    # Und der Verweis gehört nicht in den Namen der Einheit: Sonst zerfiele ein
+    # Kapitel in so viele Bündel, wie es Verweise hat (D100).
     assert vocab.clean_unit('Unidad 3 ¡Acércate!  ▶ p. 48') == vocab.clean_unit('Unidad 3 ¡Acércate!')
 
 
@@ -438,8 +472,8 @@ def test_a_changed_reading_instruction_reads_the_page_again(setup):
     calls = []
 
     async def complete(account, purpose, instruction, context, *a, **kw):
-        if 'woerter' in context:
-            return json.dumps({"headings": []}), {}, "fake"
+        if "subject" not in context:
+            return json.dumps({"ueberschriften": []}), {}, "fake"
         calls.append(1)
         return json.dumps({"words": [{"foreign_word": "ecce", "meanings": ["Schau!"]}]}), {}, "fake"
     patch.setattr(ai, "complete", complete)
@@ -456,6 +490,12 @@ def test_a_changed_reading_instruction_reads_the_page_again(setup):
     client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
     assert len(calls) == 2, "neue Anweisung: die Seite wird noch einmal gelesen"
     assert vocab.unread_pages(1, "LATEIN") == [], "danach ist sie wieder aktuell"
+    # Dasselbe für die Überschriftenfrage: eigener Zähler, eigener Stand.
+    patch.setattr(vocab, "HEADS_VERSION", vocab.HEADS_VERSION + 1)
+    assert vocab.unread_pages(1, "LATEIN") == [mid]
+    client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
+    assert len(calls) == 2, "die Wörter bleiben davon unberührt"
+    assert vocab.unread_pages(1, "LATEIN") == []
 
 
 def test_pages_from_lessons_are_no_longer_offered_as_bundles(setup):
@@ -466,12 +506,12 @@ def test_pages_from_lessons_are_no_longer_offered_as_bundles(setup):
     client.app.include_router(vocab_router.router, prefix="/api")
     sheet = seed_page(subject="SPANISCH", text="una palabra — ein Wort", page=26, label="Arbeitsheft", title="Wortschatz")
     liste = seed_page(subject="SPANISCH", text="el país — das Land", page=171, label="Schulbuch", title="Vocabulario")
-    answers = {sheet: {"words": [{"foreign_word": "una palabra", "meanings": ["ein Wort"]}]},
-               liste: {"words": [{"unit": "Unidad 3", "foreign_word": "el país", "meanings": ["das Land"]}]}}
-
-    async def complete(account, purpose, instruction, context, *a, **kw):
-        return json.dumps(answers[sheet if context["page"] == 26 else liste]), {}, "fake"
-    patch.setattr(ai, "complete", complete)
+    ai_answers(patch,
+               {26: {"words": [{"foreign_word": "una palabra", "meanings": ["ein Wort"]}]},
+                171: {"words": [{"foreign_word": "el país", "meanings": ["das Land"]}]}},
+               # Die Heftseite trägt keine Überschrift, die Wortliste schon.
+               {171: {"ueberschriften": [kopf("Unidad 3", "el país", groesser=True)],
+                      "beginnt_mit_ueberschrift": True}})
     # Nur die Heftseite gelesen: Sie bleibt stehen, sonst gäbe es gar nichts.
     client.post(V + "/SPANISCH/extract", json={"material_ids": [sheet]})
     assert [u["unit"] for u in vocab.units(1, "SPANISCH") if u["words"]] == ["Arbeitsheft S. 26"]
@@ -492,14 +532,14 @@ def test_one_unit_is_one_bundle_even_under_two_names(setup):
                       label="Schulbuch", title="Vocabulario")
     heft = seed_page(subject="SPANISCH", text="la tienda — der Laden", page=18,
                      label="Grammatikheft", title="Wortschatz")
-    answers = {171: {"words": [{"unit": "Unidad 3", "foreign_word": "el país", "meanings": ["das Land"]},
-                               {"unit": "Unidad 3", "foreign_word": "el río", "meanings": ["der Fluss"]}]},
-               18: {"words": [{"unit": "Unidad 3 De paseo por España", "foreign_word": "la tienda",
-                               "meanings": ["der Laden"]}]}}
-
-    async def complete(account, purpose, instruction, context, *a, **kw):
-        return json.dumps(answers[context["page"]]), {}, "fake"
-    patch.setattr(ai, "complete", complete)
+    ai_answers(patch,
+               {171: {"words": [{"foreign_word": "el país", "meanings": ["das Land"]},
+                                {"foreign_word": "el río", "meanings": ["der Fluss"]}]},
+                18: {"words": [{"foreign_word": "la tienda", "meanings": ["der Laden"]}]}},
+               {171: {"ueberschriften": [kopf("Unidad 3", "el país", groesser=True)],
+                      "beginnt_mit_ueberschrift": True},
+                18: {"ueberschriften": [kopf("Unidad 3 De paseo por España", "la tienda", groesser=True)],
+                     "beginnt_mit_ueberschrift": True}})
     client.post(V + "/SPANISCH/extract", json={"material_ids": [liste, heft]})
     found = vocab.units(1, "SPANISCH")
     assert [u["unit"] for u in found] == ["Unidad 3 De paseo por España"], found
@@ -553,11 +593,10 @@ def test_units_are_named_and_ordered_like_the_book(setup):
     pages = {172: 'Unidad 2', 171: 'Unidad 1', 173: 'Unidad 3'}
     ids = {p: seed_page(subject="SPANISCH", text="el país — das Land", page=p, label="Schulbuch", title="Vocabulario")
            for p in pages}
-
-    async def complete(account, purpose, instruction, context, *a, **kw):
-        return json.dumps({"words": [{"unit": pages[context["page"]], "foreign_word": "el país",
-                                      "meanings": ["das Land"]}]}), {}, "fake"
-    patch.setattr(ai, "complete", complete)
+    ai_answers(patch,
+               {"words": [{"foreign_word": "el país", "meanings": ["das Land"]}]},
+               {p: {"ueberschriften": [kopf(name, "el país", groesser=True)],
+                    "beginnt_mit_ueberschrift": True} for p, name in pages.items()})
     client.post(V + "/SPANISCH/extract", json={"material_ids": list(ids.values())})
     found = [u["unit"] for u in vocab.units(1, "SPANISCH") if u["words"]]
     # Einheitlich benannt wie im Verzeichnis und in Buchreihenfolge.
@@ -576,21 +615,24 @@ def test_a_section_runs_across_the_page_break_and_keeps_the_book_order(setup):
     seiten = {218: "Story S. 218", 219: "Story S. 219", 220: "Check-out S. 220"}
     ids = {p: seed_page(subject="ENGLISCH", text=t + "\nword — Wort\nother — anderes",
                         page=p, label="Schulbuch", title="Vocabulary") for p, t in seiten.items()}
-    antwort = {
-        # S. 218: erst noch Station 3, ab der Mitte beginnt „Story".
-        218: [{"unit": "Unit 1", "section": "Station 3", "foreign_word": "word", "meanings": ["Wort"]},
-              {"unit": "Unit 1", "section": "Story", "foreign_word": "other", "meanings": ["anderes"]}],
+    woerter = {"words": [{"foreign_word": "word", "meanings": ["Wort"]},
+                         {"foreign_word": "other", "meanings": ["anderes"]}]}
+    koepfe = {
+        # S. 218: erst noch Station 3, ab dem zweiten Wort beginnt „Story".
+        218: {"ueberschriften": [kopf("Vocabulary", wo="seitenkopf"),
+                                 kopf("Unit 1", "word", groesser=True),
+                                 kopf("Station 3", "word"),
+                                 kopf("Story", "other")],
+              "beginnt_mit_ueberschrift": True},
         # S. 219 trägt keine eigene Überschrift — sie gehört noch zu „Story".
-        219: [{"foreign_word": "word", "meanings": ["Wort"]},
-              {"foreign_word": "other", "meanings": ["anderes"]}],
+        219: {"ueberschriften": [kopf("Vocabulary", wo="seitenkopf")],
+              "beginnt_mit_ueberschrift": False},
         # S. 220 beginnt ohne Überschrift und wechselt dann zu „Check-out".
-        220: [{"foreign_word": "word", "meanings": ["Wort"]},
-              {"unit": "Unit 1", "section": "Check-out", "foreign_word": "other", "meanings": ["anderes"]}],
+        220: {"ueberschriften": [kopf("Vocabulary", wo="seitenkopf"),
+                                 kopf("Check-out", "other")],
+              "beginnt_mit_ueberschrift": False},
     }
-
-    async def complete(account, purpose, instruction, context, *a, **kw):
-        return json.dumps({"words": antwort[context["page"]]}), {}, "fake"
-    patch.setattr(ai, "complete", complete)
+    ai_answers(patch, woerter, koepfe)
     for page in (218, 219, 220):
         client.post(V + "/ENGLISCH/extract", json={"material_ids": [ids[page]]})
     unit = next(u for u in vocab.units(1, "ENGLISCH") if u["words"])
@@ -601,72 +643,58 @@ def test_a_section_runs_across_the_page_break_and_keeps_the_book_order(setup):
         ("Station 3", 1), ("Story", 4), ("Check-out", 1)]
 
 
-def test_a_box_is_placed_at_its_level_in_the_hierarchy():
-    """Drei Ebenen: Einheit, Abschnitt, Kasten. „School" steht in „The new boy"
-    und gehört deshalb unter diesen Abschnitt, nicht daneben. Ein Kasten direkt
-    unter der Einheit ist dagegen selbst der Abschnitt („Holiday words"), und
-    ein Kasten ohne eigene Überschrift bekommt keinen Namen (D116)."""
-    assert "box ist ein Kasten mit eigener Überschrift innerhalb eines Abschnitts" in vocab.EXTRACT
-    assert "bekommt keinen Namen" in vocab.EXTRACT
-    drin, allein, leer = vocab.tidy([
-        vocab.WordIn(foreign_word='a', meanings=['x'], unit='Unit 1', section='The new boy', box='School'),
-        vocab.WordIn(foreign_word='b', meanings=['x'], unit='Welcome back!', section='', box='Holiday words'),
-        vocab.WordIn(foreign_word='c', meanings=['x'], unit='Unit 1', section='Story', box='Story')])
-    assert (drin.section, drin.box) == ('The new boy', 'School'), 'im Abschnitt: dritte Ebene'
-    assert (allein.section, allein.box) == ('Holiday words', ''), 'ohne Abschnitt: selbst der Abschnitt'
-    assert (leer.section, leer.box) == ('Story', ''), 'ein Kasten, der den Abschnitt wiederholt, ist keiner'
-
-
-def test_the_running_head_of_an_appendix_page_is_not_a_section():
-    """Über jeder Anhangseite steht „Vocabulary" und der Name der Einheit. Als
-    Abschnitt gelesen sammelt der Laufkopf Wörter ein, die in Wahrheit zum
-    Abschnitt davor gehören — bei Kind B Englisch stand „Vocabulary" als eigener
-    Abschnitt neben „Story" und „Check-out" (D115)."""
-    ws = [vocab.WordIn(foreign_word='a', meanings=['x'], unit='Unit 1', section='Vocabulary'),
-          vocab.WordIn(foreign_word='b', meanings=['x'], unit='Unit 1', section='Unit 1'),
-          vocab.WordIn(foreign_word='c', meanings=['x'], unit='V', section='Story'),
-          vocab.WordIn(foreign_word='d', meanings=['x'], unit='Unit 1', section='Station 1')]
-    a, b, c, d = vocab.tidy(ws)
-    assert (a.unit, a.section) == ('Unit 1', ''), 'der Laufkopf ist kein Abschnitt'
-    assert (b.unit, b.section) == ('Unit 1', ''), 'ein Abschnitt, der die Einheit wiederholt, ist keiner'
-    assert (c.unit, c.section) == ('', 'Story'), 'der Laufkopf ist auch keine Einheit'
-    assert (d.unit, d.section) == ('Unit 1', 'Station 1'), 'eine echte Überschrift bleibt'
-    assert 'Der Laufkopf einer Anhangseite ist keine Überschrift' in vocab.EXTRACT
-
-
-def test_boxes_are_listed_under_their_section_in_book_order(setup):
-    """„School" steht in „The new boy", „Feelings" in „Story". Beide sollen als
-    Unterthemen erkennbar sein, aber in der Hierarchie unter ihrem Abschnitt
-    stehen — nicht als dessen Geschwister (D116)."""
+def test_a_framed_word_field_is_a_block_like_any_other(setup):
+    """Die dritte Ebene ist gestrichen. Ob „School" ein Kasten in „The new boy"
+    oder ein Abschnitt daneben ist, war die einzige Frage, an der die Gliederung
+    noch wackelte — sie hat drei Anläufe gekostet (D124, D135, D136) und für das
+    Üben keinen Unterschied gemacht. Ein Kasten ist jetzt ein Block wie jeder
+    andere: eine Überschrift, die Wörter darunter (D139)."""
     client, state, patch = setup
     client.app.include_router(vocab_router.router, prefix="/api")
     mid = seed_page(subject="ENGLISCH", text="a — x\nb — y\nc — z\nd — w",
                     page=213, label="Schulbuch", title="Vocabulary")
-
-    async def complete(account, purpose, instruction, context, *a, **kw):
-        return json.dumps({"words": [
-            {"unit": "Unit 1", "section": "The new boy", "foreign_word": "a", "meanings": ["x"]},
-            {"unit": "Unit 1", "section": "The new boy", "box": "School", "foreign_word": "b", "meanings": ["y"]},
-            # Ohne eigene Angabe läuft der Kasten weiter.
-            {"foreign_word": "c", "meanings": ["z"]},
-            # Neuer Abschnitt: Der Kasten des alten gilt nicht weiter.
-            {"unit": "Unit 1", "section": "Station 1", "foreign_word": "d", "meanings": ["w"]}]}), {}, "fake"
-    patch.setattr(ai, "complete", complete)
+    ai_answers(patch,
+               {"words": [{"foreign_word": w, "meanings": [m]}
+                          for w, m in (("a", "x"), ("b", "y"), ("c", "z"), ("d", "w"))]},
+               {213: {"ueberschriften": [kopf("Vocabulary", wo="seitenkopf"),
+                                         kopf("Unit 1", "a", groesser=True),
+                                         kopf("The new boy", "a"),
+                                         kopf("School", "b", gerahmt=True),
+                                         kopf("Station 1", "d")],
+                      "beginnt_mit_ueberschrift": True}})
     client.post(V + "/ENGLISCH/extract", json={"material_ids": [mid]})
     unit = next(u for u in vocab.units(1, "ENGLISCH") if u["words"])
-    assert [(s["section"], s["words"], [b["box"] for b in s["boxes"]]) for s in unit["sections"]] == [
-        ("The new boy", 3, ["School"]), ("Station 1", 1, [])]
-    assert [b["words"] for b in unit["sections"][0]["boxes"]] == [2], "der Kasten läuft weiter"
-    # Üben lässt sich jede Ebene: ganze Einheit, Abschnitt, Kasten.
+    assert [(s["section"], s["words"]) for s in unit["sections"]] == [
+        ("The new boy", 1), ("School", 2), ("Station 1", 1)]
+    assert all(not s["boxes"] for s in unit["sections"]), "keine dritte Ebene mehr"
+    # Üben lässt sich beides: die ganze Einheit und jeder einzelne Block.
     assert len(vocab.cards(1, "ENGLISCH", "Unit 1", 1, "from")) == 4
-    assert len(vocab.cards(1, "ENGLISCH", "Unit 1", 1, "from", section="The new boy")) == 3
-    assert len(vocab.cards(1, "ENGLISCH", "Unit 1", 1, "from", section="The new boy", box="School")) == 2
+    assert len(vocab.cards(1, "ENGLISCH", "Unit 1", 1, "from", section="School")) == 2
 
 
-def test_the_word_reading_sees_the_page_so_a_box_stays_a_box(setup):
-    """Ob eine Überschrift eine laufende Zwischenüberschrift ist oder ein
-    abgesetzter Kasten, steht nicht im Text, sondern im Satz der Seite. Ohne das
-    Bild landete „School" neben „The new boy" statt darunter (D120)."""
+def test_the_running_head_of_an_appendix_page_is_no_heading_at_all():
+    """Über jeder Anhangseite steht „Vocabulary" und der Name der Einheit. Als
+    Überschrift gelesen beginnt dort auf jeder Seite ein neuer Block, und die
+    Fortsetzung über den Seitenwechsel reißt ab — bei Kind B Englisch landeten
+    so dreizehn von sechzehn Seiten in „Unit 1" (D115, D130)."""
+    heads = [kopf("Vocabulary", wo="seitenkopf"), kopf("Unit 1", "a", groesser=True),
+             kopf("Station 1", "b"), kopf("Media smart", "c", wo="seitenkopf")]
+    art = vocab.head_levels(heads, {})
+    assert art["vocabulary"] == "laufkopf"
+    assert art["unit 1"] == "einheit", "eine Nummer macht die Einheit erkennbar"
+    assert art["station 1"] == "abschnitt"
+    # „Media smart" trägt keine Nummer, kehrt aber anderswo als Laufkopf wieder:
+    # Das ist ein Teil des Buchs, kein Abschnitt in einem.
+    assert art["media smart"] == "einheit"
+    # Ein Laufkopf schneidet nie, auch die Einheit nicht, die oben wiederholt wird.
+    words = [{"plain": "a"}, {"plain": "b"}, {"plain": "c"}]
+    cuts = vocab.page_cuts(words, {"ueberschriften": heads, "beginnt_mit_ueberschrift": True}, art)
+    assert cuts == [(0, "einheit", "Unit 1"), (1, "abschnitt", "Station 1")]
+
+
+def test_both_questions_see_the_page_not_only_its_text(setup):
+    """Ob eine Überschrift größer, farbig oder gerahmt ist, steht nicht im Text,
+    sondern im Satz der Seite. Beide Fragen bekommen deshalb das Bild (D120)."""
     import io
     from PIL import Image
     client, state, patch = setup
@@ -681,10 +709,14 @@ def test_the_word_reading_sees_the_page_so_a_box_stays_a_box(setup):
 
     async def complete(account, purpose, instruction, context, images=None, *a, **kw):
         gesehen.append(images or [])
+        if "subject" not in context:
+            return json.dumps({"ueberschriften": []}), {}, "fake"
         return json.dumps(WORDS), {}, "fake"
     patch.setattr(ai, "complete", complete)
     assert client.post(V + "/LATEIN/extract", json={"material_ids": [mid]}).status_code == 200
-    assert len(gesehen[0]) == 1 and gesehen[0][0]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert len(gesehen) == 2, "Wörter und Überschriften, zwei Aufrufe"
+    for bilder in gesehen:
+        assert len(bilder) == 1 and bilder[0]["image_url"]["url"].startswith("data:image/jpeg;base64,")
 
     # Eine Seite ohne hinterlegte Datei wird weiter aus ihrem Text gelesen.
     ohne = seed_page(page=11)
@@ -693,11 +725,11 @@ def test_the_word_reading_sees_the_page_so_a_box_stays_a_box(setup):
     assert gesehen[0] == []
 
 
-def test_the_reading_is_told_which_section_is_still_open(setup):
-    """Das Modell sieht immer nur eine Seite. „School" steht auf S. 212, der
-    Abschnitt „The new boy" beginnt auf S. 211 — ohne diesen Hinweis ist auf
-    S. 212 kein Abschnitt offen, und ein Kasten wird dort zwangsläufig selbst
-    zum Abschnitt (D121)."""
+def test_the_reading_is_never_told_what_was_open_before(setup):
+    """Das Modell bekommt keinen Hinweis mehr darauf, was von der Seite davor
+    läuft. Er hieß, ihm die Antwort vorzusagen: Ein schwächeres Modell schrieb
+    ihn ab, statt hinzusehen, und ein einziger Fehler wanderte durch alle
+    Folgeseiten (D130). Die Fortsetzung stellt jetzt die App her (D139)."""
     client, state, patch = setup
     client.app.include_router(vocab_router.router, prefix="/api")
     erste = seed_page(page=10, text=PAGE)
@@ -705,24 +737,23 @@ def test_the_reading_is_told_which_section_is_still_open(setup):
     gesehen = []
 
     async def complete(account, purpose, instruction, context, *a, **kw):
-        if 'woerter' in context:
-            return json.dumps({"headings": []}), {}, "fake"
-        gesehen.append(context.get("offen_von_der_seite_davor"))
-        page = context["page"]
-        return json.dumps({"words": [{**w, "unit": "Lektion 1", "section": "A" if page == 10 else "",
-                                      "box": "" if page == 10 else "Tiere"}
-                                     for w in WORDS["words"][:2]]}), {}, "fake"
+        gesehen.append(dict(context))
+        if "subject" not in context:
+            # Die zweite Seite trägt keine eigene Überschrift.
+            if context["seite"] == 10:
+                return json.dumps({"ueberschriften": [kopf("Lektion 1", "ecce", groesser=True),
+                                                      kopf("A", "ecce")],
+                                   "beginnt_mit_ueberschrift": True}), {}, "fake"
+            return json.dumps({"ueberschriften": [], "beginnt_mit_ueberschrift": False}), {}, "fake"
+        return json.dumps({"words": WORDS["words"][:2]}), {}, "fake"
     patch.setattr(ai, "complete", complete)
     client.post(V + "/LATEIN/extract", json={"material_ids": [erste]})
-    # Auf der ersten Seite ist noch nichts offen.
-    assert gesehen[0] is None
     client.post(V + "/LATEIN/extract", json={"material_ids": [zweite]})
-    # Die Einheit steht auf der Seite selbst und gehört nicht in den Hinweis (D130).
-    assert gesehen[1] == {"section": "A", "box": ""}
-    # Der Kasten der zweiten Seite hängt unter dem offenen Abschnitt, nicht daneben.
-    units = client.get(V + "/LATEIN/units").json()["units"]
-    lektion = next(u for u in units if u["unit"] == "Lektion 1")
-    assert [(s["section"], [b["box"] for b in s["boxes"]]) for s in lektion["sections"]] == [("A", ["Tiere"])]
+    assert not any("offen_von_der_seite_davor" in c for c in gesehen), "kein Hinweis mehr"
+    # Und die Fortsetzung stimmt trotzdem: Die zweite Seite gehört noch zu „A".
+    lektion = next(u for u in client.get(V + "/LATEIN/units").json()["units"] if u["words"])
+    assert lektion["unit"] == "Lektion 1" and lektion["words"] == 4
+    assert [(s["section"], s["words"]) for s in lektion["sections"]] == [("A", 4)]
 
 
 def test_rereading_a_page_clears_what_the_old_reading_left_behind(setup):
@@ -736,56 +767,96 @@ def test_rereading_a_page_clears_what_the_old_reading_left_behind(setup):
     stand = {"n": 0}
 
     async def complete(account, purpose, instruction, context, *a, **kw):
+        if "subject" not in context:
+            return json.dumps({"ueberschriften": [kopf("Lektion 1", "ecce", groesser=True),
+                                                  kopf("Kasten", "ecce")],
+                               "beginnt_mit_ueberschrift": True}), {}, "fake"
         stand["n"] += 1
-        if stand["n"] == 1:
-            return json.dumps({"words": [{**w, "unit": "Lektion 1", "section": "Kasten"}
-                                         for w in WORDS["words"][:3]]}), {}, "fake"
-        return json.dumps({"words": [{**w, "unit": "Lektion 1", "section": "A"}
-                                     for w in WORDS["words"][:2]]}), {}, "fake"
+        return json.dumps({"words": WORDS["words"][:3 if stand["n"] == 1 else 2]}), {}, "fake"
     patch.setattr(ai, "complete", complete)
     client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
-    assert [s["section"] for s in client.get(V + "/LATEIN/units").json()["units"][0]["sections"]] == ["Kasten"]
+    unit = client.get(V + "/LATEIN/units").json()["units"][0]
+    assert [(s["section"], s["words"]) for s in unit["sections"]] == [("Kasten", 3)]
     # Denselben Text noch einmal lesen: Die Seite trägt danach nur noch, was die
     # neue Lesung nennt.
     patch.setattr(vocab, "EXTRACT_VERSION", vocab.EXTRACT_VERSION + 1)
     client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
     unit = client.get(V + "/LATEIN/units").json()["units"][0]
-    assert [s["section"] for s in unit["sections"]] == ["A"]
-    assert unit["words"] == 2
+    assert [(s["section"], s["words"]) for s in unit["sections"]] == [("Kasten", 2)]
+    with closing(db.webapp_conn()) as c:
+        assert "servus" not in {r[0] for r in c.execute("SELECT foreign_word FROM vocab_words")}
+
+
+def test_the_grouping_can_be_redone_without_touching_a_single_word(setup):
+    """Die Gliederung hängt nicht mehr an den Wörtern, sondern an den
+    Überschriften. Sie neu zu setzen kostet deshalb keinen Wortaufruf und keinen
+    Lernstand — das war die Bedingung, unter der die Bündelung überhaupt neu
+    gebaut werden durfte (D125, D139)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    mid = seed_page()
+    titel = {"jetzt": "Kasten"}
+    woerter = {"n": 0}
+
+    async def complete(account, purpose, instruction, context, *a, **kw):
+        if "subject" not in context:
+            return json.dumps({"ueberschriften": [kopf("Lektion 1", "ecce", groesser=True),
+                                                  kopf(titel["jetzt"], "ecce")],
+                               "beginnt_mit_ueberschrift": True}), {}, "fake"
+        woerter["n"] += 1
+        return json.dumps({"words": WORDS["words"][:3]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
+    with closing(db.webapp_conn()) as c:
+        vorher = {r[0]: r[1] for r in c.execute("SELECT id,foreign_word FROM vocab_words")}
+    # Das Kind übt eines der Wörter.
+    erstes = sorted(vorher)[0]
+    client.post(V + "/attempts", json={"word_id": erstes, "stage": 1, "direction": "from",
+                                       "answer": "Schau!", "seconds": 3})
+    # Nur die Überschriftenfrage wird neu gestellt, die Wörterfrage nicht.
+    titel["jetzt"] = "A"
+    patch.setattr(vocab, "HEADS_VERSION", vocab.HEADS_VERSION + 1)
+    gelesen = woerter["n"]
+    client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
+    assert woerter["n"] == gelesen, "die Wörter werden dafür nicht noch einmal gelesen"
+    unit = client.get(V + "/LATEIN/units").json()["units"][0]
+    assert [(s["section"], s["words"]) for s in unit["sections"]] == [("A", 3)]
+    with closing(db.webapp_conn()) as c:
+        nachher = {r[0]: r[1] for r in c.execute("SELECT id,foreign_word FROM vocab_words")}
+        versuche = [r[0] for r in c.execute("SELECT word_id FROM vocab_attempts")]
+    assert nachher == vorher, "dieselben Zeilen, dieselben Wörter"
+    assert versuche == [erstes], "und derselbe Lernstand"
 
 
 def test_a_heading_keeps_its_name_whether_or_not_a_colon_follows():
     """„la fruta:" und „la fruta" sind dieselbe Überschrift; der Doppelpunkt
-    kündigt im Buch die Liste an. Ohne das Abschneiden stand jeder Kasten
-    zweimal in der Liste (D124)."""
-    mit, ohne = vocab.tidy([
-        vocab.WordIn(foreign_word='a', meanings=['x'], unit='Módulo 3', section='Comida', box='la fruta:'),
-        vocab.WordIn(foreign_word='b', meanings=['x'], unit='Módulo 3', section='Comida', box='la fruta')])
-    assert mit.box == ohne.box == 'la fruta'
+    kündigt im Buch die Liste an. Ohne das Abschneiden stand jeder Block zweimal
+    in der Liste (D124)."""
+    found = vocab.clean_heads(vocab.HeadsOut.model_validate({"ueberschriften": [
+        {"titel": "la fruta:", "erstes_wort": "la manzana"},
+        {"titel": "la fruta", "erstes_wort": "la pera"},
+        {"titel": "Unidad 3 ¡Acércate!  ▶ p. 48", "erstes_wort": "el país"}]}))
+    # Der Verweis gehört nicht in den Namen der Einheit (D100).
+    assert [h["titel"] for h in found["ueberschriften"]] == ["la fruta", "la fruta", "Unidad 3 ¡Acércate!"]
 
 
-def test_a_box_that_runs_over_the_page_edge_stays_a_box(setup):
-    """Läuft ein Kasten über den Seitenrand, meldet die Folgeseite seine
-    Überschrift gern als Abschnitt. Dann stand „School" mit einem Wort neben
-    „The new boy", obwohl derselbe Kasten darunter schon lief (D124)."""
+def test_a_block_repeated_at_the_top_of_the_next_page_stays_one_block(setup):
+    """Läuft ein Block über den Seitenrand, nennt die Folgeseite seine
+    Überschrift oft noch einmal. Dann läuft derselbe Block weiter, statt neben
+    sich selbst ein zweites Mal aufzutauchen (D124)."""
     client, state, patch = setup
     client.app.include_router(vocab_router.router, prefix="/api")
     erste = seed_page(page=10)
     zweite = seed_page(page=11)
-
-    async def complete(account, purpose, instruction, context, *a, **kw):
-        if context["page"] == 10:
-            return json.dumps({"words": [{**w, "unit": "Lektion 1", "section": "A", "box": "Tiere"}
-                                         for w in WORDS["words"][:2]]}), {}, "fake"
-        # Die Folgeseite meldet den Kasten als Abschnitt.
-        return json.dumps({"words": [{**w, "unit": "", "section": "Tiere", "box": ""}
-                                     for w in WORDS["words"][2:4]]}), {}, "fake"
-    patch.setattr(ai, "complete", complete)
+    ai_answers(patch,
+               {10: {"words": WORDS["words"][:2]}, 11: {"words": WORDS["words"][2:4]}},
+               {10: {"ueberschriften": [kopf("Lektion 1", "ecce", groesser=True), kopf("Tiere", "ecce")],
+                     "beginnt_mit_ueberschrift": True},
+                11: {"ueberschriften": [kopf("Tiere", "servus")], "beginnt_mit_ueberschrift": True}})
     client.post(V + "/LATEIN/extract", json={"material_ids": [erste]})
     client.post(V + "/LATEIN/extract", json={"material_ids": [zweite]})
     unit = client.get(V + "/LATEIN/units").json()["units"][0]
-    assert [(s["section"], [(b["box"], b["words"]) for b in s["boxes"]]) for s in unit["sections"]] == [
-        ("A", [("Tiere", 4)])]
+    assert [(s["section"], s["words"]) for s in unit["sections"]] == [("Tiere", 4)]
 
 
 def test_a_reread_never_costs_a_learned_word_its_history(setup):
@@ -798,13 +869,15 @@ def test_a_reread_never_costs_a_learned_word_its_history(setup):
     stand = {"n": 0}
 
     async def complete(account, purpose, instruction, context, *a, **kw):
+        if "subject" not in context:
+            return json.dumps({"ueberschriften": [kopf("Lektion 1", "ecce", groesser=True)],
+                               "beginnt_mit_ueberschrift": True}), {}, "fake"
         stand["n"] += 1
         if stand["n"] == 1:
-            return json.dumps({"words": [{**w, "unit": "Lektion 1"} for w in WORDS["words"][:3]]}), {}, "fake"
+            return json.dumps({"words": WORDS["words"][:3]}), {}, "fake"
         # Zweite Lesung: „servus" steht mit Marke da, „esse" fehlt ganz.
-        return json.dumps({"words": [
-            {**WORDS["words"][0], "unit": "Lektion 1"},
-            {**WORDS["words"][2], "foreign_word": "servus m.", "unit": "Lektion 1"}]}), {}, "fake"
+        return json.dumps({"words": [WORDS["words"][0],
+                                     {**WORDS["words"][2], "foreign_word": "servus m."}]}), {}, "fake"
     patch.setattr(ai, "complete", complete)
     client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
     with closing(db.webapp_conn()) as c:
@@ -831,16 +904,12 @@ def test_a_reread_never_costs_a_learned_word_its_history(setup):
 
 def test_an_exercise_number_is_no_heading():
     """Das kleine Modell machte aus der Aufgabennummer „5" einen Abschnitt und
-    nahm „Holiday words" damit ein Wort weg. Bei der Einheit bleibt eine bloße
-    Nummer dagegen gültig: Die Wortliste von Green Line überschreibt ihre Units
-    nur mit „1", „2", „3" (D110, D128)."""
-    nummer, mit_text, einheit = vocab.tidy([
-        vocab.WordIn(foreign_word='a', meanings=['x'], unit='Welcome back!', section='5'),
-        vocab.WordIn(foreign_word='b', meanings=['x'], unit='Welcome back!', section='Holiday words', box='2a'),
-        vocab.WordIn(foreign_word='c', meanings=['x'], unit='3', section='Station 1')])
-    assert nummer.section == ''
-    assert mit_text.section == 'Holiday words' and mit_text.box == ''
-    assert einheit.unit == '3' and einheit.section == 'Station 1'
+    nahm „Holiday words" damit ein Wort weg (D128). Eine bloße Nummer ist keine
+    Überschrift und fällt schon beim Lesen der Überschriften heraus."""
+    found = vocab.clean_heads(vocab.HeadsOut.model_validate({"ueberschriften": [
+        {"titel": "5"}, {"titel": "2a"}, {"titel": "Nr. 7"}, {"titel": "B3"},
+        {"titel": "Holiday words", "erstes_wort": "beach"}]}))
+    assert [h["titel"] for h in found["ueberschriften"]] == ["Holiday words"]
 
 
 def test_two_spellings_of_one_word_do_not_break_the_page(setup):
@@ -855,38 +924,14 @@ def test_two_spellings_of_one_word_do_not_break_the_page(setup):
             c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,position,"
                       "foreign_word,plain,meanings_json,created_at) VALUES(1,'LATEIN',?,'Begleitband',10,'Lektion 1',?,?,?,?,'now')",
                       (mid, pos, wort, vocab.plain(wort), json.dumps(['der Sklave'])))
-
-    async def complete(account, purpose, instruction, context, *a, **kw):
-        return json.dumps({"words": [{**WORDS["words"][2], "unit": "Lektion 1"}]}), {}, "fake"
-    patch.setattr(ai, "complete", complete)
+    ai_answers(patch, {"words": [WORDS["words"][2]]},
+               {10: {"ueberschriften": [kopf("Lektion 1", "servus", groesser=True)],
+                     "beginnt_mit_ueberschrift": True}})
     r = client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
     assert r.status_code == 200, r.text
     with closing(db.webapp_conn()) as c:
         namen = sorted(x[0] for x in c.execute("SELECT foreign_word FROM vocab_words WHERE material_id=?", (mid,)))
     assert 'servus' in namen
-
-
-def test_the_unit_is_read_from_the_page_not_from_the_hint(setup):
-    """Der Hinweis auf die Vorseite trägt Abschnitt und Kasten, nicht die
-    Einheit. Sie steht als Laufkopf auf der Seite; sie mitzugeben hieß, dem
-    Modell die Antwort vorzusagen — ein schwächeres schrieb sie ab, und ein
-    einziger Fehler wanderte durch alle Folgeseiten (D130)."""
-    client, state, patch = setup
-    client.app.include_router(vocab_router.router, prefix="/api")
-    erste = seed_page(page=10)
-    zweite = seed_page(page=11)
-    gesehen = []
-
-    async def complete(account, purpose, instruction, context, *a, **kw):
-        if 'woerter' in context:
-            return json.dumps({"headings": []}), {}, "fake"
-        gesehen.append(context.get("offen_von_der_seite_davor"))
-        return json.dumps({"words": [{**w, "unit": "Lektion 1", "section": "A"}
-                                     for w in WORDS["words"][:2]]}), {}, "fake"
-    patch.setattr(ai, "complete", complete)
-    client.post(V + "/LATEIN/extract", json={"material_ids": [erste]})
-    client.post(V + "/LATEIN/extract", json={"material_ids": [zweite]})
-    assert gesehen[1] == {"section": "A", "box": ""}, "die Einheit gehört nicht in den Hinweis"
 
 
 def test_a_double_running_head_is_resolved_by_the_page_itself():
@@ -899,73 +944,70 @@ def test_a_double_running_head_is_resolved_by_the_page_itself():
     assert vocab.split_head('Unit 1 / Media smart', 'Vocabulary') == 'Unit 1 / Media smart'
     # Ein einfacher Laufkopf bleibt unangetastet, auch mit Bindestrich im Namen.
     assert vocab.split_head('Across cultures 1', 'Vocabulary: Across cultures') == 'Across cultures 1'
-def test_the_continuation_stops_at_the_book_and_at_the_page_before():
-    """Fortgesetzt wird nur von der unmittelbar vorhergehenden Seite desselben
-    Buchteils. Zwischen Arbeitsheft S. 146 und Schulbuch S. 206 liegen zwei
-    Bücher — die Einheit der Heftseite wanderte von dort durch den ganzen
-    Anhang (D131)."""
-    from contextlib import closing as schliessen
-    with schliessen(db.webapp_conn()) as c, c:
-        c.execute("DELETE FROM vocab_words WHERE account_id=1")
-        for page, label, unit in ((146, 'Arbeitsheft', 'Unit 1'), (205, 'Schulbuch', 'Grammar'),
-                                  (206, 'Schulbuch', 'Grammar')):
-            c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,section,position,"
-                      "foreign_word,plain,meanings_json,created_at) VALUES(1,'ENGLISCH',?,?,?,?,'Irregular verbs',0,?,?,'[]','now')",
-                      (page, label, page, unit, f'wort{page}', f'wort{page}'))
-    # Aus einem anderen Buch wird nichts fortgesetzt.
-    assert vocab.carry_over(1, 'ENGLISCH', 206, 'Arbeitsheft') == ('', '', '')
-    # Und auch nicht über eine Lücke von sechzig Seiten hinweg.
-    assert vocab.carry_over(1, 'ENGLISCH', 209, 'Schulbuch') == ('', '', '')
-    # Die Seite davor im selben Buch schon.
-    assert vocab.carry_over(1, 'ENGLISCH', 206, 'Schulbuch') == ('Grammar', 'Irregular verbs', '')
-
-
-def test_the_boundary_question_places_a_unit_boundary_inside_a_page(setup):
-    """Wo zwei Einheiten auf einer Seite aneinanderstoßen, sagt die gezielte
-    Frage, ab welchem Wort der neue Teil gilt. Die Wörter davor behalten die
-    Einheit der Vorseite (D133)."""
+def test_the_continuation_stops_at_the_book(setup):
+    """Fortgesetzt wird nur innerhalb eines Buchteils. Zwischen Arbeitsheft
+    S. 146 und Schulbuch S. 206 liegen zwei Bücher — die Einheit der Heftseite
+    wanderte von dort durch den ganzen Anhang (D131)."""
     client, state, patch = setup
     client.app.include_router(vocab_router.router, prefix="/api")
-    erste = seed_page(page=10)
-    grenze = seed_page(page=11)
-    fragen = []
+    heft = seed_page(subject="ENGLISCH", text="a — x", page=146, label="Arbeitsheft", title="Vocabulary")
+    buch = seed_page(subject="ENGLISCH", text="b — y", page=206, label="Schulbuch", title="Vocabulary")
+    ai_answers(patch,
+               {146: {"words": [{"foreign_word": "a", "meanings": ["x"]}]},
+                206: {"words": [{"foreign_word": "b", "meanings": ["y"]}]}},
+               # Nur die Heftseite nennt eine Einheit; die Buchseite trägt keine.
+               {146: {"ueberschriften": [kopf("Unit 1", "a", groesser=True)],
+                      "beginnt_mit_ueberschrift": True},
+                206: {"ueberschriften": [], "beginnt_mit_ueberschrift": False}})
+    client.post(V + "/ENGLISCH/extract", json={"material_ids": [heft, buch]})
+    with closing(db.webapp_conn()) as c:
+        stand = {r[0]: r[1] for r in c.execute("SELECT page,unit FROM vocab_words WHERE account_id=1")}
+    assert stand[146] == "Unit 1"
+    assert stand[206] != "Unit 1", "aus einem anderen Buch wird nichts fortgesetzt"
 
-    async def complete(account, purpose, instruction, context, *a, **kw):
-        if 'woerter' in context:
-            fragen.append(context['woerter'])
-            return json.dumps({"ab": 3, "einheit": "Lektion 2"}), {}, "fake"
-        einheit = 'Lektion 1' if context['page'] == 10 else 'Lektion 2'
-        return json.dumps({"words": [{**w, "unit": einheit} for w in WORDS["words"][:4]]}), {}, "fake"
-    patch.setattr(ai, "complete", complete)
-    client.post(V + "/LATEIN/extract", json={"material_ids": [erste]})
-    assert not fragen, "die erste Seite hat keine Vorseite und keine Grenze"
+
+def test_a_unit_boundary_inside_a_page_is_placed_at_the_right_word(setup):
+    """Wo zwei Einheiten auf einer Seite aneinanderstoßen, sagt die Überschrift,
+    ab welchem Wort der neue Teil gilt: „Holiday words" steht oben auf S. 211
+    und gehört noch zu „Welcome back!", darunter beginnt Unit 1 (D132, D139).
+    Dass „Welcome back!" ein Teil des Buchs ist und kein Abschnitt, verrät der
+    Laufkopf der Seite, der denselben Namen trägt (D130)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    grenze = seed_page(page=11)
+    ai_answers(patch, {"words": WORDS["words"][:4]},
+               {11: {"ueberschriften": [kopf("Welcome back!", wo="seitenkopf"),
+                                        kopf("Welcome back!", "ecce", groesser=True),
+                                        kopf("Unit 1", "servus", groesser=True)],
+                     "beginnt_mit_ueberschrift": True}})
     client.post(V + "/LATEIN/extract", json={"material_ids": [grenze]})
-    assert len(fragen) == 1, "nur die Grenzseite wird gefragt"
     with closing(db.webapp_conn()) as c:
         rows = {r[0]: r[1] for r in c.execute("SELECT foreign_word,unit FROM vocab_words WHERE material_id=?", (grenze,))}
-    assert rows['ecce'] == 'Lektion 1' and rows['esse'] == 'Lektion 1'
-    assert rows['servus'] == 'Lektion 2' and rows['cōgitāre'] == 'Lektion 2'
+    assert rows['ecce'] == 'Welcome back!' and rows['esse'] == 'Welcome back!'
+    assert rows['servus'] == 'Unit 1' and rows['cōgitāre'] == 'Unit 1'
 
 
-def test_an_unanswerable_boundary_does_not_cost_the_page(setup):
-    """Die gezielte Frage ist ein Zugewinn, keine Bedingung: Bleibt sie ohne
-    brauchbare Antwort, bleibt die erste Lesung stehen, statt die Seite zu
-    verlieren (D133)."""
+def test_unreadable_headings_do_not_cost_the_page(setup):
+    """Der Überschriftenlauf ist ein Zugewinn, keine Bedingung: Bleibt er ohne
+    Antwort, stehen die Wörter trotzdem da — unter dem Kapitel der Seite. Im
+    ersten Lauf mit Eskalation riss der gescheiterte zweite Versuch die Seite
+    mit, dreißig von sechsundachtzig (D132)."""
     client, state, patch = setup
     client.app.include_router(vocab_router.router, prefix="/api")
-    erste = seed_page(page=10)
-    grenze = seed_page(page=11)
+    mid = seed_page()
 
     async def complete(account, purpose, instruction, context, *a, **kw):
-        if 'woerter' in context:
+        if "subject" not in context:
             raise RuntimeError('kein Kontingent')
-        einheit = 'Lektion 1' if context['page'] == 10 else 'Lektion 2'
-        return json.dumps({"words": [{**w, "unit": einheit} for w in WORDS["words"][:2]]}), {}, "fake"
+        return json.dumps({"words": WORDS["words"][:2]}), {}, "fake"
     patch.setattr(ai, "complete", complete)
-    client.post(V + "/LATEIN/extract", json={"material_ids": [erste]})
-    r = client.post(V + "/LATEIN/extract", json={"material_ids": [grenze]})
+    r = client.post(V + "/LATEIN/extract", json={"material_ids": [mid]})
     assert r.status_code == 200, r.text
-    assert list(r.json()["words"].values()) == [2], "die erste Lesung bleibt stehen"
+    assert list(r.json()["words"].values()) == [2], "die Wörter bleiben stehen"
+    unit = next(u for u in vocab.units(1, "LATEIN") if u["words"])
+    assert unit["unit"] == "Begleitband S. 10"
+    # Der Fehler steht an der Seite und wird nicht ewig wiederholt.
+    assert vocab.unread_pages(1, "LATEIN") == []
 
 
 def test_a_unit_name_carries_no_section_and_the_other_way_round():
@@ -982,32 +1024,48 @@ def test_a_unit_name_carries_no_section_and_the_other_way_round():
     assert vocab.trim_unit_prefix('Station 1', 'Unit 1') == 'Station 1'
 
 
-def test_the_page_outline_is_its_own_question_and_the_app_assigns_it():
-    """Die Wörter liest ein kleines Modell stabil, die Gliederung nicht: Sie
-    kippte zwischen zwei Läufen, „Feelings" einmal als Kasten unter „Story",
-    einmal als Abschnitt daneben. Als eigene Frage mit nummerierter Wortliste
-    ist sie stabil, und zugeordnet wird in der App (D135)."""
-    woerter = [vocab.WordIn(foreign_word=f'w{i}', meanings=['x']) for i in range(1, 9)]
-    outline = [(1, 'Unit 1', 'einheit'), (3, 'The new boy', 'abschnitt'), (5, 'School', 'kasten'),
-               (7, 'Station 1', 'abschnitt')]
-    got = vocab.apply_outline(woerter, outline, ('Welcome back!', 'Holiday words', ''))
-    stand = [(w.unit, w.section, w.box) for w in got]
-    # Vor der ersten Überschrift gilt, was von der Seite davor läuft.
-    assert stand[0] == ('Unit 1', '', '')
-    assert stand[2] == ('Unit 1', 'The new boy', '')
-    # Der Kasten hängt unter seinem Abschnitt, nicht daneben.
-    assert stand[4] == ('Unit 1', 'The new boy', 'School')
-    # Ein neuer Abschnitt schließt den Kasten.
-    assert stand[6] == ('Unit 1', 'Station 1', '')
-
-
 def test_words_before_the_first_heading_keep_what_was_open():
-    """Beginnt die Seite mitten in einem Abschnitt, gehören ihre ersten Wörter
-    noch dorthin — das ist die Fortsetzung aus D115, jetzt über die Gliederung."""
-    woerter = [vocab.WordIn(foreign_word=f'w{i}', meanings=['x']) for i in range(1, 5)]
-    got = vocab.apply_outline(woerter, [(3, 'Unit 1', 'einheit')], ('Welcome back!', 'Holiday words', 'places'))
-    assert (got[0].unit, got[0].section, got[0].box) == ('Welcome back!', 'Holiday words', 'places')
-    assert (got[2].unit, got[2].section, got[2].box) == ('Unit 1', '', '')
+    """Beginnt die Seite mitten in einem Block, gehören ihre ersten Wörter noch
+    dorthin (D115). Steht die erste Überschrift dagegen über dem ersten Wort,
+    gilt sie von Anfang an — auch wenn ihr Ankerwort nicht wiederzufinden ist."""
+    words = [{"plain": f"w{i}"} for i in range(1, 6)]
+    art = {"unit 1": "einheit", "story": "abschnitt"}
+    # Mitten im Block: Der Schnitt liegt beim genannten Wort, nicht am Anfang.
+    cuts = vocab.page_cuts(words, {"ueberschriften": [kopf("Story", "w3")],
+                                   "beginnt_mit_ueberschrift": False}, art)
+    assert cuts == [(2, "abschnitt", "Story")]
+    # Die Seite beginnt unter der Überschrift: Sie gilt ab dem ersten Wort.
+    cuts = vocab.page_cuts(words, {"ueberschriften": [kopf("Story", "w3")],
+                                   "beginnt_mit_ueberschrift": True}, art)
+    assert cuts == [(0, "abschnitt", "Story")]
+    # Ankerwort unauffindbar und die Seite beginnt mittendrin: kein Schnitt,
+    # lieber gar keiner als ein falscher.
+    cuts = vocab.page_cuts(words, {"ueberschriften": [kopf("Story", "gibtesnicht")],
+                                   "beginnt_mit_ueberschrift": False}, art)
+    assert cuts == []
+
+
+def test_a_foreign_part_behind_the_word_list_is_cut_off(setup):
+    """Hinter dem Wortschatz beginnt bei Green Line das Dictionary: das gesamte
+    Vokabular aller vier Bände, alphabetisch. Auf der Doppelseite 190/191 steht
+    beides nebeneinander. Als Wortschatz gelesen schwemmte es die Liste zu —
+    Kind A „Unidad 3" hatte 1161 Wörter (D139)."""
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    mid = seed_page(subject="ENGLISCH", text="a — x\nb — y\nzebra — Zebra", page=190,
+                    label="Schulbuch", title="Vocabulary / Dictionary")
+    ai_answers(patch,
+               {"words": [{"foreign_word": "a", "meanings": ["x"]},
+                          {"foreign_word": "b", "meanings": ["y"]},
+                          {"foreign_word": "zebra", "meanings": ["Zebra"]}]},
+               {190: {"ueberschriften": [kopf("Vocabulary", wo="seitenkopf"),
+                                         kopf("Across cultures 4", "a", groesser=True),
+                                         kopf("Dictionary", "zebra", wo="seitenkopf")],
+                      "beginnt_mit_ueberschrift": True}})
+    client.post(V + "/ENGLISCH/extract", json={"material_ids": [mid]})
+    with closing(db.webapp_conn()) as c:
+        namen = sorted(r[0] for r in c.execute("SELECT foreign_word FROM vocab_words"))
+    assert namen == ["a", "b"], "was unter dem Dictionary steht, gehört nicht in die Liste"
 
 
 def test_a_spread_delivered_twice_is_read_only_once():
@@ -1037,20 +1095,6 @@ def test_a_spread_nobody_else_delivered_is_kept_even_if_it_was_not_ordered():
             {"id": 2, "source_page": 12, "source_label": "", "printed_pages": "", "page_check": "unknown"}]
     assert [r["id"] for r in vocab.one_per_spread(ohne)] == [1]
     assert vocab.printed_of({"source_page": 12, "printed_pages": "kaputt"}) == [12]
-
-
-def test_a_double_page_continues_from_two_numbers_back():
-    """Eine Doppelseite trägt die Nummer ihrer linken Seite: Auf 160/161 folgt
-    162/163. Die Seite davor liegt damit zwei Nummern zurück (D138)."""
-    from contextlib import closing as schliessen
-    with schliessen(db.webapp_conn()) as c, c:
-        c.execute("DELETE FROM vocab_words WHERE account_id=1")
-        c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,section,position,"
-                  "foreign_word,plain,meanings_json,created_at) VALUES(1,'ENGLISCH',1,'Schulbuch',160,'Unit 1',"
-                  "'Station 1',0,'wort160','wort160','[]','now')")
-    assert vocab.carry_over(1, 'ENGLISCH', 162, 'Schulbuch') == ('Unit 1', 'Station 1', '')
-    # Die unmittelbare Vorseite hat weiter Vorrang, und die Lücke bleibt begrenzt.
-    assert vocab.carry_over(1, 'ENGLISCH', 165, 'Schulbuch') == ('', '', '')
 
 
 def test_the_words_of_a_doubled_page_go_but_a_practised_one_stays(setup):
