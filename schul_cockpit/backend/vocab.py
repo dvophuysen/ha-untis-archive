@@ -236,8 +236,9 @@ EXTRACT = (
     "aus Beispielsätzen, Merkkästen oder Überschriften, keine erfundenen Bedeutungen. Reihenfolge wie "
     "im Buch. Enthält die Seite keine Lernwörter, gib eine leere Liste.\n"
     "Überschriften gehören nicht in die Liste: Wo ein Wort hingehört, wird getrennt gefragt. Gib nur die "
-    "Wörter, lückenlos und in der Reihenfolge der Seite, von oben nach unten und bei zwei Spalten erst die "
-    "linke, dann die rechte. Die Reihenfolge ist wichtig, denn an ihr hängt die Zuordnung. Nur JSON: "
+    "Wörter, lückenlos und in der Leserichtung der Seite: von oben nach unten, bei mehreren Spalten erst die "
+    "linke Spalte ganz, dann die nächste, und zeigt das Bild eine Doppelseite, erst die linke Seite ganz, dann "
+    "die rechte. Die Reihenfolge ist wichtig, denn an ihr hängt die Zuordnung. Nur JSON: "
 )
 
 
@@ -546,17 +547,30 @@ def split_head(unit: str, title: str = "") -> str:
     return passend[-1] if len(passend) == 1 else unit
 
 
+# Die Lautschrift, die Green Line hinter jedes Stichwort setzt: „on the move
+# [ˌɒn ðə ˈmuːv]". Sie gehört nicht zum Wort — in Stufe 2 wäre sie sonst
+# mitzutippen. Erkannt an den Zeichen, die nur in der Lautschrift vorkommen,
+# damit eine eckige Klammer mit echtem Inhalt stehen bleibt.
+_IPA = re.compile(r"\s*\[[^\]]*[ˈˌːəɑɒæŋʃʒθðʊɔɪʌɜʤʧ][^\]]*\]")
+
+
+def strip_sound(word: str) -> str:
+    """„on the move [ˌɒn ðə ˈmuːv]" → „on the move"."""
+    return re.sub(r"\s+", " ", _IPA.sub("", word or "")).strip()
+
+
 def tidy(words: list) -> list:
     """Die Wörter in die Form bringen, auf die sich der Trainer verlässt.
 
     Modelle halten sich unterschiedlich streng an die Anweisung: Das eine trennt
-    die grammatische Marke ab, das andere nicht. Darauf darf die Bündelung nicht
+    die grammatische Marke ab, das andere nicht, das dritte schreibt die
+    Lautschrift ins Stichwort. Darauf darf weder die Bündelung noch das Abfragen
     ankommen (D107)."""
     for w in words:
-        core, mark = split_mark(w.foreign_word)
+        core, mark = split_mark(strip_sound(w.foreign_word))
         if mark:
-            w.foreign_word = core
             w.grammar = (w.grammar or "").strip() or mark
+        w.foreign_word = core or w.foreign_word
     return words
 
 
@@ -609,12 +623,14 @@ class HeadsOut(InputModel):
 HEADS = (
     "Beantworte eine einzige Frage zu dieser Buchseite: Welche Überschriften stehen darauf? Die Wörter selbst "
     "interessieren hier nicht.\n"
-    "Nenne jede Überschrift von oben nach unten, bei zwei Spalten erst die linke Spalte, dann die rechte. "
-    "Zu jeder Überschrift:\n"
+    "Nenne jede Überschrift in der Leserichtung der Seite: von oben nach unten, bei mehreren Spalten erst die "
+    "linke Spalte ganz, dann die nächste, und zeigt das Bild eine Doppelseite, erst die linke Seite ganz, dann "
+    "die rechte. Nenne auch eine Überschrift, unter der keine Lernwörter stehen. Zu jeder Überschrift:\n"
     "titel — der Text der Überschrift, genau wie er dasteht, ohne Zusätze und ohne die Überschrift darüber zu "
     "wiederholen.\n"
-    "erstes_wort — das erste Fremdwort, das darunter steht, wörtlich wie im Buch. Steht darunter kein Wort, "
-    "lass es leer.\n"
+    "erstes_wort — das erste Fremdwort, das darunter steht, wörtlich und vollständig wie im Buch, mit "
+    "Lautschrift, falls sie dabeisteht. An diesem Wort wird die Liste geteilt; ein ungenaues Wort setzt den "
+    "Schnitt an die falsche Stelle. Steht unter der Überschrift kein Fremdwort, lass es leer.\n"
     "wo — „seitenkopf“, wenn sie oben am Seitenrand steht, abgesetzt vom Text, und auf dieser Art Seite immer "
     "wieder vorkommt (der Laufkopf). Sonst „im_text“.\n"
     "groesser, farbig, gerahmt — beschreibe nur, was du siehst: Ist die Schrift größer als die der Wörter? Hat "

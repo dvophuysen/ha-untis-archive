@@ -5,6 +5,7 @@
 - Die dritte Ebene (Kasten unter Abschnitt) entfällt. Ein Themenkasten ist jetzt ein Block wie jeder andere — für das Üben macht das keinen Unterschied, für die Zuverlässigkeit schon.
 - Die Sortierung lässt sich jederzeit neu setzen, ohne eine Seite noch einmal zu lesen und ohne einen Lernstand anzufassen.
 - Das Wörterverzeichnis hinter dem Wortschatzteil (bei Green Line das Dictionary aller vier Bände) landet nicht mehr in der Liste. Die Wörter werden dabei ausgeblendet, nicht gelöscht.
+- Die Lautschrift steht nicht mehr im Stichwort: „on the move [ˌɒn ðə ˈmuːv]" wird zu „on the move". Beim Tippen in Stufe 2 war sie sonst mitzuschreiben.
 - Bücher, die Doppelseiten liefern, werden nur noch nach ihren linken Seiten bestellt: halb so viele Abrufe, keine Dubletten.
 
 ## 1.11.1
