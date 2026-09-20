@@ -21,7 +21,7 @@ from .learning import InputModel, ai_tiers
 from .vocab_catalog import CatalogError, _now
 
 PROMPT = (Path(__file__).parent / 'vocab_mini_prompt.txt').read_text()
-PROTOCOL = 'physical-page-two-overlapping-regions-v1'
+PROTOCOL = 'physical-page-ordered-elements-v2'
 
 
 class PageSpec(InputModel):
@@ -58,6 +58,64 @@ def images_for(blob: bytes, side: str) -> list[dict]:
     return images
 
 
+def ordered_transcript(result: dict) -> dict:
+    """Derive offsets from source-order elements; never trust model arithmetic.
+
+    This is a draft adapter, not a source reviewer. Box ownership and inherited
+    hierarchy are resolved across pages only after the original-source review.
+    Raw elements remain in the result for comparing the adapter with the model.
+    """
+    if not isinstance(result, dict) or not isinstance(result.get('elements'), list):
+        raise CatalogError('Modellantwort enthält keine geordnete Quellenlesung.')
+    rows, events, references = [], [], []
+    boxes = []
+    begins = 'continuation'
+    for element in result['elements']:
+        if not isinstance(element, dict):
+            raise CatalogError('Ungültiges Element in der Quellenlesung.')
+        kind = element.get('type')
+        if kind == 'word':
+            word, meanings = element.get('foreign_word'), element.get('meanings')
+            if (not isinstance(word, str) or not word.strip() or not isinstance(meanings, list)
+                    or not meanings or any(not isinstance(m, str) or not m.strip() for m in meanings)):
+                raise CatalogError('Lernwort ohne lesbare Quellübersetzung; keine automatische Ergänzung.')
+            if not isinstance(element.get('uncertain'), bool):
+                raise CatalogError('Unsicherheit des gelesenen Wortes fehlt.')
+            for field in ('grammar', 'parent_word'):
+                if not isinstance(element.get(field, ''), str):
+                    raise CatalogError('Ungültige grammatische Quellenangabe.')
+            rows.append({k: v for k, v in element.items() if k != 'type'})
+            rows[-1]['example'] = ''
+        elif kind in ('heading', 'subheading', 'box_start'):
+            title = element.get('title')
+            if kind == 'box_start' and isinstance(title, str) and not title.strip():
+                title = 'Vokabelkasten ohne Überschrift'
+            if not isinstance(title, str) or not title.strip():
+                raise CatalogError('Überschrift ohne prüfbaren Titel.')
+            event_kind = 'box' if kind == 'box_start' else 'section' if kind == 'subheading' else element.get('kind')
+            if event_kind not in ('unit', 'section', 'box'):
+                raise CatalogError('Unbekannte Überschriftenart.')
+            events.append({'at': len(rows), 'action': 'open', 'title': title, 'kind': event_kind,
+                           'evidence': 'Ungeprüfte Modelllesung: Element in der Quellenreihenfolge.'})
+            if kind == 'box_start':
+                boxes.append(title)
+            if not rows:
+                begins = 'new'
+        elif kind == 'box_end':
+            # Empty local stack may be a box continued from the preceding page.
+            events.append({'at': len(rows), 'action': 'close', 'title': boxes.pop() if boxes else '',
+                           'kind': 'box', 'evidence': 'Ungeprüfte Modelllesung: Kastenende nach dem vorigen Wort.'})
+        elif kind == 'reference_box':
+            title, items = element.get('title'), element.get('items')
+            if (not isinstance(title, str) or not title.strip() or not isinstance(items, list)
+                    or any(not isinstance(x, str) or not x.strip() for x in items)):
+                raise CatalogError('Unvollständiger einsprachiger Quellenkasten.')
+            references.append({'at': len(rows), 'title': title, 'items': items})
+        else:
+            raise CatalogError('Unbekanntes Element in der Quellenlesung.')
+    return {**result, 'rows': rows, 'events': events, 'reference_boxes': references, 'begins': begins}
+
+
 async def read_page(account_id: int, subject: str, spec: PageSpec) -> dict:
     tier = mini_tier()
     with closing(webapp_conn()) as c:
@@ -77,9 +135,7 @@ async def read_page(account_id: int, subject: str, spec: PageSpec) -> dict:
     text, usage, _ = await ai.complete(account_id, ai.VOCAB, PROMPT,
                                       {'views': 'Two overlapping crops of ONE physical page, upper then lower. Transcribe overlap exactly once.'},
                                       images=images_for(blob, spec.side), max_output=16000, tier=tier, effort='medium')
-    result = json.loads(text)
-    if not isinstance(result, dict) or not isinstance(result.get('rows'), list) or not isinstance(result.get('events'), list):
-        raise CatalogError('Modellantwort enthält keine prüfbare Wortliste.')
+    result = ordered_transcript(json.loads(text))
     issues = list(result.get('issues') or [])
     if result.get('printed_page') != spec.number:
         issues.append('Gedruckte Seitenzahl stimmt nicht mit dem Prüfauftrag überein.')

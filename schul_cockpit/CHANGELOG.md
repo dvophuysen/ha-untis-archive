@@ -1,3 +1,9 @@
+## 1.13.1
+
+- Mini-Quellenlesung liefert Wörter und Grenzen direkt in Buchreihenfolge. Positionsnummern werden aus dieser Folge berechnet; das Modell muss keine Kasten-Endindizes zählen.
+- Laufköpfe, Beispielspalten und grammatische Zeilenumbrüche werden ausdrücklich unterschieden. Einsprachige Quellenkästen bleiben ohne erfundene Übersetzungen erhalten.
+- Entwürfe bleiben prüfpflichtig; keine automatische Freigabe oder Änderung bestehender Lernstände.
+
 ## 1.13.0
 
 - Neuer isolierter Prüfbestand für Vokabellisten: Originale, Seitenfolge, Überschriften und Kastenenden werden vor einer Aktivierung geprüft. Fehlende Vorgängerseiten, ungeklärte Zuordnungen und veränderte Originale sperren die Freigabe.

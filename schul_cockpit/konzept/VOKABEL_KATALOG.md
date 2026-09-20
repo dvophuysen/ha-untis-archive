@@ -19,7 +19,10 @@ korrekt abgeschriebene Wörter: Quellenabgleich ist eine separate Bedingung.
 `vocab_mini.py` akzeptiert ausschließlich `gpt-5-mini` auf Foundry `2`.
 Jede physische Seite wird in zwei überlappenden, ausreichend großen Ausschnitten
 gelesen. Der Cache berücksichtigt Originalbytes, Ausschnitt, Protokoll, Prompt
-und Modellkonfiguration. Rohantworten bleiben in `vocab_page_reads`; sie werden
+und Modellkonfiguration. Seit 1.13.1 liefert das Modell Wörter und Grenzereignisse als geordnete Elemente.
+Die Software zählt daraus die Positionen; modellberechnete Zeilenindizes werden
+nicht übernommen. Einsprachige Kästen bleiben als Referenzmaterial erhalten,
+ohne deutsche Bedeutungen hinzuzuerfinden. Rohantworten bleiben in `vocab_page_reads`; sie werden
 nicht direkt zu Lernwörtern. Seitenzahlen des Betrachters gelten nicht als
 gedruckte Seitenzahlen. Der Quellenabgleich muss auch Auslassungen, zusätzliche
 Wörter, Bedeutungen, Reihenfolge und Überschriften prüfen. Eine Selbsteinschätzung
