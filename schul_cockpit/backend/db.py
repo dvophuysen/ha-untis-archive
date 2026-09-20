@@ -1019,6 +1019,13 @@ CREATE TABLE IF NOT EXISTS vocab_headings (
 
 _MIGRATIONS.append(("vocab_004_catalog", (Path(__file__).parent / "vocab_catalog_schema.sql").read_text()))
 _MIGRATIONS.append(("vocab_005_attempt_scope", "ALTER TABLE vocab_attempts ADD COLUMN unit_scope TEXT;"))
+_MIGRATIONS.append(("vocab_006_review", """
+CREATE TABLE vocab_attempt_reviews (
+ id INTEGER PRIMARY KEY, attempt_id INTEGER NOT NULL REFERENCES vocab_attempts(id) ON DELETE CASCADE,
+ excluded INTEGER NOT NULL, reason TEXT NOT NULL, reviewer_id INTEGER NOT NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX idx_vocab_attempt_reviews_attempt ON vocab_attempt_reviews(attempt_id,id);
+"""))
 
 
 def init_webapp_db() -> None:

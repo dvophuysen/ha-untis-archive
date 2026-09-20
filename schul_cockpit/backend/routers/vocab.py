@@ -211,6 +211,20 @@ def reset(account_id: int, subject: str, user: CurrentUser = Depends(get_current
     return {'removed': gone, 'units': vocab.units(account_id, subject)}
 
 
+class ReviewIn(InputModel):
+    attempt_ids: list[int] = Field(min_length=1, max_length=250)
+    reason: str = Field(min_length=5, max_length=500)
+    excluded: bool = True
+    digest: str | None = None
+
+
+@router.post('/{subject}/attempt-review')
+def review_attempts(account_id: int, subject: str, body: ReviewIn, user: CurrentUser = Depends(get_current_user)):
+    access(user, account_id, write=True, parent=True)
+    from ..vocab_review import review
+    return review(account_id, subject, body.attempt_ids, body.reason, body.excluded, user.id, body.digest)
+
+
 @router.post('/{subject}/transcribe')
 async def transcribe(account_id: int, subject: str, file: UploadFile = File(...), unit: str = Form(''), direction: str = Form('from'),
                      seconds: int = Form(0), user: CurrentUser = Depends(get_current_user)):

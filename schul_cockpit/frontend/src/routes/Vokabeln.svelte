@@ -21,6 +21,16 @@
   let verdict = $state(null), pending = $state(null), done = $state(false), tally = $state({ correct: 0, wrong: 0 });
   let answerInput = $state(null);
   let bookWords = $state(null), importDraft = $state(null), importFile = $state(null);
+  let reviewIds = $state(''), reviewReason = $state('Bedienfehler: versehentlich übersprungen'), reviewRestore = $state(false), reviewDraft = $state(null), reviewMessage = $state('');
+  async function reviewAttempts(apply = false) {
+    busy = true; error = ''; reviewMessage = '';
+    try {
+      const payload = {attempt_ids: [...new Set(reviewIds.split(/[\s,;]+/).filter(Boolean).map(Number))], reason: reviewReason, excluded: !reviewRestore};
+      const r = await api.post(`${base}/${encodeURIComponent(subject)}/attempt-review`, {...payload, ...(apply ? {digest: reviewDraft.digest} : {})});
+      if (apply) { reviewDraft = null; reviewMessage = `${r.reviewed} Versuche ${r.excluded ? 'aus der Wertung genommen' : 'wieder gewertet'}. Originale bleiben erhalten.`; await load(); }
+      else reviewDraft = r;
+    } catch(e) { error = e.message; } finally { busy = false; }
+  }
   let capturePage = $state(1), captureJob = $state(null);
 
   const lang = $derived(data?.language);
@@ -313,6 +323,20 @@
   {/if}
 
   {#if canManage && subject && !cards.length}
+    <details class="card">
+      <summary>Lernversuche prüfen und korrigieren (Eltern)</summary>
+      <p>Gezielt ausgewählte Versuche aus der Wertung nehmen oder wieder berücksichtigen. Die ursprünglichen Antworten bleiben erhalten.</p>
+      <label>Versuchsnummern<input aria-label="Versuchsnummern" bind:value={reviewIds} oninput={() => reviewDraft = null} /></label>
+      <label>Begründung<input aria-label="Begründung" bind:value={reviewReason} oninput={() => reviewDraft = null} /></label>
+      <label><input type="checkbox" bind:checked={reviewRestore} onchange={() => reviewDraft = null} /> Wieder in die Wertung aufnehmen</label>
+      <button disabled={busy || !reviewIds.trim()} onclick={() => reviewAttempts()}>Auswahl prüfen</button>
+      {#if reviewDraft}
+        <p>{reviewDraft.attempts.length} ausgewählte Versuche</p>
+        <ol>{#each reviewDraft.attempts as a}<li>#{a.id} · {a.created_at} · {a.foreign_word}: {a.answer || '(leer)'} · {a.result}</li>{/each}</ol>
+        <button disabled={busy} onclick={() => reviewAttempts(true)}>{reviewRestore ? 'Auswahl wieder werten' : 'Auswahl aus Wertung nehmen'}</button>
+      {/if}
+      {#if reviewMessage}<p role="status">{reviewMessage}</p>{/if}
+    </details>
     <details class="card">
       <summary>Geprüften Buchbestand übernehmen (Eltern)</summary>
       <p>Der neue Bestand wird zuerst getrennt geprüft. Bestehende Lernversuche bleiben erhalten. Ungeklärte Seiten oder Zuordnungen verhindern die Freigabe.</p>

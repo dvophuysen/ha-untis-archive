@@ -236,7 +236,8 @@ def word_states(c, account_id: int, word_ids: list[int]) -> dict[int, dict]:
     source_ids = sorted(set(word_ids) | {wid for wid, canonical in aliases.items() if canonical in wanted} | wanted)
     marks = ",".join("?" * len(source_ids))
     rows = [dict(r) for r in c.execute(
-        f"SELECT word_id,stage,result,seconds,created_at,unit_scope FROM vocab_attempts WHERE account_id=? AND word_id IN ({marks}) ORDER BY created_at,id",
+        f"SELECT word_id,stage,result,seconds,created_at,unit_scope FROM vocab_attempts a WHERE account_id=? AND word_id IN ({marks}) "
+        "AND COALESCE((SELECT excluded FROM vocab_attempt_reviews r WHERE r.attempt_id=a.id ORDER BY r.id DESC LIMIT 1),0)=0 ORDER BY created_at,id",
         (account_id, *source_ids))]
     grouped: dict[tuple[int, int], list[dict]] = {}
     for r in rows:

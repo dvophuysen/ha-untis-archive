@@ -1,3 +1,8 @@
+## 1.13.5
+
+- Eltern können konkret ausgewählte Lernversuche nach einer Vorschau aus der Wertung nehmen und wieder aufnehmen. Die ursprünglichen Antworten bleiben unverändert; jede Korrektur wird mit Begründung protokolliert.
+- Lernstände und Fortschrittsbalken berücksichtigen diese Korrekturen sofort.
+
 ## 1.13.4
 
 - Faire Zeitwertung: Richtige Antworten verlieren ihren Lernfortschritt nicht durch lange Antwort- oder Erkennungszeiten. Technische Transkriptionswartezeit wird aus der neuen Zeitmessung herausgerechnet. Vorhandene Lernversuche bleiben erhalten.
