@@ -1,3 +1,10 @@
+## 1.13.4
+
+- Faire Zeitwertung: Richtige Antworten verlieren ihren Lernfortschritt nicht durch lange Antwort- oder Erkennungszeiten. Technische Transkriptionswartezeit wird aus der neuen Zeitmessung herausgerechnet. Vorhandene Lernversuche bleiben erhalten.
+- Fortschrittsbalken für Einheiten und Unterabschnitte: bisher nur falsch, unsicher, sicher, noch ungeübt. Bedeutung und Schreibweise werden getrennt zusammengefasst. Die Gesamtübersicht zählt eindeutige Wörter nur aus begonnenen Einheiten; neue Versuche speichern dafür die gewählte Einheit.
+- Spracheingabe verwendet den aktiven geprüften Katalog als Erkennungshilfe. Spanische Buchvarianten wie juntos/-as werden als ausgeschriebene Formen akzeptiert.
+- Die semantische Mini-Prüfung freier Antwortalternativen ist noch nicht aktiviert.
+
 ## 1.13.3
 
 - Vollständige Buchbedeutungen mit „und“ oder „oder“ werden vor der Zerlegung in Antwortalternativen geprüft. Eine wortgetreu richtige Erklärung wird dadurch nicht mehr fälschlich als unklar bewertet.
