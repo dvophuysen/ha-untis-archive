@@ -76,6 +76,28 @@ def test_meaning_judgement_is_lenient_about_form_but_not_about_sense():
     assert vocab.judge_meaning("", ["denken"]) == ("incorrect", None)
 
 
+def test_source_only_phrases_never_become_unanswerable_cards(setup):
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    mid = seed_page(subject='Englisch')
+    with closing(db.webapp_conn()) as c, c:
+        for pos, meanings in enumerate(('[]', '[" "]', 'null', '["Schule"]')):
+            c.execute("INSERT INTO vocab_words(account_id,subject,material_id,unit,position,foreign_word,plain,meanings_json,created_at) "
+                      "VALUES(1,'Englisch',?,'Unit 1',?,?,'school',?,'now')", (mid, pos, f'school {pos}', meanings))
+        ids = [r[0] for r in c.execute('SELECT id FROM vocab_words ORDER BY id')]
+        c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,created_at) VALUES(1,?,1,'from','old','incorrect','old')", (ids[0],))
+        before = [dict(r) for r in c.execute('SELECT * FROM vocab_attempts')]
+    assert sum(u['words'] for u in vocab.units(1, 'Englisch')) == 1
+    assert [w['id'] for w in vocab.cards(1, 'Englisch', 'Unit 1', 1, 'from')] == [ids[-1]]
+    for wid in ids[:-1]:
+        for direction in ('from', 'into'):
+            r = client.post(V + '/attempts', json={'word_id':wid,'stage':1,'direction':direction,'answer':'school'})
+            assert r.status_code == 409
+    with closing(db.webapp_conn()) as c:
+        assert [dict(r) for r in c.execute('SELECT * FROM vocab_attempts')] == before
+        assert c.execute('SELECT COUNT(*) FROM vocab_words').fetchone()[0] == 4
+
+
 def test_spelling_counts_every_letter_and_speech_counts_the_sound():
     assert vocab.judge_foreign("to apply for", "to apply for", spoken=False) == ("correct", "")
     assert vocab.judge_foreign("apply for", "to apply for", spoken=False) == ("correct", "")

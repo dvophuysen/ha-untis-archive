@@ -41,6 +41,16 @@ CHECK_AFTER_DAYS = 3
 STAGES = ["neu", "wackelt", "sitzt", "gefestigt"]
 
 
+def trainable(word: dict) -> bool:
+    """Source-only phrases stay stored, but cannot be translation questions."""
+    try:
+        meanings = word.get('meanings') if 'meanings' in word else json.loads(word.get('meanings_json') or '[]')
+    except (ValueError, TypeError):
+        return False
+    return (bool((word.get('foreign_word') or '').strip()) and isinstance(meanings, list)
+            and bool(meanings) and all(isinstance(m, str) and m.strip() for m in meanings))
+
+
 def language_of(subject: str) -> dict | None:
     key = (subject or "").strip().casefold()
     for name, info in LANGUAGES.items():
@@ -1290,8 +1300,9 @@ def units(account_id: int, subject: str) -> list[dict]:
     found = pages(account_id, subject)
     with closing(webapp_conn()) as c:
         words = [dict(r) for r in c.execute(
-            "SELECT id,unit,section,box,material_id,page,position FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 "
+            "SELECT id,unit,section,box,material_id,page,position,foreign_word,meanings_json FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 "
             "ORDER BY page,position,id", (account_id, subject))]
+        words = [w for w in words if trainable(w)]
         states = word_states(c, account_id, [w["id"] for w in words])
     # Eine Seite gehört zur Einheit ihrer Wörter, sobald sie welche hat; so bleiben
     # Seite und Wörter zusammen, auch wenn das Verzeichnis später anders benennt.
@@ -1436,7 +1447,7 @@ def cards(account_id: int, subject: str, unit: str, stage: int, direction: str, 
             "SELECT * FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 "
             "ORDER BY page,position,id", (account_id, subject))]
     family = unit_family(account_id, subject, unit)
-    words = [w for w in words if w["unit"] in family]
+    words = [w for w in words if w["unit"] in family and trainable(w)]
     if (section or "").strip():
         words = [w for w in words if (w["section"] or "").strip() == section.strip()]
     if (box or "").strip():
@@ -1457,7 +1468,7 @@ def prompt_for(account_id: int, subject: str, unit: str, direction: str) -> str:
             "SELECT unit,foreign_word,meanings_json FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 ORDER BY position",
             (account_id, subject))]
     family = unit_family(account_id, subject, unit)
-    rows = [r for r in rows if r["unit"] in family]
+    rows = [r for r in rows if r["unit"] in family and trainable(r)]
     lang = language_of(subject) or {"name": subject}
     if direction == "into":
         words = ", ".join(r["foreign_word"] for r in rows)[:450]
@@ -1488,6 +1499,8 @@ def attempt(account_id: int, body: AttemptIn) -> dict:
         raise HTTPException(404, "Wort nicht gefunden.")
     from . import vocab_catalog
     w = vocab_catalog.effective_word(account_id, dict(w))
+    if not trainable(w):
+        raise HTTPException(409, "Für diesen Quelleintrag fehlt eine geprüfte Bedeutung. Bitte eine andere Lernkarte wählen.")
     meanings = json.loads(w["meanings_json"] or "[]")
     lang = language_of(w["subject"]) or {"into": True}
     if body.stage == 2 and body.direction != "into":

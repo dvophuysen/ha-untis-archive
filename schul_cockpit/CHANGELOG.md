@@ -1,3 +1,8 @@
+## 1.13.2
+
+- Einträge ohne geprüfte Bedeutung bleiben als Quellenmaterial erhalten, werden aber nicht als unbeantwortbare Übersetzungskarten angeboten oder als lernbare Wörter gezählt.
+- Auch direkte Antworten auf solche alten Karten werden ohne Änderung des Lernstands abgewiesen. Keine Löschung oder Neuzuordnung vorhandener Wörter und Lernversuche.
+
 ## 1.13.1
 
 - Mini-Quellenlesung liefert Wörter und Grenzen direkt in Buchreihenfolge. Positionsnummern werden aus dieser Folge berechnet; das Modell muss keine Kasten-Endindizes zählen.
