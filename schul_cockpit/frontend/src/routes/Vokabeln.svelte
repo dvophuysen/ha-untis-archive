@@ -4,6 +4,9 @@
   // Fremdsprache. Kein Multiple Choice; die App wertet, nicht das Kind.
   import { api } from '../lib/api.js';
   import Speech from '../lib/Speech.svelte';
+  import { answerClock } from '../lib/answerClock.js';
+  import VocabProgress from '../lib/VocabProgress.svelte';
+  const clock = answerClock();
   import { subjectStyle } from '../lib/subjectStyle.js';
   import { appState } from '../lib/store.svelte.js';
   let { accountId, subject = '', initialUnit = '' } = $props();
@@ -14,8 +17,8 @@
   // Vokabelliste selbst nennt („Texto A"), ist nur eine Einschränkung
   // davon und wird beim Wechsel der Einheit wieder aufgehoben (D100).
   let unit = $state(initialUnit), section = $state(''), box = $state(''), stage = $state(1), direction = $state('from');
-  let cards = $state([]), index = $state(0), answer = $state(''), spoken = $state(false), edits = $state(0), shownAt = $state(0);
-  let verdict = $state(null), pending = $state(null), done = $state(false), tally = $state({ correct: 0, slow: 0, wrong: 0 });
+  let cards = $state([]), index = $state(0), answer = $state(''), spoken = $state(false), edits = $state(0);
+  let verdict = $state(null), pending = $state(null), done = $state(false), tally = $state({ correct: 0, wrong: 0 });
   let answerInput = $state(null);
   let bookWords = $state(null), importDraft = $state(null), importFile = $state(null);
   let capturePage = $state(1), captureJob = $state(null);
@@ -48,19 +51,22 @@
   $effect(() => { void accountId; void subject; polls = 0; load(); return () => clearTimeout(pollTimer); });
   async function begin(s, d) {
     stage = s; direction = d; busy = true; error = ''; done = false; verdict = null; pending = null;
-    tally = { correct: 0, slow: 0, wrong: 0 };
+    tally = { correct: 0, wrong: 0 };
     try {
       const r = await api.get(`${base}/${encodeURIComponent(subject)}/cards?unit=${encodeURIComponent(unit)}&section=${encodeURIComponent(section)}&box=${encodeURIComponent(box)}&stage=${s}&direction=${d}&limit=80`);
       cards = r.cards; index = 0; show();
       if (!cards.length) error = s === 2 ? 'Für die Schreibweise zuerst die Bedeutungen sichern: Stufe 2 fragt nur Wörter, deren Bedeutung sitzt.' : box ? 'Keine Wörter in diesem Kasten.' : section ? 'Keine Wörter in diesem Abschnitt.' : 'Keine Wörter in dieser Einheit.';
     } catch (e) { error = e.message; } finally { busy = false; }
   }
-  function show() { answer = ''; spoken = false; edits = 0; shownAt = Date.now(); verdict = null; pending = null; setTimeout(() => answerInput?.focus?.(), 50); }
-  function seconds() { return Math.min(3600, Math.round((Date.now() - shownAt) / 1000)); }
+  function show() { answer = ''; spoken = false; edits = 0; clock.reset(); verdict = null; pending = null; setTimeout(() => answerInput?.focus?.(), 50); }
+  function seconds() { return clock.seconds(); }
   async function transcribe(blob, took) {
     const f = new FormData(); f.append('file', blob, 'aufnahme'); f.append('seconds', String(took)); f.append('unit', unit); f.append('direction', direction);
-    const r = await api.post(`${base}/${encodeURIComponent(subject)}/transcribe`, f);
-    return r.text;
+    clock.pause();
+    try {
+      const r = await api.post(`${base}/${encodeURIComponent(subject)}/transcribe`, f);
+      return r.text;
+    } finally { clock.resume(); }
   }
   function heard(t) { answer = t; spoken = true; submit(); }
   async function submit(confirm = false, gaveUp = false) {
@@ -70,11 +76,11 @@
     try {
       const r = await api.post(`${base}/attempts`, {
         word_id: card.id, stage, direction, answer: answer.trim(), spoken, gave_up: gaveUp,
-        seconds: seconds(), edits, confirm,
+        seconds: seconds(), edits, confirm, unit_scope: unit,
       });
       if (r.result === 'unclear') { pending = r; return; }
       pending = null; verdict = r;
-      if (r.result === 'correct') { if (/Zögern/.test(r.feedback)) tally.slow++; else tally.correct++; } else tally.wrong++;
+      if (r.result === 'correct') tally.correct++; else tally.wrong++;
     } catch (e) { error = e.message; } finally { busy = false; }
   }
   function next() {
@@ -160,8 +166,8 @@
     {#if done}
       <section class="card result">
         <h2>Durchgang fertig</h2>
-        <p>{tally.correct} sofort richtig · {tally.slow} richtig mit Zögern · {tally.wrong} falsch oder offen</p>
-        <p class="muted">Zögern und zweite Anläufe merkt sich der Trainer als „wackelt“; diese Wörter kommen beim nächsten Mal zuerst.</p>
+        <p>{tally.correct} richtig · {tally.wrong} falsch oder offen</p>
+        <p class="muted">Noch unsichere Wörter kommen beim nächsten Mal zuerst. Deine Antwortzeit verschlechtert den Lernstand nicht.</p>
         <div class="actions"><button class="primary" onclick={() => begin(stage, direction)}>Noch einmal, Wackler zuerst</button><button onclick={() => { done = false; cards = []; }}>Andere Einheit</button></div>
       </section>
     {/if}
@@ -171,12 +177,20 @@
     {:else}
       <section class="card">
         <h2>Welche Einheit?</h2>
+        {#if data.overview?.started_units}
+          <p><strong>Dein Stand in {data.overview.started_units} begonnenen Einheiten</strong></p>
+          <VocabProgress progress={data.overview.progress} />
+          {#if lang.into}<VocabProgress progress={data.overview.writing_progress} label="Schreibweise" />{/if}
+          <p class="muted small">Jedes Wort zählt einmal. Noch nicht begonnene Einheiten zählen hier nicht mit.</p>
+        {:else}<p class="muted small">Noch keine Einheit begonnen. Ungeübte Wörter sind grau und zählen nicht als Fehler.</p>{/if}
         <div class="units">
           {#each data.units as u (u.unit)}
             <button class="unit" class:chosen={unit === u.unit} onclick={() => chooseUnit(u.unit)}>
               <strong>{u.label || u.unit}</strong>
               <span>{u.words ? `${u.words} Wörter · Bedeutung: ${unitSummary(u, 's1')}` : u.unread ? 'Quelle noch nicht freigegeben' : 'keine Lernwörter auf diesen Seiten'}</span>
               {#if u.words && lang.into}<span>Schreibweise: {unitSummary(u, 's2')}</span>{/if}
+              <VocabProgress progress={u.progress} />
+              {#if u.words && lang.into}<VocabProgress progress={u.writing_progress} label="Schreibweise" />{/if}
             </button>
           {/each}
         </div>
@@ -185,10 +199,12 @@
           <div class="units">
             <button class="unit" class:chosen={!section} onclick={() => chooseSection('')}>
               <strong>Ganze Einheit</strong><span>{currentUnit?.words ?? 0} Wörter</span>
+              <VocabProgress progress={currentUnit?.progress} />
             </button>
             {#each sections as part (part.section)}
               <button class="unit" class:chosen={section === part.section} onclick={() => chooseSection(part.section)}>
                 <strong>{part.label || part.section}</strong><span>{part.words} {part.words === 1 ? 'Wort' : 'Wörter'}</span>
+                <VocabProgress progress={part.progress} />
               </button>
             {/each}
           </div>
@@ -201,6 +217,7 @@
               {#each boxes as kasten (kasten.box)}
                 <button class="unit" class:chosen={box === kasten.box} onclick={() => (box = kasten.box)}>
                   <strong>{kasten.box}</strong><span>{kasten.words} {kasten.words === 1 ? 'Wort' : 'Wörter'}</span>
+                  <VocabProgress progress={kasten.progress} />
                 </button>
               {/each}
             </div>
@@ -264,7 +281,7 @@
           <p>{verdict.feedback}</p>
           {#if card.example}<p class="muted">Im Buch: {card.example}</p>{/if}
           <div class="actions">
-            {#if verdict.result !== 'correct' && stage === 2}<button onclick={() => { answer = ''; verdict = null; shownAt = Date.now(); }}>Noch einmal schreiben</button>{/if}
+            {#if verdict.result !== 'correct' && stage === 2}<button onclick={() => { answer = ''; verdict = null; clock.reset(); }}>Noch einmal schreiben</button>{/if}
             <button class="primary" onclick={next}>{index + 1 >= cards.length ? 'Fertig' : 'Nächstes Wort'}</button>
           </div>
         </div>
@@ -275,7 +292,7 @@
             <button class="primary" onclick={() => submit(true)}>Ja, das meinte ich</button>
             <button onclick={() => { pending = null; answer = ''; spoken = false; }}>Nein, noch einmal</button>
           </div>
-          <p class="muted">Die Rückfrage zählt nicht als Hilfe, aber auch nicht als sofort richtig.</p>
+          <p class="muted">Eine Rückfrage allein zählt nicht als Fehler.</p>
         </div>
       {:else}
         {#if stage === 1 && data.speech && (askForeign || lang.code)}
@@ -291,7 +308,7 @@
           </div>
         </form>
       {/if}
-      <p class="muted small">{stage === 2 ? 'Ohne Autokorrektur, ohne Vorschläge. Großschreibung zählt nur, wo sie zum Wort gehört.' : 'Zögern und zweite Anläufe merkt sich der Trainer als „wackelt“.'}</p>
+      <p class="muted small">{stage === 2 ? 'Ohne Autokorrektur, ohne Vorschläge. Großschreibung zählt nur, wo sie zum Wort gehört.' : 'Nimm dir Zeit. Richtig bleibt richtig. Wiederholt richtige Antworten festigen deinen Lernstand.'}</p>
     </section>
   {/if}
 

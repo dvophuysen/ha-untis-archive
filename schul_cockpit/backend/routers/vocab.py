@@ -29,9 +29,11 @@ def units(account_id: int, subject: str, background: BackgroundTasks, user: Curr
     access(user, account_id)
     lang = vocab.language_of(subject)
     found = vocab.units(account_id, subject)
+    from ..vocab_progress import annotate
+    overview = annotate(account_id, subject, found)
     # Imports are explicit parent actions and stay separate from this GET.
     reading = 0
-    return {'subject': subject, 'language': lang, 'units': found, 'reading': reading,
+    return {'subject': subject, 'language': lang, 'units': found, 'reading': reading, 'overview': overview,
             'speech': bool(ai.transcribe_url()), 'hesitation_seconds': vocab.HESITATION_SECONDS}
 
 

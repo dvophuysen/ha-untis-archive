@@ -155,7 +155,7 @@ def test_word_stage_two_clean_sits_three_days_later_settles_and_errors_wobble():
     state = vocab.replay([att("2026-09-16"), att("2026-09-16")])
     assert state["stage"] == "sitzt" and state["due"] == "2026-09-19"
     assert vocab.replay([att("2026-09-16"), att("2026-09-16"), att("2026-09-19")])["stage"] == "gefestigt"
-    assert vocab.replay([att("2026-09-16"), att("2026-09-16", seconds=30)])["stage"] == "wackelt"
+    assert vocab.replay([att("2026-09-16"), att("2026-09-16", seconds=30)])["stage"] == "sitzt"
     assert vocab.replay([att("2026-09-16"), att("2026-09-16"), att("2026-09-19", "incorrect")])["stage"] == "wackelt"
     # Eine Rückfrage zählt nicht, weder gut noch schlecht.
     assert vocab.replay([att("2026-09-16"), att("2026-09-16", "unclear"), att("2026-09-16")])["stage"] == "sitzt"
@@ -224,13 +224,13 @@ def test_attempts_move_the_word_and_wobblers_come_first(setup):
     # Ein Buchstabe daneben ist bei einer Bedeutung kein Fehler.
     r = client.post(V + "/attempts", json={"word_id": ids[1], "stage": 1, "direction": "from", "answer": "sain", "seconds": 2})
     assert r.json()["result"] == "correct"
-    # Nah dran, aber nicht sicher: Rückfrage, nichts gebucht; die Bestätigung zählt als richtig mit Zögern.
+    # Nah dran: Rückfrage ohne Buchung; Bestätigung zählt ohne Zeitstrafe.
     r = client.post(V + "/attempts", json={"word_id": ids[0], "stage": 1, "direction": "from", "answer": "Schade", "seconds": 2})
     assert r.json()["result"] == "unclear" and "Meintest du" in r.json()["feedback"]
     with closing(db.webapp_conn()) as c:
         assert c.execute("SELECT COUNT(*) FROM vocab_attempts WHERE word_id=?", (ids[0],)).fetchone()[0] == 0
     r = client.post(V + "/attempts", json={"word_id": ids[0], "stage": 1, "direction": "from", "answer": "Schade", "seconds": 2, "confirm": True})
-    assert r.json()["result"] == "correct" and "Zögern" in r.json()["feedback"]
+    assert r.json()["result"] == "correct" and "Zögern" not in r.json()["feedback"]
     # Falsch: wackelt, und die Karte rückt nach vorn.
     r = client.post(V + "/attempts", json={"word_id": ids[2], "stage": 1, "direction": "from", "answer": "Pferd", "seconds": 2})
     assert r.json()["result"] == "incorrect" and "Im Buch: servus · der Sklave, der Diener" in r.json()["feedback"]

@@ -4,7 +4,7 @@ Stufe 1 prüft die Bedeutung, gesprochen (Latein → Deutsch wie in der Arbeit;
 Englisch in beide Richtungen). Stufe 2 prüft die Schreibweise, getippt ohne
 Autokorrektur, nur in die Fremdsprache hinein. Kein Multiple Choice, kein
 Abschreiben aus dem Heft. Die Stufe je Wort (neu, wackelt, sitzt, gefestigt)
-wird aus den Versuchen abgelesen: zweimal hintereinander richtig ohne Zögern
+wird aus den Versuchen abgelesen: zweimal hintereinander richtig
 heißt sitzt, Tage später noch einmal richtig heißt gefestigt, ein Fehler setzt
 auf wackelt. Was das Kind sagt, zählt erst, wenn es dasteht.
 """
@@ -34,7 +34,7 @@ LANGUAGES = {
     "französisch": {"code": "fr", "name": "Französisch", "into": True, "tts": "fr-FR"},
     "franzoesisch": {"code": "fr", "name": "Französisch", "into": True, "tts": "fr-FR"},
 }
-# Zögern bei einer Vokabel: länger als so viele Sekunden von Karte bis Antwort.
+# Legacy API metadata only; response duration no longer affects mastery.
 HESITATION_SECONDS = 12
 CLEAN_RUN = 2
 CHECK_AFTER_DAYS = 3
@@ -190,18 +190,23 @@ def judge_foreign(answer: str, word: str, spoken: bool) -> tuple[str, str]:
 # ------------------------------------------------------------ Stufen je Wort
 
 def is_clean(a: dict) -> bool:
-    return a["result"] == "correct" and (a.get("seconds") is None or a["seconds"] <= HESITATION_SECONDS)
+    # Response duration cannot distinguish thinking from recording, typing or
+    # historic provider latency. Mastery is based on demonstrated correctness.
+    return a["result"] == "correct"
 
 
 def replay(attempts: list[dict]) -> dict:
     """Stufe eines Wortes für eine Stufe (Bedeutung oder Schreibweise)."""
     stage, streak, sat, last, last_result = "neu", 0, None, None, None
+    correct_count = wrong_count = 0
     for a in attempts:
         day = date.fromisoformat(a["created_at"][:10])
         last = day
         if a["result"] == "unclear":
             continue
         last_result = a["result"]
+        correct_count += a['result'] == 'correct'
+        wrong_count += a['result'] in ('incorrect', 'partial')
         if is_clean(a):
             streak += 1
             if sat and (day - sat).days >= CHECK_AFTER_DAYS:
@@ -217,7 +222,9 @@ def replay(attempts: list[dict]) -> dict:
     if stage == "sitzt" and sat:
         due = (sat + timedelta(days=CHECK_AFTER_DAYS)).isoformat()
     return {"stage": stage, "streak": streak, "last": last.isoformat() if last else None, "due": due,
-            "last_result": last_result}
+            "last_result": last_result, "correct_count": correct_count, "wrong_count": wrong_count,
+            "unit_scopes": sorted({a['unit_scope'] for a in attempts if a.get('unit_scope')}),
+            "unscoped": any(not a.get('unit_scope') and a['result'] != 'unclear' for a in attempts)}
 
 
 def word_states(c, account_id: int, word_ids: list[int]) -> dict[int, dict]:
@@ -229,7 +236,7 @@ def word_states(c, account_id: int, word_ids: list[int]) -> dict[int, dict]:
     source_ids = sorted(set(word_ids) | {wid for wid, canonical in aliases.items() if canonical in wanted} | wanted)
     marks = ",".join("?" * len(source_ids))
     rows = [dict(r) for r in c.execute(
-        f"SELECT word_id,stage,result,seconds,created_at FROM vocab_attempts WHERE account_id=? AND word_id IN ({marks}) ORDER BY created_at,id",
+        f"SELECT word_id,stage,result,seconds,created_at,unit_scope FROM vocab_attempts WHERE account_id=? AND word_id IN ({marks}) ORDER BY created_at,id",
         (account_id, *source_ids))]
     grouped: dict[tuple[int, int], list[dict]] = {}
     for r in rows:
@@ -1510,12 +1517,13 @@ class AttemptIn(InputModel):
     seconds: int | None = Field(default=None, ge=0, le=3600)
     edits: int | None = Field(default=None, ge=0, le=1000)
     confirm: bool = False
+    unit_scope: str = Field(default='', max_length=500)
 
 
 def attempt(account_id: int, body: AttemptIn) -> dict:
     """Eine Antwort werten und festhalten. Bei „unclear" wird nur nachgefragt;
-    erst die Bestätigung mit confirm zählt, und zwar als richtig mit Rückfrage
-    (kein Hilfe-Makel, aber auch kein sauberer Treffer)."""
+    erst die Bestätigung mit confirm zählt. Dauer allein verändert die
+    Bewertung oder den Lernstand nicht."""
     with closing(webapp_conn()) as c:
         w = c.execute("SELECT * FROM vocab_words WHERE id=? AND account_id=?", (body.word_id, account_id)).fetchone()
     if not w:
@@ -1524,6 +1532,10 @@ def attempt(account_id: int, body: AttemptIn) -> dict:
     w = vocab_catalog.effective_word(account_id, dict(w))
     if not trainable(w):
         raise HTTPException(409, "Für diesen Quelleintrag fehlt eine geprüfte Bedeutung. Bitte eine andere Lernkarte wählen.")
+    if body.unit_scope:
+        allowed = cards(account_id, w['subject'], body.unit_scope, 1, 'from', 100000)
+        if not any(card['id'] == w['id'] for card in allowed):
+            raise HTTPException(422, 'Das Wort gehört nicht zu dieser Einheit.')
     meanings = json.loads(w["meanings_json"] or "[]")
     lang = language_of(w["subject"]) or {"into": True}
     if body.stage == 2 and body.direction != "into":
@@ -1540,22 +1552,18 @@ def attempt(account_id: int, body: AttemptIn) -> dict:
     else:
         result, feedback = judge_foreign(body.answer, w["foreign_word"], spoken=(body.stage == 1))
     if result == "unclear" and body.confirm:
-        # Bestätigt nach Rückfrage: richtig, aber als Zögern gebucht, nicht als sauber.
         result = "correct"
-        seconds = max(HESITATION_SECONDS + 1, body.seconds or 0)
-    else:
-        seconds = body.seconds
+    seconds = body.seconds
     if result == "unclear":
         return {"result": "unclear", "feedback": feedback or f"Ich habe „{body.answer.strip()}“ verstanden. Meintest du „{matched}“?",
                 "matched": matched, "word": public_word(w)}
     with closing(webapp_conn()) as c, c:
-        c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,spoken,seconds,edits,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                  (account_id, w["id"], body.stage, body.direction, body.answer[:300], result, int(body.spoken), seconds, body.edits, now_iso()))
+        c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,spoken,seconds,edits,created_at,unit_scope) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                  (account_id, w["id"], body.stage, body.direction, body.answer[:300], result, int(body.spoken), seconds, body.edits, now_iso(), body.unit_scope or None))
         state = word_states(c, account_id, [w["id"]])[w["id"]]
     book = f"{w['foreign_word']} · {', '.join(meanings)}" + (f" · {w['source_label']} S. {w['page']}" if w["page"] else "")
     if result == "correct":
-        slow = seconds is not None and seconds > HESITATION_SECONDS
-        feedback = ("Richtig, aber mit Zögern. " if slow else "Richtig. ") + f"Im Buch: {book}"
+        feedback = "Richtig. " + f"Im Buch: {book}"
         if body.direction == "from" and matched and len(meanings) > 1:
             feedback += f" Du hast „{matched}“ getroffen."
     elif result == "partial":

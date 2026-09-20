@@ -1018,6 +1018,7 @@ CREATE TABLE IF NOT EXISTS vocab_headings (
 
 
 _MIGRATIONS.append(("vocab_004_catalog", (Path(__file__).parent / "vocab_catalog_schema.sql").read_text()))
+_MIGRATIONS.append(("vocab_005_attempt_scope", "ALTER TABLE vocab_attempts ADD COLUMN unit_scope TEXT;"))
 
 
 def init_webapp_db() -> None:
