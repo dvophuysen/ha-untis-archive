@@ -1042,3 +1042,12 @@ def init_webapp_db() -> None:
         _apply_migrations(conn)
     finally:
         conn.close()
+
+_MIGRATIONS.append(("vocab_007_assessment", """
+CREATE TABLE vocab_answer_assessments (
+ attempt_id INTEGER PRIMARY KEY REFERENCES vocab_attempts(id) ON DELETE CASCADE,
+ protocol TEXT NOT NULL,
+ decision TEXT NOT NULL,
+ evidence_json TEXT NOT NULL
+);
+"""))

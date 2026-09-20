@@ -1521,10 +1521,8 @@ class AttemptIn(InputModel):
     unit_scope: str = Field(default='', max_length=500)
 
 
-def attempt(account_id: int, body: AttemptIn) -> dict:
-    """Eine Antwort werten und festhalten. Bei „unclear" wird nur nachgefragt;
-    erst die Bestätigung mit confirm zählt. Dauer allein verändert die
-    Bewertung oder den Lernstand nicht."""
+def prepare_attempt(account_id: int, body: AttemptIn) -> dict:
+    """Validate ownership, source and requested practice mode before grading."""
     with closing(webapp_conn()) as c:
         w = c.execute("SELECT * FROM vocab_words WHERE id=? AND account_id=?", (body.word_id, account_id)).fetchone()
     if not w:
@@ -1543,28 +1541,40 @@ def attempt(account_id: int, body: AttemptIn) -> dict:
         raise HTTPException(422, "Die Schreibweise wird nur in die Fremdsprache geprüft.")
     if body.direction == "into" and not lang.get("into", True):
         raise HTTPException(422, "In diesem Fach wird nur in die Muttersprache übersetzt.")
+    return w
+
+
+def attempt(account_id: int, body: AttemptIn, *, assessment: dict | None = None) -> dict:
+    w = prepare_attempt(account_id, body)
+    meanings = json.loads(w["meanings_json"] or "[]")
     feedback = ""
     matched = None
-    if body.gave_up:
+    if assessment is not None and body.stage == 1 and not body.gave_up:
+        result = assessment['result']
+        feedback = assessment.get('feedback', '')
+    elif body.gave_up:
         result = "incorrect"
         feedback = "Weiß ich nicht."
     elif body.direction == "from":
         result, matched = judge_meaning(body.answer, meanings)
     else:
         result, feedback = judge_foreign(body.answer, w["foreign_word"], spoken=(body.stage == 1))
-    if result == "unclear" and body.confirm:
+    if result == "unclear" and body.confirm and assessment is None:
         result = "correct"
     seconds = body.seconds
     if result == "unclear":
         return {"result": "unclear", "feedback": feedback or f"Ich habe „{body.answer.strip()}“ verstanden. Meintest du „{matched}“?",
-                "matched": matched, "word": public_word(w)}
+                "matched": matched, "can_confirm": assessment is None, "word": public_word(w)}
     with closing(webapp_conn()) as c, c:
-        c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,spoken,seconds,edits,created_at,unit_scope) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        inserted = c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,spoken,seconds,edits,created_at,unit_scope) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                   (account_id, w["id"], body.stage, body.direction, body.answer[:300], result, int(body.spoken), seconds, body.edits, now_iso(), body.unit_scope or None))
+        if assessment is not None:
+            c.execute("INSERT INTO vocab_answer_assessments(attempt_id,protocol,decision,evidence_json) VALUES(?,?,?,?)",
+                      (inserted.lastrowid, assessment['protocol'], result, json.dumps(assessment, ensure_ascii=False)))
         state = word_states(c, account_id, [w["id"]])[w["id"]]
     book = f"{w['foreign_word']} · {', '.join(meanings)}" + (f" · {w['source_label']} S. {w['page']}" if w["page"] else "")
     if result == "correct":
-        feedback = "Richtig. " + f"Im Buch: {book}"
+        feedback = ("Das passt. " if assessment and assessment.get("method") in ("semantic", "reviewed") else "Richtig. ") + f"Im Buch: {book}"
         if body.direction == "from" and matched and len(meanings) > 1:
             feedback += f" Du hast „{matched}“ getroffen."
     elif result == "partial":

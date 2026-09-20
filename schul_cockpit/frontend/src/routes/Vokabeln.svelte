@@ -18,7 +18,7 @@
   // davon und wird beim Wechsel der Einheit wieder aufgehoben (D100).
   let unit = $state(initialUnit), section = $state(''), box = $state(''), stage = $state(1), direction = $state('from');
   let cards = $state([]), index = $state(0), answer = $state(''), spoken = $state(false), edits = $state(0);
-  let verdict = $state(null), pending = $state(null), done = $state(false), tally = $state({ correct: 0, wrong: 0 });
+  let verdict = $state(null), pending = $state(null), done = $state(false), tally = $state({ correct: 0, wrong: 0, skipped: 0 });
   let answerInput = $state(null);
   let bookWords = $state(null), importDraft = $state(null), importFile = $state(null);
   let reviewIds = $state(''), reviewReason = $state('Bedienfehler: versehentlich übersprungen'), reviewRestore = $state(false), reviewDraft = $state(null), reviewMessage = $state('');
@@ -61,7 +61,7 @@
   $effect(() => { void accountId; void subject; polls = 0; load(); return () => clearTimeout(pollTimer); });
   async function begin(s, d) {
     stage = s; direction = d; busy = true; error = ''; done = false; verdict = null; pending = null;
-    tally = { correct: 0, wrong: 0 };
+    tally = { correct: 0, wrong: 0, skipped: 0 };
     try {
       const r = await api.get(`${base}/${encodeURIComponent(subject)}/cards?unit=${encodeURIComponent(unit)}&section=${encodeURIComponent(section)}&box=${encodeURIComponent(box)}&stage=${s}&direction=${d}&limit=80`);
       cards = r.cards; index = 0; show();
@@ -71,18 +71,19 @@
   function show() { answer = ''; spoken = false; edits = 0; clock.reset(); verdict = null; pending = null; setTimeout(() => answerInput?.focus?.(), 50); }
   function seconds() { return clock.seconds(); }
   async function transcribe(blob, took) {
+    const requestedCard = card;
     const f = new FormData(); f.append('file', blob, 'aufnahme'); f.append('seconds', String(took)); f.append('unit', unit); f.append('direction', direction);
     clock.pause();
     try {
       const r = await api.post(`${base}/${encodeURIComponent(subject)}/transcribe`, f);
       return r.text;
-    } finally { clock.resume(); }
+    } finally { if (card === requestedCard) clock.resume(); }
   }
   function heard(t) { answer = t; spoken = true; submit(); }
   async function submit(confirm = false, gaveUp = false) {
     if (!card || busy) return;
     if (!gaveUp && !answer.trim() && !confirm) return;
-    busy = true; error = '';
+    busy = true; error = ''; clock.pause();
     try {
       const r = await api.post(`${base}/attempts`, {
         word_id: card.id, stage, direction, answer: answer.trim(), spoken, gave_up: gaveUp,
@@ -91,9 +92,10 @@
       if (r.result === 'unclear') { pending = r; return; }
       pending = null; verdict = r;
       if (r.result === 'correct') tally.correct++; else tally.wrong++;
-    } catch (e) { error = e.message; } finally { busy = false; }
+    } catch (e) { error = e.message; } finally { busy = false; clock.resume(); }
   }
-  function next() {
+  function next(skip = false) {
+    if (skip === true) tally.skipped++;
     if (index + 1 >= cards.length) { done = true; load(); return; }
     index += 1; show();
   }
@@ -176,7 +178,7 @@
     {#if done}
       <section class="card result">
         <h2>Durchgang fertig</h2>
-        <p>{tally.correct} richtig · {tally.wrong} falsch oder offen</p>
+        <p>{tally.correct} richtig · {tally.wrong} falsch oder noch nicht korrekt · {tally.skipped} ohne Wertung</p>
         <p class="muted">Noch unsichere Wörter kommen beim nächsten Mal zuerst. Deine Antwortzeit verschlechtert den Lernstand nicht.</p>
         <div class="actions"><button class="primary" onclick={() => begin(stage, direction)}>Noch einmal, Wackler zuerst</button><button onclick={() => { done = false; cards = []; }}>Andere Einheit</button></div>
       </section>
@@ -299,22 +301,27 @@
         <div class="verdict unclear">
           <p>{pending.feedback}</p>
           <div class="actions">
-            <button class="primary" onclick={() => submit(true)}>Ja, das meinte ich</button>
-            <button onclick={() => { pending = null; answer = ''; spoken = false; }}>Nein, noch einmal</button>
+            {#if pending.can_confirm !== false}<button class="primary" disabled={busy} onclick={() => submit(true)}>Ja, das meinte ich</button>{/if}
+            <button disabled={busy} onclick={() => { pending = null; answer = ''; spoken = false; }}>{pending.can_confirm === false ? "Antwort präzisieren" : "Nein, noch einmal"}</button>
           </div>
+          <button disabled={busy} onclick={() => next(true)}>Ohne Wertung weiter</button>
           <p class="muted">Eine Rückfrage allein zählt nicht als Fehler.</p>
         </div>
       {:else}
         {#if stage === 1 && data.speech && (askForeign || lang.code)}
+          {#key card}
           <Speech onText={heard} {transcribe} disabled={busy} label={speechLabel} />
+          {/key}
         {/if}
         <form onsubmit={(e) => { e.preventDefault(); submit(); }}>
+          {#if busy}<p role="status">Deine Antwort wird geprüft …</p>{/if}
           <input bind:this={answerInput} bind:value={answer} type="text" maxlength="300" placeholder={stage === 2 ? 'Genau so, wie es im Buch steht' : 'oder tippen …'}
                  autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" lang={askForeign ? 'de' : (lang.code || 'de')}
                  onbeforeinput={(e) => { if ((e.inputType || '').startsWith('delete')) edits++; }} oninput={() => (spoken = false)} />
           <div class="actions">
             <button class="primary" disabled={busy || !answer.trim()}>Prüfen</button>
-            <button type="button" disabled={busy} onclick={() => submit(false, true)}>Weiß ich nicht</button>
+            <button type="button" disabled={busy} onclick={() => submit(false, true)}>Weiß ich nicht – als Fehler werten</button>
+            <button type="button" disabled={busy} onclick={() => next(true)}>Überspringen ohne Wertung</button>
           </div>
         </form>
       {/if}

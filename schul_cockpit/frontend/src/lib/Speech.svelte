@@ -1,15 +1,23 @@
 <script>
+  import { onDestroy } from 'svelte';
   // Spracheingabe mit eigener Erkennung: Halten und sprechen, loslassen, dann
   // erscheint der erkannte Text zum Prüfen. Nicht das Diktat der Tastatur, weil
   // das Fachbegriffe und lateinische Formen zu Alltagswörtern macht.
   let { onText, transcribe, disabled = false, label = 'Aufnahme: Deutsch · eigene Erkennung', compact = false } = $props();
   let recorder = $state(null), recording = $state(false), working = $state(false), seconds = $state(0), error = $state('');
   let chunks = [], timer = null, startedAt = 0, stream = null, mime = '';
+  let disposed = false;
   // Lautstärke mitmessen: Aus Stille oder Rauschen erfindet die Erkennung Text,
   // der zum Hinweis passt („Mit der a-Deklination.“). Leise Aufnahmen bleiben hier.
   let audioCtx = null, analyser = null, loudest = 0;
   const MIN_LOUDNESS = 0.02;
   const supported = typeof window !== 'undefined' && !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
+  onDestroy(() => {
+    disposed = true; clearInterval(timer);
+    if (recorder) { recorder.onstop = null; if (recorder.state !== 'inactive') recorder.stop(); }
+    stream?.getTracks().forEach((t) => t.stop());
+    audioCtx?.close().catch(() => {});
+  });
 
   function pickMime() {
     for (const m of ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']) {
@@ -22,6 +30,7 @@
     error = '';
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (disposed) { stream.getTracks().forEach((t) => t.stop()); return; }
     } catch (e) {
       error = 'Kein Zugriff auf das Mikrofon. Bitte in den Einstellungen erlauben oder tippen.';
       return;
@@ -68,7 +77,7 @@
     try {
       const text = await transcribe(blob, took);
       if (!text?.trim()) error = 'Ich habe nichts verstanden. Noch einmal, etwas näher am Gerät?';
-      else onText(text.trim());
+      else if (!disposed) onText(text.trim());
     } catch (e) {
       error = e.message;
     } finally {

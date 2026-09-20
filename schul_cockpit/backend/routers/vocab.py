@@ -194,9 +194,10 @@ def cards(account_id: int, subject: str, unit: str, stage: int = 1, direction: s
 
 
 @router.post('/attempts')
-def attempts(account_id: int, body: vocab.AttemptIn, user: CurrentUser = Depends(get_current_user)):
+async def attempts(account_id: int, body: vocab.AttemptIn, user: CurrentUser = Depends(get_current_user)):
     access(user, account_id, write=True)
-    return vocab.attempt(account_id, body)
+    from ..vocab_semantic import submit
+    return await submit(account_id, body)
 
 
 @router.delete('/{subject}/attempts')

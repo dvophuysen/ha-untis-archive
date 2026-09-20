@@ -221,15 +221,23 @@ def test_attempts_move_the_word_and_wobblers_come_first(setup):
     assert r.json()["result"] == "correct" and r.json()["feedback"].startswith("Richtig. Im Buch: servus") and r.json()["word"]["state"]["s1"]["stage"] == "wackelt"
     r = client.post(V + "/attempts", json={"word_id": ids[2], "stage": 1, "direction": "from", "answer": "Diener", "seconds": 5})
     assert r.json()["word"]["state"]["s1"]["stage"] == "sitzt"
-    # Ein Buchstabe daneben ist bei einer Bedeutung kein Fehler.
+    # Non-exact answers go through a semantic reviewer, never edit distance.
+    from backend import vocab_semantic
+    patch.setattr(vocab_semantic, 'mini_tier', lambda: 'klein')
+    async def reviewer(account, purpose, prompt, context, **kw):
+        decision = {'sain': 'accept', 'Schade': 'clarify', 'Pferd': 'reject'}[context['answer']]
+        return json.dumps({'decision': decision, 'reason': 'fixture','input_quality':'clear','specificity':'equivalent' if decision=='accept' else 'different'}), {}, 'call'
+    patch.setattr(ai, 'complete', reviewer)
     r = client.post(V + "/attempts", json={"word_id": ids[1], "stage": 1, "direction": "from", "answer": "sain", "seconds": 2})
     assert r.json()["result"] == "correct"
     # Nah dran: Rückfrage ohne Buchung; Bestätigung zählt ohne Zeitstrafe.
     r = client.post(V + "/attempts", json={"word_id": ids[0], "stage": 1, "direction": "from", "answer": "Schade", "seconds": 2})
-    assert r.json()["result"] == "unclear" and "Meintest du" in r.json()["feedback"]
+    assert r.json()["result"] == "unclear" and r.json()["can_confirm"] is False
     with closing(db.webapp_conn()) as c:
         assert c.execute("SELECT COUNT(*) FROM vocab_attempts WHERE word_id=?", (ids[0],)).fetchone()[0] == 0
     r = client.post(V + "/attempts", json={"word_id": ids[0], "stage": 1, "direction": "from", "answer": "Schade", "seconds": 2, "confirm": True})
+    assert r.json()["result"] == "unclear"
+    r = client.post(V + "/attempts", json={"word_id": ids[0], "stage": 1, "direction": "from", "answer": "Schau!", "seconds": 20})
     assert r.json()["result"] == "correct" and "Zögern" not in r.json()["feedback"]
     # Falsch: wackelt, und die Karte rückt nach vorn.
     r = client.post(V + "/attempts", json={"word_id": ids[2], "stage": 1, "direction": "from", "answer": "Pferd", "seconds": 2})
@@ -252,7 +260,7 @@ def test_english_spelling_stage_needs_the_meaning_first(setup):
         wid = c.execute("SELECT id FROM vocab_words").fetchone()[0]
     assert client.get(V + "/ENGLISCH/cards?unit=Unit%201&stage=2&direction=into").json()["cards"] == []
     for _ in range(2):
-        client.post(V + "/attempts", json={"word_id": wid, "stage": 1, "direction": "into", "answer": "to apply", "spoken": True, "seconds": 3})
+        client.post(V + "/attempts", json={"word_id": wid, "stage": 1, "direction": "into", "answer": "to apply for", "spoken": True, "seconds": 3})
     cards = client.get(V + "/ENGLISCH/cards?unit=Unit%201&stage=2&direction=into").json()["cards"]
     assert [c["foreign_word"] for c in cards] == ["to apply for"]
     r = client.post(V + "/attempts", json={"word_id": wid, "stage": 2, "direction": "into", "answer": "to aply for", "seconds": 9})

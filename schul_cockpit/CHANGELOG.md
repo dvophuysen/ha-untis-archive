@@ -1,3 +1,10 @@
+## 1.13.6
+
+- Bedeutungsprüfung: Buchtreffer werden sofort erkannt, geprüfte gleichwertige Alternativen mit der Buchangabe akzeptiert. Weitere Abweichungen prüft ausschließlich gpt-5-mini in Foundry 2. Keine Zeichenähnlichkeit als Ersatz für Bedeutungsprüfung.
+- Unklare, unvollständige oder technisch nicht prüfbare Antworten verändern den Lernstand nicht. Rückfragen können nicht durch bloßes Bestätigen einen richtigen Versuch erzeugen. Modellentscheidungen werden bei gewerteten Versuchen nachvollziehbar gespeichert.
+- „Überspringen ohne Wertung“ ist vom ausdrücklich als Fehler gewerteten „Weiß ich nicht“ getrennt. Übersprungene Karten werden am Rundenende separat gezählt. Veraltete Mikrofonantworten können nach Kartenwechsel nicht die nächste Karte bewerten.
+- Technische Bewertungswartezeit wird ebenfalls aus der aktiven Antwortzeit herausgerechnet. Keine Neubewertung alter Versuche durch das Update.
+
 ## 1.13.5
 
 - Eltern können konkret ausgewählte Lernversuche nach einer Vorschau aus der Wertung nehmen und wieder aufnehmen. Die ursprünglichen Antworten bleiben unverändert; jede Korrektur wird mit Begründung protokolliert.
