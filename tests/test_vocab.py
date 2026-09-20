@@ -76,6 +76,13 @@ def test_meaning_judgement_is_lenient_about_form_but_not_about_sense():
     assert vocab.judge_meaning("", ["denken"]) == ("incorrect", None)
 
 
+def test_complete_meaning_with_conjunction_is_accepted():
+    for meaning in ["mit Fleisch und Tomatensoße gefüllter Maisfladen (mexikanisch)",
+                    "mit dem Bus oder der Bahn fahren"]:
+        assert vocab.judge_meaning(meaning, [meaning]) == ("correct", meaning)
+    assert vocab.judge_meaning("Flugzeug", ["mit dem Bus oder der Bahn fahren"])[0] != "correct"
+
+
 def test_source_only_phrases_never_become_unanswerable_cards(setup):
     client, state, patch = setup
     client.app.include_router(vocab_router.router, prefix="/api")

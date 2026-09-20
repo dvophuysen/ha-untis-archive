@@ -130,6 +130,11 @@ def judge_meaning(answer: str, meanings: list[str]) -> tuple[str, str | None]:
     said = normalize_meaning(answer)
     if not said:
         return "incorrect", None
+    # A complete printed meaning is valid even when it contains "und" or
+    # "oder". Split alternatives only after checking the complete phrase.
+    for meaning in meanings:
+        if said in variants(meaning):
+            return "correct", meaning
     said_parts = [normalize_meaning(p) for p in re.split(r"[;,/]|\boder\b|\bund\b", answer or "")]
     said_parts = [p for p in said_parts if p] or [said]
     for meaning in meanings:

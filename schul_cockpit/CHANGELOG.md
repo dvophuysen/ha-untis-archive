@@ -1,3 +1,8 @@
+## 1.13.3
+
+- Vollständige Buchbedeutungen mit „und“ oder „oder“ werden vor der Zerlegung in Antwortalternativen geprüft. Eine wortgetreu richtige Erklärung wird dadurch nicht mehr fälschlich als unklar bewertet.
+- Keine Änderung bestehender Lernversuche oder Lernstände.
+
 ## 1.13.2
 
 - Einträge ohne geprüfte Bedeutung bleiben als Quellenmaterial erhalten, werden aber nicht als unbeantwortbare Übersetzungskarten angeboten oder als lernbare Wörter gezählt.
