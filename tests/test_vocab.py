@@ -76,6 +76,35 @@ def test_meaning_judgement_is_lenient_about_form_but_not_about_sense():
     assert vocab.judge_meaning("", ["denken"]) == ("incorrect", None)
 
 
+def test_spanish_printed_variants_and_transcription_punctuation():
+    for answer, word in [('bienvenido', 'bienvenido/-a'), ('bienvenida', 'bienvenido/-a'),
+                         ('juntos', 'juntos/-as'), ('juntas', 'juntos/-as'),
+                         ('ser nueva', 'ser nuevo/-a'), ('Qué rico.', '¡Qué rico!'),
+                         ('¿Qué te duele?', '¿Qué te duele?')]:
+        for spoken in (True, False):
+            assert vocab.judge_foreign(answer, word, spoken)[0] == 'correct', (answer, word)
+    assert vocab.judge_foreign('ser vieja', 'ser nuevo/-a', False)[0] != 'correct'
+    assert vocab.judge_foreign('hola', 'bienvenido/-a', True)[0] != 'correct'
+
+
+def test_vocab_transcription_language_reaches_provider_without_attempts(setup):
+    from test_speech import fake_azure
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix='/api')
+    calls = []
+    fake_azure(patch, calls, {'text': 'bienvenida', 'usage': {'input_tokens': 300, 'output_tokens': 4}})
+    with closing(db.webapp_conn()) as c:
+        before = [tuple(r) for r in c.execute('SELECT * FROM vocab_attempts')]
+    for direction, language in [('from', 'de'), ('into', 'es')]:
+        response = client.post(V + '/Spanisch/transcribe', data={'direction': direction, 'seconds': '2'},
+                               files={'file': ('answer.wav', b'0' * 2000, 'audio/wav')})
+        assert response.status_code == 200, response.text
+        assert response.json()['language'] == language
+        assert calls[-1]['data']['language'] == language
+    with closing(db.webapp_conn()) as c:
+        assert before == [tuple(r) for r in c.execute('SELECT * FROM vocab_attempts')]
+
+
 def test_complete_meaning_with_conjunction_is_accepted():
     for meaning in ["mit Fleisch und Tomatensoße gefüllter Maisfladen (mexikanisch)",
                     "mit dem Bus oder der Bahn fahren"]:

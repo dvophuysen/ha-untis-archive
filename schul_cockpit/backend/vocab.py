@@ -151,17 +151,28 @@ def judge_meaning(answer: str, meanings: list[str]) -> tuple[str, str | None]:
     return "incorrect", None
 
 
+def foreign_variants(word: str) -> list[str]:
+    """Expand explicit textbook o/-a and os/-as notation, not guessed forms."""
+    text = plain(_PARENS.sub("", word))
+    forms = [text]
+    for feminine in (False, True):
+        forms.append(re.sub(r"\b(\w+?)o(s?)/-a(s?)\b",
+                            lambda m: m[1] + ('a' + m[3] if feminine else 'o' + m[2]), text))
+    return list(dict.fromkeys(
+        _ARTICLES.sub("", re.sub(r"^[¡¿]+|[.!?,;:]+$", "", f.strip())).strip()
+        for f in forms))
+
+
 def judge_foreign(answer: str, word: str, spoken: bool) -> tuple[str, str]:
     """Deutsch → Fremdsprache. Gesprochen zählt der Klang (Stufe 1), getippt die
     Schreibung (Stufe 2): genau richtig, oder „fast" bei einem Buchstaben."""
-    target = plain(_PARENS.sub("", word))
-    target = _ARTICLES.sub("", target).strip()
-    said = _ARTICLES.sub("", plain(_PARENS.sub("", answer))).strip()
-    said = re.sub(r"[.!?,;:]+$", "", said).strip()
+    targets = foreign_variants(word)
+    said = foreign_variants(answer)[0]
     if not said:
         return "incorrect", "Keine Antwort."
-    if said == target:
+    if said in targets:
         return "correct", ""
+    target = min(targets, key=lambda t: distance(said, t))
     if spoken:
         if close_enough(said, target):
             return "correct", ""
@@ -1468,17 +1479,24 @@ def cards(account_id: int, subject: str, unit: str, stage: int, direction: str, 
 
 def prompt_for(account_id: int, subject: str, unit: str, direction: str) -> str:
     """Erwartete Wörter als Hinweis für die Erkennung: alle der Einheit, nie nur das gefragte."""
-    with closing(webapp_conn()) as c:
-        rows = [dict(r) for r in c.execute(
-            "SELECT unit,foreign_word,meanings_json FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 ORDER BY position",
-            (account_id, subject))]
-    family = unit_family(account_id, subject, unit)
-    rows = [r for r in rows if r["unit"] in family and trainable(r)]
+    from . import vocab_catalog
+    if vocab_catalog.active(account_id, subject):
+        rows = vocab_catalog.selected_words(account_id, subject, unit)
+    else:
+        with closing(webapp_conn()) as c:
+            rows = [dict(r) for r in c.execute(
+                "SELECT unit,foreign_word,meanings_json FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) AND hidden=0 ORDER BY position",
+                (account_id, subject))]
+        family = unit_family(account_id, subject, unit)
+        rows = [r for r in rows if r["unit"] in family]
+    rows = [r for r in rows if trainable(r)]
     lang = language_of(subject) or {"name": subject}
     if direction == "into":
-        words = ", ".join(r["foreign_word"] for r in rows)[:450]
+        words = ", ".join(v for r in rows for v in
+                          ([r['foreign_word']] if '/-' not in r['foreign_word'] else foreign_variants(r['foreign_word']))
+                          if '/-' not in v)[:450]
         return f"Vokabeltest {lang['name']}, Antwort auf {lang['name']}. Mögliche Wörter: {words}"
-    meanings = ", ".join(m for r in rows for m in json.loads(r["meanings_json"] or "[]"))[:450]
+    meanings = ", ".join(m for r in rows for m in r.get('meanings', json.loads(r.get("meanings_json") or "[]")))[:450]
     return f"Vokabeltest {lang['name']} → Deutsch, Antwort auf Deutsch, kurz. Mögliche Bedeutungen: {meanings}"
 
 

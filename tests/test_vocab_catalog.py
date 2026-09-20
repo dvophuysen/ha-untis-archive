@@ -44,6 +44,18 @@ def publish(payload):
     return catalog.activate(1, run['id'], run['content_digest'])
 
 
+def test_speech_hint_uses_active_catalog_membership(env):
+    from backend import vocab
+    payload = fixture(word='airport')
+    legacy(payload['pages'][0]['material_id'], word='obsolete', practiced=False)
+    publish(payload)
+    unit = vocab.units(1, 'Englisch')[0]['unit']
+    hint = vocab.prompt_for(1, 'Englisch', unit, 'into')
+    assert 'airport' in hint
+    assert 'obsolete' not in hint
+    assert 'Gate' in vocab.prompt_for(1, 'Englisch', unit, 'from')
+
+
 def test_staging_does_not_change_words_history_or_active_catalog(env):
     payload = fixture(); legacy(payload['pages'][0]['material_id']); before = attempts()
     run = catalog.stage(1, 'Englisch', payload)
