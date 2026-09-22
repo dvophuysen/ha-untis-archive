@@ -1,3 +1,9 @@
+## 1.13.9
+
+- Hausaufgabenhilfe und Kontrolle: „Fotos zeigen" / „Fotos der Lösung" nimmt mehrere Fotos oder PDFs auf einmal an. Jedes wird ein Material des Fachs, hängt an der Hausaufgabe (bei der Kontrolle als Ergebnis), wird wie in der Materialansicht gelesen und liegt damit auch später zum Üben vor.
+- Die Fotos sind sofort in den Chat eingebunden. Solange eines noch nicht gelesen ist, sieht der Mentor es als Bild. Dieselbe Datei ein zweites Mal legt kein zweites Material an.
+- Jedes Foto wird einmal gelesen und kostet dafür wie ein Upload in der Materialansicht. Fotos aus früheren Gesprächen bleiben, wo sie sind.
+
 ## 1.13.8
 
 - „Aus Materialien" fand bei Hausaufgaben aus Untis nichts, weil das Fach dort nur im Titel steht. Das Fach wird jetzt so bestimmt wie im Chat; das behebt auch die Vorschläge in der Materialansicht zur Hausaufgabe und das Wiederfinden der abgelegten Bearbeitung bei der Kontrolle.

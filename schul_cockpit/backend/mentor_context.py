@@ -253,6 +253,8 @@ def chosen_materials(account_id,entries):
               'datum':page.get('document_date') or (page.get('created_at') or '')[:10],
               'text':full[:room],'eintragungen_des_kindes':pupil_only(full)[:120]}
         if len(full)>room:item['gekuerzt']=True
+        # Ein frisches Foto ist noch nicht gelesen: Dann zählt nur das Bild.
+        if page.get('analysis_state')!='ready' and not full:item['noch_nicht_gelesen']=True
         used+=len(item['text'])
         out.append(item)
     return out

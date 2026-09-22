@@ -9,7 +9,7 @@ const {chromium}=require('playwright-core');const http=require('http'),fs=requir
  const items=[{id:11,title:'Heft S. 12',label:'Heft S. 12',mime_type:'image/png',date:'2026-09-18',reason:'hängt an der Aufgabe',group:'linked',chosen:false},
   {id:12,title:'Arbeitsblatt Nomen',label:'',mime_type:'application/pdf',date:'2026-09-17',reason:'Blatt desselben Fachs vom 2026-09-17',group:'suggested',chosen:false},
   {id:13,title:'Heft S. 13',label:'Heft S. 13',mime_type:'image/png',date:'2026-09-16',reason:'',group:'subject',chosen:false}];
- const subjects=[{name:'Deutsch',count:3},{name:'Mathe',count:1}];let subjectAsked=null,chosen=[],version=1,added=null,turn=null,dropped=null;
+ const subjects=[{name:'Deutsch',count:3},{name:'Mathe',count:1}];let uploads=0,subjectAsked=null,chosen=[],version=1,added=null,turn=null,dropped=null;
  const session=()=>({id:7,version,subject:'Deutsch',goal:'Hilfe: Aufgabe 4',label:'Aufgabe 4',mode:'homework_help',task_id:42,untimed:true,status:'active',messages:[{id:1,role:'assistant',text:'Wobei hängst du?',payload:{choices:[]},author:null}].concat(turn?[{id:2,role:'user',text:'Meine Seiten ansehen',payload:{material_ids:turn.ids},author:'kind'}]:[]),attachments:[],quiz:[],quiz_open:[],
    materials:chosen.map(id=>{const x=items.find(y=>y.id===id);return {id,title:x.title,label:x.label,mime_type:x.mime_type,date:x.date,shown:!!turn&&turn.ids.includes(id)};})});
  await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url()).pathname;let body={},status=200;
@@ -25,6 +25,7 @@ const {chromium}=require('playwright-core');const http=require('http'),fs=requir
   else if(u.endsWith('/sessions/7/materials')&&req.method()==='POST'){added=req.postDataJSON().material_ids;chosen=[...chosen,...added];version++;body=session();}
   else if(/\/sessions\/7\/materials\/\d+$/.test(u)){dropped=Number(u.split('/').pop());chosen=chosen.filter(x=>x!==dropped);version++;body=session();}
   else if(u.endsWith('/sessions/7/turn')){const b=req.postDataJSON();assert.equal(b.version,version);turn={ids:chosen.filter(id=>!(turn?.ids||[]).includes(id)),text:b.text};version++;body=session();}
+  else if(u.endsWith('/sessions/7/uploads')){uploads=(req.postData()||'').split('name="files"').length-1;for(let i=0;i<uploads;i++){const id=31+i;items.push({id,title:`Foto ${i+1}`,label:'',mime_type:'image/jpeg',date:'2026-09-22',reason:'',group:'linked',chosen:false});chosen.push(id);}version++;body=session();}
   else if(u.endsWith('/pause'))body=session();
   await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
  });
@@ -49,5 +50,9 @@ const {chromium}=require('playwright-core');const http=require('http'),fs=requir
  await page.getByRole('button',{name:'Heft S. 13 wieder lösen',exact:true}).click();await page.getByText(/Eingebunden: 1 Seite$/).waitFor();assert.equal(dropped,13);
  // Schon eingebundene Seiten sind in der Auswahl gesetzt und nicht noch einmal wählbar.
  await page.getByRole('button',{name:'Aus Materialien',exact:true}).click();const first=page.getByRole('checkbox',{name:/Heft S\. 12/});await first.waitFor();assert(await first.isChecked());assert(await first.isDisabled());
+ await page.getByRole('button',{name:'Abbrechen',exact:true}).click();
+ // Mehrere Fotos aus der Hausaufgabe: Material der Aufgabe, sofort eingebunden.
+ await page.locator('input.file').setInputFiles([{name:'a.png',mimeType:'image/png',buffer:png},{name:'b.png',mimeType:'image/png',buffer:png}]);
+ await page.getByText(/Eingebunden: 3 Seiten · 2 neu/).waitFor();assert.equal(uploads,2);assert(!(await sendButton.isDisabled()));
  assert.deepEqual(errors,[]);console.log('PASS: several filed pages picked, embedded, sent without text, removed again');await browser.close();await new Promise(r=>server.close(r));
 })().catch(e=>{console.error(e);process.exit(1);});

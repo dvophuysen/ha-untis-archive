@@ -6,7 +6,10 @@ Schlüssel in diesem Dokument (D15/D68).
 
 ## Nachtrag 22.09.2026
 
-**1.13.8 ist eingespielt** (22.09., abends). 1.13.7 fand bei Untis-Aufgaben
+**1.13.9 ist eingespielt** (Nacht zum 23.09.): Fotos aus Hausaufgabe und
+Kontrolle werden Material der Aufgabe, mehrere auf einmal (D143). Beim nächsten
+echten Lauf ansehen, ob die Lesung der Chat-Fotos klappt und ob sie beim Üben
+auftauchen. Davor **1.13.8** (22.09., abends). 1.13.7 fand bei Untis-Aufgaben
 kein Material, weil das Fach nur im Titel steht; 1.13.8 behebt das und lässt
 das Fach von Hand wählen (D142). Inhalt (D141): In Hausaufgabenhilfe und
 Kontrolle bindet „Aus Materialien" mehrere abgelegte Seiten des Fachs in den

@@ -192,3 +192,57 @@ def test_a_task_with_its_subject_only_in_the_title_finds_its_pages(setup):
     r = client.get(f"/api/accounts/1/materials/for-task/{tid}")
     assert r.status_code == 200, r.text
     assert r.json()["subject"].casefold() == "deutsch" and mine in [x["material_id"] for x in r.json()["candidates"]]
+
+
+def test_photos_from_the_homework_chat_become_filed_material(setup):
+    """Mehrere Fotos auf einmal: Jedes wird Material des Fachs, hängt an der
+    Hausaufgabe, wird gelesen und ist sofort eingebunden (D143)."""
+    from backend.routers import materials as materials_router
+    client, state, patch = setup
+    child(state)
+    read = []
+    async def analysis(account_id, material_id):
+        read.append(material_id)
+    patch.setattr(materials_router, "_run_analysis", analysis)
+    with closing(db.webapp_conn()) as c, c:
+        tid = c.execute("INSERT INTO tasks(account_id,title,subject_name,notes,source,created_at,updated_at) "
+                        "VALUES(1,'Deutsch',NULL,'Argumentation verfassen','untis','now','now')").lastrowid
+    s = client.post(B + "/sessions", json={"homework_task_id": tid, "check": True}).json()
+
+    def shot(colour):
+        out = io.BytesIO()
+        Image.new("RGB", (40, 30), colour).save(out, format="PNG")
+        return out.getvalue()
+    first, second = shot("white"), shot("black")
+    r = client.post(B + f"/sessions/{s['id']}/uploads",
+                    files=[("files", ("a.png", first, "image/png")), ("files", ("b.png", second, "image/png"))])
+    assert r.status_code == 200, r.text
+    s = r.json()
+    ids = [x["id"] for x in s["materials"]]
+    assert len(ids) == 2 and sorted(read) == sorted(ids)
+    with closing(db.webapp_conn()) as c:
+        rows = [dict(x) for x in c.execute(f"SELECT id,subject_name,analysis_state FROM materials WHERE id IN ({ids[0]},{ids[1]})")]
+        assert all(x["subject_name"] and x["subject_name"].casefold() == "deutsch" for x in rows)
+        assert links(c, tid) == {ids[0]: "ergebnis", ids[1]: "ergebnis"}
+
+    # Dieselbe Datei noch einmal ist keine neue Seite.
+    r = client.post(B + f"/sessions/{s['id']}/uploads", files=[("files", ("a2.png", first, "image/png"))])
+    assert r.status_code == 200, r.text
+    assert [x["id"] for x in r.json()["materials"]] == ids and len(read) == 2
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT COUNT(*) FROM materials WHERE account_id=1").fetchone()[0] == 2
+
+    # Noch ungelesen: Der Mentor bekommt das Bild und weiß, dass es noch keinen Text gibt.
+    contexts, images = [], []
+    capture(patch, contexts, images)
+    async def no_book(*args, **kw):
+        return [], {"status": "no_pages"}
+    from backend import textbook_context
+    patch.setattr(textbook_context, "homework_page_images", no_book)
+    r = send(client, r.json(), text="")
+    assert r.status_code == 200, r.text
+    pages = contexts[-1][1]["eingebunden"]
+    assert images[-1] == 2 and all(x["als_bild"] and x["noch_nicht_gelesen"] for x in pages)
+
+    assert client.post(B + f"/sessions/{s['id']}/uploads",
+                       files=[("files", (f"{i}.png", shot((i, i, i)), "image/png")) for i in range(7)]).status_code == 422
