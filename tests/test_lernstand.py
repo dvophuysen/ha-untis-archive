@@ -3,7 +3,7 @@ import json
 import sqlite3
 import sys
 from contextlib import closing
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -71,7 +71,11 @@ def test_sorting_puts_wobblers_and_the_childs_doubt_first():
 
 
 NOTICE = "Latein Arbeit: Vokabeln Lektion 1 (Begleitband S. 10-11); a-/o-Deklination Begleitband S. 13; Text Gefahr im Circus Maximus Textband S. 10, 11"
-EXAMS = {"exams": [{"exam_key": "cal:latein-2026-09-21", "subject_name": "Latein", "date": "2026-09-21", "title": "Latein"}], "calendar_error": None}
+# Die Arbeitsübersicht teilt nach dem echten heutigen Datum in bevorstehend und
+# vergangen. Ein festes Datum machte den Test ab dem 22.09.2026 rot, also liegt
+# die Arbeit immer in der Zukunft; der Schlüssel bleibt fest.
+EXAM_DAY = max(date(2026, 9, 21), date.today() + timedelta(days=10)).isoformat()
+EXAMS = {"exams": [{"exam_key": "cal:latein-2026-09-21", "subject_name": "Latein", "date": EXAM_DAY, "title": "Latein"}], "calendar_error": None}
 
 
 def notice(client_conn, account=1):

@@ -13,9 +13,10 @@ Chat ein; der Chat darf dafür sechs Bilder je Aufruf schicken. Nach dem
 Einspielen an einer echten Kontrolle mit zwei, drei Heftseiten ansehen, ob der
 Mentor alle Seiten prüft und was ein Zug dann kostet.
 
-Zwei Tests in `tests/test_lernstand.py` schlagen seit dem 22.09. fehl, unabhängig
-von 1.13.7: Die Testarbeit liegt auf dem 21.09. und zählt nicht mehr als
-bevorstehend. Der Test braucht ein festes Datum.
+Zwei Tests in `tests/test_lernstand.py` waren seit dem 22.09. rot: Die
+Arbeitsübersicht teilt nach dem echten heutigen Datum ein, und die Testarbeit
+lag fest auf dem 21.09. Sie liegt jetzt immer zehn Tage in der Zukunft; alle
+611 Tests grün.
 
 ## Das Nächste zuerst
 
