@@ -32,6 +32,8 @@
   const speechLabel=$derived(running?`Aufnahme: ${/englisch/i.test(running.subject)?'Englisch oder Deutsch':/spanisch/i.test(running.subject)?'Spanisch oder Deutsch':/franz/i.test(running.subject)?'Französisch oder Deutsch':/latein/i.test(running.subject)?'Latein oder Deutsch':'Deutsch'} · eigene Erkennung`:'');
   $effect(()=>{const prompt=running?.task?.prompt;if(prompt){taskShownAt=Date.now();edits=0;}else{taskShownAt=null;}});
   async function send(kind='message',value=text){
+    // Angekreuzt, aber noch nicht eingebunden: geht mit dieser Nachricht mit.
+    if(picked.length&&kind!=='finish')await embed();
     const signals=kind==='answer'&&taskShownAt?{seconds:Math.min(36000,Math.round((Date.now()-taskShownAt)/1000)),edits}:{};
     const r=await api.post(`${base}/sessions/${running.id}/turn`,{request_key:crypto.randomUUID(),version:running.version,text:value,kind,attachment_id:attachment?.id||null,spoken:spoken&&value===text,...signals});
     running=r;text='';attachment=null;spoken=false;await tick();end?.scrollIntoView({behavior:'smooth',block:'end'});
@@ -155,11 +157,11 @@
                 {/each}</ul>
               {/if}
             {/each}
-            <div class="actions"><button type="button" class="primary" disabled={busy||!picked.length} onclick={()=>act(embed)}>{picked.length===1?'1 Seite einbinden':picked.length?`${picked.length} Seiten einbinden`:'Seiten ankreuzen'}</button><button type="button" disabled={busy} onclick={()=>{picker=null;picked=[];}}>Abbrechen</button></div>
+            <div class="actions pick-actions"><button type="button" class="primary" disabled={busy||!picked.length} onclick={()=>act(embed)}>{picked.length===1?'1 Seite einbinden':picked.length?`${picked.length} Seiten einbinden`:'Seiten ankreuzen'}</button><button type="button" disabled={busy} onclick={()=>{picker=null;picked=[];}}>Abbrechen</button></div>
             {#if pickRoom<=picked.length}<p class="hint">Mehr als {picker.max} Seiten gehen in einem Gespräch nicht.</p>{/if}
           </div>
         {/if}
-        <div class="actions"><button class="primary" disabled={busy||(!text.trim()&&!attachment&&!freshPages)||!data?.can_write}>Senden</button><button type="button" class:primary={running.mode==='homework_check'&&!attachment&&!running.attachments?.length&&!running.materials?.length} disabled={busy||!data?.can_write} onclick={()=>fileInput?.click()}>{running.mode==='homework_check'?'Fotos der Lösung':homeworkChat?'Fotos zeigen':'Foto zeigen'}</button><input class="file" type="file" accept={homeworkChat?'image/*,application/pdf':'image/*'} multiple={homeworkChat} bind:this={fileInput} onchange={upload}/>{#if homeworkChat}<button type="button" disabled={busy||!data?.can_write} onclick={()=>act(openPicker)}>Aus Materialien</button>{/if}<a class="material-link" href={`#/materialien/${encodeURIComponent(running.subject||'')}${homeworkChat&&running.task_id?`/${running.task_id}`:''}`} title="Arbeitsblatt, Heftseite oder PDF dauerhaft ablegen"><ActionLabel label="Material hinzufügen" /></a></div>
+        <div class="actions"><button class="primary" disabled={busy||(!text.trim()&&!attachment&&!freshPages&&!picked.length)||!data?.can_write}>{picked.length?`Senden mit ${picked.length===1?'1 Seite':`${picked.length} Seiten`}`:'Senden'}</button><button type="button" class:primary={running.mode==='homework_check'&&!attachment&&!running.attachments?.length&&!running.materials?.length} disabled={busy||!data?.can_write} onclick={()=>fileInput?.click()}>{running.mode==='homework_check'?'Fotos der Lösung':homeworkChat?'Fotos zeigen':'Foto zeigen'}</button><input class="file" type="file" accept={homeworkChat?'image/*,application/pdf':'image/*'} multiple={homeworkChat} bind:this={fileInput} onchange={upload}/>{#if homeworkChat}<button type="button" disabled={busy||!data?.can_write} onclick={()=>act(openPicker)}>Aus Materialien</button>{/if}<a class="material-link" href={`#/materialien/${encodeURIComponent(running.subject||'')}${homeworkChat&&running.task_id?`/${running.task_id}`:''}`} title="Arbeitsblatt, Heftseite oder PDF dauerhaft ablegen"><ActionLabel label="Material hinzufügen" /></a></div>
         <div class="actions"><button type="button" disabled={busy||!data?.can_write} onclick={()=>act(()=>send('hint','Bitte anders erklären.'))}>Anders erklären</button><button type="button" disabled={busy||!data?.can_write} onclick={()=>act(()=>send('finish','Für heute fertig.'))}>Für heute fertig</button></div>
       </form>
     {:else}<section class="card"><h2>{running.status==='active'?'Gespeicherter Verlauf':running.topic?'Einheit beendet':running.mode==='homework_check'?'Kontrolle beendet':running.untimed?'Unterbrochen':'Für heute geschafft'}</h2><p>{running.summary||'Dein Gespräch und deine Antworten bleiben gespeichert.'}</p>{#if running.topic}<p><strong>Stufe: {running.topic.stage}</strong>{#if running.topic.reason&&running.topic.stage!=='neu'} · {running.topic.reason}{/if}{#if running.topic.next_check} · Kurzprüfung ab {formatShortDate(running.topic.next_check)}{/if}</p><a href="#/klausuren">Zur Arbeit und den anderen Themen</a>{/if}
@@ -249,5 +251,6 @@
 .picker li span{min-width:0;overflow-wrap:anywhere}
 .picker small{display:block;opacity:.75}
 .pick-subject{display:block;margin:.3rem 0 .6rem}
+.pick-actions{position:sticky;bottom:-.6rem;margin:.4rem -.6rem -.6rem;padding:.6rem;background:var(--bg-card,#fff);border-top:1px solid var(--border,#d4e0da)}
 .pick-subject select{display:block;width:100%;margin-top:.3rem;min-height:44px;font:inherit;font-size:16px;padding:.5rem;border-radius:10px;border:1px solid var(--border,#ccc);background:var(--bg-card,#fff);color:inherit}.found img{display:block;width:100%;max-width:22rem;max-height:14rem;object-fit:cover;object-position:top;border:1px solid var(--border,#d4e0da);border-radius:12px}.found small{display:block;margin-top:.25rem}
 </style>

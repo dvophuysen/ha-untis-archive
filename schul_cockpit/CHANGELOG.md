@@ -1,3 +1,8 @@
+## 1.13.10
+
+- „Aus Materialien": Angekreuzte Seiten gehen beim Senden automatisch mit, auch ohne vorher „einbinden" zu tippen. Der Knopf heißt dann „Senden mit 2 Seiten". Bisher blieb auf dem Handy der Einbinden-Knopf unter einer langen Liste verborgen, und die Nachricht ging ohne die Seiten raus.
+- Der Einbinden-Knopf bleibt unten in der Liste immer sichtbar.
+
 ## 1.13.9
 
 - Hausaufgabenhilfe und Kontrolle: „Fotos zeigen" / „Fotos der Lösung" nimmt mehrere Fotos oder PDFs auf einmal an. Jedes wird ein Material des Fachs, hängt an der Hausaufgabe (bei der Kontrolle als Ergebnis), wird wie in der Materialansicht gelesen und liegt damit auch später zum Üben vor.
