@@ -227,10 +227,11 @@ def for_task(account_id: int, task_id: int, user: CurrentUser = Depends(get_curr
     stehen, sonst liest FastAPI „for-task" als ID (D106)."""
     access(user, account_id)
     with closing(webapp_conn()) as conn:
-        task = conn.execute("SELECT id,subject_name FROM tasks WHERE id=? AND account_id=?",
+        task = conn.execute("SELECT id,title,subject_name FROM tasks WHERE id=? AND account_id=?",
                             (task_id, account_id)).fetchone()
     if not task:
         raise HTTPException(404, "Aufgabe nicht gefunden.")
+    task = sources.with_subject(account_id, dict(task))
     return {"task_id": task_id, "subject": task["subject_name"] or "",
             "linked": store.listing(account_id, task_id=task_id, limit=50),
             "candidates": sources.task_candidates(account_id, task_id)}

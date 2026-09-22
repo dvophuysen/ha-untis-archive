@@ -6,8 +6,9 @@ Schlüssel in diesem Dokument (D15/D68).
 
 ## Nachtrag 22.09.2026
 
-**1.13.7 ist auf `main`, aber nicht eingespielt.** Der Nutzer spielt das Update
-selbst ein, weil gerade gelernt wird. Inhalt (D141): In Hausaufgabenhilfe und
+**1.13.8 ist eingespielt** (22.09., abends). 1.13.7 fand bei Untis-Aufgaben
+kein Material, weil das Fach nur im Titel steht; 1.13.8 behebt das und lässt
+das Fach von Hand wählen (D142). Inhalt (D141): In Hausaufgabenhilfe und
 Kontrolle bindet „Aus Materialien" mehrere abgelegte Seiten des Fachs in den
 Chat ein; der Chat darf dafür sechs Bilder je Aufruf schicken. Nach dem
 Einspielen an einer echten Kontrolle mit zwei, drei Heftseiten ansehen, ob der

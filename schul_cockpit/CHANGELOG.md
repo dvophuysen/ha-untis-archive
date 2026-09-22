@@ -1,3 +1,8 @@
+## 1.13.8
+
+- „Aus Materialien" fand bei Hausaufgaben aus Untis nichts, weil das Fach dort nur im Titel steht. Das Fach wird jetzt so bestimmt wie im Chat; das behebt auch die Vorschläge in der Materialansicht zur Hausaufgabe und das Wiederfinden der abgelegten Bearbeitung bei der Kontrolle.
+- In der Auswahl lässt sich das Fach von Hand wechseln. Angeboten werden alle Fächer mit abgelegtem Material; angekreuzte Seiten bleiben beim Wechsel erhalten.
+
 ## 1.13.7
 
 - Hausaufgabenhilfe und Kontrolle: Mit „Aus Materialien" lassen sich mehrere schon abgelegte Seiten des Fachs ankreuzen und in den Chat einbinden, zuerst die an der Aufgabe hängenden und die vorgeschlagenen. Die Seiten bleiben für das Gespräch gesetzt, lassen sich einzeln wieder lösen und hängen an der Hausaufgabe, bei der Kontrolle als Ergebnis.

@@ -585,6 +585,20 @@ def sheet_candidates(account_id: int, material: dict, days: int = 14, limit: int
     return out[:limit]
 
 
+def with_subject(account_id: int, task: dict) -> dict:
+    """Die Hausaufgabe mit ihrem Fach, so wie der Chat es sieht.
+
+    Aus Untis kommt das Fach oft nur im Titel („DEUTSCH"), das Fachfeld bleibt
+    leer. Ohne diesen Schritt fand die Suche nach passendem Material für eine
+    solche Aufgabe gar nichts, obwohl der Chat sie längst dem Fach zuordnete.
+    """
+    try:
+        from .subject_names import SubjectCatalog
+        return SubjectCatalog(account_id).task(task)
+    except Exception:
+        return task
+
+
 def task_candidates(account_id: int, task_id: int, limit: int = 12) -> list[dict]:
     """Bereits abgelegte Materialien, die zu dieser Hausaufgabe passen könnten.
 
@@ -605,6 +619,7 @@ def task_candidates(account_id: int, task_id: int, limit: int = 12) -> list[dict
         task = dict(task)
         linked = {r[0] for r in conn.execute(
             "SELECT material_id FROM material_links WHERE kind='task' AND target_id=?", (task_id,))}
+    task = with_subject(account_id, task)
     subject = canonical_subject(account_id, task["subject_name"] or "") or (task["subject_name"] or "")
     wanted = citations(task_text(task), task.get("subject_name") or "")
     anchor_day = (task["due_date"] or task["created_at"] or "")[:10]
@@ -672,6 +687,7 @@ def solution_for_task(account_id: int, task_id: int) -> dict | None:
         keys = {r[1] for r in conn.execute("PRAGMA table_info(materials)")}
         if "pupil_entries" not in keys:
             return None
+        task = with_subject(account_id, task)
         subject = canonical_subject(account_id, task["subject_name"] or "") or (task["subject_name"] or "")
         rows = [dict(r) for r in conn.execute(
             "SELECT id,title,kind,source_label,source_page,printed_pages,document_date,created_at,origin,"

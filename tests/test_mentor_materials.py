@@ -67,9 +67,13 @@ def test_help_takes_several_filed_pages_of_the_subject(setup):
     assert ids[0] == sheet and items[0]["group"] == "linked"
     assert {one, two, sheet} <= set(ids) and maths not in ids and foreign not in ids
 
-    for wrong in (maths, foreign):
-        r = client.post(B + f"/sessions/{s['id']}/materials", json={"material_ids": [one, wrong]})
-        assert r.status_code == 404, r.text
+    r = client.post(B + f"/sessions/{s['id']}/materials", json={"material_ids": [one, foreign]})
+    assert r.status_code == 404, r.text
+    # Ein anderes Fach wählt das Kind von Hand; die Liste bietet alle Fächer mit Material an.
+    assert {"Deutsch", "Mathe"} <= {x["name"] for x in offer.json()["subjects"]}
+    other = client.get(B + f"/sessions/{s['id']}/materials", params={"subject": "Mathe"}).json()
+    assert other["subject"] == "Mathe" and maths in [x["id"] for x in other["items"]]
+    assert one not in [x["id"] for x in other["items"] if x["group"] != "linked"]
     r = client.post(B + f"/sessions/{s['id']}/materials", json={"material_ids": [one, two, sheet, one]})
     assert r.status_code == 200, r.text
     s = r.json()
@@ -166,3 +170,25 @@ def test_the_chat_takes_six_images_other_calls_two(setup):
     with pytest.raises(HTTPException) as err:
         asyncio.run(ai.complete(1, "exam_grade", "x", {}, [part] * 3))
     assert err.value.status_code == 413 and "2" in err.value.detail
+
+
+def test_a_task_with_its_subject_only_in_the_title_finds_its_pages(setup):
+    """Aus Untis steht das Fach oft nur im Titel. Der Chat ordnete die
+    Kontrolle Deutsch zu, die Auswahl fand trotzdem nichts (D142)."""
+    from backend import sources
+    client, state, patch = setup
+    child(state)
+    with closing(db.webapp_conn()) as c, c:
+        tid = c.execute("INSERT INTO tasks(account_id,title,subject_name,notes,source,created_at,updated_at) "
+                        "VALUES(1,'Deutsch',NULL,'Vollständige Argumentation verfassen','untis','now','now')").lastrowid
+        mine = page(c, "Deutsch", "Mein Text zu sozialem Netzwerk", text="[Kind: Erstens ...]", pupil=1)
+    s = client.post(B + "/sessions", json={"homework_task_id": tid, "check": True}).json()
+    offer = client.get(B + f"/sessions/{s['id']}/materials").json()
+    assert offer["task_subject"] and offer["subject"].casefold() == "deutsch"
+    assert mine in [x["id"] for x in offer["items"]]
+    assert mine in [x["material_id"] for x in sources.task_candidates(1, tid)]
+    from backend.routers import materials as materials_router
+    client.app.include_router(materials_router.router, prefix="/api")
+    r = client.get(f"/api/accounts/1/materials/for-task/{tid}")
+    assert r.status_code == 200, r.text
+    assert r.json()["subject"].casefold() == "deutsch" and mine in [x["material_id"] for x in r.json()["candidates"]]

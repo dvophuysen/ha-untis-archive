@@ -637,24 +637,39 @@ def homework_session(c,account_id,sid,user,write=False):
     return s,source
 
 
-def task_subject(c,account_id,task_id):
+def task_subject(c,account_id,task_id,fallback=''):
+    """Das Fach der Hausaufgabe, wie der Chat es sieht: aus dem Fachfeld oder,
+    wie bei Untis üblich, aus dem Titel. Sonst das Fach des Gesprächs."""
     from ..materials import canonical_subject
-    row=c.execute('SELECT subject_name FROM tasks WHERE id=? AND account_id=?',(task_id,account_id)).fetchone()
-    name=(row['subject_name'] if row else '') or ''
+    from ..sources import with_subject
+    row=c.execute('SELECT id,title,subject_name FROM tasks WHERE id=? AND account_id=?',(task_id,account_id)).fetchone()
+    name=(with_subject(account_id,dict(row))['subject_name'] if row else '') or fallback or ''
     return canonical_subject(account_id,name) or name
 
 
+def material_subjects(c,account_id):
+    """Alle Fächer mit abgelegtem Material, für die Auswahl von Hand."""
+    return [{'name':r[0],'count':r[1]} for r in c.execute(
+        "SELECT subject_name,COUNT(*) FROM materials WHERE account_id=? AND hidden=0 AND COALESCE(subject_name,'')!='' "
+        "AND COALESCE(origin,'')!='book_fetch' AND kind NOT IN ('exam_notice','toc') GROUP BY subject_name ORDER BY subject_name",(account_id,))]
+
+
 @router.get('/sessions/{sid}/materials')
-def material_choice(account_id:int,sid:int,user:CurrentUser=Depends(get_current_user)):
+def material_choice(account_id:int,sid:int,subject:str='',user:CurrentUser=Depends(get_current_user)):
     """Was sich einbinden lässt: zuerst, was schon an der Aufgabe hängt, dann die
     Vorschläge zur Aufgabe mit ihrem Grund (D106), dann alle übrigen
     abgelegten Seiten des Fachs, die neuesten zuerst. Abgerufene Buchseiten
-    stehen nur unter den Vorschlägen; die holt der Mentor ohnehin selbst."""
+    stehen nur unter den Vorschlägen; die holt der Mentor ohnehin selbst.
+    Mit subject zeigt die Liste ein anderes Fach: Das Kind darf selbst
+    wählen, wenn das Fach falsch oder gar nicht erkannt ist (D142)."""
     access(user,account_id)
     from .. import materials as store,sources
     with closing(webapp_conn()) as c:
         s,source=homework_session(c,account_id,sid,user)
-        task_id=source['task_id'];subject=task_subject(c,account_id,task_id)
+        task_id=source['task_id'];task_subj=task_subject(c,account_id,task_id,s['subject'])
+        subjects=material_subjects(c,account_id)
+    subject=subject.strip() or task_subj
+    other=bool(subject) and subject.casefold()!=(task_subj or '').casefold()
     chosen={e['id'] for e in source.get('eingebunden') or []}
     items=[];seen=set()
     def add(row,reason,group):
@@ -665,7 +680,7 @@ def material_choice(account_id:int,sid:int,user:CurrentUser=Depends(get_current_
         items.append({'id':mid,'title':row.get('title') or wo or 'Material','label':wo,'mime_type':row.get('mime_type') or '',
                       'date':row.get('document_date') or (row.get('created_at') or '')[:10],'reason':reason,'group':group,'chosen':mid in chosen})
     for row in store.listing(account_id,task_id=task_id,limit=50):add(row,'hängt an der Aufgabe','linked')
-    suggested=sources.task_candidates(account_id,task_id)
+    suggested=[] if other else sources.task_candidates(account_id,task_id)
     if suggested:
         with closing(webapp_conn()) as c:
             ids=[x['material_id'] for x in suggested]
@@ -676,7 +691,7 @@ def material_choice(account_id:int,sid:int,user:CurrentUser=Depends(get_current_
         for row in store.listing(account_id,subject=subject,include_books=False,limit=150):
             if row.get('kind') in ('exam_notice','toc'):continue
             add(row,'','subject')
-    return {'subject':subject,'max':MAX_CHOSEN,'items':items}
+    return {'subject':subject,'task_subject':task_subj,'subjects':subjects,'max':MAX_CHOSEN,'items':items}
 
 
 @router.post('/sessions/{sid}/materials')
@@ -687,15 +702,15 @@ def material_add(account_id:int,sid:int,body:MaterialsIn,user:CurrentUser=Depend
         s,source=homework_session(c,account_id,sid,user,write=True)
         if s['pending_key']:raise HTTPException(409,'Eine Antwort wird gerade vorbereitet. Bitte kurz warten.')
         task_id=source['task_id'];check=source['mode']=='homework_check'
-        subject=(task_subject(c,account_id,task_id) or '').casefold()
         entries=list(source.get('eingebunden') or [])
         have={e['id'] for e in entries}
         linked={r[0] for r in c.execute("SELECT material_id FROM material_links WHERE kind='task' AND target_id=?",(task_id,))}
         for mid in dict.fromkeys(body.material_ids):
             if mid in have:continue
-            row=c.execute('SELECT id,subject_name FROM materials WHERE id=? AND account_id=? AND hidden=0',(mid,account_id)).fetchone()
-            # Nur das Fach der Aufgabe oder was ausdrücklich an ihr hängt, nie ein fremdes Heft.
-            if not row or (mid not in linked and (row['subject_name'] or '').casefold()!=subject):raise HTTPException(404,'Dieses Material passt nicht zu der Hausaufgabe.')
+            # Jedes eigene Material des Kindes, auch aus einem anderen Fach: Das
+            # Kind wählt ausdrücklich, und das Fach ist nicht immer erkannt (D142).
+            row=c.execute('SELECT id FROM materials WHERE id=? AND account_id=? AND hidden=0',(mid,account_id)).fetchone()
+            if not row:raise HTTPException(404,'Dieses Material gibt es nicht.')
             # Eine bestehende Verknüpfung behält ihre Rolle: Ein Arbeitsblatt bleibt Blatt.
             c.execute("INSERT OR IGNORE INTO material_links(material_id,kind,target_id,origin,created_at,relation) VALUES(?,'task',?,'mensch',?,?)",
                       (mid,task_id,now_iso(),'ergebnis' if check else None))

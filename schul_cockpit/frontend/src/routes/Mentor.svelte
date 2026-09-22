@@ -52,6 +52,8 @@
   const PICK_GROUPS=[['linked','Hängt schon an der Aufgabe'],['suggested','Passt vermutlich zur Aufgabe'],['subject','Weitere Seiten im Fach']];
   const fileUrl=id=>`./api/accounts/${accountId}/materials/${id}/file`;
   async function openPicker(){picker=await api.get(`${base}/sessions/${running.id}/materials`);picked=[];}
+  // Ein anderes Fach von Hand: wenn es falsch oder gar nicht erkannt ist. Angekreuztes bleibt.
+  async function pickSubject(name){picker=await api.get(`${base}/sessions/${running.id}/materials?subject=${encodeURIComponent(name)}`);}
   function togglePick(id){picked=picked.includes(id)?picked.filter(x=>x!==id):[...picked,id];}
   async function embed(){running=await api.post(`${base}/sessions/${running.id}/materials`,{material_ids:picked});picker=null;picked=[];}
   async function unembed(id){running=await api.delete(`${base}/sessions/${running.id}/materials/${id}`);}
@@ -124,8 +126,18 @@
         {/if}
         {#if picker}
           <div class="picker">
-            <p><strong>Seiten aus deinen Materialien</strong>{picker.subject?` · ${picker.subject}`:''}</p>
-            {#if !picker.items.length}<p class="hint">Zu diesem Fach ist noch nichts abgelegt.</p>{/if}
+            <p><strong>Seiten aus deinen Materialien</strong></p>
+            {#if picker.subjects?.length}
+              <label class="pick-subject">Fach
+                <select value={picker.subject} disabled={busy} onchange={e=>act(()=>pickSubject(e.currentTarget.value))}>
+                  {#if !picker.subject}<option value="">Bitte wählen</option>{/if}
+                  {#if picker.subject&&!picker.subjects.some(x=>x.name.toLowerCase()===picker.subject.toLowerCase())}<option value={picker.subject}>{picker.subject} (nichts abgelegt)</option>{/if}
+                  {#each picker.subjects as x (x.name)}<option value={x.name}>{x.name} ({x.count})</option>{/each}
+                </select>
+              </label>
+              {#if !picker.task_subject}<p class="hint">Das Fach dieser Hausaufgabe ist nicht erkannt. Wähle es oben aus.</p>{/if}
+            {/if}
+            {#if !picker.items.length}<p class="hint">{picker.subject?'Zu diesem Fach ist noch nichts abgelegt.':'Noch nichts abgelegt.'}</p>{/if}
             {#each PICK_GROUPS as [key,title]}
               {@const group=picker.items.filter(x=>x.group===key)}
               {#if group.length}<p class="hint">{title}</p>
@@ -231,5 +243,7 @@
 .picker img,.picker .doc{width:3.5rem;height:3.5rem;flex:none;object-fit:cover;object-position:top;border-radius:6px;border:1px solid var(--border,#d4e0da)}
 .picker .doc{display:grid;place-items:center;font-size:1.4rem}
 .picker li span{min-width:0;overflow-wrap:anywhere}
-.picker small{display:block;opacity:.75}.found img{display:block;width:100%;max-width:22rem;max-height:14rem;object-fit:cover;object-position:top;border:1px solid var(--border,#d4e0da);border-radius:12px}.found small{display:block;margin-top:.25rem}
+.picker small{display:block;opacity:.75}
+.pick-subject{display:block;margin:.3rem 0 .6rem}
+.pick-subject select{display:block;width:100%;margin-top:.3rem;min-height:44px;font:inherit;font-size:16px;padding:.5rem;border-radius:10px;border:1px solid var(--border,#ccc);background:var(--bg-card,#fff);color:inherit}.found img{display:block;width:100%;max-width:22rem;max-height:14rem;object-fit:cover;object-position:top;border:1px solid var(--border,#d4e0da);border-radius:12px}.found small{display:block;margin-top:.25rem}
 </style>
