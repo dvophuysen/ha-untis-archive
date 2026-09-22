@@ -51,6 +51,9 @@ BACKGROUND = {'discovery', 'background'}
 # seinen eigenen Rahmen, damit er die Auswertung der Kinderfotos nicht
 # verdrängt und umgekehrt. Beides bleibt innerhalb des Monatsrahmens.
 SOURCES = 'sources'
+MENTOR_CHAT = 'mentor'
+# Bilder je Aufruf; alles andere zwei.
+MAX_IMAGES = {SOURCES: 6, MENTOR_CHAT: 6}
 # Der erste Zug einer Einheit: eigener Zweck, damit sein Modell geeicht werden kann.
 OPENING = 'opening'
 # Vokabellisten in Wörter zerlegen: Formatarbeit auf gedrucktem, sauberem Text,
@@ -305,10 +308,12 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
     if not 256<=max_output<=16000: raise ValueError('Invalid output boundary')
     images=images or []
     normalized=[]
-    # Chat und Übung: zwei Bilder. Der Quellenbestand liest ein fotografiertes
+    # Übung: zwei Bilder. Der Quellenbestand liest ein fotografiertes
     # Inhaltsverzeichnis mit bis zu sechs Aufnahmen in einem Aufruf; zusammen-
-    # gefügt würden sie beim Verkleinern auf 1600 Pixel unlesbar.
-    most=6 if purpose==SOURCES else 2
+    # gefügt würden sie beim Verkleinern auf 1600 Pixel unlesbar. Der Chat
+    # darf ebenso sechs: Hausaufgabenhilfe und Kontrolle nehmen mehrere selbst
+    # gewählte Heftseiten mit, dazu die Buchseiten der Aufgabe.
+    most=MAX_IMAGES.get(purpose,2)
     if len(images)>most: raise HTTPException(413,f'Bitte höchstens {most} Bilder auf einmal verwenden.')
     for part in images:
         try:

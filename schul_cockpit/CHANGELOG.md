@@ -1,3 +1,9 @@
+## 1.13.7
+
+- Hausaufgabenhilfe und Kontrolle: Mit „Aus Materialien" lassen sich mehrere schon abgelegte Seiten des Fachs ankreuzen und in den Chat einbinden, zuerst die an der Aufgabe hängenden und die vorgeschlagenen. Die Seiten bleiben für das Gespräch gesetzt, lassen sich einzeln wieder lösen und hängen an der Hausaufgabe, bei der Kontrolle als Ergebnis.
+- Der Mentor liest den Text aller eingebundenen Seiten in jeder Runde. Als Bild sieht er sie, soweit sechs Bilder je Aufruf reichen: bei der Hilfe einmal, bei der Kontrolle jedes Mal. Der Chat darf dafür sechs statt zwei Bilder mitschicken; mehr Bilder kosten entsprechend mehr.
+- „Material hinzufügen" führt auch aus der Kontrolle zur Materialansicht der Hausaufgabe.
+
 ## 1.13.6
 
 - Bedeutungsprüfung: Buchtreffer werden sofort erkannt, geprüfte gleichwertige Alternativen mit der Buchangabe akzeptiert. Weitere Abweichungen prüft ausschließlich gpt-5-mini in Foundry 2. Keine Zeichenähnlichkeit als Ersatz für Bedeutungsprüfung.

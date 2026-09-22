@@ -22,7 +22,7 @@
   let limits=$state({monthly_eur:50,warning_eur:40,daily_eur:10,sources_eur:30,background_eur:10,sources_model:'',opening_model:'',background_model:'',vocab_model:''}),limitsOpen=$state(false);
   async function load(){data=await api.get(`${base}?demo=${demo}`);const b=data.budget||{};limits={monthly_eur:b.limit_eur??50,warning_eur:b.warning_eur??40,daily_eur:b.daily_limit_eur??10,sources_eur:b.sources_limit_eur??30,background_eur:b.background_limit_eur??10,sources_model:b.sources_model??'',opening_model:b.opening_model??'',background_model:b.background_model??'',vocab_model:b.vocab_model??''};}
   async function act(fn){if(busy)return;busy=true;error='';try{await fn();await tick();}catch(e){error=e.message;}finally{busy=false;}}
-  async function open(s){removeConfirm=false;running=await api.get(`${base}/sessions/${s.id}`);text='';attachment=null;}
+  async function open(s){removeConfirm=false;running=await api.get(`${base}/sessions/${s.id}`);text='';attachment=null;picker=null;}
   async function start(c){running=await api.post(`${base}/sessions`,{subject:c.subject,lesson_id:c.lesson_id||null,skill_id:c.skill_id||null,goal:c.title||goal,goal_key:c.key||null,minutes:c.minutes||10,voluntary:c.voluntary||false,demo});text='';}
   // Signale fürs Zögern: Zeit von der gestellten Aufgabe bis zum Absenden, Löschungen beim Tippen.
   let taskShownAt=$state(null),edits=$state(0),spoken=$state(false);
@@ -44,6 +44,18 @@
     try{const m=await api.get(`/api/accounts/${accountId}/materials/${id}`);pages={...pages,[id]:{text:m.printed_text||m.content_text||'',title:m.title||''}};}
     catch(e){pages={...pages,[id]:{error:e.message}};}}
   async function upload(e){const file=e.target.files?.[0];if(!file)return;await act(async()=>{const f=new FormData();f.append('file',file);attachment=await api.post(`${base}/sessions/${running.id}/photos`,f);});e.target.value='';}
+  // Aus dem Bestand einbinden: mehrere abgelegte Seiten des Fachs ankreuzen.
+  // Sie bleiben für das Gespräch gesetzt; neue sind schon eine Nachricht.
+  let picker=$state(null),picked=$state([]);
+  const homeworkChat=$derived(running?.mode==='homework_help'||running?.mode==='homework_check');
+  const freshPages=$derived((running?.materials||[]).filter(x=>!x.shown).length);
+  const PICK_GROUPS=[['linked','Hängt schon an der Aufgabe'],['suggested','Passt vermutlich zur Aufgabe'],['subject','Weitere Seiten im Fach']];
+  const fileUrl=id=>`./api/accounts/${accountId}/materials/${id}/file`;
+  async function openPicker(){picker=await api.get(`${base}/sessions/${running.id}/materials`);picked=[];}
+  function togglePick(id){picked=picked.includes(id)?picked.filter(x=>x!==id):[...picked,id];}
+  async function embed(){running=await api.post(`${base}/sessions/${running.id}/materials`,{material_ids:picked});picker=null;picked=[];}
+  async function unembed(id){running=await api.delete(`${base}/sessions/${running.id}/materials/${id}`);}
+  const pickRoom=$derived(picker?Math.max(0,picker.max-(running?.materials?.length||0)):0);
   async function leave(){if(running?.status==='active'&&data?.can_write)await api.post(`${base}/sessions/${running.id}/pause`,{paused:true});running=null;await load();}
   async function pause(hidden){if(running?.status==='active'&&data?.can_write&&!busy){try{const r=await api.post(`${base}/sessions/${running.id}/pause`,{paused:hidden});if(running?.id===r.id)running=r;}catch{/* next explicit action shows an error */}}}
   const choices=$derived(running?.messages.filter(m=>m.role==='assistant').at(-1)?.payload?.choices||[]);
@@ -87,6 +99,7 @@
       {#each running.messages as m}<article class:own={m.role==='user'}><span class="speaker">{m.role!=='user'?'Mentor':m.author==='eltern'?'Eltern':data?.can_manage?'Kind':'Du'}</span><p class="preserve">{m.text}</p>
         <!-- Erst das, woran gearbeitet wird, dann der Auftrag (G1). -->
         {#if m.payload.task}<div class="task"><strong>Deine Aufgabe</strong>{#if m.payload.task.vorlage}<blockquote class="vorlage preserve">{m.payload.task.vorlage}{#if m.payload.task.quelle}<cite>{m.payload.task.quelle}</cite>{/if}</blockquote>{/if}<p class="preserve">{m.payload.task.prompt}</p></div>{/if}
+        {#if m.payload.material_ids?.length}<p class="hint">{m.payload.material_ids.length===1?'1 Seite':`${m.payload.material_ids.length} Seiten`} aus deinen Materialien eingebunden</p>{/if}
         {#if m.payload.attachment_id}<a href={`./${base.slice(1)}/photos/${m.payload.attachment_id}`} target="_blank" rel="noreferrer"><ActionLabel label="Dein Foto öffnen" /></a>{/if}
         <!-- Die gefundene Bearbeitung: Das Kind sieht, worüber gesprochen wird, bevor es bestätigt. -->
         {#if m.payload.material}<a class="found" href={`./api/accounts/${accountId}/materials/${m.payload.material.id}/file`} target="_blank" rel="noreferrer"><img src={`./api/accounts/${accountId}/materials/${m.payload.material.id}/file`} alt={`Deine Bearbeitung: ${m.payload.material.label}`} loading="lazy" /><small>{m.payload.material.label}</small></a>{/if}
@@ -97,10 +110,40 @@
       <div class="choices">{#each choices as c}<button disabled={busy||!data?.can_write} onclick={()=>act(()=>send(c==='Für heute fertig'?'finish':c.includes('Beispiel')?'example':'message',c))}>{c}</button>{/each}</div>
       <form class="composer" onsubmit={e=>{e.preventDefault();act(()=>send(running.task?'answer':'message'));}}>
         {#if data?.speech}<Speech onText={heard} {transcribe} disabled={busy||!data?.can_write} label={speechLabel}/>{/if}
-        <label for="mentor-answer">{running.task?'Dein Versuch oder deine Frage':running.mode==='homework_check'&&!attachment?'Foto anhängen, dazu eine Frage, wenn du willst':'Was möchtest du sagen?'}{#if spoken} · erkannt, bitte prüfen{/if}</label>
+        <label for="mentor-answer">{running.task?'Dein Versuch oder deine Frage':running.mode==='homework_check'&&!attachment&&!running.materials?.length?'Foto anhängen oder Seiten aus deinen Materialien wählen, dazu eine Frage, wenn du willst':'Was möchtest du sagen?'}{#if spoken} · erkannt, bitte prüfen{/if}</label>
         <textarea id="mentor-answer" bind:value={text} rows="3" maxlength="4000" disabled={busy||!data?.can_write} placeholder={data?.speech?'… oder tippen':'Deine Antwort oder Frage …'} onbeforeinput={e=>{if((e.inputType||'').startsWith('delete'))edits++;}}></textarea>
         {#if attachment}<p>Foto angehängt. <button type="button" onclick={()=>attachment=null}>Entfernen</button></p>{/if}
-        <div class="actions"><button class="primary" disabled={busy||(!text.trim()&&!attachment)||!data?.can_write}>Senden</button><button type="button" class:primary={running.mode==='homework_check'&&!attachment&&!running.attachments?.length} disabled={busy||!data?.can_write} onclick={()=>fileInput?.click()}>{running.mode==='homework_check'?'Foto der Lösung':'Foto zeigen'}</button><input class="file" type="file" accept="image/*" bind:this={fileInput} onchange={upload}/><a class="material-link" href={`#/materialien/${encodeURIComponent(running.subject||'')}${running.mode==='homework_help'&&running.task_id?`/${running.task_id}`:''}`} title="Arbeitsblatt, Heftseite oder PDF dauerhaft ablegen"><ActionLabel label="Material hinzufügen" /></a></div>
+        {#if running.materials?.length}
+          <div class="embedded" aria-label="Eingebundene Seiten">
+            <p class="hint">{`Eingebunden: ${running.materials.length===1?'1 Seite':`${running.materials.length} Seiten`}${freshPages?` · ${freshPages===1?'eine neu, geht':`${freshPages} neu, gehen`} mit der nächsten Nachricht mit`:''}`}</p>
+            <ul>{#each running.materials as x (x.id)}<li class:fresh={!x.shown}>
+              <a href={fileUrl(x.id)} target="_blank" rel="noreferrer">{#if x.mime_type?.startsWith('image/')}<img src={fileUrl(x.id)} alt="" loading="lazy" />{:else}<span class="doc" aria-hidden="true">📄</span>{/if}<small>{x.title}</small></a>
+              <button type="button" class="quiet" disabled={busy} aria-label={`${x.title} wieder lösen`} onclick={()=>act(()=>unembed(x.id))}>✕</button>
+            </li>{/each}</ul>
+          </div>
+        {/if}
+        {#if picker}
+          <div class="picker">
+            <p><strong>Seiten aus deinen Materialien</strong>{picker.subject?` · ${picker.subject}`:''}</p>
+            {#if !picker.items.length}<p class="hint">Zu diesem Fach ist noch nichts abgelegt.</p>{/if}
+            {#each PICK_GROUPS as [key,title]}
+              {@const group=picker.items.filter(x=>x.group===key)}
+              {#if group.length}<p class="hint">{title}</p>
+                <ul>{#each group as x (x.id)}
+                  {@const on=x.chosen||running.materials?.some(y=>y.id===x.id)}
+                  <li><label class:on={on||picked.includes(x.id)}>
+                    <input type="checkbox" checked={on||picked.includes(x.id)} disabled={on||(!picked.includes(x.id)&&picked.length>=pickRoom)} onchange={()=>togglePick(x.id)} />
+                    {#if x.mime_type?.startsWith('image/')}<img src={fileUrl(x.id)} alt="" loading="lazy" />{:else}<span class="doc" aria-hidden="true">📄</span>{/if}
+                    <span>{x.title}<small>{[x.label!==x.title?x.label:'',x.date?formatShortDate(x.date):'',on?'schon eingebunden':x.reason].filter(Boolean).join(' · ')}</small></span>
+                  </label></li>
+                {/each}</ul>
+              {/if}
+            {/each}
+            <div class="actions"><button type="button" class="primary" disabled={busy||!picked.length} onclick={()=>act(embed)}>{picked.length===1?'1 Seite einbinden':picked.length?`${picked.length} Seiten einbinden`:'Seiten ankreuzen'}</button><button type="button" disabled={busy} onclick={()=>{picker=null;picked=[];}}>Abbrechen</button></div>
+            {#if pickRoom<=picked.length}<p class="hint">Mehr als {picker.max} Seiten gehen in einem Gespräch nicht.</p>{/if}
+          </div>
+        {/if}
+        <div class="actions"><button class="primary" disabled={busy||(!text.trim()&&!attachment&&!freshPages)||!data?.can_write}>Senden</button><button type="button" class:primary={running.mode==='homework_check'&&!attachment&&!running.attachments?.length&&!running.materials?.length} disabled={busy||!data?.can_write} onclick={()=>fileInput?.click()}>{running.mode==='homework_check'?'Foto der Lösung':'Foto zeigen'}</button><input class="file" type="file" accept="image/*" bind:this={fileInput} onchange={upload}/>{#if homeworkChat}<button type="button" disabled={busy||!data?.can_write} onclick={()=>act(openPicker)}>Aus Materialien</button>{/if}<a class="material-link" href={`#/materialien/${encodeURIComponent(running.subject||'')}${homeworkChat&&running.task_id?`/${running.task_id}`:''}`} title="Arbeitsblatt, Heftseite oder PDF dauerhaft ablegen"><ActionLabel label="Material hinzufügen" /></a></div>
         <div class="actions"><button type="button" disabled={busy||!data?.can_write} onclick={()=>act(()=>send('hint','Bitte anders erklären.'))}>Anders erklären</button><button type="button" disabled={busy||!data?.can_write} onclick={()=>act(()=>send('finish','Für heute fertig.'))}>Für heute fertig</button></div>
       </form>
     {:else}<section class="card"><h2>{running.status==='active'?'Gespeicherter Verlauf':running.topic?'Einheit beendet':running.mode==='homework_check'?'Kontrolle beendet':running.untimed?'Unterbrochen':'Für heute geschafft'}</h2><p>{running.summary||'Dein Gespräch und deine Antworten bleiben gespeichert.'}</p>{#if running.topic}<p><strong>Stufe: {running.topic.stage}</strong>{#if running.topic.reason&&running.topic.stage!=='neu'} · {running.topic.reason}{/if}{#if running.topic.next_check} · Kurzprüfung ab {formatShortDate(running.topic.next_check)}{/if}</p><a href="#/klausuren">Zur Arbeit und den anderen Themen</a>{/if}
@@ -172,5 +215,21 @@
 
   .hint{font-size:.85rem;opacity:.8;margin:.2rem 0 .6rem}
   .free-choice{background:var(--accent-soft);border-color:var(--accent)}.homework-choice{padding:14px 0;border-bottom:1px solid var(--border)}.homework-choice:last-child{border-bottom:0}nav[aria-label="Lernbereiche"]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}nav[aria-label="Lernbereiche"] button{text-align:left}nav[aria-label="Lernbereiche"] button span{margin-right:6px}
-  .mode-switch{display:grid;grid-template-columns:1fr 1fr}.mentor{max-width:720px;margin:auto;padding-bottom:1.5rem}h1{font-size:1.55rem;line-height:1.25;overflow-wrap:anywhere}h2{font-size:1.1rem;line-height:1.35}.eyebrow,.speaker{font-size:.8rem;font-weight:650;opacity:.8}.card,.task{border:1px solid var(--border,#d4e0da);background:var(--bg-card,#fff);padding:1rem;border-radius:16px;margin:1rem 0}.task{position:relative}.preserve{white-space:pre-wrap;overflow-wrap:anywhere}nav,.choices,.actions{display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0}button{min-height:44px;min-width:44px;padding:.6rem .85rem;border:1px solid var(--border,#d4e0da);border-radius:12px;background:var(--bg-card,#fff);color:inherit;font:inherit;cursor:pointer}.primary,.chosen{background:var(--accent,#247552);color:var(--accent-fg,#fff)}button:disabled{opacity:.5;cursor:default}.messages article{background:var(--bg-card,#fff);border:1px solid var(--border,#d4e0da);padding:.8rem 1rem;border-radius:14px;margin:.8rem 0;max-width:95%}.messages .own{margin-left:1rem;background:var(--bg,#edf5f0)}.messages p{margin:.4rem 0;line-height:1.55}.composer{background:var(--bg-card,#fff);padding:1rem .2rem;border-top:1px solid var(--border,#d4e0da)}textarea,input,select{font:inherit;font-size:16px;box-sizing:border-box;width:100%;padding:.7rem;margin:.4rem 0;border:1px solid var(--border,#ccc);border-radius:10px;background:var(--bg-card,#fff);color:inherit}label{display:block;margin:.5rem 0}.file{display:none}.check{display:flex;align-items:center;gap:.6rem}.check input{width:24px;height:24px}.notice{padding:.8rem;background:#fff0cf;color:#493a12;border-radius:12px}.session-head{display:flex;align-items:center;gap:.6rem;font-size:.85rem}.history{display:block;text-align:left;width:100%;margin:.6rem 0}.history span,small{display:block;font-size:.8rem;opacity:.8;margin-top:.3rem}.history.filed{opacity:.75}.parents{margin-top:1.5rem;border-top:1px solid var(--border,#ccc);padding-top:1rem}summary{min-height:44px;cursor:pointer;display:flex;align-items:center}.muted{font-size:.85rem;opacity:.8}.working{padding:1rem;color:var(--accent,#247552)}.basis{border:1px solid var(--border,#d4e0da);border-radius:16px;padding:.4rem .8rem;margin:.8rem 0}.basis details{margin:.3rem 0;border-top:1px solid var(--border,#d4e0da)}.basis .page{font-size:.9rem;line-height:1.5;max-height:60vh;overflow:auto}.vorlage{margin:.5rem 0;padding:.6rem .8rem;border-left:3px solid var(--accent,#247552);background:var(--bg,#edf5f0);border-radius:0 10px 10px 0;font-size:1.02rem;line-height:1.6}.vorlage cite{display:block;margin-top:.4rem;font-size:.8rem;font-style:normal;opacity:.75}.found{display:block;margin:.5rem 0}.found img{display:block;width:100%;max-width:22rem;max-height:14rem;object-fit:cover;object-position:top;border:1px solid var(--border,#d4e0da);border-radius:12px}.found small{display:block;margin-top:.25rem}
+  .mode-switch{display:grid;grid-template-columns:1fr 1fr}.mentor{max-width:720px;margin:auto;padding-bottom:1.5rem}h1{font-size:1.55rem;line-height:1.25;overflow-wrap:anywhere}h2{font-size:1.1rem;line-height:1.35}.eyebrow,.speaker{font-size:.8rem;font-weight:650;opacity:.8}.card,.task{border:1px solid var(--border,#d4e0da);background:var(--bg-card,#fff);padding:1rem;border-radius:16px;margin:1rem 0}.task{position:relative}.preserve{white-space:pre-wrap;overflow-wrap:anywhere}nav,.choices,.actions{display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0}button{min-height:44px;min-width:44px;padding:.6rem .85rem;border:1px solid var(--border,#d4e0da);border-radius:12px;background:var(--bg-card,#fff);color:inherit;font:inherit;cursor:pointer}.primary,.chosen{background:var(--accent,#247552);color:var(--accent-fg,#fff)}button:disabled{opacity:.5;cursor:default}.messages article{background:var(--bg-card,#fff);border:1px solid var(--border,#d4e0da);padding:.8rem 1rem;border-radius:14px;margin:.8rem 0;max-width:95%}.messages .own{margin-left:1rem;background:var(--bg,#edf5f0)}.messages p{margin:.4rem 0;line-height:1.55}.composer{background:var(--bg-card,#fff);padding:1rem .2rem;border-top:1px solid var(--border,#d4e0da)}textarea,input,select{font:inherit;font-size:16px;box-sizing:border-box;width:100%;padding:.7rem;margin:.4rem 0;border:1px solid var(--border,#ccc);border-radius:10px;background:var(--bg-card,#fff);color:inherit}label{display:block;margin:.5rem 0}.file{display:none}.check{display:flex;align-items:center;gap:.6rem}.check input{width:24px;height:24px}.notice{padding:.8rem;background:#fff0cf;color:#493a12;border-radius:12px}.session-head{display:flex;align-items:center;gap:.6rem;font-size:.85rem}.history{display:block;text-align:left;width:100%;margin:.6rem 0}.history span,small{display:block;font-size:.8rem;opacity:.8;margin-top:.3rem}.history.filed{opacity:.75}.parents{margin-top:1.5rem;border-top:1px solid var(--border,#ccc);padding-top:1rem}summary{min-height:44px;cursor:pointer;display:flex;align-items:center}.muted{font-size:.85rem;opacity:.8}.working{padding:1rem;color:var(--accent,#247552)}.basis{border:1px solid var(--border,#d4e0da);border-radius:16px;padding:.4rem .8rem;margin:.8rem 0}.basis details{margin:.3rem 0;border-top:1px solid var(--border,#d4e0da)}.basis .page{font-size:.9rem;line-height:1.5;max-height:60vh;overflow:auto}.vorlage{margin:.5rem 0;padding:.6rem .8rem;border-left:3px solid var(--accent,#247552);background:var(--bg,#edf5f0);border-radius:0 10px 10px 0;font-size:1.02rem;line-height:1.6}.vorlage cite{display:block;margin-top:.4rem;font-size:.8rem;font-style:normal;opacity:.75}.found{display:block;margin:.5rem 0}
+.embedded ul,.picker ul{list-style:none;margin:.3rem 0;padding:0}
+.embedded ul{display:flex;gap:.5rem;flex-wrap:wrap}
+.embedded li{display:flex;align-items:flex-start;gap:.2rem}
+.embedded li a{display:block;color:inherit;text-decoration:none}
+.embedded img,.embedded .doc{display:block;width:6.5rem;height:5rem;object-fit:cover;object-position:top;border:1px solid var(--border,#d4e0da);border-radius:8px}
+.embedded .doc{display:grid;place-items:center;font-size:1.8rem}
+.embedded li.fresh img,.embedded li.fresh .doc{border:2px solid var(--primary,#2f7d5b)}
+.embedded small{display:block;max-width:6.5rem;font-size:.75rem;overflow-wrap:anywhere}
+.picker{border:1px solid var(--border,#d4e0da);border-radius:12px;padding:.6rem;margin:.5rem 0;max-height:60vh;overflow-y:auto}
+.picker li label{display:flex;align-items:center;gap:.6rem;margin:.25rem 0;padding:.3rem;border-radius:8px;cursor:pointer}
+.picker li label.on{background:var(--bg-soft,#eef5f1)}
+.picker input{width:22px;height:22px;flex:none}
+.picker img,.picker .doc{width:3.5rem;height:3.5rem;flex:none;object-fit:cover;object-position:top;border-radius:6px;border:1px solid var(--border,#d4e0da)}
+.picker .doc{display:grid;place-items:center;font-size:1.4rem}
+.picker li span{min-width:0;overflow-wrap:anywhere}
+.picker small{display:block;opacity:.75}.found img{display:block;width:100%;max-width:22rem;max-height:14rem;object-fit:cover;object-position:top;border:1px solid var(--border,#d4e0da);border-radius:12px}.found small{display:block;margin-top:.25rem}
 </style>

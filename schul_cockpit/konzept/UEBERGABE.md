@@ -4,6 +4,19 @@ Stand 19.09.2026, abends. Live läuft Schul-Cockpit **1.12.6**, `main` und
 Arbeitsbranch stehen gleich, 550 Tests grün. Keine Kindernamen, PINs oder
 Schlüssel in diesem Dokument (D15/D68).
 
+## Nachtrag 22.09.2026
+
+**1.13.7 ist auf `main`, aber nicht eingespielt.** Der Nutzer spielt das Update
+selbst ein, weil gerade gelernt wird. Inhalt (D141): In Hausaufgabenhilfe und
+Kontrolle bindet „Aus Materialien" mehrere abgelegte Seiten des Fachs in den
+Chat ein; der Chat darf dafür sechs Bilder je Aufruf schicken. Nach dem
+Einspielen an einer echten Kontrolle mit zwei, drei Heftseiten ansehen, ob der
+Mentor alle Seiten prüft und was ein Zug dann kostet.
+
+Zwei Tests in `tests/test_lernstand.py` schlagen seit dem 22.09. fehl, unabhängig
+von 1.13.7: Die Testarbeit liegt auf dem 21.09. und zählt nicht mehr als
+bevorstehend. Der Test braucht ein festes Datum.
+
 ## Das Nächste zuerst
 
 Der neue Vokabelweg ist gebaut, ausgeliefert und an allen vier Listen gemessen.

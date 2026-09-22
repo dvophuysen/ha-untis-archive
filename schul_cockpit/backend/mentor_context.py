@@ -161,6 +161,9 @@ def context(account_id,session):
     s=snapshot(account_id);subject=session['subject']
     lessons=[r for r in s['lessons'] if same_subject(r.get('subject_name'),subject)][:18]
     source=json.loads(session.get('source_json') or '{}')
+    # Die selbst gewählten Seiten sind Buchführung der App; beim Mentor kommen
+    # sie mit ihrem gelesenen Text an, nicht als Liste von Nummern.
+    chosen_pages=source.pop('eingebunden',None) or []
     if source.get('mode') in ('homework_help','homework_check'):
         with closing(webapp_conn()) as c:
             task=c.execute('SELECT id,title,notes,subject_name,status,due_date FROM tasks WHERE id=? AND account_id=?',(source.get('task_id'),account_id)).fetchone()
@@ -220,10 +223,39 @@ def context(account_id,session):
         item=consolidated.setdefault(normalized,{'topic':lesson.get('topic',{}).get('title') or lesson['text'],'feedback':[]})
         item['feedback'].append({k:lesson.get(k) for k in ('id','date','rating','note')})
     state['consolidated_topics']=list(consolidated.values())
+    if chosen_pages:state['eingebunden']=chosen_materials(account_id,chosen_pages)
     version=fingerprint(state)
     state.update(messages=msgs,summary=session['summary'],phase=session['phase'],current_task=json.loads(session['current_task']) if session['current_task'] else None,
                  help_count=session['help_count'],task_help=bool(session['task_help']),read_at=s['read_at'])
     return state,version,s
+
+
+# Mehrere eingebundene Seiten sollen den Kontext nicht sprengen: Der ganze
+# Aufruf darf 48 000 Byte haben, und der Unterricht will auch noch hinein.
+CHOSEN_PAGE_CHARS=3000
+CHOSEN_TOTAL_CHARS=12000
+
+
+def chosen_materials(account_id,entries):
+    """Die Seiten, die das Kind im Chat aus seinen Materialien gewählt hat,
+    mit ihrem gelesenen Text. [Kind: …] markiert im Text, was das Kind selbst
+    eingetragen hat; eintragungen_des_kindes zieht das der Reihe nach heraus.
+    Ob eine Seite zusätzlich als Bild beiliegt, trägt erst der Zug ein."""
+    from .materials import detail, pupil_only
+    out=[];used=0
+    for entry in entries:
+        page=detail(account_id,entry.get('id'))
+        if not page or page.get('hidden'):continue
+        full=page.get('content_text') or ''
+        room=max(0,min(CHOSEN_PAGE_CHARS,CHOSEN_TOTAL_CHARS-used))
+        wo=' '.join(x for x in ((page.get('source_label') or '').strip(),f"S. {page['source_page']}" if page.get('source_page') else '') if x)
+        item={'id':page['id'],'titel':page.get('title') or '','wo':wo,
+              'datum':page.get('document_date') or (page.get('created_at') or '')[:10],
+              'text':full[:room],'eintragungen_des_kindes':pupil_only(full)[:120]}
+        if len(full)>room:item['gekuerzt']=True
+        used+=len(item['text'])
+        out.append(item)
+    return out
 
 
 def book_context(account_id,subject,source):
