@@ -1,3 +1,7 @@
+## 1.13.13
+
+- Sicherheit: Die PIN-Sperre zählt jetzt auch gleichzeitige Versuche; bisher ließen sich mit parallelen Anfragen beliebig viele PINs prüfen. Wer weiterrät, wartet länger: nach 5 Fehlversuchen 5 Minuten, dann 15 Minuten, 1 Stunde und danach 24 Stunden. Eine richtige PIN setzt alles zurück; Eltern entsperren, indem sie eine neue PIN setzen.
+
 ## 1.13.12
 
 - Sicherheit: Die Anmeldung aus dem HA-Seitenmenü (Ingress) gilt nur noch, wenn die Anfrage tatsächlich vom HA-Supervisor kommt. Über die direkte Adresse ließ sich die Kopfzeile bisher fälschen, und wer eine HA-Benutzer-ID kannte, war ohne PIN angemeldet. Dort gilt jetzt immer die PIN; eine ignorierte Kopfzeile steht mit ihrer Herkunft im Log.

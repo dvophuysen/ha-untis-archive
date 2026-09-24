@@ -8,7 +8,7 @@ Schlüssel in diesem Dokument (D15/D68).
 
 **1.13.11 ist eingespielt.** Die Session hat die App geprüft. Der vollständige Befund liegt als Bericht beim Nutzer; offen und abzustimmen sind:
 
-- Sicherheit: Ingress-Kopfzeile gilt seit 1.13.12 nur noch von 172.30.32.2 (D146). Offen: PIN-Sperre ist mit parallelen Anfragen umgehbar; nach dem Dateileck (bis 1.13.10) Geheimnisse tauschen.
+- Sicherheit: Ingress-Kopfzeile gilt seit 1.13.12 nur noch von 172.30.32.2 (D146). PIN-Sperre seit 1.13.13 atomar und wachsend (D147). Geheimnisse werden nach Nutzerentscheidung nicht getauscht (D148).
 - Kosten: Prompt-Caching (stabiles Präfix, `prompt_cache_key`), Mentor-Kontext entschlacken, Structured Output. Modellanträge für Foundry 2: gpt-5.1 als „hoch“, gpt-5-nano, mehr TPM für gpt-5-mini.
 - Mentor: Hilfeleiter (Hilfen schrittweise zurücknehmen) fehlt in allen Prompts; der Arbeitsblatt-Satz widerspricht der Buchseiten-Regel.
 - Eltern: Nutzungsbericht „So wurde die App genutzt“ (nur Eltern, aufklappbar) ist entworfen, nicht gebaut.

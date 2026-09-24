@@ -9,8 +9,9 @@ manifest + service worker.
 Security model
 - 4–8 digit PIN per user, hashed with pbkdf2_hmac/sha256 + per-user salt
   (200 000 iterations — stdlib only, no extra dependency).
-- Wrong PIN: increment a counter. 5 failures lock the account for 5
-  minutes; the counter resets on a correct PIN.
+- Every attempt is counted before the hash is computed, so parallel
+  attempts cannot slip past the lock. Every 5th failure locks the account,
+  for 5 min, 15 min, 1 h and then 24 h; a correct or newly set PIN resets.
 - Successful login: 32 bytes of os.urandom → base64url token stored in
   `sessions`, returned as an HttpOnly `sc_session` cookie (30-day expiry).
   Every request touches `last_seen_at` so stale rows can be purged.
@@ -20,13 +21,15 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
 SESSION_TTL_DAYS = 365
 LOCKOUT_THRESHOLD = 5
-LOCKOUT_MINUTES = 5
+# Sperrdauer je Sperre in Minuten; ab der vierten bleibt es bei 24 Stunden.
+LOCKOUT_STEPS_MINUTES = (5, 15, 60, 24 * 60)
 PBKDF2_ITERS = 200_000
 SESSION_COOKIE = "sc_session"
 
@@ -76,41 +79,62 @@ class PinError(Exception):
         self.status = status
 
 
+def lockout_minutes(failures: int) -> int:
+    """Sperrdauer nach der n-ten Sperre: 5 min, 15 min, 1 h, danach 24 h."""
+    steps = LOCKOUT_STEPS_MINUTES
+    return steps[min(max(failures // LOCKOUT_THRESHOLD, 1), len(steps)) - 1]
+
+
 def verify_pin(conn: sqlite3.Connection, user_id: int, pin: str) -> bool:
-    row = conn.execute(
-        "SELECT pin_hash, pin_salt, pin_failed_attempts, pin_locked_until "
-        "FROM users WHERE id = ?",
-        (user_id,),
-    ).fetchone()
-    if not row or not row["pin_hash"]:
-        raise PinError("Kein PIN für diesen Nutzer gesetzt", status=400)
+    """Prüft eine PIN. Der Versuch wird gezählt, bevor gerechnet wird.
 
-    if row["pin_locked_until"]:
-        locked_until = datetime.fromisoformat(row["pin_locked_until"])
-        if locked_until > _utc_now():
-            remaining = int((locked_until - _utc_now()).total_seconds() // 60) + 1
-            raise PinError(
-                f"Zu viele Fehlversuche — bitte {remaining} Min warten",
-                status=429,
-            )
+    Bis 1.13.12 las die Prüfung den Zähler, rechnete 200 000 Runden und schrieb
+    erst danach: Gleichzeitige Versuche sahen alle denselben Stand, und 40
+    parallele Fehlversuche lösten keine Sperre aus. Jetzt setzt eine kurze
+    Schreibtransaktion den Zähler vorab hoch und sperrt beim fünften Versuch
+    sofort für alle weiteren. Der Zähler läuft über Sperren hinweg weiter, so
+    wächst die Sperre bei fortgesetztem Raten (5 min, 15 min, 1 h, 24 h); eine
+    richtige PIN oder eine neu gesetzte PIN setzt alles zurück."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        row = conn.execute(
+            "SELECT pin_hash, pin_salt, pin_failed_attempts, pin_locked_until "
+            "FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if not row or not row["pin_hash"]:
+            raise PinError("Kein PIN für diesen Nutzer gesetzt", status=400)
 
-    if _hash(pin, row["pin_salt"]) == row["pin_hash"]:
+        now = _utc_now()
+        if row["pin_locked_until"]:
+            locked_until = datetime.fromisoformat(row["pin_locked_until"])
+            if locked_until > now:
+                remaining = int((locked_until - now).total_seconds() // 60) + 1
+                raise PinError(
+                    f"Zu viele Fehlversuche — bitte {remaining} Min warten",
+                    status=429,
+                )
+
+        attempts = (row["pin_failed_attempts"] or 0) + 1
+        locked: str | None = None
+        if attempts % LOCKOUT_THRESHOLD == 0:
+            locked = (now + timedelta(minutes=lockout_minutes(attempts))).isoformat()
+        conn.execute(
+            "UPDATE users SET pin_failed_attempts = ?, pin_locked_until = ? WHERE id = ?",
+            (attempts, locked, user_id),
+        )
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+
+    if hmac.compare_digest(_hash(pin, row["pin_salt"]), row["pin_hash"]):
         conn.execute(
             "UPDATE users SET pin_failed_attempts = 0, pin_locked_until = NULL "
             "WHERE id = ?",
             (user_id,),
         )
         return True
-
-    attempts = (row["pin_failed_attempts"] or 0) + 1
-    locked_until: str | None = None
-    if attempts >= LOCKOUT_THRESHOLD:
-        locked_until = (_utc_now() + timedelta(minutes=LOCKOUT_MINUTES)).isoformat()
-        attempts = 0
-    conn.execute(
-        "UPDATE users SET pin_failed_attempts = ?, pin_locked_until = ? WHERE id = ?",
-        (attempts, locked_until, user_id),
-    )
     return False
 
 
