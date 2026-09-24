@@ -304,6 +304,17 @@ def spread_left(account_id: int, book_title: str) -> int | None:
     return links if seiten.count(links) >= 0.8 * len(seiten) else None
 
 
+def entry_date(wanted: dict, page: int) -> str | None:
+    """Das Datum der Bestellung zu einer abgerufenen Seite. Bei Doppelseiten
+    wird auf die linke Hälfte zusammengelegt (fold_spreads): Bestellt war 21,
+    geholt wird 20. Bis 1.13.30 brach der Sammellauf dort mit KeyError ab,
+    nachdem die Seiten schon aufgenommen waren, und verwarf sie."""
+    for candidate in (page, page + 1, page - 1):
+        if candidate in wanted:
+            return wanted[candidate]
+    return None
+
+
 def fold_spreads(pages, left: int | None) -> list[int]:
     """Bestellungen auf die linke Hälfte ihrer Doppelseite zusammenlegen."""
     if left is None:
@@ -462,7 +473,7 @@ async def _collect(account_id: int, budget: int) -> dict:
                 continue
             record_access(account_id, book["title"], "readable", page=page)
             try:
-                material_id = store_page(account_id, book, page, image, subject, group["pages"][page])
+                material_id = store_page(account_id, book, page, image, subject, entry_date(group["pages"], page))
             except StorageFull as exc:
                 log.warning("%s; Sammellauf beendet", exc)
                 summary["skipped"] = "Materialspeicher voll"
@@ -483,7 +494,7 @@ async def _collect(account_id: int, budget: int) -> dict:
                                               budget=120)
                     shot = next((image for p, image in again["shots"] if p is not None), None)
                     if shot is not None and not looks_blank(shot):
-                        material_id = store_page(account_id, book, page, shot, subject, group["pages"][page])
+                        material_id = store_page(account_id, book, page, shot, subject, entry_date(group["pages"], page))
                         row = await analyze_page(account_id, material_id)
                         if row and row.get("page_check") == "ok":
                             record_access(account_id, book["title"], "proven", page=page, printed=page)

@@ -1,3 +1,8 @@
+## 1.13.31
+
+- Digitale Bücher: Der automatische Abruf brach bei Büchern mit Doppelseiten ab, sobald eine ungerade Seite bestellt war, und verwarf dabei die schon aufgenommenen Seiten, bei jedem Lauf neu. Jetzt wird die Seite unter ihrer linken Hälfte abgelegt.
+- KI-Kosten: Eine Überschriften-Lesung für Vokabeln wird nicht mehr verworfen, nur weil ein Titel zu lang geraten ist oder das Modell ein Zusatzfeld mitschickt; sie ist bezahlt und wird gekürzt übernommen.
+
 ## 1.13.30
 
 - Nachbesserung: Auch Zweifel, die sich nur in der Lautschrift in eckigen Klammern oder in Satzzeichen unterscheiden, führen nicht mehr zum Gegenlesen.

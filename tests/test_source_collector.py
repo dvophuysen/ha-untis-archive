@@ -335,3 +335,27 @@ def test_a_delivered_spread_counts_for_both_of_its_printed_pages(env):
     have = sources._book_pages(1)['englisch']
     assert 160 in have and 161 in have, 'beide gedruckten Seiten liegen vor'
     assert have[161]['source_page'] == 160
+
+
+async def test_an_odd_page_of_a_double_page_book_is_stored_under_its_left_half(env, monkeypatch):
+    """Bestellt 171, geholt 170/171: Bis 1.13.30 fand der Sammellauf zur
+    zusammengelegten Seite kein Bestelldatum, brach mit KeyError ab und
+    verwarf die schon aufgenommenen Seiten, bei jedem Lauf neu."""
+    history(homework=[(2, 'SN', 'S. 171 Vokabeln lernen', '2026-09-11')])
+    shelf()
+    with closing(db.webapp_conn()) as c, c:
+        for page, printed in ((160, [160, 161]), (162, [162, 163]), (164, [164, 165])):
+            c.execute("INSERT INTO materials(account_id,kind,subject_name,title,summary,source_book,source_page,"
+                      "printed_pages,origin,analysis_state,created_at,updated_at) "
+                      "VALUES(1,'book_page','SPANISCH','Seite','','¡Apúntate! 2',?,?,'book_fetch','ready','now','now')",
+                      (page, json.dumps(printed)))
+    capture, calls = fake_capture({170})
+    monkeypatch.setattr(ctx, "capture_pages", capture)
+    fake_analysis(monkeypatch)
+    summary = await collector.collect(1)
+    assert calls == [[170]] and summary["stored"] == 1
+    with closing(db.webapp_conn()) as conn:
+        row = conn.execute("SELECT document_date FROM materials WHERE source_page=170").fetchone()
+    assert row["document_date"] == '2026-09-11'
+    assert collector.entry_date({171: '2026-09-11'}, 170) == '2026-09-11'
+    assert collector.entry_date({}, 170) is None

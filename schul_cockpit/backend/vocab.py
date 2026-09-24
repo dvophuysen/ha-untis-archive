@@ -16,9 +16,12 @@ from contextlib import closing
 from datetime import date, timedelta
 
 from fastapi import HTTPException
-from pydantic import Field, ValidationError
+from typing import Annotated
+
+from pydantic import ConfigDict, Field, ValidationError
 
 from .db import webapp_conn
+from .material_analysis import ClippedStr, _clip
 from .learning import InputModel, now_iso, today_local
 from . import mentor_context as mc
 
@@ -682,18 +685,24 @@ def page_image(account_id: int, material_id: int) -> list[dict]:
 # ------------------------------------------------------------ Überschriften lesen
 
 class HeadIn(InputModel):
-    """Eine Überschrift auf der Seite, beschrieben statt eingeordnet."""
-    titel: str = Field(default="", max_length=90)
-    erstes_wort: str = Field(default="", max_length=80)
+    """Eine Überschrift auf der Seite, beschrieben statt eingeordnet.
+
+    Zu lange Texte werden gekürzt und unbekannte Felder übergangen, statt die
+    bezahlte Antwort zu verwerfen (am 19.09. zwei Seiten: ein Titel mit mehr als
+    90 Zeichen, ein ungefragtes Zusatzfeld)."""
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+    titel: ClippedStr(90) = ""
+    erstes_wort: ClippedStr(80) = ""
     # Wo sie steht: ganz oben am Seitenrand (Laufkopf) oder mitten im Text.
-    wo: str = Field(default="im_text", max_length=12)
+    wo: ClippedStr(12) = "im_text"
     groesser: bool = Field(default=False)
     farbig: bool = Field(default=False)
     gerahmt: bool = Field(default=False)
 
 
 class HeadsOut(InputModel):
-    ueberschriften: list[HeadIn] = Field(default_factory=list, max_length=16)
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+    ueberschriften: Annotated[list[HeadIn], _clip(16)] = Field(default_factory=list, max_length=16)
     beginnt_mit_ueberschrift: bool = Field(default=False)
 
 
