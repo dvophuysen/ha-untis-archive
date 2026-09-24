@@ -180,10 +180,20 @@ def run_once(now=None):
             LOG.warning('Reminder check unavailable for account %s', account, exc_info=True)
 
 
+def run_parent_report(now=None):
+    """Der Wochenbericht an die Eltern hängt an derselben Minutenschleife."""
+    from . import parent_report
+    try:
+        parent_report.run_once((now or datetime.now(ZONE)).astimezone(ZONE))
+    except Exception:
+        LOG.warning('Wochenbericht an die Eltern nicht möglich', exc_info=True)
+
+
 async def loop():
     while True:
         try:
             await asyncio.to_thread(run_once)
+            await asyncio.to_thread(run_parent_report)
         except Exception:
             LOG.exception('Reminder loop failed')
         await asyncio.sleep(60)

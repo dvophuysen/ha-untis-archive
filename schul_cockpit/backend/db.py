@@ -1070,3 +1070,16 @@ CREATE TABLE IF NOT EXISTS usage_days (
  PRIMARY KEY(account_id, day, actor)
 );
 """))
+
+# Der Wochenbericht an die Eltern als Mitteilung: Zeit, Elterngeräte und je
+# Woche, Kind und Gerät höchstens eine Zustellung (D161).
+_MIGRATIONS.append(("parent_report_001", """
+CREATE TABLE IF NOT EXISTS parent_report_config (
+ id INTEGER PRIMARY KEY CHECK (id=1), weekday INTEGER NOT NULL DEFAULT 6, at TEXT NOT NULL DEFAULT '18:00'
+);
+CREATE TABLE IF NOT EXISTS parent_report_targets (service TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS parent_report_deliveries (
+ week TEXT NOT NULL, account_id INTEGER NOT NULL, service TEXT NOT NULL,
+ status TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(week, account_id, service)
+);
+"""))

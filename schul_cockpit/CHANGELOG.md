@@ -1,3 +1,7 @@
+## 1.13.19
+
+- Familienansicht: „Wochenbericht aufs Handy“. Die App schickt einmal in der Woche (Voreinstellung Sonntag 18 Uhr) je Kind eine kurze Nachricht mit der Kopfzeile und den Auffälligkeiten des Nutzungsberichts an die gewählten Elterngeräte; Tippen öffnet die App. Geräte, die Erinnerungen eines Kindes bekommen, lassen sich nicht auswählen. Mit Testnachricht.
+
 ## 1.13.18
 
 - Datenschutz: Adresse und Kürzel der Schule stehen nicht mehr im Programm, in Tests und Beispielen. Das Feld für das IServ-Portal ist ohne eingetragenen Zugang leer statt vorbelegt.

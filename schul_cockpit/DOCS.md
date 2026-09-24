@@ -187,8 +187,10 @@ nicht sehen kann. Dafür misst die App, wie lange sie sichtbar war (Summen je
 Tag und Ansicht, nach 90 Tagen gelöscht), und merkt sich bei jeder Nachricht
 an den Mentor, ob es eine Frage, eine Antwort oder eine Bitte um Hilfe war.
 
-Als Nachricht an die Eltern am Sonntagabend, mit dem Mitteilungs-Token des
-Kindes in `secrets.yaml`:
+Als Nachricht aufs Handy der Eltern: in der Familienansicht unter
+„Wochenbericht aufs Handy“ Tag, Uhrzeit und Geräte wählen (ab 1.13.19). Wer den
+Text lieber selbst in einer HA-Automation verarbeitet, liest ihn mit dem
+Mitteilungs-Token des Kindes ab, etwa so:
 
 ```yaml
 # configuration.yaml

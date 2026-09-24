@@ -51,8 +51,8 @@ Das öffentliche Repository wurde mit bereinigter Historie neu angelegt (keine K
   echten Kontrolle mit zwei, drei Heftseiten, ob der Mentor alle Seiten
   prüft und was ein Zug dann kostet (D141).
 - Eltern: Der Nutzungsbericht „So wurde die App genutzt“ läuft seit 1.13.17
-  (D159). Die sonntägliche HA-Nachricht an die Eltern richtet der Nutzer
-  selbst ein (Anleitung in DOCS.md); nach zwei, drei Wochen mit ihm prüfen,
+  (D159). Die Wochennachricht an die Eltern verschickt die App seit
+  1.13.19 selbst (D161); nach zwei, drei Wochen mit ihm prüfen,
   ob Schwellen und Auffälligkeiten passen.
 - Seit 0.74 kein Release für Fachübersicht, Elternüberblick und
   Übungsklausuren.

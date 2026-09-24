@@ -14,7 +14,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
-from .. import usage_report
+from .. import app_notify, parent_report, usage_report
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..db import history_conn, webapp_conn
 from ..learning import today_local
@@ -86,3 +86,39 @@ def usage_feed(account_id: int, token: str = Query(...), day: str | None = Query
     return {"title": f"Schul-Cockpit: Woche {report['week']['label']} – {name}",
             "headline": report["headline"], "text": "\n".join(lines),
             "warnings": len(report["warnings"]), "week": report["week"]}
+
+
+class ParentReportIn(BaseModel):
+    weekday: int = Field(ge=0, le=6)
+    at: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    targets: list[str] = Field(default_factory=list, max_length=10)
+
+
+def _parent(user: CurrentUser) -> None:
+    if not (user.is_admin or user.role == "parent"):
+        raise HTTPException(403, "Nur für Eltern")
+
+
+@router.get("/parent-report")
+def get_parent_report(user: CurrentUser = Depends(get_current_user)) -> dict:
+    _parent(user)
+    kids = parent_report.child_devices()
+    return {**parent_report.config(),
+            "devices": [{"service": s, "child_device": s in kids} for s in app_notify.services()]}
+
+
+@router.put("/parent-report")
+def put_parent_report(body: ParentReportIn, user: CurrentUser = Depends(get_current_user)) -> dict:
+    _parent(user)
+    try:
+        return parent_report.set_config(body.weekday, body.at, body.targets)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+
+
+@router.post("/parent-report/test")
+def test_parent_report(user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Sofort an die gewählten Geräte, ohne den Wochenversand zu verbrauchen."""
+    _parent(user)
+    from datetime import datetime
+    return {"sent": parent_report.send_all(datetime.now(usage_report.TZ))}

@@ -5,6 +5,7 @@
   import FamilyDayCheck from '../lib/FamilyDayCheck.svelte';
   import WeekReview from '../lib/WeekReview.svelte';
   import UsageWeek from '../lib/UsageWeek.svelte';
+  import ParentReportSettings from '../lib/ParentReportSettings.svelte';
   import { api } from '../lib/api.js';
   import { setActiveAccount } from '../lib/store.svelte.js';
 
@@ -136,6 +137,7 @@
       </section>
     {/each}
   </div>
+  <ParentReportSettings />
 {/if}
 
 <style>
