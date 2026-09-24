@@ -40,7 +40,9 @@ Das öffentliche Repository wurde mit bereinigter Historie neu angelegt (keine K
 - Modelle (D162, ersetzt D160): Ziel sind **gpt-6-luna** für die Lese-
   und Vokabelstufen und **gpt-6-sol** für Mentor und sorgfältige Lesung,
   auf Dauer auf Foundry 2. Offen: Kontingentanträge auf Foundry 2 (Sweden
-  Central, Global Standard, je 100, mit Region). Ab 28.09. (neues Guthaben
+  Central, Global Standard, je 100) am 24.09. abgelehnt, auch für East US;
+  Foundry 2 steht auf Kontingentstufe 0. Erst Nutzung aufbauen, ab 24.10.
+  erneut beantragen, mit mehreren Regionen. Ab 28.09. (neues Guthaben
   auf Foundry 1) dort beide bereitstellen und gegen gpt-5-mini eichen,
   auch die Bildlesung; die App bleibt bis zur Bewilligung auf gpt-5-mini
   (Nutzerentscheidung „nur testen“). Preise stehen seit 1.13.20 in `RATES`.
