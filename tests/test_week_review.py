@@ -39,6 +39,12 @@ def seed(patch):
             " (1,1,'Mathematik','Demo','completed',600,'2026-09-16T15:00','2026-09-16T15:12',0,1),"
             " (1,2,'LATEIN','Vorwoche','completed',600,'2026-09-10T15:00','2026-09-10T15:12',0,0),"
             " (1,2,'LATEIN','offen','active',60,'2026-09-17T15:00','2026-09-17T15:01',0,0);"
+            # Gezählt wird, worin das Kind in der Woche geschrieben hat; die
+            # offene Einheit 5 wurde nur geöffnet.
+            "INSERT INTO mentor_messages(account_id,session_id,request_key,role,text,created_at) VALUES"
+            " (1,1,'r1','user','x','2026-09-15T15:05'),(1,2,'r2','user','x','2026-09-16T15:05'),"
+            " (1,3,'r3','user','x','2026-09-16T15:05'),(1,4,'r4','user','x','2026-09-10T15:05'),"
+            " (1,5,'r5','assistant','Hallo','2026-09-17T15:00');"
             "INSERT INTO tasks(account_id,title,status,source,due_date,completed_at,created_at,updated_at) VALUES"
             " (1,'Erledigt A','done','manual','2026-09-15','2026-09-14T18:00','now','now'),"
             " (1,'Erledigt B','done','manual','2026-09-16','2026-09-15T18:00','now','now'),"
@@ -111,3 +117,25 @@ def test_the_route_serves_child_and_parent_within_the_account(env):
     child(state)
     assert client.get("/api/accounts/1/week-review").status_code == 200
     assert client.get("/api/accounts/2/week-review").status_code == 403
+
+
+def test_open_homework_help_counts_and_dont_know_and_rejected_calls_are_told_apart(env):
+    """Hausaufgabenhilfe bleibt offen (D25) und zählt trotzdem; „Weiß ich
+    nicht" ist kein Irrtum; ein abgelehnter Aufruf hat nichts gekostet."""
+    client, state, patch = env
+    seed(patch)
+    with closing(db.webapp_conn()) as c, c:
+        c.executescript(
+            "INSERT INTO mentor_messages(account_id,session_id,request_key,role,text,created_at) VALUES"
+            " (1,5,'r6','user','Wie geht Nr. 3?','2026-09-17T15:01');"
+            "INSERT INTO vocab_words(id,account_id,subject,material_id,foreign_word,plain,created_at) VALUES"
+            " (1,1,'LATEIN',1,'servus','servus','now');"
+            "INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,created_at) VALUES"
+            " (1,1,1,'from','Sklave','correct','2026-09-16T16:00'),(1,1,1,'from','','incorrect','2026-09-16T16:01'),"
+            " (1,1,1,'from','Herr','incorrect','2026-09-16T16:02');"
+            "INSERT INTO mentor_ai_calls(id,account_id,purpose,month,day,model,status,reserved_micro,charged_micro,input_rate,output_rate,created_at) VALUES"
+            " ('e',1,'mentor','2026-09','2026-09-16','test','released',500000,0,10,45,'now');")
+    view = asyncio.run(week_review.review(1, TODAY))
+    assert view["units"]["count"] == 3
+    assert "3 Vokabelabfragen, 1 davon richtig, 1× „Weiß ich nicht“." in view["lines"]
+    assert view["costs_eur"] == 0.71

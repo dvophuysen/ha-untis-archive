@@ -39,7 +39,7 @@
   <button data-status={taskStatus} onclick={() => open(kid, 'today')}>
     <span aria-hidden="true">📝</span><span><strong>{overdue ? `${overdue} ${overdue===1?'Aufgabe':'Aufgaben'} überfällig` : tasks.due.length ? `${tasks.due.length} ${tasks.due.length === 1 ? 'Aufgabe' : 'Aufgaben'} bis morgen offen` : 'Für morgen nichts mehr offen'}</strong>
     {#if tasks.undated.length}<small>{tasks.undated.length} ohne Termin · bitte einordnen</small>{/if}
-    {#if tasks.ahead.length}<small>{tasks.ahead.length} weitere Aufgaben · später fällig</small>{/if}</span><span class="nav-mark"><ActionLabel /></span>
+    {#if tasks.ahead.length}<small>{tasks.ahead.length} {tasks.ahead.length === 1 ? 'weitere Aufgabe' : 'weitere Aufgaben'} · später fällig</small>{/if}</span><span class="nav-mark"><ActionLabel /></span>
   </button>
   {#if loading}<p class="small dim">Tagescheck wird geladen …</p>
   {:else if error}<p class="error-box" role="alert">{error}</p>

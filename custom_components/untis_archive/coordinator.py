@@ -47,6 +47,8 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         super().__init__(
             hass,
             _LOGGER,
+            # Ausdrücklich statt über den ContextVar, den HA abkündigt.
+            config_entry=entry,
             name=f"{DOMAIN}:{entry.title}",
             update_interval=timedelta(hours=UPDATE_INTERVAL_HOURS),
         )

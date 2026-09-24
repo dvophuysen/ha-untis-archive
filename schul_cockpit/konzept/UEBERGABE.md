@@ -4,6 +4,16 @@ Stand 19.09.2026, abends. Live läuft Schul-Cockpit **1.12.6**, `main` und
 Arbeitsbranch stehen gleich, 550 Tests grün. Keine Kindernamen, PINs oder
 Schlüssel in diesem Dokument (D15/D68).
 
+## Nachtrag 24.09.2026
+
+**1.13.11 ist eingespielt.** Die Session hat die App geprüft. Der vollständige Befund liegt als Bericht beim Nutzer; offen und abzustimmen sind:
+
+- Sicherheit: Die Ingress-Kopfzeile `X-Remote-User-Id` wird ohne Prüfung der Gegenstelle geglaubt (`auth.py`), Port 8099 ist über den Tunnel erreichbar. Fix: nur von 172.30.32.2 annehmen, `--proxy-headers` aus `run.sh` entfernen. PIN-Sperre ist mit parallelen Anfragen umgehbar. Nach dem Dateileck (bis 1.13.10) Geheimnisse tauschen.
+- Kosten: Prompt-Caching (stabiles Präfix, `prompt_cache_key`), Mentor-Kontext entschlacken, Structured Output. Modellanträge für Foundry 2: gpt-5.1 als „hoch“, gpt-5-nano, mehr TPM für gpt-5-mini.
+- Mentor: Hilfeleiter (Hilfen schrittweise zurücknehmen) fehlt in allen Prompts; der Arbeitsblatt-Satz widerspricht der Buchseiten-Regel.
+- Eltern: Nutzungsbericht „So wurde die App genutzt“ (nur Eltern, aufklappbar) ist entworfen, nicht gebaut.
+- Drift: Seit 0.74 kein Release für Fachübersicht, Elternüberblick, Übungsklausuren. Doku widersprüchlich, Archivierung der Altkonzepte vorgeschlagen.
+
 ## Nachtrag 22.09.2026
 
 **1.13.9 ist eingespielt** (Nacht zum 23.09.): Fotos aus Hausaufgabe und
@@ -25,7 +35,7 @@ lag fest auf dem 21.09. Sie liegt jetzt immer zehn Tage in der Zukunft; alle
 ## Das Nächste zuerst
 
 Der neue Vokabelweg ist gebaut, ausgeliefert und an allen vier Listen gemessen.
-Offen sind zwei Stellen, beide in Kind A Spanisch:
+Offen sind zwei Stellen, beide in Spanisch von Kind A:
 
 - „Unidad 1 ¡Bienvenidos a mi barrio!" trägt 451 Wörter. Der Laufkopf dieser
   Seiten nennt keine Marke, also fehlt der Hinweis, wo die nächste Unidad
@@ -35,7 +45,7 @@ Offen sind zwei Stellen, beide in Kind A Spanisch:
   einer Einheit. Dafür gibt es `_OTHER_PART`; der Name steht nur noch nicht
   darin, und ob er allgemein genug ist, gehört geprüft.
 
-Kleinere Beobachtungen: In Kind A Englisch hat S. 164/165 keine einzige
+Kleinere Beobachtungen: In Englisch von Kind A hat S. 164/165 keine einzige
 Überschrift gemeldet, deshalb hängen dort 77 Wörter an „Station 2: Idiot
 nephew?". Bei Kind B steht „Irregular verbs" unter „Unit 1" statt unter dem
 Grammatikanhang, weil „Grammar" nur als Laufkopf vorkommt und ein Laufkopf nie
@@ -49,8 +59,8 @@ Entscheidungen D137 bis D140 in [ENTSCHEIDUNGEN.md](ENTSCHEIDUNGEN.md).
   „klein", also auf der zweiten Foundry. Die gründliche zweite Lesung ist ein
   Zugewinn, keine Bedingung: Scheitert sie, gilt die erste. Anlass waren fünfzig
   Materialien mit 502, weil beide Stufen auf der ersten Foundry lagen.
-- **1.11.1 (D138)** Jede gedruckte Seite wird nur einmal gelesen. Kind A
-  Englischbuch kommt als Doppelseite, und der Viewer lieferte auf jede ungerade
+- **1.11.1 (D138)** Jede gedruckte Seite wird nur einmal gelesen. Das
+  Englischbuch von Kind A kommt als Doppelseite, und der Viewer lieferte auf jede ungerade
   Bestellung eine um vier Seiten versetzte Doppelseite: vierzig Abrufe für rund
   fünfzehn Seiten. Das allein erklärt die unbrauchbaren Listen.
 - **1.12.0 (D139)** Die Gliederung entsteht aus dem Vergleich aller Seiten eines
@@ -73,19 +83,19 @@ Entscheidungen D137 bis D140 in [ENTSCHEIDUNGEN.md](ENTSCHEIDUNGEN.md).
 Alle vier Listen am Abend des 19.09., nach sechs Nachbesserungen, die jede am
 echten Lauf abgelesen ist:
 
-- Kind A Englisch: 9 Einheiten, 550 Wörter, genau die Gliederung des Buchs
+- Englisch von Kind A: 9 Einheiten, 550 Wörter, genau die Gliederung des Buchs
   (Unit 1, Across cultures 1, Text smart 1, Across cultures 2, Unit 2, Text
   smart 2, Across cultures 3, Unit 3, Across cultures 4) mit den Abschnitten in
   Buchreihenfolge. Vorher: 15 zusammenhanglose Bündel, 1217 Wörter.
-- Kind B Englisch: 4 Einheiten, 381 Wörter.
-- Kind B Latein: 54 Wörter, davon die 42 geübten mit vollem Verlauf. Der
+- Englisch von Kind B: 4 Einheiten, 381 Wörter.
+- Latein von Kind B: 54 Wörter, davon die 42 geübten mit vollem Verlauf. Der
   Lernstand hat den ganzen Umbau überstanden.
-- Kind A Spanisch: 7 Einheiten, 671 Wörter statt 1523.
+- Spanisch von Kind A: 7 Einheiten, 671 Wörter statt 1523.
 - Die erste Vokabel-Doppelseite (Material 251, gedruckt 160/161) liest das
   kleine Modell fehlerfrei: 21 von 21 Wörtern, richtige Reihenfolge, richtige
   Bedeutungen, und von der Erklärseite links kein einziges Wort — auch nicht
   aus der Lauttabelle, die wie eine Wortliste aussieht.
-- Kind A Englisch kam in 40 Abrufen für 24 verschiedene Doppelseiten; gerade
+- Englisch von Kind A kam in 40 Abrufen für 24 verschiedene Doppelseiten; gerade
   Bestellungen richtig, ungerade um vier Seiten versetzt. Gedruckt 186–189
   fehlen bis heute.
 
@@ -103,7 +113,7 @@ Zwei Regeln, die plausibel klangen und an echten Seiten scheiterten:
 
 ## Offen
 
-- Die beiden Stellen in Kind A Spanisch, oben unter „Das Nächste zuerst".
+- Die beiden Stellen in Spanisch von Kind A, oben unter „Das Nächste zuerst".
 - Eine Korrekturschnittstelle für die Gliederung wäre jetzt billig: Einheit und
   Abschnitt einer Seite von Hand setzen, ohne neu zu lesen. `regroup()` müsste
   solche Festlegungen nur achten, wie `book_chapters.locked` es vormacht.

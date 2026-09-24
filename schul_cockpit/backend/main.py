@@ -277,6 +277,22 @@ def _is_legacy_browser(request: Request) -> bool:
     return bool(m and int(m.group(1)) < 13)
 
 
+def frontend_file(root: Path, full_path: str) -> Path | None:
+    """Die Datei unterhalb des Frontend-Verzeichnisses, sonst None. Ein
+    absoluter Pfad („//data/options.json") oder „..“ darf nie hinausführen:
+    Über den Direktport ist diese Route ohne Anmeldung erreichbar."""
+    if not full_path:
+        return None
+    base = root.resolve()
+    try:
+        target = (base / full_path.lstrip("/")).resolve()
+    except (OSError, ValueError):
+        return None
+    if not target.is_relative_to(base) or not target.is_file():
+        return None
+    return target
+
+
 if _FRONTEND_DIR and (_FRONTEND_DIR / "index.html").exists():
     if (_FRONTEND_DIR / "assets").exists():
         app.mount(
@@ -287,8 +303,8 @@ if _FRONTEND_DIR and (_FRONTEND_DIR / "index.html").exists():
 
     @app.get("/{full_path:path}")
     def spa(full_path: str, request: Request):
-        target = _FRONTEND_DIR / full_path
-        if full_path and target.exists() and target.is_file():
+        target = frontend_file(_FRONTEND_DIR, full_path)
+        if target is not None:
             name = target.name
             if name in _NO_CACHE:
                 return FileResponse(target, headers=_NO_CACHE_HEADERS)

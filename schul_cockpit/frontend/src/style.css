@@ -86,6 +86,12 @@ input, select, textarea {
   min-height: 44px;
 }
 textarea { min-height: 80px; resize: vertical; }
+/* iOS Safari zoomt beim Antippen jedes Felds unter 16 px ins Bild und bleibt
+   gezoomt. Die Felder erben hier sonst die .85rem ihres <label>. Nur auf iOS
+   (-webkit-touch-callout), damit die Desktopansicht kompakt bleibt. */
+@supports (-webkit-touch-callout: none) {
+  input, select, textarea { font-size: max(16px, 1em) !important; }
+}
 label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-bottom: 0.3rem; }
 
 /* Layout is back to the simple v0.1 model: body scrolls normally, the

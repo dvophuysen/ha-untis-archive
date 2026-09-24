@@ -732,7 +732,7 @@ def test_a_framed_word_field_is_a_block_like_any_other(setup):
 def test_the_running_head_of_an_appendix_page_is_no_heading_at_all():
     """Über jeder Anhangseite steht „Vocabulary" und der Name der Einheit. Als
     Überschrift gelesen beginnt dort auf jeder Seite ein neuer Block, und die
-    Fortsetzung über den Seitenwechsel reißt ab — bei Kind B Englisch landeten
+    Fortsetzung über den Seitenwechsel reißt ab — bei Englisch von Kind B landeten
     so dreizehn von sechzehn Seiten in „Unit 1" (D115, D130)."""
     heads = [kopf("Vocabulary", wo="seitenkopf"), kopf("Unit 1", "a", groesser=True),
              kopf("Station 1", "b"), kopf("Media smart", "c", wo="seitenkopf")]
@@ -1106,7 +1106,7 @@ def test_a_foreign_part_behind_the_word_list_is_cut_off(setup):
     """Hinter dem Wortschatz beginnt bei Green Line das Dictionary: das gesamte
     Vokabular aller vier Bände, alphabetisch. Auf der Doppelseite 190/191 steht
     beides nebeneinander. Als Wortschatz gelesen schwemmte es die Liste zu —
-    Kind A „Unidad 3" hatte 1161 Wörter. Ausgeblendet, nicht gelöscht: Eine
+    „Unidad 3" von Kind A hatte 1161 Wörter. Ausgeblendet, nicht gelöscht: Eine
     bessere Lesung der Überschriften holt die Wörter zurück (D139)."""
     client, state, patch = setup
     client.app.include_router(vocab_router.router, prefix="/api")
@@ -1140,7 +1140,7 @@ def test_a_foreign_part_behind_the_word_list_is_cut_off(setup):
 
 
 def test_a_spread_delivered_twice_is_read_only_once():
-    """Kind A Englischbuch kommt als Doppelseite, und der Viewer liefert nicht
+    """Englischbuch von Kind A kommt als Doppelseite, und der Viewer liefert nicht
     immer, was bestellt wurde: Vierzig Abrufe deckten fünfzehn Doppelseiten ab,
     jede zwei- bis dreimal. Jede Dublette brachte dieselben Wörter noch einmal
     unter einer anderen Seitenzahl und riss die Fortsetzung auseinander (D138)."""
@@ -1210,7 +1210,7 @@ def test_the_same_page_number_in_two_books_is_not_a_duplicate():
 
 def test_how_a_heading_looks_decides_nothing():
     """Die Optik wird mitgeschrieben und ist in der Elternansicht zu sehen, sie
-    entscheidet aber nichts. Gemessen an Kind B Englisch machte sie aus
+    entscheidet aber nichts. Gemessen an Englisch von Kind B machte sie aus
     „Station 2", „Story" und „Check-out" eigene Einheiten: Das Buch hebt seine
     Abschnitte genauso hervor wie seine Teile. Was ein Teil ist, sagt das Buch
     selbst — im Laufkopf und im Verzeichnis, nicht im Schriftgrad (D139)."""

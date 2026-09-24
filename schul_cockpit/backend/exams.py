@@ -54,7 +54,9 @@ _SYNONYMS: dict[str, list[str]] = {
 
 
 def _norm(s: str) -> str:
-    s = unicodedata.normalize("NFKD", s or "").lower()
+    # NFC, nicht NFKD: NFKD zerlegt „ö" in „o" plus Kombinationszeichen, und
+    # „Französisch" traf danach weder die Synonyme noch die Wortzerlegung.
+    s = unicodedata.normalize("NFC", s or "").lower()
     return s.strip()
 
 

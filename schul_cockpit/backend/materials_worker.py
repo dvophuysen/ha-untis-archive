@@ -35,7 +35,11 @@ def _stuck(limit: int) -> list[tuple[int, int]]:
         return [(r[0], r[1]) for r in conn.execute(
             "SELECT m.account_id,m.id FROM materials m "
             "JOIN learning_profiles p ON p.account_id=m.account_id AND p.active=1 AND p.ai_enabled=1 "
-            "WHERE m.hidden=0 AND m.analysis_state='pending' AND m.updated_at<? "
+            # julianday vergleicht Zeitpunkte, nicht Zeichenketten: updated_at
+            # steht in UTC, die Grenze in Berliner Zeit. Als Text verglichen galt
+            # ein Upload von vor einer Minute schon als hängend und wurde ein
+            # zweites Mal ausgewertet, während die erste Lesung noch lief.
+            "WHERE m.hidden=0 AND m.analysis_state='pending' AND julianday(m.updated_at)<julianday(?) "
             "ORDER BY m.id LIMIT ?", (cutoff, limit)).fetchall()]
 
 

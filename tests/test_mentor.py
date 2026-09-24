@@ -834,7 +834,7 @@ def test_the_condition_reaches_the_model(setup):
 
 
 def test_three_turns_without_a_task_demand_one(setup):
-    """Nach Kind A berechtigtem Einwand hat der Mentor am 17.09. zweimal um
+    """Nach dem berechtigten Einwand von Kind A hat der Mentor am 17.09. zweimal um
     Erlaubnis gefragt („Sollen wir so weitermachen?"), statt die berichtigte
     Aufgabe zu stellen; das Kind musste nachfassen (D101). Zweimal anders
     erklären bleibt erlaubt, beim dritten Zug wird die Aufgabe eingefordert."""

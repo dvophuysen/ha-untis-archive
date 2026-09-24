@@ -541,6 +541,33 @@ def test_the_second_pass_is_what_gets_stored(env, monkeypatch):
     assert insight.content_text == "Handschrift" and tier == "hoch"
 
 
+def test_no_second_pass_when_both_tiers_are_the_same_deployment(env, monkeypatch):
+    """Stehen klein und hoch auf demselben Modell derselben Foundry, wäre die
+    zweite Lesung mit gleicher Tiefe derselbe Aufruf noch einmal."""
+    from backend import material_analysis as analysis
+    ai_env(monkeypatch)
+    same = {"model": "m", "deployment": "m", "foundry": "2"}
+    monkeypatch.setattr(analysis.ai, "ai_tiers", lambda: {"klein": same, "hoch": dict(same)})
+    seen = []
+
+    async def extract(account_id, row, tier=None, effort=None):
+        seen.append((tier, effort))
+        return _insight(content_text="Text", handwritten=True), "k"
+    monkeypatch.setattr(analysis, "extract", extract)
+    import asyncio
+    insight, tier = asyncio.run(analysis.read_material(1, _row()))
+    assert seen == [(analysis.FIRST_TIER, None)] and tier == analysis.FIRST_TIER
+    # Eine Wertetabelle bekommt die tiefe Prüfung trotzdem.
+    seen.clear()
+
+    async def table(account_id, row, tier=None, effort=None):
+        seen.append((tier, effort))
+        return _insight(content_text="Tabelle", page_type="table"), "k"
+    monkeypatch.setattr(analysis, "extract", table)
+    asyncio.run(analysis.read_material(1, _row()))
+    assert seen == [(analysis.FIRST_TIER, None), ("hoch", "high")]
+
+
 def test_a_cheaply_read_page_is_not_due_again_every_night(env, monkeypatch):
     """Sonst läse die Nacht jede günstig gelesene Seite endlos neu."""
     from backend import material_analysis as analysis
@@ -560,6 +587,39 @@ def test_a_cheaply_read_page_is_not_due_again_every_night(env, monkeypatch):
     with closing(db.webapp_conn()) as c, c:
         c.execute("UPDATE materials SET analysis_model='altes-modell' WHERE id=?", (mid,))
     assert mid in [m for _, m in analysis.due()]
+
+
+def test_a_cheaper_model_does_not_reread_what_a_stronger_one_read(env, monkeypatch):
+    """Fällt die erste Foundry aus und stehen alle Stufen auf dem kleinen
+    Modell, darf die Nacht den Bestand nicht neu lesen und dabei gründliche
+    Lesungen überschreiben (bis 1.13.10 bis zu 40 Seiten je Nacht). Eine Seite
+    ohne Themenbezug kommt höchstens alle zwei Wochen wieder."""
+    from datetime import datetime, timedelta, timezone
+    from backend import material_analysis as analysis
+    client, _, _ = env
+    ai_env(monkeypatch)
+    seed(client, ai_enabled=True)
+    monkeypatch.setitem(analysis.ai.RATES, 'stark', (10.0, 45.0))
+    monkeypatch.setitem(analysis.ai.RATES, analysis.ai.model_name(analysis.FIRST_TIER), (0.5, 3.0))
+    monkeypatch.setitem(analysis.ai.RATES, analysis.ai.model_name(analysis.CAREFUL_TIER), (0.5, 3.0))
+    fresh = datetime.now(timezone.utc).isoformat()
+    with closing(db.webapp_conn()) as c, c:
+        strong = c.execute("INSERT INTO materials(account_id,kind,subject_name,title,created_at,updated_at,"
+                           "analysis_state,analysis_version,analysis_model,analyzed_at) "
+                           "VALUES(1,'book_page','GESCHICHTE','Gründlich','now','now','ready',?,'stark',?)",
+                           (analysis.ANALYSIS_VERSION, fresh)).lastrowid
+        c.execute("INSERT INTO material_links(material_id,kind,target_id,origin,created_at)"
+                  " VALUES(?,'topic',1,'test','now')", (strong,))
+        unlinked = c.execute("INSERT INTO materials(account_id,kind,subject_name,title,created_at,updated_at,"
+                             "analysis_state,analysis_version,analysis_model,analyzed_at) "
+                             "VALUES(1,'book_page','ENGLISCH','Vokabeln','now','now','ready',?,?,?)",
+                             (analysis.ANALYSIS_VERSION, analysis.ai.model_name(analysis.FIRST_TIER), fresh)).lastrowid
+    due = [m for _, m in analysis.due()]
+    assert strong not in due and unlinked not in due
+    old = (datetime.now(timezone.utc) - timedelta(days=analysis.RETRY_UNLINKED_DAYS + 1)).isoformat()
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("UPDATE materials SET analyzed_at=? WHERE id=?", (old, unlinked))
+    assert unlinked in [m for _, m in analysis.due()]
 
 
 def test_background_analysis_has_its_own_tier_apart_from_copying(env, monkeypatch):

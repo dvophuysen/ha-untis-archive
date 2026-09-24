@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -152,11 +153,14 @@ def _register_services(hass: HomeAssistant) -> None:
         if bucket is None:
             raise HomeAssistantError("UNTIS Archive ist nicht eingerichtet.")
         coordinator: UntisCoordinator = bucket["coordinator"]
+        # storage.mark_lesson takes lstext/is_supervision keyword-only.
         await hass.async_add_executor_job(
-            coordinator.storage.mark_lesson,
-            lesson_id,
-            lstext,
-            is_supervision,
+            partial(
+                coordinator.storage.mark_lesson,
+                lesson_id,
+                lstext=lstext,
+                is_supervision=is_supervision,
+            )
         )
         # Trigger a refresh so sensors update.
         await coordinator.async_request_refresh()

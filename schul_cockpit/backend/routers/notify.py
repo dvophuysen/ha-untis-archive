@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from ..auth import CurrentUser, get_current_user, require_admin
+from ..auth import CurrentUser, assert_account_access, get_current_user, require_admin
 from ..config import SETTINGS
 from ..db import history_conn, webapp_conn
 from ..queries import upcoming_exams
@@ -70,6 +70,8 @@ def show_notify_token(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     _require_admin_or_parent(user)
+    # Nur für Kinder, die mit diesem Elternteil verknüpft sind.
+    assert_account_access(user, account_id)
     return {"token": _get_or_create_token(account_id)}
 
 
@@ -134,7 +136,7 @@ def notify_summary(
         ).fetchone()
     finally:
         conn.close()
-    if not row or not row["notify_token"] or row["notify_token"] != token:
+    if not row or not row["notify_token"] or not secrets.compare_digest(row["notify_token"], token):
         # Don't leak whether the account exists.
         raise HTTPException(status_code=401, detail="invalid token")
 

@@ -16,6 +16,7 @@ from datetime import date, timedelta
 
 from . import day_close
 from .db import webapp_conn
+from .learning import today_local
 from .lernstand import LABELS, PROGRESS
 from .subject_names import label as subject_label
 
@@ -40,7 +41,7 @@ def _short(day: str) -> str:
 
 
 async def review(account_id: int, today: date | None = None) -> dict:
-    today = today or date.today()
+    today = today or today_local()
     start, end = week_bounds(today)
     s, e = start.isoformat(), end.isoformat()
     with closing(webapp_conn()) as c:
@@ -48,13 +49,20 @@ async def review(account_id: int, today: date | None = None) -> dict:
             "SELECT e.stage_before,e.stage_after,e.reason,e.created_at,t.title,t.subject FROM topic_events e "
             "JOIN exam_topics t ON t.id=e.topic_id WHERE e.account_id=? AND substr(e.created_at,1,10) BETWEEN ? AND ? "
             "ORDER BY e.created_at", (account_id, s, e))]
+        # Eine Einheit zählt, wenn das Kind in dieser Woche darin geschrieben
+        # hat. Nur abgeschlossene zu zählen verfehlte fast alle: Hausaufgabenhilfe
+        # bleibt absichtlich offen (D25), und nur „Für heute fertig" schließt
+        # (D73) — der Satz „Keine Einheit mit dem Mentor" stand deshalb meist da,
+        # obwohl gearbeitet wurde.
+        active = ("SELECT DISTINCT session_id FROM mentor_messages WHERE account_id=? AND role='user' "
+                  "AND substr(created_at,1,10) BETWEEN ? AND ?")
         units = c.execute(
             "SELECT COUNT(*) AS n, COALESCE(SUM(elapsed_seconds),0) AS sec FROM mentor_sessions "
-            "WHERE account_id=? AND is_test=0 AND is_demo=0 AND status='completed' AND substr(updated_at,1,10) BETWEEN ? AND ?",
-            (account_id, s, e)).fetchone()
+            f"WHERE account_id=? AND is_test=0 AND is_demo=0 AND id IN ({active})",
+            (account_id, account_id, s, e)).fetchone()
         unit_subjects = [r[0] for r in c.execute(
-            "SELECT DISTINCT subject FROM mentor_sessions WHERE account_id=? AND is_test=0 AND is_demo=0 AND status='completed' "
-            "AND substr(updated_at,1,10) BETWEEN ? AND ? ORDER BY subject", (account_id, s, e))]
+            "SELECT DISTINCT subject FROM mentor_sessions WHERE account_id=? AND is_test=0 AND is_demo=0 "
+            f"AND id IN ({active}) ORDER BY subject", (account_id, account_id, s, e))]
         homework_done = c.execute(
             "SELECT COUNT(*) FROM tasks WHERE account_id=? AND status='done' AND substr(completed_at,1,10) BETWEEN ? AND ?",
             (account_id, s, e)).fetchone()[0]
@@ -65,14 +73,17 @@ async def review(account_id: int, today: date | None = None) -> dict:
             "SELECT school_day,answer FROM afternoon_checks WHERE account_id=? AND school_day BETWEEN ? AND ?",
             (account_id, s, e))] if _has(c, "afternoon_checks") else []
         cost_micro = c.execute(
-            "SELECT COALESCE(SUM(CASE WHEN status='settled' THEN charged_micro ELSE reserved_micro END),0) FROM mentor_ai_calls "
+            # Wie das Gateway: Freigegebene Aufrufe (abgelehnt, keine Tokens) kosten nichts.
+            "SELECT COALESCE(SUM(CASE WHEN status='settled' THEN charged_micro WHEN status='released' THEN 0 "
+            "ELSE reserved_micro END),0) FROM mentor_ai_calls "
             "WHERE account_id=? AND day BETWEEN ? AND ?", (account_id, s, e)).fetchone()[0]
         vocab = None
         if _has(c, "vocab_attempts"):
             row = c.execute(
-                "SELECT COUNT(*) AS n, COALESCE(SUM(result='correct'),0) AS ok FROM vocab_attempts "
+                "SELECT COUNT(*) AS n, COALESCE(SUM(result='correct'),0) AS ok, "
+                "COALESCE(SUM(result!='correct' AND TRIM(answer)=''),0) AS open FROM vocab_attempts "
                 "WHERE account_id=? AND substr(created_at,1,10) BETWEEN ? AND ?", (account_id, s, e)).fetchone()
-            vocab = {"attempts": row["n"], "correct": row["ok"]} if row["n"] else None
+            vocab = {"attempts": row["n"], "correct": row["ok"], "dont_know": row["open"]} if row["n"] else None
 
     ups, downs = [], []
     for ev in events:
@@ -127,7 +138,10 @@ async def review(account_id: int, today: date | None = None) -> dict:
     else:
         lines.append("Keine Einheit mit dem Mentor in dieser Woche.")
     if vocab:
-        lines.append(f"{vocab['attempts']} Vokabelabfragen, {vocab['correct']} davon richtig.")
+        # „Weiß ich nicht" deckt die Lösung auf und ist Lernen, kein Irrtum.
+        open_ = vocab.get("dont_know") or 0
+        lines.append(f"{vocab['attempts']} Vokabelabfragen, {vocab['correct']} davon richtig"
+                     + (f", {open_}× „Weiß ich nicht“." if open_ else "."))
     lines.append(f"{homework_done} {'Aufgabe' if homework_done == 1 else 'Aufgaben'} erledigt" + (f", {overdue} überfällig." if overdue else "."))
     if photo_days:
         lines.append(f"An {len(photo_days)} {'Tag' if len(photo_days) == 1 else 'Tagen'} nach der Schule geantwortet, {photos} {'Foto' if photos == 1 else 'Fotos'}.")

@@ -281,7 +281,7 @@ def _rank(priority: dict | None, subject: str, page: int, only_chapter: bool) ->
 def spread_left(account_id: int, book_title: str) -> int | None:
     """Ob das Buch Doppelseiten liefert, und welche Hälfte die Nummer trägt.
 
-    Kind A Green Line kommt als Doppelseite: ein Bild, zwei gedruckte Seiten,
+    Green Line von Kind A kommt als Doppelseite: ein Bild, zwei gedruckte Seiten,
     und die Bestellung trägt die Nummer der linken. Ungerade bestellt liefert
     der Viewer dann irgendetwas — vierzig Abrufe deckten fünfzehn Seiten ab,
     jede mehrfach (D138). Gemessen wird am Bestand, nicht geraten: Erst ab drei

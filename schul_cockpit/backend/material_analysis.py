@@ -11,7 +11,7 @@ import json
 import logging
 import re
 from contextlib import closing
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from pydantic import Field, ValidationError
 
@@ -463,6 +463,16 @@ async def compare(account_id: int, material_id: int, tier: str, effort: str | No
 # das Urteil holt die Eskalation (D137).
 FIRST_TIER = "klein"
 CAREFUL_TIER = "hoch"
+# Die Tiefe, mit der das Gateway ohne Angabe nachdenkt (ai_gateway.complete).
+FIRST_EFFORT = "low"
+
+
+def _same_deployment(a: str, b: str) -> bool:
+    tiers = ai.ai_tiers()
+    ta, tb = tiers.get(a) or {}, tiers.get(b) or {}
+    return bool(ta.get("model")) and all(ta.get(k) == tb.get(k) for k in ("model", "deployment", "foundry"))
+
+
 # Eigene Bearbeitungen, Arbeitshefte und Arbeitsblätter: dort steht Handschrift
 # und dort zählt jede Zeile.
 CAREFUL_KINDS = {"workbook", "worksheet", "own_work"}
@@ -504,6 +514,12 @@ async def read_material(account_id: int, row) -> tuple[Insight, str]:
     if not step:
         return insight, FIRST_TIER
     tier, effort = step
+    if effort == FIRST_EFFORT and _same_deployment(tier, FIRST_TIER):
+        # Liegen beide Stufen auf derselben Bereitstellung (etwa weil die
+        # erste Foundry ausfällt), wäre die zweite Lesung derselbe Aufruf noch
+        # einmal: doppelte Kosten, kein Zugewinn. Mit tieferem Nachdenken
+        # (Wertetabellen) bleibt sie sinnvoll.
+        return insight, FIRST_TIER
     try:
         careful, _ = await extract(account_id, row, tier=tier, effort=effort)
     except Exception as exc:
@@ -586,27 +602,57 @@ async def after_analysis(account_id: int, material_id: int) -> None:
         _LOGGER.warning("Nacharbeit zu Material %s nicht möglich", material_id, exc_info=True)
 
 
+# Fehlt einer Seite noch Fach oder Thema, kann eine spätere Lesung es finden,
+# weil inzwischen Themen angelegt sind. Das rechtfertigt einen neuen Versuch
+# alle zwei Wochen, nicht jede Nacht: Vokabelseiten und abgerufene Buchseiten
+# bekommen oft nie einen Themenbezug und wurden bis 1.13.10 Nacht für Nacht mit
+# Bild neu gelesen.
+RETRY_UNLINKED_DAYS = 14
+
+
+def _stronger(current: str, stored: str) -> bool:
+    """Ob eine Lesung mit dem jetzigen Modell besser wäre als die gespeicherte.
+    Maßstab ist der hinterlegte Ausgangspreis; ein unbekannter alter Name gilt
+    als schwächer. Ein Wechsel auf ein günstigeres Modell (etwa weil die erste
+    Foundry ausfällt) liest den Bestand nicht neu und überschreibt keine
+    gründliche Lesung mit einer flacheren."""
+    if not current or current == stored:
+        return False
+    old, new = ai.RATES.get(stored), ai.RATES.get(current)
+    if old is None:
+        return True
+    return new is not None and new[1] > old[1]
+
+
 def due(limit: int = 20) -> list[tuple[int, int]]:
-    """What the night run picks up: never analysed, failed, outdated version or
-    model, and materials whose subject or topic could not be resolved yet."""
+    """What the night run picks up: never analysed, failed, outdated version, a
+    stronger model than the stored reading, and — at most every two weeks —
+    materials whose subject or topic could not be resolved yet."""
     # Beide Stufen, die lesen dürfen: Seit den zwei Durchgängen (D90) trägt eine
     # Seite mal das günstige, mal das gründliche Modell. Nur eine davon zu
     # prüfen hieße, die halbe Sammlung dauerhaft für fällig zu halten und jede
     # Nacht neu zu lesen.
-    models = [ai.model_name(FIRST_TIER) or "", ai.model_name(CAREFUL_TIER) or ""]
+    models = {ai.model_name(FIRST_TIER) or "", ai.model_name(CAREFUL_TIER) or ""}
+    retry_before = (datetime.now(timezone.utc) - timedelta(days=RETRY_UNLINKED_DAYS)).isoformat()
     with closing(webapp_conn()) as conn:
         rows = conn.execute(
-            "SELECT m.account_id,m.id FROM materials m "
+            "SELECT m.account_id,m.id,m.analysis_state,m.analysis_version,m.origin,m.analysis_model,m.analyzed_at,"
+            " (m.subject_name IS NULL OR m.subject_name='') AS no_subject,"
+            " NOT EXISTS (SELECT 1 FROM material_links l WHERE l.material_id=m.id AND l.kind='topic') AS no_topic "
+            "FROM materials m "
             "JOIN learning_profiles p ON p.account_id=m.account_id AND p.active=1 AND p.ai_enabled=1 "
-            "WHERE m.hidden=0 AND ("
-            " m.analysis_state IN ('pending','failed')"
-            " OR (m.analysis_version<? AND COALESCE(m.origin,'')!='book_fetch')"
-            " OR COALESCE(m.analysis_model,'') NOT IN (?,?)"
-            " OR (m.subject_name IS NULL OR m.subject_name='')"
-            " OR NOT EXISTS (SELECT 1 FROM material_links l WHERE l.material_id=m.id AND l.kind='topic')"
-            ") ORDER BY m.analysis_state='pending' DESC, m.id DESC LIMIT ?",
-            (ANALYSIS_VERSION, *models, limit)).fetchall()
-    return [(r[0], r[1]) for r in rows]
+            "WHERE m.hidden=0 ORDER BY m.analysis_state='pending' DESC, m.id DESC").fetchall()
+    picked = []
+    for r in rows:
+        stored = r["analysis_model"] or ""
+        if (r["analysis_state"] in ("pending", "failed")
+                or (r["analysis_version"] < ANALYSIS_VERSION and (r["origin"] or "") != "book_fetch")
+                or (stored not in models and any(_stronger(m, stored) for m in models))
+                or ((r["no_subject"] or r["no_topic"]) and (r["analyzed_at"] or "") < retry_before)):
+            picked.append((r["account_id"], r["id"]))
+            if len(picked) >= limit:
+                break
+    return picked
 
 
 def utc_hour() -> int:

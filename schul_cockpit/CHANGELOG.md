@@ -1,3 +1,16 @@
+## 1.13.11
+
+- Sicherheit: Die Auslieferung der App-Dateien gab über den Direktport ohne Anmeldung beliebige Dateien des Containers heraus, auch die Add-on-Optionen mit den KI-Schlüsseln. Angefragt werden kann jetzt nur noch, was im Frontend-Verzeichnis liegt.
+- Sicherheit: Das Mitteilungs-Token eines Kindes sehen nur noch Eltern, die mit diesem Kind verknüpft sind; der Vergleich läuft zeitkonstant.
+- KI-Kosten: Die Nacht liest den Bestand nicht mehr neu, nur weil jetzt ein günstigeres Modell eingestellt ist. Bisher wurden so bis zu 40 Seiten je Nacht neu gelesen und gründliche Lesungen durch flachere ersetzt. Seiten ohne Fach- oder Themenbezug kommen alle 14 Tage wieder statt jede Nacht.
+- KI-Kosten: Liegen beide Lesestufen auf demselben Modell, entfällt die zweite, identische Lesung; Wertetabellen behalten die tiefe Zweitlesung.
+- Die hinterlegten Kostensätze gelten nach dem 01.12.2026 als Schätzung weiter. Bisher hätte die App ab diesem Tag jeden KI-Aufruf verweigert. gpt-5-mini wird zum Listenpreis angerechnet (vorher ein zu niedriger Platzhalter); gpt-5-nano, gpt-5 und gpt-5.1 sind hinterlegt.
+- Wochenrückblick: zählt Mentor-Einheiten, in denen das Kind in der Woche geschrieben hat (Hausaufgabenhilfe bleibt ja offen), nennt „Weiß ich nicht" getrennt und rechnet abgelehnte KI-Aufrufe nicht als Kosten.
+- Arbeiten in Fächern mit Umlaut (etwa Französisch) werden aus dem Kalender wieder zugeordnet.
+- Ein frischer Upload wird nicht mehr ein zweites Mal ausgewertet, während die erste Lesung noch läuft.
+- Hausaufgabenhilfe antwortet wie die übrigen Einheiten ohne LaTeX und Markdown.
+- iPhone: Kein Zoom mehr beim Antippen von Eingabefeldern. Verbindungsfehler werden verständlich gemeldet.
+
 ## 1.13.10
 
 - „Aus Materialien": Angekreuzte Seiten gehen beim Senden automatisch mit, auch ohne vorher „einbinden" zu tippen. Der Knopf heißt dann „Senden mit 2 Seiten". Bisher blieb auf dem Handy der Einbinden-Knopf unter einer langen Liste verborgen, und die Nachricht ging ohne die Seiten raus.
@@ -72,11 +85,11 @@
 
 ## 1.12.6
 
-- Wie eine Überschrift aussieht, entscheidet nichts mehr. An Kind B Englisch gemessen machte die Optik aus „Station 2", „Story" und „Check-out" eigene Einheiten — das Buch hebt seine Abschnitte genauso hervor wie seine Teile. Was ein Teil ist, sagt das Buch selbst: im Laufkopf und im Verzeichnis. Größe, Farbe und Rahmen werden weiter mitgeschrieben und sind in der Elternansicht zu sehen.
+- Wie eine Überschrift aussieht, entscheidet nichts mehr. An Englisch von Kind B gemessen machte die Optik aus „Station 2", „Story" und „Check-out" eigene Einheiten — das Buch hebt seine Abschnitte genauso hervor wie seine Teile. Was ein Teil ist, sagt das Buch selbst: im Laufkopf und im Verzeichnis. Größe, Farbe und Rahmen werden weiter mitgeschrieben und sind in der Elternansicht zu sehen.
 
 ## 1.12.5
 
-- An Kind B Büchern nachgebessert: „Holiday words" ist eine Überschrift und kein Laufkopf, „Unit 1 / Media smart" über der Seite nennt zwei Teile, und eine bloße Nummer im Laufkopf taugt nicht als Abkürzung — sonst wurde „1. Lernen mit dem Buch" zur eigenen Einheit.
+- An den Büchern von Kind B nachgebessert: „Holiday words" ist eine Überschrift und kein Laufkopf, „Unit 1 / Media smart" über der Seite nennt zwei Teile, und eine bloße Nummer im Laufkopf taugt nicht als Abkürzung — sonst wurde „1. Lernen mit dem Buch" zur eigenen Einheit.
 - Beginnt eine Überschrift mit dem Namen aus dem Laufkopf, gehört sie zu diesem Teil: „Media smart Searching for information online" unter „Unit 1 / Media smart".
 
 ## 1.12.4
@@ -111,7 +124,7 @@
 
 ## 1.11.1
 
-- Jede gedruckte Buchseite wird nur noch einmal in die Vokabelliste gelesen. Kind A Englischbuch kommt als Doppelseite, und der Viewer lieferte auf viele Bestellungen dieselbe Doppelseite noch einmal — vierzig Abrufe für rund fünfzehn Seiten. Jede Dublette brachte dieselben Wörter unter einer anderen Seitenzahl und riss die Fortsetzung über den Seitenwechsel auseinander; das erklärt die unbrauchbaren Listen in Englisch und Spanisch.
+- Jede gedruckte Buchseite wird nur noch einmal in die Vokabelliste gelesen. Englischbuch von Kind A kommt als Doppelseite, und der Viewer lieferte auf viele Bestellungen dieselbe Doppelseite noch einmal — vierzig Abrufe für rund fünfzehn Seiten. Jede Dublette brachte dieselben Wörter unter einer anderen Seitenzahl und riss die Fortsetzung über den Seitenwechsel auseinander; das erklärt die unbrauchbaren Listen in Englisch und Spanisch.
 - Die Wörter, die aus solchen Dubletten schon in der Liste standen, werden beim nächsten Lesedurchgang entfernt. Geübte Wörter bleiben dabei unangetastet — ein Lernstand geht nie verloren.
 - Die Fortsetzung von der Seite davor findet jetzt auch die linke Seite einer Doppelseite: Auf 160/161 folgt 162/163, die Vorseite liegt zwei Nummern zurück.
 
@@ -152,7 +165,7 @@
 
 ## 1.7.3
 
-- Fehler behoben: Beim Lesen einer Vokabelseite bekam ich die Einheit der Vorseite vorgesagt und habe sie im Zweifel abgeschrieben, statt auf den Laufkopf der Seite zu sehen. Ein einziger Fehler zog sich so durch alle Folgeseiten — bei Kind B Englisch landeten dreizehn von sechzehn Seiten in „Unit 1".
+- Fehler behoben: Beim Lesen einer Vokabelseite bekam ich die Einheit der Vorseite vorgesagt und habe sie im Zweifel abgeschrieben, statt auf den Laufkopf der Seite zu sehen. Ein einziger Fehler zog sich so durch alle Folgeseiten — bei Englisch von Kind B landeten dreizehn von sechzehn Seiten in „Unit 1".
 - Steht über einer Seite ein doppelter Laufkopf wie „Unit 1 / Media smart", entscheidet jetzt die Seite selbst, welcher gemeint ist.
 
 ## 1.7.2

@@ -282,6 +282,16 @@ def test_a_subject_written_into_one_word_still_matches():
     assert match_subject("Klausur Werte und Normen", amap)[1][0]["subject_name"] == "Werte und Normen"
 
 
+def test_a_subject_with_an_umlaut_matches():
+    """NFKD zerlegte „ö“; „Französischarbeit“ blieb bis 1.13.10 unzugeordnet."""
+    from backend.exams import _norm, match_subject
+
+    amap = {_norm("Französisch"): {"subject_name": "FRANZÖSISCH", "subject_untis_id": 5, "multiword": False}}
+    status, subs = match_subject("Französischarbeit Nr. 2", amap)
+    assert status == "auto" and subs[0]["subject_name"] == "FRANZÖSISCH"
+    assert match_subject("Klausur Französisch", amap)[0] == "auto"
+
+
 def test_a_date_already_in_the_exam_plan_cannot_be_entered_by_hand(env, monkeypatch):
     from contextlib import closing as _closing
     from backend.routers import exams as exam_routes

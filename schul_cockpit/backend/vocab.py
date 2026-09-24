@@ -966,7 +966,7 @@ def book_of(row) -> str:
 def one_per_spread(rows: list[dict]) -> list[dict]:
     """Jede gedruckte Seite nur einmal lesen.
 
-    Der Viewer liefert nicht immer, was bestellt wurde: Bei Kind A Englisch
+    Der Viewer liefert nicht immer, was bestellt wurde: Bei Englisch von Kind A
     deckten vierzig Abrufe fünfzehn Doppelseiten ab, jede zwei- bis dreimal,
     weil auf „Seite 167“ die Seiten 162/163 kamen. Jede Dublette bringt dieselben
     Wörter noch einmal unter einer anderen Seitenzahl, und die Fortsetzung über
@@ -1076,7 +1076,7 @@ def book_units(account_id: int, subject: str) -> dict[str, dict]:
 
 # Ein anderer Teil des Buchs, der hinter dem Wortschatz beginnt: Das Dictionary
 # von Green Line führt das gesamte Vokabular aller vier Bände alphabetisch. Als
-# Wortschatz gelesen schwemmt es die Liste zu — Kind A „Unidad 3" hatte 1161
+# Wortschatz gelesen schwemmt es die Liste zu — „Unidad 3" von Kind A hatte 1161
 # Wörter (D139).
 _OTHER_PART = re.compile(
     r"^(dictionary|diccionario|glosario|glossar|w[oö]rterverzeichnis|wortverzeichnis|index|namen|names)\b", re.I)
@@ -1096,7 +1096,7 @@ def head_levels(heads: list[dict], known: dict) -> dict[str, str]:
     Laufkopf wiederkehrt. Alles andere ist zunächst ein Abschnitt.
 
     Größe, Farbe und Rahmen werden mitgeschrieben und sind in der Elternansicht
-    zu sehen, entscheiden aber nichts. Gemessen an Kind B Englisch machte die
+    zu sehen, entscheiden aber nichts. Gemessen an Englisch von Kind B machte die
     Optik aus „Station 2", „Story" und „Check-out" eigene Einheiten: Das Buch
     hebt seine Abschnitte genauso hervor wie seine Teile. Was ein Teil ist, sagt
     das Buch selbst — im Laufkopf und im Verzeichnis, nicht im Schriftgrad."""

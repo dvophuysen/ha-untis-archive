@@ -22,9 +22,17 @@ async function request(method, path, body) {
       opts.body = JSON.stringify(body);
     }
   }
-  const resp = await fetch(joinUrl(path), opts);
+  let resp;
+  try {
+    resp = await fetch(joinUrl(path), opts);
+  } catch (_) {
+    // Funkloch oder App startet gerade neu: iOS meldet sonst nur „Load failed".
+    throw new ApiError('Keine Verbindung zur App – gleich nochmal versuchen.', 0);
+  }
   if (!resp.ok) {
     let detail = `${resp.status} ${resp.statusText}`;
+    // Während eines Add-on-Neustarts antwortet HA mit 502/503/504 ohne JSON.
+    if ([502, 503, 504].includes(resp.status)) detail = 'Die App startet gerade neu – gleich nochmal versuchen.';
     try {
       const data = await resp.json();
       if (data?.detail) detail = Array.isArray(data.detail)

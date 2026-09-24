@@ -15,7 +15,6 @@ import asyncio
 import logging
 import re
 import sqlite3
-from contextlib import suppress
 from datetime import datetime, timezone
 
 from .db import webapp_conn
@@ -384,10 +383,12 @@ async def sync_all() -> None:
 
 
 async def background_sync_loop() -> None:
+    # Ein Abbruch beim Herunterfahren muss durchgehen; bis 1.13.10 schluckte
+    # ein suppress(CancelledError) ihn, die Schleife lief weiter und HA musste
+    # den Container hart beenden.
     while True:
-        with suppress(asyncio.CancelledError):
-            try:
-                await sync_all()
-            except Exception:
-                _LOGGER.exception("Background HA-todo sync failed")
+        try:
+            await sync_all()
+        except Exception:
+            _LOGGER.exception("Background HA-todo sync failed")
         await asyncio.sleep(SYNC_INTERVAL_SECONDS)

@@ -33,15 +33,15 @@ RATE_UNTIL = date(2026, 12, 1)
 RATES = {'gpt-5.6-sol': (10.0, 45.0), 'gpt-5.6-terra': (5.0, 18.0), 'gpt-5.6-luna': (0.4, 1.8),
          # Spracheingabe: Audio-Token (etwa 1000 je Minute) und Text; Listenpreis 6 $/M plus Puffer.
          'gpt-4o-transcribe': (6.5, 11.0),
-         # Platzhalter: Der Satz für gpt-5-mini ist hier nicht bekannt. Gebucht
-         # wird in der Größenordnung der günstigsten bekannten Stufe, damit die
-         # Eichung überhaupt laufen kann. Er kann danebenliegen — sobald der
-         # echte Satz vorliegt, gehört er in die Add-on-Konfiguration, die ihm
-         # vorgeht (D105).
-         'gpt-5-mini': (0.4, 1.8)}
+         # GPT-5-Familie nach derselben Regel: Listenpreis Standard Global in USD
+         # (mini 0.25/2.00, nano 0.05/0.40, gpt-5 und gpt-5.1 1.25/10), Faktor 2
+         # auf den Eingang und 1,5 auf den Ausgang. Bis 1.13.10 stand für mini ein
+         # Platzhalter von 0,40/1,80 €, der den Ausgang unter Listenpreis buchte.
+         'gpt-5-mini': (0.5, 3.0), 'gpt-5-nano': (0.1, 0.6),
+         'gpt-5': (2.5, 15.0), 'gpt-5.1': (2.5, 15.0)}
 # Modelle, deren Satz ein Platzhalter ist. Die Elternansicht sagt das dazu,
 # damit eine geschätzte Buchung nicht wie eine gemessene aussieht.
-ESTIMATED = {'gpt-5-mini'}
+ESTIMATED: set[str] = set()
 # Eine Minute Sprache sind rund tausend Audio-Token; die Schätzung rechnet großzügig.
 AUDIO_TOKENS_PER_SECOND = 20
 TRANSCRIBE_MAX_BYTES = 8 * 1024 * 1024
@@ -142,7 +142,7 @@ def status():
                          output_per_m=rate[1] if rate else None,foundry=entry['foundry'],
                          # Geschätzt heißt: kein eigener Satz eingetragen und der
                          # hinterlegte ist nur ein Platzhalter.
-                         estimated=bool(not entry.get('rate') and entry['model'] in ESTIMATED))
+                         estimated=rate_is_estimate(entry))
     return dict(month=month,used_eur=round(used/1e6,4),limit_eur=cfg['monthly_micro']/1e6,daily_limit_eur=cfg['daily_micro']/1e6,
                 background_limit_eur=cfg['background_micro']/1e6,session_limit_eur=SESSION_MICRO/1e6,
                 model=model,sources_model=cfg.get('sources_model') or None,opening_model=cfg.get('opening_model') or None,
@@ -207,11 +207,21 @@ def settings_for(tier):
 def rate_for(settings):
     """Der Kostensatz einer Stufe: erst der eigene aus der Konfiguration, sonst
     der hinterlegte des Modells. Ohne beides wird nicht gerechnet und nicht
-    aufgerufen, damit nie ungemessen Geld ausgegeben wird."""
+    aufgerufen, damit nie ungemessen Geld ausgegeben wird.
+
+    Ein hinterlegter Satz nach RATE_UNTIL gilt weiter, aber als Schätzung: Bis
+    1.13.10 fiel er an diesem Tag ersatzlos weg, und jede Stufe ohne eigenen
+    Satz hätte ab dann jeden Aufruf verweigert — Stillstand ist nach D89 der
+    schlechtere Ausgang als eine möglicherweise veraltete Anrechnung."""
     if settings.get('rate'): return settings['rate']
-    model=settings['model']
-    if model in RATES and today_local()<RATE_UNTIL: return RATES[model]
-    return None
+    return RATES.get(settings['model'])
+
+
+def rate_is_estimate(settings):
+    """Ob die Anrechnung einer Stufe auf einem Platzhalter oder einem
+    abgelaufenen Satz beruht. Ein eigener Satz aus der Konfiguration nie."""
+    if settings.get('rate') or settings['model'] not in RATES: return False
+    return settings['model'] in ESTIMATED or today_local()>=RATE_UNTIL
 
 
 def endpoint_overview():
@@ -224,7 +234,8 @@ def endpoint_overview():
         host=urlsplit(platforms[entry['foundry']]['url']).hostname or 'ohne Adresse'
         name=entry['model'] if entry['deployment']==entry['model'] else f"{entry['model']} als {entry['deployment']}"
         rate=rate_for({**entry})
-        parts.append(f"{tier}: {name} über Foundry {entry['foundry']} ({host})"+('' if rate else ', ohne Kostensatz'))
+        parts.append(f"{tier}: {name} über Foundry {entry['foundry']} ({host})"
+                     +('' if rate else ', ohne Kostensatz')+(', Kostensatz geschätzt' if rate and rate_is_estimate(entry) else ''))
     return '; '.join(parts) or 'kein Modell eingerichtet'
 
 

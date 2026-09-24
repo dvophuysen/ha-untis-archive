@@ -229,3 +229,18 @@ def test_the_month_is_projected_and_warns_before_it_is_reached(setup):
     # 3 Euro am Tag, 19 Tage Rest: die Hochrechnung reißt die Schwelle von 60.
     assert s['per_day_eur'] == 3.0 and s['projected_eur'] == 78.0
     assert s['warning'] is True and s['used_eur'] < 60, 'die Warnung kommt vor dem Erreichen'
+
+
+def test_an_expired_table_rate_keeps_the_app_running_as_an_estimate(setup, monkeypatch):
+    # Bis 1.13.10 fiel der hinterlegte Satz am 01.12.2026 weg, und jede Stufe
+    # ohne eigenen Satz verweigerte ab dann jeden Aufruf (D89: Stillstand ist
+    # der schlechtere Ausgang).
+    _, _, patch = setup
+    both(patch, hoch={'modellname': 'test', 'foundry': '1'})
+    settings = L.ai_settings('hoch')
+    monkeypatch.setattr(ai, 'today_local', lambda: ai.RATE_UNTIL - ai.timedelta(days=1))
+    assert ai.rate_for(settings) == ai.RATES['test'] and not ai.rate_is_estimate(settings)
+    monkeypatch.setattr(ai, 'today_local', lambda: ai.RATE_UNTIL)
+    assert ai.rate_for(settings) == ai.RATES['test'] and ai.rate_is_estimate(settings)
+    both(patch, hoch={'modellname': 'test', 'foundry': '1', 'preis_eingang': 3.5, 'preis_ausgang': 9.5})
+    assert not ai.rate_is_estimate(L.ai_settings('hoch'))
