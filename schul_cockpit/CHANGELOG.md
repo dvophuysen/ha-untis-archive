@@ -1,3 +1,7 @@
+## 1.13.30
+
+- Nachbesserung: Auch Zweifel, die sich nur in der Lautschrift in eckigen Klammern oder in Satzzeichen unterscheiden, führen nicht mehr zum Gegenlesen.
+
 ## 1.13.29
 
 - Nachbesserung zu 1.13.28: Unscharfe Lautschrift führt nicht mehr zur Bitte um ein neues Foto, und eine Seite, deren einzige Zweifel die Eintragungen des Kindes sind, steht nicht mehr wegen ihrer niedrigen Gesamtsicherheit zum Gegenlesen.

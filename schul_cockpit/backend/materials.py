@@ -294,7 +294,20 @@ def doubts_of(row) -> list[dict]:
 # Kontrolle am Foto selbst, nicht an der Abschrift (D123). Und was unscharf oder
 # abgeschnitten ist, kann niemand besser lesen als das Modell: Es braucht ein
 # neues Foto, und das macht das Kind.
-_IPA_REASON = re.compile(r"lautschrift|\bipa\b|betonung|aussprachezeichen|phonet", re.I)
+_IPA_REASON = re.compile(r"lautschrift|\bipa\b|betonung|aussprachezeichen|phonet|\bschwa\b", re.I)
+# Reine Zeichensetzung ändert nichts an dem, was gelernt wird.
+_TYPO_REASON = re.compile(r"bindestrich|satzzeichen|leerzeichen|abstände|zeilenumbruch|ausrufezeichen|komma\b", re.I)
+
+
+def _only_brackets_differ(d: dict) -> bool:
+    """Die zwei Lesarten unterscheiden sich nur in der Lautschrift in eckigen
+    Klammern (oder gar nicht, von Zeichen abgesehen)."""
+    alt = d.get("alternative") or ""
+    if not alt:
+        return False
+    def core(x: str) -> str:
+        return re.sub(r"[^0-9a-zäöüß]", "", re.sub(r"\[[^\]]*\]", "", x.casefold()))
+    return core(d.get("text") or "") == core(alt)
 _PHOTO_REASON = re.compile(r"unscharf|verschwommen|verwackelt|abgeschnitten|angeschnitten|verdeckt|zu dunkel|"
                            r"schlecht beleuchtet|spiegel|nicht (?:im|auf dem) (?:foto|bild)|fehl\w* (?:im|auf dem) (?:foto|bild)|"
                            r"au(?:ß|ss)erhalb des (?:fotos|bildes)", re.I)
@@ -317,6 +330,8 @@ def review_doubts(doubts: list[dict], kind: str = "") -> list[dict]:
     """Die Zweifel, die wirklich ein Elternteil brauchen."""
     return [d for d in doubts
             if not _IPA_REASON.search(d.get("reason") or "")
+            and not _TYPO_REASON.search(d.get("reason") or "")
+            and not _only_brackets_differ(d)
             and not proofread.PUPIL.search(d.get("text") or "")
             and not (kind in PRINTED_KINDS and _PUPIL_REASON.search(d.get("reason") or ""))
             and not _photo_doubt(d)]
