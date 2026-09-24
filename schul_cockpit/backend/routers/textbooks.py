@@ -60,7 +60,7 @@ def _portal_url(raw: str) -> str:
 def _public(row) -> dict:
     return {
         "configured": row is not None,
-        "portal_url": row["portal_url"] if row else "https://beispiel-iserv.de",
+        "portal_url": row["portal_url"] if row else "",
         "username": row["username"] if row else "",
         "password_saved": row is not None,
         "verified_at": row["verified_at"] if row else None,

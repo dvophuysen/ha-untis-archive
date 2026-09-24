@@ -446,7 +446,7 @@
     <div class="textbook-grid">
       <label>
         IServ-Adresse
-        <input type="url" autocomplete="url" bind:value={textbookAccess.portal_url} />
+        <input type="url" autocomplete="url" placeholder="https://deine-schule-iserv.de" bind:value={textbookAccess.portal_url} />
       </label>
       <label>
         Benutzername

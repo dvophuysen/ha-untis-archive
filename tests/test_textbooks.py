@@ -27,7 +27,7 @@ def test_parent_can_store_update_and_delete_write_only_credentials(env):
         initial = client.get(URL).json()
         assert initial == {
             "configured": False,
-            "portal_url": "https://beispiel-iserv.de",
+            "portal_url": "",
             "username": "",
             "password_saved": False,
             "verified_at": None,

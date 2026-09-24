@@ -1,3 +1,7 @@
+## 1.13.18
+
+- Datenschutz: Adresse und Kürzel der Schule stehen nicht mehr im Programm, in Tests und Beispielen. Das Feld für das IServ-Portal ist ohne eingetragenen Zugang leer statt vorbelegt.
+
 ## 1.13.17
 
 - Familienansicht: Neu ist „So wurde die App genutzt“ unter dem Wochenrückblick, nur für Eltern. Oben eine Zeile („5 Tage aktiv · 3 Mentor-Einheiten · …“), aufgeklappt die Woche: wann gearbeitet wurde, Zeit in der App, Mentor-Einheiten mit Hilfeanfragen und selbst gelösten Aufgaben, Vokabeln mit „Weiß ich nicht“ und ob die Wörter später saßen, Aufgaben vor oder nach dem Fälligkeitstag, Check-ins, Uploads. Auffälligkeiten stehen mit Beleg, möglicher Deutung und dem, was die App nicht sehen kann. Keine Punktzahl, kein Vergleich zwischen Geschwistern.
