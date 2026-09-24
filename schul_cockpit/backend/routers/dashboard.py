@@ -158,13 +158,10 @@ async def dashboard(user: CurrentUser = Depends(get_current_user)) -> dict:
     # nach Schuljahreswechsel / Restore), gab es vorher eine namenlose
     # Geisterkarte im Dashboard. Die IDs melden wir separat, damit die
     # Oberfläche warnen kann statt still Unsinn anzuzeigen.
-    kids = []
-    stale_account_ids = []
-    for acc_id in account_ids:
-        if acc_id not in names:
-            stale_account_ids.append(acc_id)
-            continue
-        kids.append(await _dashboard_for_account(acc_id, names[acc_id], today))
+    stale_account_ids = [acc_id for acc_id in account_ids if acc_id not in names]
+    # Die Kinder parallel: Kalender und Karte laufen je Kind unabhängig.
+    kids = list(await asyncio.gather(*(
+        _dashboard_for_account(acc_id, names[acc_id], today) for acc_id in account_ids if acc_id in names)))
     return {
         "today": today_iso,
         "kids": kids,

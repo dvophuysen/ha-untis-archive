@@ -1,3 +1,7 @@
+## 1.14.1
+
+- Startseite: Die Karten der Kinder werden parallel berechnet und kommen schneller. Fachnamen unter „Beobachten“ und im Status stehen lesbar da statt in Großbuchstaben.
+
 ## 1.14.0
 
 - Neue Startseite für Eltern: je Kind eine Karte mit einem klaren Status (Im Griff, Nachsteuern, Eingreifen), darunter nur, was jetzt offen ist, oder eine grüne Zeile, wenn alles erledigt ist. Die Arbeiten stehen in zeitlicher Reihenfolge, jede mit einem Balken für den Lernstand ihrer Themen und dem Materialstand; spätere Arbeiten in einer Zeile. Unter „Beobachten“ steht, was sich über Wochen abzeichnet.

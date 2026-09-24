@@ -26,6 +26,7 @@ from . import lernstand, usage_report
 from .courses import hidden_keys, lesson_is_hidden
 from .db import history_conn, webapp_conn
 from .queries import lessons_for_date
+from .subject_names import label as subject_label
 
 _LOG = logging.getLogger(__name__)
 
@@ -216,7 +217,7 @@ def watch(account_id: int, support: list[dict], today: date) -> list[dict]:
     """Was sich über Wochen abzeichnet. Spät in der App zählt nur auf der
     Anmeldung des Kindes; das Elterngerät sagt über das Kind nichts."""
     rows = [{"key": f"hard-{s['subject_id']}", "tone": "warn", "icon": "∿",
-             "title": f"{s['subject_name'] or s['subject_short']} fällt schwer",
+             "title": f"{subject_label(s['subject_name'] or s['subject_short'] or '')} fällt schwer",
              "detail": f"{s['hard_count']} von {s['total_count']} bewerteten Stunden der letzten 3 Wochen als schwer bewertet",
              "subject_name": s["subject_name"], "go": go("subject", s["subject_id"])} for s in support]
     try:
@@ -236,11 +237,11 @@ def level(acute_rows: list[dict], near: list[dict]) -> dict:
         reasons.append(("bad", "Aufgaben überfällig"))
     for x in near:
         if x["days_until"] <= URGENT_DAYS and x["missing"]:
-            reasons.append(("bad", f"Material für {x['subject_name']} fehlt"))
+            reasons.append(("bad", f"Material für {subject_label(x['subject_name'] or '')} fehlt"))
     reasons += [("warn", r["title"]) for r in acute_rows if r["tone"] == "warn"]
     for x in near:
         if x["days_until"] <= IDLE_DAYS and x["topics"] and not x["practiced"]:
-            reasons.append(("warn", f"{x['subject_name']}: noch nichts geübt"))
+            reasons.append(("warn", f"{subject_label(x['subject_name'] or '')}: noch nichts geübt"))
     worst = "bad" if any(r[0] == "bad" for r in reasons) else "warn" if reasons else "good"
     return {"level": worst, "label": LEVELS[worst], "reasons": [r[1] for r in reasons]}
 
