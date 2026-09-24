@@ -244,3 +244,48 @@ def test_an_expired_table_rate_keeps_the_app_running_as_an_estimate(setup, monke
     assert ai.rate_for(settings) == ai.RATES['test'] and ai.rate_is_estimate(settings)
     both(patch, hoch={'modellname': 'test', 'foundry': '1', 'preis_eingang': 3.5, 'preis_ausgang': 9.5})
     assert not ai.rate_is_estimate(L.ai_settings('hoch'))
+
+
+def test_a_turn_puts_the_changing_part_behind_the_images_and_records_cache_use(setup):
+    """Verlauf und neue Nachricht stehen hinter den Bildern, damit Anweisung,
+    Kontext und Bilder als gleichbleibender Anfang aus dem Cache kommen
+    können; Cache- und Denk-Token werden festgehalten."""
+    client, _, patch = setup
+    both(patch)
+    session = start(client)
+    sent = []
+
+    class FakeClient:
+        def __init__(self, **kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): pass
+        async def post(self, url, **kwargs):
+            sent.append(kwargs['json'])
+            body = {'status': 'completed',
+                    'usage': {'input_tokens': 3000, 'output_tokens': 200,
+                              'input_tokens_details': {'cached_tokens': 2048},
+                              'output_tokens_details': {'reasoning_tokens': 120}},
+                    'output': [{'type': 'message', 'role': 'assistant',
+                                'content': [{'type': 'output_text', 'text': json.dumps(reply())}]}]}
+            return httpx.Response(200, json=body, request=httpx.Request('POST', url))
+    patch.setattr(ai.httpx, 'AsyncClient', FakeClient)
+    r = client.post(B + f"/sessions/{session['id']}/turn",
+                    json={'text': 'Ich fange an.', 'request_key': 'zug-cache-1', 'version': session['version'], 'kind': 'message'})
+    assert r.status_code == 200, r.text
+    parts = sent[0]['input'][0]['content']
+    head, tail = json.loads(parts[0]['text']), json.loads(parts[-1]['text'])
+    assert 'incoming' in tail and 'messages' in tail
+    assert 'incoming' not in head and 'messages' not in head
+    from contextlib import closing
+    from backend import db
+    with closing(db.webapp_conn()) as c:
+        row = c.execute('SELECT cached_tokens, reasoning_tokens FROM mentor_ai_calls ORDER BY created_at DESC LIMIT 1').fetchone()
+    assert tuple(row) == (2048, 120)
+
+
+def test_without_tail_keys_the_payload_stays_one_block():
+    payload = L.model_payload(SECOND, 'm', 'anweisung', {'a': 1, 'b': 2},
+                              [{'type': 'image_url', 'image_url': {'url': 'data:image/jpeg;base64,AA'}}])
+    content = payload['input'][0]['content']
+    assert [p['type'] for p in content] == ['input_text', 'input_image']
+    assert json.loads(content[0]['text']) == {'a': 1, 'b': 2}

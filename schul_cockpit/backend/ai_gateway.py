@@ -127,6 +127,12 @@ def status():
         bg = effective_sum(c,"month=? AND purpose IN ('discovery','background')",(month,))
         src = effective_sum(c,"month=? AND purpose='sources'",(month,))
         counts = c.execute('SELECT status,COUNT(*) n FROM mentor_ai_calls WHERE month=? GROUP BY status',(month,)).fetchall()
+        # Nur Aufrufe, die Cache- und Denk-Token schon erfassen (ab 1.13.15),
+        # je Zweck: So lässt sich ablesen, ob die Reihenfolge im Mentor wirkt.
+        tokens = [dict(r) for r in c.execute(
+            "SELECT purpose,COUNT(*) calls,SUM(input_tokens) input,SUM(cached_tokens) cached,"
+            "SUM(output_tokens) output,SUM(reasoning_tokens) reasoning FROM mentor_ai_calls "
+            "WHERE month=? AND status='settled' AND cached_tokens IS NOT NULL GROUP BY purpose ORDER BY purpose",(month,))]
     today=today_local()
     with closing(webapp_conn()) as c:
         projected,per_day=projection(c,month,used,today)
@@ -160,7 +166,7 @@ def status():
                 opening_confirmed=bool(cfg['opening_confirmed'] or cfg['opening_month']!=month),
                 opening_eur=opening/1e6,rate_available=bool(rate_for(tiers[MAIN_TIER])),
                 accounting='Konservative Budgetanrechnung, keine Azure-Rechnung',rate_valid_until=RATE_UNTIL.isoformat(),
-                calls={r['status']:r['n'] for r in counts})
+                calls={r['status']:r['n'] for r in counts},tokens=tokens)
 
 
 def tier_for(purpose, cfg=None, override=None):
@@ -281,10 +287,17 @@ def reserve(account_id, purpose, session_id, input_max, output_max, settings=Non
     return key
 
 
+def _count(value):
+    return value if isinstance(value,int) and not isinstance(value,bool) and value>=0 else None
+
+
 def settle(key, result=None, error=None):
     usage=(result or {}).get('usage') or {}
     inp=usage.get('input_tokens',usage.get('prompt_tokens'));out=usage.get('output_tokens',usage.get('completion_tokens'))
     valid=isinstance(inp,int) and not isinstance(inp,bool) and inp>=0 and isinstance(out,int) and not isinstance(out,bool) and out>=0
+    # Responses-API und Chat Completions nennen die Einzelheiten verschieden.
+    cached=_count((usage.get('input_tokens_details') or usage.get('prompt_tokens_details') or {}).get('cached_tokens'))
+    reasoning=_count((usage.get('output_tokens_details') or usage.get('completion_tokens_details') or {}).get('reasoning_tokens'))
     with closing(webapp_conn()) as c,c:
         row=c.execute('SELECT * FROM mentor_ai_calls WHERE id=?',(key,)).fetchone()
         if valid:
@@ -292,8 +305,11 @@ def settle(key, result=None, error=None):
             # Never conceal an accounting overrun: disable calls pending reconciliation.
             if charge>row['reserved_micro']:
                 c.execute('UPDATE mentor_ai_config SET opening_confirmed=0,opening_month=? WHERE id=1',(today_local().strftime('%Y-%m'),))
-            c.execute("UPDATE mentor_ai_calls SET status='settled',charged_micro=?,input_tokens=?,output_tokens=?,finished_at=?,error=? WHERE id=?",
-                      (charge,inp,out,now_iso(),error,key))
+            # Gebucht wird weiter der volle Eingangssatz, auch für Cache-Token:
+            # Die Anrechnung bleibt konservativ, die Zahlen zeigen die Wirkung.
+            c.execute("UPDATE mentor_ai_calls SET status='settled',charged_micro=?,input_tokens=?,output_tokens=?,"
+                      "cached_tokens=?,reasoning_tokens=?,finished_at=?,error=? WHERE id=?",
+                      (charge,inp,out,cached,reasoning,now_iso(),error,key))
         else:
             c.execute("UPDATE mentor_ai_calls SET status='uncertain',finished_at=?,error=? WHERE id=?",(now_iso(),error or 'usage_missing',key))
 
@@ -301,7 +317,8 @@ def settle(key, result=None, error=None):
 EFFORTS=('low','medium','high')
 
 
-async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, tier=None, effort=None):
+async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, tier=None, effort=None,
+                   tail_keys=()):
     # Reasoning-Tiefe: bisher fest low; für die Eichung je Aufruf wählbar (D77).
     effort=effort or 'low'
     if effort not in EFFORTS: raise ValueError('Invalid reasoning effort')
@@ -347,7 +364,11 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
     if text_bytes>48000: raise HTTPException(413,'Zu viel Material für einen Schritt. Bitte einen kleineren Abschnitt wählen.')
     upper_input=text_bytes+1024+32768*len(images)
     # In den Aufruf geht der Bereitstellungsname, nicht der Modellname.
-    payload=model_payload(endpoint,config['deployment'],instruction,context,images)
+    # tail_keys: was sich von Zug zu Zug ändert (Verlauf, neue Nachricht),
+    # steht hinter den Bildern. Azure rechnet einen gleichbleibenden Anfang
+    # verbilligt aus dem Cache ab; stand der Verlauf vorn, fiel alles dahinter,
+    # auch die Bilder, jedes Mal heraus.
+    payload=model_payload(endpoint,config['deployment'],instruction,context,images,tail_keys=tail_keys)
     if uses_responses(endpoint):
         payload['max_output_tokens']=max_output
         payload['reasoning']={'effort':effort}

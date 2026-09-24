@@ -1,3 +1,8 @@
+## 1.13.15
+
+- KI-Kosten: Im Mentor stehen Gesprächsverlauf und neue Nachricht im Aufruf jetzt hinter den Bildern. So kann Azure den gleichbleibenden Anfang (Anweisung, Unterricht, Material, Buchseiten) verbilligt aus dem Cache rechnen; bisher fiel alles hinter dem Verlauf, auch die Bilder, bei jedem Zug heraus. Inhaltlich sieht der Mentor dasselbe.
+- Die App hält je Aufruf fest, wie viele Token aus dem Cache kamen und wie viel das Modell nachgedacht hat; die Budgetübersicht nennt die Monatssummen je Zweck. Angerechnet wird weiterhin der volle Satz.
+
 ## 1.13.14
 
 - KI-Kosten: Eine gründliche Seitenlesung wird nicht mehr verworfen, nur weil eine Zweifelsnotiz oder der Titel etwas zu lang geraten ist; das Zuviel wird gekürzt. Bisher war die Lesung bezahlt und die Seite behielt die schwächere erste Lesung.

@@ -244,8 +244,15 @@ def uses_responses(url: str) -> bool:
     return urlsplit(url).path.rstrip("/").endswith("/responses")
 
 
-def model_payload(url: str, model: str, instruction: str, context: dict, images: list) -> dict:
-    content = [{"type": "text", "text": json.dumps(context, ensure_ascii=False)}, *images]
+def model_payload(url: str, model: str, instruction: str, context: dict, images: list, tail_keys=()) -> dict:
+    """Anweisung, Kontext und Bilder in der Form der jeweiligen API. Die
+    Schlüssel aus tail_keys stehen als zweiter Kontextteil hinter den Bildern,
+    damit der gleichbleibende Anfang aus dem Cache kommen kann."""
+    tail = {k: context[k] for k in tail_keys if k in context}
+    head = {k: v for k, v in context.items() if k not in tail}
+    content = [{"type": "text", "text": json.dumps(head, ensure_ascii=False)}, *images]
+    if tail:
+        content.append({"type": "text", "text": json.dumps(tail, ensure_ascii=False)})
     if uses_responses(url):
         converted = []
         for part in content:

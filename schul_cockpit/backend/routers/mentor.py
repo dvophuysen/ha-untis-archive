@@ -882,6 +882,11 @@ Eingebunden: eingebunden nennt Seiten, die das Kind selbst aus seinen abgelegten
 action ausschließlich clarify, explain oder finish; task und assessment immer null. Keine neue Testaufgabe erzeugen. Antworte ausschließlich im folgenden JSON-Schema: '''
 
 HOMEWORK_MODES=('homework_help','homework_check')
+# Was sich in einem Gespräch von Zug zu Zug ändert. Es steht im Aufruf hinter
+# den Bildern, damit Anweisung, Unterricht, Material und Buchseiten als
+# gleichbleibender Anfang aus dem Cache kommen können.
+TURN_TAIL=('messages','summary','phase','current_task','help_count','task_help','read_at',
+           'topic','abfrage','verfassung','ohne_aufgabe','incoming')
 # Die Rückfrage der Kontrolle zur gefundenen Bearbeitung (D123).
 SOLUTION_CHOICES=['Ja, das ist mein neuester Stand','Nein, ich zeige ein neues Foto']
 NEW_PHOTO_TEXT=('Gut, dann zeig mir ein Foto deiner fertigen Lösung. Ich gehe sie Aufgabe für Aufgabe durch '
@@ -1285,7 +1290,8 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
         stoff=context_text(ctx)
         note=''
         for versuch in range(2):
-            raw,_,call_id=await ai.complete(account_id,'mentor',instruction+note+json.dumps(Reply.model_json_schema()),ctx,images,max_output=4096,session_id=sid)
+            raw,_,call_id=await ai.complete(account_id,'mentor',instruction+note+json.dumps(Reply.model_json_schema()),ctx,images,max_output=4096,session_id=sid,
+                                            tail_keys=TURN_TAIL)
             try:
                 reply=Reply.model_validate_json(raw)
                 if reply.action=='task' and not reply.task:raise ValueError('Missing task')

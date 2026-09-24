@@ -1051,3 +1051,9 @@ CREATE TABLE vocab_answer_assessments (
  evidence_json TEXT NOT NULL
 );
 """))
+
+# Wie viel eines Aufrufs aus dem Cache kam und wie viel das Modell nachgedacht
+# hat. Bis 1.13.14 wurde beides verworfen; ohne die Zahlen lässt sich nicht
+# sagen, ob eine cachefreundliche Reihenfolge wirkt.
+_MIGRATIONS.append(("mentor_ai_calls_002_cached", "ALTER TABLE mentor_ai_calls ADD COLUMN cached_tokens INTEGER"))
+_MIGRATIONS.append(("mentor_ai_calls_003_reasoning", "ALTER TABLE mentor_ai_calls ADD COLUMN reasoning_tokens INTEGER"))

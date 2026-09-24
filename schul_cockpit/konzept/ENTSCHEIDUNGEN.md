@@ -311,3 +311,5 @@ D147 · 24.09.2026 · Beschlossen (gebaut in 1.13.13): Ein PIN-Versuch wird in e
 
 D148 · 24.09.2026 · Nutzerentscheidung: Nach dem Dateileck bis 1.13.10 werden keine Geheimnisse getauscht. Der Nutzer schätzt eine Ausnutzung als äußerst unwahrscheinlich ein; die HA-Instanz steuert keine Kameras oder Schlösser. Die Lücke selbst ist seit 1.13.11 geschlossen.
 
+D149 · 24.09.2026 · Beschlossen (gebaut in 1.13.15): Der Mentor-Kontext wird für Azures Prompt-Caching sortiert. Was sich von Zug zu Zug ändert (`TURN_TAIL`: Verlauf, Zusammenfassung, Phase, aktuelle Aufgabe, Hilfezähler, Thema, Abfrage, Verfassung, neue Nachricht), steht als zweiter Kontextteil hinter den Bildern; Anweisung, Unterricht, Material und Buchseiten bilden den gleichbleibenden Anfang. Cache- und Denk-Token werden je Aufruf gespeichert (`mentor_ai_calls.cached_tokens`, `reasoning_tokens`), gebucht wird weiter der volle Satz. Das Entschlacken des Kontexts (doppelte Unterrichtstexte, `volltext` neben `gedruckte_seite`, Buchseiten-Bilder in jedem Zug) folgt erst nach etwa einer Woche Messung. Herkunft: Nutzerentscheidung 24.09. (Option „Messen + Umsortieren jetzt“).
+
