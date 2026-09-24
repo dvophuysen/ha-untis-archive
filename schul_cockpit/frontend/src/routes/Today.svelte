@@ -111,7 +111,7 @@
     <section class="day-section school" class:school-done={!lessons.upcoming.length && !lessons.open.length}>
       <div class="section-head"><h3>{activeUpcoming.length ? 'In der Schule' : 'Dein Schultag'}</h3><a href="#/week"><ActionLabel label="Woche ansehen" /></a></div>
       {#if activeUpcoming.length}<p class="next-lesson"><strong>{activeUpcoming[0].subject_name || activeUpcoming[0].subject_short}</strong> · {activeUpcoming[0].start_hhmm}{#if activeUpcoming[0].room} · Raum {activeUpcoming[0].room}{/if}</p>{/if}
-      {#if beforeSchool}<PackingChecklist {accountId} schoolDay={data.date} />{/if}
+      {#if beforeSchool}<div data-section="tasche"><PackingChecklist {accountId} schoolDay={data.date} /></div>{/if}
       {#if !beforeSchool}{#each lessons.upcoming as lesson (lesson.id)}<LessonCard {accountId} {lesson} preview />{/each}{/if}
       {#if lessons.open.length}<h4 data-section="rueckmelden">Noch kurz zurückmelden · {lessons.open.length}</h4><p class="eyebrow">Wie gut hast du den Stoff verstanden?</p>
         {#each lessons.open as lesson (lesson.id)}<LessonCard {accountId} {lesson} onsaved={feedbackSaved} />{/each}

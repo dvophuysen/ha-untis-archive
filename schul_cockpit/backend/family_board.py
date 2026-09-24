@@ -13,7 +13,9 @@ Drei Stufen, feste Regeln, kein Modellaufruf:
 - Im Griff: sonst.
 
 Was für morgen ansteht, ist vor dem Abend noch kein Versäumnis: Es steht
-neutral da und zählt erst ab der Erinnerungszeit des Kindes.
+neutral da und zählt erst ab der Erinnerungszeit des Kindes. Die Tasche folgt
+dem Schultag: vor dem Unterricht die für heute, währenddessen keine, danach
+die für den nächsten Schultag (`bag_target()`).
 """
 from __future__ import annotations
 
@@ -76,9 +78,35 @@ def next_school_day(account_id: int, today: date) -> str | None:
     with closing(history_conn()) as conn:
         for offset in range(1, 8):
             day = (today + timedelta(days=offset)).isoformat()
-            if any(not lesson_is_hidden(l, hidden) for l in lessons_for_date(conn, account_id, day)):
+            # Ein Tag, an dem alles ausfällt, ist kein Schultag.
+            if any(not lesson_is_hidden(l, hidden) and not l.get("is_cancelled") and not l.get("was_absent")
+                   for l in lessons_for_date(conn, account_id, day)):
                 return day
     return None
+
+
+def _clock(value) -> int | None:
+    return value if isinstance(value, int) and 0 <= value <= 2359 and value % 100 <= 59 else None
+
+
+def bag_target(account_id: int, today: date, now: datetime) -> tuple[str | None, str]:
+    """Welche Tasche jetzt zählt. Vor dem Unterricht die für heute, gepackt am
+    Vorabend; während der Schulzeit keine, dann lässt sich nicht packen; nach
+    Schulschluss und an freien Tagen die für den nächsten Schultag, auch am
+    Freitag schon für Montag."""
+    hidden = hidden_keys(account_id)
+    with closing(history_conn()) as conn:
+        held = [l for l in lessons_for_date(conn, account_id, today.isoformat())
+                if not lesson_is_hidden(l, hidden) and not l.get("is_cancelled") and not l.get("was_absent")]
+    starts = [t for t in (_clock(l.get("start_time")) for l in held) if t is not None]
+    ends = [t for t in (_clock(l.get("end_time")) for l in held) if t is not None]
+    if starts and ends:
+        clock = now.hour * 100 + now.minute
+        if clock < min(starts):
+            return today.isoformat(), "before"
+        if clock < max(ends):
+            return None, "school"
+    return next_school_day(account_id, today), "after"
 
 
 def feedback(account_id: int, today: date, now: datetime) -> dict:
@@ -134,7 +162,7 @@ def acute(account_id: int, tasks: list[dict], today: date, now: datetime, evenin
                      "title": f"{_plural(len(undated), 'Aufgabe', 'Aufgaben')} ohne Termin",
                      "detail": "bitte einordnen", "go": go("today", section="ohne-termin")})
 
-    day = next_school_day(account_id, today)
+    day, phase = bag_target(account_id, today, now)
     if day:
         try:
             from .packing import packing_plan, view
@@ -144,12 +172,18 @@ def acute(account_id: int, tasks: list[dict], today: date, now: datetime, evenin
         except Exception:
             _LOG.warning("Packliste für Konto %s nicht lesbar", account_id, exc_info=True)
             bag = None
+        # Vor dem Unterricht fehlt wirklich etwas. Die Tasche für den nächsten
+        # Schultag mahnt erst am Abend direkt davor; am Freitag steht die für
+        # Montag schon da, aber neutral.
+        before = phase == "before"
+        urgent = before or (evening and day == tomorrow)
+        name = "heute" if before else day_label(day)
         if bag and bag["items"] and bag["confirmed_count"] < len(bag["items"]):
-            rows.append({"key": "bag", "tone": "warn" if evening else "info", "icon": "🎒",
-                         "title": f"Tasche für {day_label(day)}: {bag['confirmed_count']} von {len(bag['items'])} Fächern",
+            rows.append({"key": "bag", "tone": "warn" if urgent else "info", "icon": "🎒",
+                         "title": f"Tasche für {name}: {bag['confirmed_count']} von {len(bag['items'])} Fächern",
                          "detail": "noch nicht alles abgehakt", "go": go("today", section="tasche")})
         elif bag and bag["items"]:
-            ok.append(f"Tasche für {day_label(day)[:2]} gepackt")
+            ok.append(f"Tasche für {'heute' if before else day_label(day)[:2]} gepackt")
 
     fb = feedback(account_id, today, now)
     if fb["earlier"] or fb["today"]:

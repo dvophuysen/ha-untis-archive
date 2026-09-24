@@ -18,8 +18,8 @@ def task(title, due):
     return {"id": hash(title) % 1000, "title": title, "due_date": due}
 
 
-def quiet(patch, bag=None, feedback=None, retakes=()):
-    patch.setattr(fb, "next_school_day", lambda a, t: "2026-09-25" if bag else None)
+def quiet(patch, bag=None, feedback=None, retakes=(), bag_day=("2026-09-25", "after")):
+    patch.setattr(fb, "bag_target", lambda a, t, n: bag_day if bag else (None, "school"))
     if bag:
         from backend import packing
         patch.setattr(packing, "packing_plan", lambda a, d: ([{"key": k} for k in range(bag[1])], "x", {}))
@@ -62,6 +62,44 @@ def test_what_is_due_tomorrow_only_counts_from_the_evening(env, monkeypatch):
     # Fällig heute und noch offen ist schon vor dem Abend dran; überfällig ist rot.
     rows, _ = fb.acute(1, [task("Lesen", "2026-09-24"), task("Vokabeln", "2026-09-22")], TODAY, MORNING, evening=False)
     assert {r["key"]: r["tone"] for r in rows} == {"overdue": "bad", "due": "warn", "bag": "info"}
+
+
+def lessons(rows):
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:
+        c.execute(f"CREATE TABLE IF NOT EXISTS lessons({LESSON_COLUMNS})")
+        c.executemany("INSERT INTO lessons(id,account_id,date,start_time,end_time,subject_name,code,was_absent) "
+                      "VALUES(?,1,?,?,?,'Mathematik',?,0)", rows)
+
+
+def test_the_bag_follows_the_school_day(env):
+    """Vor dem Unterricht die Tasche für heute, gepackt am Vorabend; während der
+    Schulzeit keine; nach Schulschluss die für den nächsten Schultag."""
+    lessons([(1, "2026-09-25", 800, 845, None), (2, "2026-09-25", 1230, 1315, None),
+             (3, "2026-09-28", 800, 845, None), (4, "2026-09-26", 900, 945, "cancelled")])
+    friday = date(2026, 9, 25)
+    assert fb.bag_target(1, friday, datetime(2026, 9, 25, 0, 8)) == ("2026-09-25", "before")
+    assert fb.bag_target(1, friday, datetime(2026, 9, 25, 7, 59)) == ("2026-09-25", "before")
+    assert fb.bag_target(1, friday, datetime(2026, 9, 25, 10, 0)) == (None, "school")
+    assert fb.bag_target(1, friday, datetime(2026, 9, 25, 13, 15)) == ("2026-09-28", "after")
+    # Samstag ist frei (die eine Stunde fällt aus): die Tasche für Montag.
+    assert fb.bag_target(1, date(2026, 9, 26), datetime(2026, 9, 26, 8, 0)) == ("2026-09-28", "after")
+
+
+def test_before_school_an_unpacked_bag_is_due_and_monday_waits_until_sunday(env, monkeypatch):
+    quiet(monkeypatch, bag=(1, 3), bag_day=("2026-09-24", "before"))
+    rows, _ = fb.acute(1, [], TODAY, datetime(2026, 9, 24, 7, 0), evening=False)
+    assert [(r["tone"], r["title"]) for r in rows] == [("warn", "Tasche für heute: 1 von 3 Fächern")]
+    quiet(monkeypatch, bag=(3, 3), bag_day=("2026-09-24", "before"))
+    assert "Tasche für heute gepackt" in fb.acute(1, [], TODAY, MORNING, evening=False)[1]
+    # Freitagabend, Tasche für Montag: sichtbar, aber noch keine Mahnung.
+    friday = date(2026, 9, 25)
+    quiet(monkeypatch, bag=(0, 3), bag_day=("2026-09-28", "after"))
+    rows, _ = fb.acute(1, [], friday, datetime(2026, 9, 25, 19, 0), evening=True)
+    assert [(r["tone"], r["title"]) for r in rows] == [("info", "Tasche für Mo 28.09.: 0 von 3 Fächern")]
+    # Während der Schulzeit steht zur Tasche nichts da.
+    quiet(monkeypatch, bag=None)
+    rows, ok = fb.acute(1, [], TODAY, MORNING, evening=False)
+    assert not [r for r in rows if r["key"] == "bag"] and not [o for o in ok if "Tasche" in o]
 
 
 def test_everything_done_is_one_line(env, monkeypatch):

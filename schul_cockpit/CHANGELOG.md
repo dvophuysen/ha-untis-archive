@@ -1,3 +1,8 @@
+## 1.14.2
+
+- Startseite, Tasche: Vor dem Unterricht zählt die Checkliste für heute, die am Vorabend gepackt wurde; während der Schulzeit steht zur Tasche nichts da; nach Schulschluss zählt die Tasche für den nächsten Schultag, am Freitag also schon die für Montag. Gemahnt wird sie erst am Abend direkt vor dem Schultag. Bisher stand nach Mitternacht fälschlich „noch nicht gepackt“ für den übernächsten Tag da.
+- Ein Tag, an dem alle Stunden ausfallen, gilt auf der Startseite nicht mehr als nächster Schultag.
+
 ## 1.14.1
 
 - Startseite: Die Karten der Kinder werden parallel berechnet und kommen schneller. Fachnamen unter „Beobachten“ und im Status stehen lesbar da statt in Großbuchstaben.
