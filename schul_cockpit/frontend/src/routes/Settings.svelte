@@ -248,7 +248,7 @@
   let backupStatus = $state(null);
   let restoreBusy = $state(false);
   let restoreMsg = $state(null);
-  let fileInput;
+  let fileInput = $state(null);
 
   async function loadBackupStatus() {
     if (!appState.me?.is_admin) return;
@@ -687,8 +687,8 @@
         {/if}
       </div>
 
-      <label style="margin-top:0.4rem;">Klassenstufe (falls Auto-Erkennung daneben liegt)</label>
-      <select
+      <label for="settings-690" style="margin-top:0.4rem;">Klassenstufe (falls Auto-Erkennung daneben liegt)</label>
+      <select id="settings-690"
         value={settings.school_section_override ?? ''}
         onchange={(e) => setSectionOverride(e.currentTarget.value)}
       >
@@ -703,8 +703,8 @@
         Kind mehr/weniger Konzentration mitbringt als der Durchschnitt.
       </div>
 
-      <label>Standard (alle Wochentage)</label>
-      <input type="number" min="0" step="15" bind:value={settings.default_daily_budget_minutes} />
+      <label for="settings-706">Standard (alle Wochentage)</label>
+      <input id="settings-706" type="number" min="0" step="15" bind:value={settings.default_daily_budget_minutes} />
 
       <div class="section-title">Abweichungen pro Wochentag</div>
       {#each DAYS as d}

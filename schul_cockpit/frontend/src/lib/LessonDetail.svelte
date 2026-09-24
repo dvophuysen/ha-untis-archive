@@ -19,7 +19,10 @@
   let { accountId, lesson, onclose, onsaved = () => {} } = $props();
 
   let busy = $state(false);
+  // Eingaben beginnen mit dem gespeicherten Stand; der Dialog wird je Stunde neu erzeugt.
+  // svelte-ignore state_referenced_locally
   let note = $state(lesson.checkin?.note ?? '');
+  // svelte-ignore state_referenced_locally
   let rating = $state(lesson.checkin?.rating ?? null);
   let cleanError = $state(null);
 
@@ -164,8 +167,8 @@
     {#if cleanError}<div class="error-box">{cleanError}</div>{/if}
 
     {#if canRate}
-      <label>Wie lief die Stunde?</label>
-      <div class="checkins" class:three={!isSubst}>
+      <p class="field-label" id="lessondetail-167">Wie lief die Stunde?</p>
+      <div role="group" aria-labelledby="lessondetail-167" class="checkins" class:three={!isSubst}>
         <button class="ci r3" class:active={rating === 3} disabled={busy} onclick={() => setRating(3)}>😀</button>
         <button class="ci r2" class:active={rating === 2} disabled={busy} onclick={() => setRating(2)}>😐</button>
         <button class="ci r1" class:active={rating === 1} disabled={busy} onclick={() => setRating(1)}>😟</button>
@@ -177,8 +180,8 @@
         <a class="primary mentor-link" style="display:block; text-align:center; margin-top:0.5rem;" href={`#/learning?${new URLSearchParams({ lesson_id: String(lesson.id), subject: lesson.subject_name || lesson.subject_short || '', title: lesson.lstext || lesson.lesson_topic || '' })}`}>Mit dem Mentor verstehen</a>
       {/if}
 
-      <label style="margin-top:0.6rem;">Kommentar</label>
-      <textarea bind:value={note} rows="3" placeholder="z.B. Hausaufgabe nicht verstanden, nochmal fragen…"></textarea>
+      <label for="lessondetail-180" style="margin-top:0.6rem;">Kommentar</label>
+      <textarea id="lessondetail-180" bind:value={note} rows="3" placeholder="z.B. Hausaufgabe nicht verstanden, nochmal fragen…"></textarea>
       <button class="primary" style="width:100%; margin-top:0.5rem;" disabled={busy} onclick={saveNote}>
         Kommentar speichern
       </button>

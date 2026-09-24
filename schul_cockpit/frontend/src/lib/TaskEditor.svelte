@@ -6,8 +6,12 @@
 
   let { accountId, task = null, onclose, onsaved } = $props();
 
+  // Der Entwurf beginnt mit dem Stand beim Öffnen; der Dialog wird je Aufgabe neu erzeugt.
+  // svelte-ignore state_referenced_locally
   let title = $state(task?.title ?? '');
+  // svelte-ignore state_referenced_locally
   let dueDate = $state(task?.due_date ?? '');
+  // svelte-ignore state_referenced_locally
   let notes = $state(task?.notes ?? '');
   let busy = $state(false);
   let error = $state(null);
@@ -65,16 +69,16 @@
 
     <div class="form-grid">
       <div>
-        <label>Aufgabe</label>
-        <input bind:value={title} placeholder="z.B. Mathe S. 42 Nr. 1-5" disabled={isHaTask} />
+        <label for="taskeditor-68">Aufgabe</label>
+        <input id="taskeditor-68" bind:value={title} placeholder="z.B. Mathe S. 42 Nr. 1-5" disabled={isHaTask} />
       </div>
       <div>
-        <label>Fällig am</label>
-        <input type="date" bind:value={dueDate} disabled={isHaTask} />
+        <label for="taskeditor-72">Fällig am</label>
+        <input id="taskeditor-72" type="date" bind:value={dueDate} disabled={isHaTask} />
       </div>
       <div>
-        <label>Notiz</label>
-        <textarea bind:value={notes} rows="3"></textarea>
+        <label for="taskeditor-76">Notiz</label>
+        <textarea id="taskeditor-76" bind:value={notes} rows="3"></textarea>
       </div>
       <div class="row gap-sm" style="margin-top:0.4rem;">
         <button class="primary" disabled={busy || !title.trim()} onclick={save} style="flex:1;">{isExisting ? 'Speichern' : 'Anlegen'}</button>

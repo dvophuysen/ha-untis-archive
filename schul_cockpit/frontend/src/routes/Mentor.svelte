@@ -91,7 +91,7 @@
       <details class="basis"><summary>Grundlage aufschlagen ({running.topic.basis.length} {running.topic.basis.length===1?'Seite':'Seiten'})</summary>
         <p class="hint">Dieselben Seiten hat der Mentor. Was er dich fragt, muss er dir in der Aufgabe selbst sagen — hier kannst du trotzdem nachsehen.</p>
         {#each running.topic.basis as p}
-          <details onclick={()=>act(()=>showPage(p.material_id))}>
+          <details ontoggle={(e)=>{ if (e.currentTarget.open) act(()=>showPage(p.material_id)); }}>
             <summary>{p.label}{p.page?` S. ${p.page}`:''}{p.title?` · ${p.title}`:''}{p.chapter?' · gleiches Kapitel':''}</summary>
             {#if pages[p.material_id]?.loading}<p class="hint">wird geladen …</p>
             {:else if pages[p.material_id]?.error}<p class="hint">{pages[p.material_id].error}</p>

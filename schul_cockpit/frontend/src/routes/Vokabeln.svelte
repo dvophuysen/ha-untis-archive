@@ -16,6 +16,8 @@
   // Das Standardbündel ist die ganze Einheit. Ein Abschnitt, den die
   // Vokabelliste selbst nennt („Texto A"), ist nur eine Einschränkung
   // davon und wird beim Wechsel der Einheit wieder aufgehoben (D100).
+  // Startwert; App.svelte erzeugt die Seite je Fach und Einheit neu ({#key}).
+  // svelte-ignore state_referenced_locally
   let unit = $state(initialUnit), section = $state(''), box = $state(''), stage = $state(1), direction = $state('from');
   let cards = $state([]), index = $state(0), answer = $state(''), spoken = $state(false), edits = $state(0);
   let verdict = $state(null), pending = $state(null), done = $state(false), tally = $state({ correct: 0, wrong: 0, skipped: 0 });

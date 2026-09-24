@@ -170,20 +170,20 @@
   </div>
   <div class="card">
     {#if entitiesAvailable && entities.length > 0}
-      <label>Kalender</label>
-      <select bind:value={selectedEntity}>
+      <label for="examsetup-173">Kalender</label>
+      <select id="examsetup-173" bind:value={selectedEntity}>
         <option value="">– wählen –</option>
         {#each entities as e}
           <option value={e.entity_id}>{e.friendly_name || e.entity_id}</option>
         {/each}
       </select>
     {:else}
-      <label>Kalender-Entity (z.B. calendar.klausuren_anna)</label>
-      <input bind:value={selectedEntity} placeholder="calendar.klausuren_anna" />
+      <label for="examsetup-181">Kalender-Entity (z.B. calendar.klausuren_anna)</label>
+      <input id="examsetup-181" bind:value={selectedEntity} placeholder="calendar.klausuren_anna" />
     {/if}
 
-    <label style="margin-top:0.6rem;">Ausschluss-Wörter (Komma-getrennt)</label>
-    <input bind:value={excludeText} placeholder="turnier, ausflug, religion" />
+    <label for="examsetup-185" style="margin-top:0.6rem;">Ausschluss-Wörter (Komma-getrennt)</label>
+    <input id="examsetup-185" bind:value={excludeText} placeholder="turnier, ausflug, religion" />
     <div class="dim" style="margin-top:0.2rem;">
       Termine, die eines dieser Wörter enthalten, gelten nie als Klausur.
     </div>
@@ -295,19 +295,19 @@
   {/each}
 
   <div class="card">
-    <label>Datum</label>
-    <input type="date" bind:value={mDate} />
-    <label style="margin-top:0.4rem;">Fach</label>
-    <select bind:value={mSubject}>
+    <label for="examsetup-298">Datum</label>
+    <input id="examsetup-298" type="date" bind:value={mDate} />
+    <label for="examsetup-300" style="margin-top:0.4rem;">Fach</label>
+    <select id="examsetup-300" bind:value={mSubject}>
       <option value="">– wählen –</option>
       {#each diag.subjects as s}
         <option value={s.subject_name}>{s.short ? s.short + ' · ' : ''}{s.subject_name}</option>
       {/each}
     </select>
-    <label style="margin-top:0.4rem;">Titel (optional)</label>
-    <input bind:value={mTitle} placeholder="z.B. Nachschreibtermin Mathe" />
-    <label style="margin-top:0.4rem;">Notiz (optional)</label>
-    <input bind:value={mNote} placeholder="z.B. mündlich vereinbart" />
+    <label for="examsetup-307" style="margin-top:0.4rem;">Titel (optional)</label>
+    <input id="examsetup-307" bind:value={mTitle} placeholder="z.B. Nachschreibtermin Mathe" />
+    <label for="examsetup-309" style="margin-top:0.4rem;">Notiz (optional)</label>
+    <input id="examsetup-309" bind:value={mNote} placeholder="z.B. mündlich vereinbart" />
     <button class="primary" style="width:100%; margin-top:0.6rem;" disabled={addingManual} onclick={addManual}>
       {addingManual ? 'Füge hinzu…' : 'Termin hinzufügen'}
     </button>

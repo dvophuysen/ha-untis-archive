@@ -106,7 +106,8 @@ textarea { min-height: 80px; resize: vertical; }
 @supports (-webkit-touch-callout: none) {
   input, select, textarea { font-size: max(16px, 1em) !important; }
 }
-label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-bottom: 0.3rem; }
+label, .field-label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-bottom: 0.3rem; }
+.field-label { margin-top: 0; }
 
 /* Layout is back to the simple v0.1 model: body scrolls normally, the
    top-bar sticks, and the bottom-nav is fixed at the viewport bottom.

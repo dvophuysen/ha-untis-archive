@@ -33,6 +33,8 @@
   let uploading = $state(0);
   let open = $state(null);
   let form = $state(null);
+  // Startwert aus der Adresse; danach wählt die Seite selbst.
+  // svelte-ignore state_referenced_locally
   let filterSubject = $state(initialSubject);
   let filterKind = $state('');
   let search = $state('');
