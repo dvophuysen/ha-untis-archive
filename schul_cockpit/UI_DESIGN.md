@@ -40,7 +40,7 @@ Abnahme: synthetische Browserkonten, Smartphone-/Tabletbreiten, keine horizontal
 - Sichtbares Aufgaben-Häkchen 24 px innerhalb einer 44 × 44 px großen Schaltfläche. Normale Fristen sind ruhiger Text; Dringlichkeit erhält weiterhin eigenen sichtbaren Status.
 - ActionLabel.svelte ist die gemeinsame Darstellung: Gespräch = einfarbige Sprechblase vor Text, ohne Zusatzpfeil; Seitenwechsel = einheitlicher Chevron nach Text. Fachsymbole bleiben beim Fach. Bereichsnavigation behält ihre festen Symbole; dekorative wechselnde Emojis in Aktionslinks entfallen. Aufklappen nutzt den Aufklappindikator, Speichern/Abhaken erhalten keinen Navigationspfeil.
 - Heute und Lernzeilen verwenden kleinere Innenabstände. Vollständige Aufträge bleiben lesbar; keine automatische Textkürzung und keine kleineren Touch-Ziele.
-- Fachübersicht als eigenes Folgepaket: [Grafische Fächerübersicht](konzept/FAECHERUEBERSICHT.md). Ein dokumentierter Entwurf ist kein implementierter Lernscore.
+- Fachübersicht als eigenes Folgepaket: [Grafische Fächerübersicht](konzept/archiv/FAECHERUEBERSICHT.md). Ein dokumentierter Entwurf ist kein implementierter Lernscore.
 
 ## Grafische Fächerliste 0.34.0
 

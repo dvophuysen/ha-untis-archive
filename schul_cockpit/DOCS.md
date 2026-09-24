@@ -38,8 +38,10 @@ sie im Setup-Screen auftauchen.
   Aufgaben on top.
 - **Plan**: priorisierter Nachmittagsplan mit Zeitbudget. Schnellwahl
   30/45/60/90/120 Min, „📋"-Knopf kopiert die Liste als Markdown.
-- **Aufgaben**: vollständige Liste, gruppiert nach Fälligkeit. Sub-Tasks,
-  Aufwandsschätzung, Notizen pro Aufgabe.
+- **Aufgaben**: vollständige Liste, gruppiert nach Fälligkeit, mit Notizen
+  pro Aufgabe. Eine Hausaufgabe öffnet seit 0.56.0 eine Leseansicht mit
+  Auftrag, Einstiegshilfe, Material und Hilfe-Chat; Typ, Aufwand und
+  Teilaufgaben sind entfallen ([D44](konzept/ENTSCHEIDUNGEN.md)).
 - **Woche**: Heatmap der letzten/kommenden Woche, Farbe = Verständnis.
 - **Fächer**: pro Fach die Lehrstoff-Timeline mit deinen Bewertungen +
   „Heute mündlich punkten"-Vorschläge.
@@ -125,7 +127,7 @@ nie über unverschlüsseltes HTTP übertragen wird.
 
 ## Datensicherheit & Persistenz
 
-- **Die Lern- und App-Daten bleiben auf deiner HA-Instanz.** Optional aktivierte KI-Entwürfe senden ausdrücklich ausgewählte Materialien an den konfigurierten Modell-Endpunkt; Details im Lernkonzept.
+- **Die Lern- und App-Daten liegen auf deiner HA-Instanz.** Ist die KI eingerichtet, gehen Fotos, Buchseiten, Unterrichts- und Hausaufgabentexte, Mentor-Gespräche und Sprachaufnahmen zur Auswertung an die konfigurierten Azure-AI-Foundry-Ressourcen; Schlüssel bleiben serverseitig. Einzelheiten: [README, Datenablage](README.md#datenablage).
 - `webapp.db` (Check-ins, Aufgaben, PINs, Einstellungen) liegt in
   `/data/` und ist Teil **jedes HA-Backups**.
 - **Add-on-Updates** (auch automatische) lassen `/data/` unangetastet.
@@ -154,16 +156,16 @@ Der Bereitstellungsname geht in den Aufruf an Azure, der Modellname in Preis, Lo
 
 Zusätzlich muss KI pro Schuljahr freigegeben werden. Ohne Konfiguration ist der Lernraum mit eigenen Aufgaben voll nutzbar. Welche Stufe welches Modell über welchen Host fährt, steht beim Start im Add-on-Log.
 
-[Gesamtkonzept, Architektur, Betriebsgrenzen und Inbetriebnahme](LERNKONZEPT.md)
+Früheres Gesamtkonzept mit Architektur und Inbetriebnahme (Stand 0.23 bis 0.83, archiviert): [LERNKONZEPT.md](konzept/archiv/LERNKONZEPT.md)
 
 
 ## Automatische Themenübersicht ab 0.24.0
 
-Im Eltern-Lernraum unter **Heute → Unterricht automatisch auswerten** einschalten. KI muss zusätzlich im aktiven Schuljahr aktiviert sein. Pro Öffnen wird höchstens eine Gruppe von 24 neuen/geänderten Einträgen eines Fachs verarbeitet; **Weitere Unterrichtseinträge auswerten** setzt die Erstaufnahme fort. Das Archivfenster beginnt am 1. August des vergangenen Schuljahres. Höchstens 6.000 aktuelle Datensätze werden betrachtet; eine Kürzung wird angezeigt.
+Im Eltern-Lernraum unter **Heute → Unterricht automatisch auswerten** einschalten. KI muss zusätzlich im aktiven Schuljahr aktiviert sein. Eine Gruppe umfasst höchstens 24 neue/geänderte Einträge eines Fachs; **Weitere Unterrichtseinträge auswerten** stößt die nächste Gruppe von Hand an. Das Archivfenster beginnt am 1. August des vergangenen Schuljahres. Höchstens 6.000 aktuelle Datensätze werden betrachtet; eine Kürzung wird angezeigt.
 
 An die KI gehen Jahrgang, Fach, Unterrichtsdatum und Stofftext sowie bereits erkannte Thementitel; Feedback, Fehlzeiten und Antworten bleiben für die Priorisierung lokal. Inhalte werden pro Eintrag auf 2.000 Zeichen und pro Gruppe auf 14.000 Zeichen begrenzt. Maximal 6.500 Ausgabetokens und gemeinsam zwölf Modellaufrufe pro Kind/Tag begrenzen den Aufwand. Tatsächliche gemeldete Tokens erfolgreicher Auswertungen werden angezeigt; dies ist keine vollständige Kostenabrechnung.
 
-Themen erhalten Erklärungen, Verbindungen und einen **nicht freigegebenen** Kurzcheck. Eltern prüfen diesen unter **Kurzcheck prüfen und freigeben**. Freigegebene Aufgaben nutzen die vorhandenen Wiederholungsintervalle und Zeitbudgets. Unterrichtstexte beweisen weder Können noch Klausurrelevanz. Älterer Unterricht bleibt mit seinem Datum erkennbar, auch wenn er dem aktuellen Lernrahmen als Grundlage zugeordnet wird. Die Auswertung startet beim Öffnen des Eltern-Lernraums, nicht im Hintergrund. Eine pausierte Auswertung löscht vorhandene Ergebnisse nicht.
+Themen erhalten Erklärungen, Verbindungen und einen **nicht freigegebenen** Kurzcheck. Eltern prüfen diesen unter **Kurzcheck prüfen und freigeben**. Freigegebene Aufgaben nutzen die vorhandenen Wiederholungsintervalle und Zeitbudgets. Unterrichtstexte beweisen weder Können noch Klausurrelevanz. Älterer Unterricht bleibt mit seinem Datum erkennbar, auch wenn er dem aktuellen Lernrahmen als Grundlage zugeordnet wird. Seit 0.25.0 läuft die Auswertung im Hintergrund, wenn sie hier und im Mentor unter „Neue Unterrichtsthemen im Hintergrund erschließen“ eingeschaltet ist: Der Dienst prüft jede Minute, je Kind kommt höchstens eine Gruppe alle zehn Minuten dran, nach einem Fehler erst vier Stunden später. Das Öffnen einer Seite löst keine Auswertung aus. Quellen und Materialien werden davon unabhängig ereignisgesteuert verarbeitet ([D63](konzept/ENTSCHEIDUNGEN.md)). Eine pausierte Auswertung löscht vorhandene Ergebnisse nicht.
 
 API (jeweils unter `/api/accounts/{account_id}/learning/discovery`): GET Übersicht, PUT `/settings` mit `{ "enabled": true }`, POST `/scan` für eine begrenzte Gruppe. Elternrolle und bestehende Kontoberechtigungen sind erforderlich.
 
@@ -174,4 +176,42 @@ Eine separate Lese-API liefert Unterricht, Rückmeldungen, Nachholen, Aufgaben u
 
 ## Lernmentor ab 0.25.0
 
-Der Lernbereich startet jetzt mit dem Mentor. [Bedienung, Kostensteuerung, Datenmodell und Grenzen](MENTOR_BETRIEB.md). Der [Masterplan](MASTERPLAN.md) ist die verbindliche Entwicklungsgrundlage. Die Abschnitte zur früheren 0.24.0-Vorarbeit beschreiben keinen eigenständigen Release; Seitenaufrufe lösen keine automatischen KI-Analysen mehr aus.
+Der Lernbereich startet jetzt mit dem Mentor. Bedienung, Kostensteuerung, Datenmodell und Grenzen mit Stand 0.28.0 stehen im archivierten [MENTOR_BETRIEB.md](konzept/archiv/MENTOR_BETRIEB.md). Maßgeblich für Stand und Entscheidungen ist [konzept/README.md](konzept/README.md); der frühere Masterplan liegt im [Archiv](konzept/archiv/MASTERPLAN.md). Die Abschnitte zur früheren 0.24.0-Vorarbeit beschreiben keinen eigenständigen Release; Seitenaufrufe lösen keine automatischen KI-Analysen mehr aus.
+
+## Nutzungsbericht für Eltern ab 1.13.17
+
+In der Familienansicht steht unter dem Wochenrückblick „So wurde die App
+genutzt“. Er ist nur für Eltern sichtbar, beschreibt die Woche und nennt
+Auffälligkeiten jeweils mit Beleg, möglicher Deutung und dem, was die App
+nicht sehen kann. Dafür misst die App, wie lange sie sichtbar war (Summen je
+Tag und Ansicht, nach 90 Tagen gelöscht), und merkt sich bei jeder Nachricht
+an den Mentor, ob es eine Frage, eine Antwort oder eine Bitte um Hilfe war.
+
+Als Nachricht an die Eltern am Sonntagabend, mit dem Mitteilungs-Token des
+Kindes in `secrets.yaml`:
+
+```yaml
+# configuration.yaml
+rest_command:
+  schul_cockpit_woche_kind_a:
+    url: !secret schul_cockpit_woche_kind_a   # http://e54108c7-schul-cockpit:8099/api/notify/1/usage-week?token=…
+    method: get
+```
+
+```yaml
+# Automation
+triggers:
+  - trigger: time
+    at: "18:00:00"
+conditions:
+  - condition: time
+    weekday: sun
+actions:
+  - action: rest_command.schul_cockpit_woche_kind_a
+    response_variable: bericht
+  - action: notify.mobile_app_eltern   # das Gerät eines Elternteils, nie das des Kindes
+    data:
+      title: "{{ bericht.content.title }}"
+      message: "{{ bericht.content.text }}"
+```
+

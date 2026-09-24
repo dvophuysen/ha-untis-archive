@@ -1057,3 +1057,16 @@ CREATE TABLE vocab_answer_assessments (
 # sagen, ob eine cachefreundliche Reihenfolge wirkt.
 _MIGRATIONS.append(("mentor_ai_calls_002_cached", "ALTER TABLE mentor_ai_calls ADD COLUMN cached_tokens INTEGER"))
 _MIGRATIONS.append(("mentor_ai_calls_003_reasoning", "ALTER TABLE mentor_ai_calls ADD COLUMN reasoning_tokens INTEGER"))
+
+# Wie lange die App je Tag sichtbar war, getrennt nach Kind und Eltern, mit
+# Sekunden je Ansicht. Nur Tagessummen, kein Klickprotokoll; nach 90 Tagen
+# gelöscht. Grundlage des Nutzungsberichts für Eltern.
+_MIGRATIONS.append(("usage_days_001", """
+CREATE TABLE IF NOT EXISTS usage_days (
+ account_id INTEGER NOT NULL, day TEXT NOT NULL, actor TEXT NOT NULL,
+ first_at TEXT NOT NULL, last_at TEXT NOT NULL,
+ opens INTEGER NOT NULL DEFAULT 0, active_seconds INTEGER NOT NULL DEFAULT 0,
+ views_json TEXT NOT NULL DEFAULT '{}',
+ PRIMARY KEY(account_id, day, actor)
+);
+"""))

@@ -1,3 +1,5 @@
+> Archiviert am 24.09.2026. Historischer Stand, gilt nicht mehr. Maßgeblich sind [konzept/README.md](../README.md) und die dort verlinkten Dokumente.
+
 # Umsetzung 0.73.0: Balken aus dem Lernstand
 
 Seit 0.73.0 (D71) zeigt der Balken je Fach die Verteilung der Stufen der

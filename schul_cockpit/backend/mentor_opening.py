@@ -7,7 +7,7 @@ ersten Zug dazu: zwei, drei Sätze Einordnung mit Erinnerung an das letzte Mal
 und den Termin, dann je nach Lage die erste Aufgabe oder die Frage, was unklar
 ist, dazu drei Vorschläge aus dem Inhalt. Sagt das Kind später, es verstehe
 das Thema nicht, wechselt der Mentor im Gespräch zum Erklären; eine Erklärung
-vor der ersten Aufgabe zählt nicht als Hilfe. Konzept: konzept/MENTOR_EINSTIEG.md.
+vor der ersten Aufgabe zählt nicht als Hilfe. Konzept: konzept/archiv/MENTOR_EINSTIEG.md.
 """
 from __future__ import annotations
 

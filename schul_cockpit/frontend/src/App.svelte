@@ -20,6 +20,7 @@
   import Login from './routes/Login.svelte';
   import ExamSetup from './routes/ExamSetup.svelte';
   import { api } from './lib/api.js';
+  import { startUsagePing } from './lib/usagePing.js';
 
   async function logout() {
     try { await api.post('/api/auth/logout'); } catch (_) { /* ignore */ }
@@ -77,7 +78,13 @@
     loadMe();
     const handler = () => (route = parseHash());
     window.addEventListener('hashchange', handler);
-    return () => window.removeEventListener('hashchange', handler);
+    // Nutzungszeit für den Elternbericht: aktives Kind und aktuelle Ansicht.
+    const stopPing = startUsagePing(() =>
+      appState.me && appState.activeAccountId ? { accountId: appState.activeAccountId, view: route.name } : null);
+    return () => {
+      window.removeEventListener('hashchange', handler);
+      stopPing();
+    };
   });
 
   // Default-Landing: sobald `me` geladen ist und es ≥2 verlinkte Kinder

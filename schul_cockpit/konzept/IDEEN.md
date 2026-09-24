@@ -1,23 +1,23 @@
 # Offene Ansätze und zu entscheidende Fragen
 
-Stand: 16.09.2026. Backlog zur gemeinsamen Klärung, kein verbindlicher Bauauftrag für alle Einträge.
+Stand: 24.09.2026, erledigte Punkte markiert. Backlog zur gemeinsamen Klärung, kein verbindlicher Bauauftrag für alle Einträge.
 
 ## Vorgeschlagen am 17.09.2026 aus der Eichung
 
 - Gebaut in 0.77.0 (D79): Plausibilitätsprüfung handschriftlicher Themenlisten: Seitenangaben des Zettels gegen die Stellen halten, die Unterricht und Hausaufgaben desselben Fachs seit der letzten Arbeit nennen; Abweichungen in der Gegenlese-Karte benennen („S. 70, 71 kommen im Unterricht nicht vor; gemeint S. 10, 11?“). Anlass: Jede Lesung las die handschriftliche 1 eines Kindes als 7 (D78).
 - Gebaut in 0.78.0 (D81): Vorschlag der Prüfung mit einem Tipp übernehmen, je Seitenangabe als Ganzes.
-- Seitenart als Steuerung der Modellwahl erst, wenn je Seitenart eine Messung mit Zahlen- und Zeilenvergleich vorliegt (D75, D77).
+- Erledigt in 0.85.0 (D90): Seitenart als Steuerung der Modellwahl erst, wenn je Seitenart eine Messung mit Zahlen- und Zeilenvergleich vorliegt (D75, D77). Die Lesung eskaliert seitdem nach Seitenart, belegt durch die Eichung vom 17.09.
 - Kontrollieren (0.78.0, D80) nach der ersten echten Kontrolle eichen: Lesbarkeit der Kinderhandschrift, Urteilsqualität je Aufgabe, ob das Modell trotz Verbot Ergebnisse nennt.
 
 ## Zurückgestellt am 16.09.2026 (D67)
 
 - Gruppierung der Lerneinheiten nach Feld, Schuljahresgrenze 1. August, Doppelstunden als eine Behandlung, gemischte Einträge; Entwurf in [LERNEINHEITEN.md](LERNEINHEITEN.md). Offene Frage: Ist ein Oberthema selbst übbar?
-- Abschreibmodell umstellen (D54): Eichung ist gebaut, das günstigere Modell nie aktiviert. Kostenhebel, Entscheidung der Eltern nach Eichung an echten Seiten.
-- Kostensätze der Modelle laufen am 01.12.2026 ab; danach sperrt `ai_gateway` unbekannte Namen. Vorher prüfen und mit Datum neu hinterlegen.
+- Erledigt (D90, D137): Abschreibmodell umstellen (D54). Seit 0.85.0 liest ein günstiger erster Durchgang, seit 1.11.0 auf der Stufe „klein“; die gründliche Lesung folgt nur, wo die Seitenart sie verlangt.
+- Erledigt in 1.13.11 (D145): Kostensätze der Modelle laufen am 01.12.2026 ab; danach sperrt `ai_gateway` unbekannte Namen. Die hinterlegten Sätze gelten jetzt danach als Schätzung weiter. Die Sätze für gpt-5.6 zu prüfen, bleibt in der [Übergabe](UEBERGABE.md) offen.
 - Sensor „Hausaufgaben offen“ der Integration widerspricht den Todo-Listen (Untis `completed` unzuverlässig). Entweder aus dem Todo-Abgleich speisen oder umbenennen.
-- Vokabeltrainer: Kartenfoto für Stufe 2, Formen-Trainer Latein, Spanisch-Wortseiten als Material.
-- Klausurseite: Fahrplan mit Tagen, Übungsfenster 60 Tage gegen „seit Ankündigung“, Weg von der Arbeit zur Materialablage.
-- Materialablage Stufe 5: Chatanhänge übernehmen, Suche, Aufbewahrungsdauer, Benachrichtigung über neues Material.
+- Vokabeltrainer: Kartenfoto für Stufe 2, Formen-Trainer Latein. Erledigt: Spanisch-Wortseiten als Material, seit 1.1.0 werden alle Wortschatzteile eines Sprachbuchs geholt (D109).
+- Klausurseite: Übungsfenster 60 Tage gegen „seit Ankündigung“. Erledigt: Weg von der Arbeit zur Materialablage, die Klausurkarte verlinkt die Einkaufsliste des Fachs (D48, 0.58.0). Verworfen für die Klausurkarte: Fahrplan mit Tagen, der Tagesplan gehört der App-Planung (D62).
+- Materialablage Stufe 5: Suche, Aufbewahrungsdauer, Benachrichtigung über neues Material. Erledigt für Hausaufgabenhilfe und Kontrolle: Chatanhänge werden Material (D143, 1.13.9); Übungs- und Themenchats behalten das Einzelfoto im Gespräch.
 
 ## Fachübersicht und Analyse
 
@@ -39,7 +39,7 @@ Stand: 16.09.2026. Backlog zur gemeinsamen Klärung, kein verbindlicher Bauauftr
 Ausgearbeiteter Entwurf: [Verantwortung übernehmen statt erinnert werden](VERANTWORTUNG.md).
 Enthält Forschungsstand, Leitlinien und vier Vorschläge (Tagesabschluss mit Wenn-Dann-Plan,
 sichtbare eigene Verlässlichkeit, verabredete Stufen der Übergabe, Wochenrückblick statt
-täglicher Nachfrage) samt Reihenfolge und offenen Fragen. Noch nicht beschlossen.
+täglicher Nachfrage) samt Reihenfolge und offenen Fragen. Teilweise beschlossen und gebaut: abgeleiteter Tagesabschluss (D32 bis D35), Frage nach der Schule (D69), Wochenrückblick (D72); der Rest ist nicht beschlossen.
 
 Gamification bleibt offen. Kandidaten: sichtbare fachliche Fortschritte, dauerhafte Gestaltungselemente, Wochenmarkierungen und verlässlicher Tagesabschluss. Nicht beschlossen: Punkte, Streaks, Belohnungstausch und Sammelwelt. Nachtfristen, Verlustdruck und Bildschirmzeitmaximierung passen nicht zur Vision.
 
@@ -67,12 +67,12 @@ Seit 0.74.0 gibt es den Wochenrückblick für Eltern (D72) als Ausgangslage. Vor
 
 ## Materialien
 
-- Arbeitsblätter ohne Nummer: Entwurf einer Kennung aus Fach, Ausgabetag und Titel, Bezug beim Einwerfen mit einem Tipp statt Fünf-Tage-Vermutung, rückwirkendes Zuordnen in der Quellenbilanz: [Arbeitsblätter mit Bezug](ARBEITSBLAETTER.md). Entschieden (D85), Stufe 1 in 0.81.0; offen Stufe 2 (Kandidaten beim Einwerfen, Kennung) und 3 (Mentor-Wortlaut).
+- Arbeitsblätter ohne Nummer: Entwurf einer Kennung aus Fach, Ausgabetag und Titel, Bezug beim Einwerfen mit einem Tipp statt Fünf-Tage-Vermutung, rückwirkendes Zuordnen in der Quellenbilanz: [Arbeitsblätter mit Bezug](ARBEITSBLAETTER.md). Entschieden (D85), Stufe 1 in 0.81.0. Erledigt: Stufe 2 und 3 in 0.87.0 (D92).
 
-- Material entsteht heute an drei Stellen ohne Verbindung: Chatanhang, Lernmaterial am Thema und Buchseiten aus dem Medienregal. Arbeitshefte, Blätter, eigene Mitschriften, digitale Hefte als PDF, bearbeitete Lösungen und zurückgegebene Arbeiten haben keinen gemeinsamen Ort.
-- Der vorhandene Weg zum Ablegen ist für Kinder nicht erreichbar und für Eltern vierfach verschachtelt. Text muss von Hand eingetippt werden, sonst nutzt ihn weder Mentor noch Übungsklausur.
-- Entwurf einer zentralen Ablage mit automatischer Einordnung: [Materialablage](MATERIALIEN.md). Enthält Datenmodell, Materialarten, Datumslogik, Neuauswertung, Schutz vor durchgereichten Lösungen sowie offene Fragen. Noch nicht beschlossen.
+- Erledigt mit der zentralen Materialablage (0.40.0, D18 bis D21): Material entstand an drei Stellen ohne Verbindung: Chatanhang, Lernmaterial am Thema und Buchseiten aus dem Medienregal. Arbeitshefte, Blätter, eigene Mitschriften, digitale Hefte als PDF, bearbeitete Lösungen und zurückgegebene Arbeiten haben keinen gemeinsamen Ort.
+- Erledigt mit derselben Ablage, die Fotos selbst liest: Der damalige Weg zum Ablegen war für Kinder nicht erreichbar und für Eltern vierfach verschachtelt. Text musste von Hand eingetippt werden, sonst nutzte ihn weder Mentor noch Übungsklausur.
+- Entwurf einer zentralen Ablage mit automatischer Einordnung: [Materialablage](MATERIALIEN.md). Enthält Datenmodell, Materialarten, Datumslogik, Neuauswertung, Schutz vor durchgereichten Lösungen sowie offene Fragen. Die Grundregeln sind beschlossen (D18 bis D21).
 
 ## Konkretisierter Folgeentwurf 13.09.2026
 
-[Grafische Fächerübersicht](FAECHERUEBERSICHT.md): kompakte Balken, Mini-Verlauf und Drilldown. Darstellungs- und Bewertungsdetails dort ausdrücklich als Vorschläge markiert. Noch keine produktive Score-/Trendberechnung, Elternintegration zurückgestellt.
+Erledigt in anderer Form: Seit 0.73.0 zeigt die Fächerübersicht die Verteilung der Lernstand-Stufen und die Stufenwechsel der letzten vier Wochen (D71). Der Entwurf [Grafische Fächerübersicht](archiv/FAECHERUEBERSICHT.md) ist archiviert; die Elternintegration bleibt zurückgestellt.

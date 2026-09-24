@@ -1,3 +1,19 @@
+# Stand 1.13.16 (24.09.2026)
+
+Kurzer Überblick über die Entwicklung seit 1.5.0, nach Themen. Einzelheiten stehen im [CHANGELOG](../CHANGELOG.md) und in den genannten Einträgen von [ENTSCHEIDUNGEN.md](ENTSCHEIDUNGEN.md). Die Abschnitte ab 1.5.0 darunter sind unverändert.
+
+**Vokabellisten und Vokabeltrainer (1.5.6 bis 1.13.6).** Die Gliederung der Wortlisten hat mehrere Anläufe gebraucht: das Bild der Seite und der offene Abschnitt der Vorseite (D120, D121), Aufräumen alter Lesungen, ohne geübte Wörter zu verlieren (D122, D125), Lesen auf der kleinen Stufe mit einer Grenzfrage statt Eskalation (D128 bis D136), Doppelseiten und Dubletten (D138, D140) und zuletzt die Gliederung aus dem Vergleich aller Seiten eines Buchteils (D139, 1.12.0 bis 1.12.6). Seit 1.13.0 kommen Listen über einen geprüften Buchbestand in den Trainer. Er wird erst nach einer Quellenprüfung aktiviert, Buch für Buch, und erhält Lernstände über verknüpfte Wörter (D152, D153). 1.13.2 bis 1.13.6 betreffen die Bewertung: nur Karten mit geprüfter Bedeutung (D154), richtige Antworten zählen unabhängig von der Dauer, dazu Fortschrittsbalken (D155), Eltern können einzelne Versuche umkehrbar aus der Wertung nehmen (D156), Bedeutungsprüfung mit gpt-5-mini und Überspringen ohne Wertung (D157). Welche Buchbestände live aktiviert sind, hält dieses Dokument nicht fest.
+
+**Materialien und Hausaufgabenhilfe (1.6.0 bis 1.13.10, 1.13.16).** Die Kontrolle sucht die Bearbeitung des Kindes zuerst im Bestand (D123). Das Zielbild „Der Mentor ist ein Lehrer, kein Chat“ ist beschrieben (D126), gebaut ist davon die erste Stufe mit Vorlage und Entdopplung (D127). Der erste Lesedurchgang jeder Seite läuft auf der kleinen Stufe, die gründliche zweite Lesung ist ein Zugewinn und keine Bedingung (D137). Seit 1.13.7 lassen sich in Hausaufgabenhilfe und Kontrolle mehrere abgelegte Seiten einbinden (D141). Das Fach einer Aufgabe wird auch aus dem Titel bestimmt und ist von Hand wählbar (D142), Fotos aus dem Chat werden Material der Aufgabe (D143), und angekreuzte Seiten gehen beim Senden mit (D144). 1.13.16 dosiert die Hilfe nach einer Hilfeleiter (D150).
+
+**Sicherheit und Kosten (1.13.11 bis 1.13.15, 23. und 24.09.).** Eine Prüfung der App am 23.09. fand drei Lücken. Über den Direktport gab die Auslieferung der App-Dateien ohne Anmeldung beliebige Dateien des Containers heraus, darunter die Add-on-Optionen mit den KI-Schlüsseln (geschlossen in 1.13.11). Die Ingress-Kopfzeile ließ sich über den Direktport fälschen (D146, 1.13.12), und die PIN-Sperre zählte gleichzeitige Versuche nicht (D147, 1.13.13). Geheimnisse werden nach Entscheidung des Nutzers nicht getauscht (D148). Bei den Kosten liest ein Modellwechsel den Bestand nur noch neu, wenn das neue Modell stärker ist; Seiten ohne Bezug kommen alle 14 Tage statt jede Nacht wieder, und hinterlegte Kostensätze gelten nach dem 01.12.2026 als Schätzung weiter (D145, 1.13.11). 1.13.14 verwirft bezahlte gründliche Lesungen nicht mehr wegen zu langer Felder und gibt den Einstiegshilfen mehr Ausgabebudget. 1.13.15 sortiert den Mentor-Kontext für das Prompt-Caching von Azure und speichert Cache- und Denk-Token je Aufruf (D149).
+
+**Gemeinsamer Planungsdienst.** Plan, Nachmittagsplan, Fächer-Vorbereitung und Mentor verwenden seit 0.28.0 `learning_plan.py`. Die Beschreibung aus dieser Zeit steht im Abschnitt „Umsetzungsstand 0.28.0“ von [archiv/LERNPLAN_VERZAHNUNG.md](archiv/LERNPLAN_VERZAHNUNG.md). Die Grundregeln von damals: Ein Themenanlass ist keine vollständige Diagnose, eine erledigte Hausaufgabe mit Stundenbezug verschiebt den ersten Kurzcheck, belegt aber kein Können, und die Wochenansicht wird aus aktuellen Daten neu berechnet, sie ist kein fester Kalender.
+
+**Ohne eigenes Release.** Fachübersicht, Elternüberblick und Übungsklausuren sind seit 0.74.0 nicht weiterentwickelt worden; 1.13.11 hat nur Zählungen im Wochenrückblick berichtigt.
+
+---
+
 # Gegenlesen nur bei Zweifel, mit Foto und Auszug 1.5.0
 
 Stand 18.09.2026. Nutzerrückmeldung und Nutzerentscheidung (D118).
@@ -544,7 +560,7 @@ nicht auf dem Hauptmodell läuft. 463 Tests grün, Frontend gebaut.
 
 # Verfassung des Kindes 0.88.0
 
-Stand 17.09.2026. Schritt 5 aus MENTOR_EINSTIEG.md, Entscheidung D93.
+Stand 17.09.2026. Schritt 5 aus archiv/MENTOR_EINSTIEG.md, Entscheidung D93.
 
 **Gebaut.** `routers/mentor.condition()` liest die letzten vier Kindnachrichten,
 den Hinweiszähler der Einheit und die Uhrzeit und liefert die Signale
@@ -1056,7 +1072,7 @@ Hauptmodell verbessert, ist ungemessen.
 
 Stand 17.09.2026. Nutzerwunsch vom 16.09.: Der Mentor soll eine Sitzung nie
 abbrechen, sondern höchstens vorschlagen, ob das Kind beenden oder
-weitermachen will. Dazu Schritt 2 aus MENTOR_EINSTIEG.md.
+weitermachen will. Dazu Schritt 2 aus archiv/MENTOR_EINSTIEG.md.
 
 **Gebaut (D73).** `routers/mentor.turn`: Nur `kind=finish` beendet. Zeit-
 und Zuggrenze (12 Züge oder `max_minutes` bei Übung, `MAX_TURNS` bei Themen)
@@ -1085,14 +1101,14 @@ Vorschlag auf nachgeholt und bleibt offen. 143 Mentor-Tests grün,
 Frontend-Build bestanden.
 
 **Offen.** Live-Prüfung der Wortwahl mit den Kindern. Schritte 4 und 5 aus
-MENTOR_EINSTIEG.md (Kontrollieren mit Foto, Verfassung).
+archiv/MENTOR_EINSTIEG.md (Kontrollieren mit Foto, Verfassung).
 
 ---
 
 # Wochenrückblick 0.74.0
 
 Stand 16.09.2026, abends. Fünftes und letztes Paket der Reihenfolge aus D67;
-Masterplan Abschnitt 10 („knappe Wochenübersicht mit wenigen Aussagen“).
+Masterplan (archiv/MASTERPLAN.md) Abschnitt 10 („knappe Wochenübersicht mit wenigen Aussagen“).
 
 **Gebaut (D72).** `week_review.review`: Montag bis Sonntag der laufenden
 Woche; Abende vor einem Schultag aus `day_close.reliability` (aktuell und
@@ -1112,7 +1128,7 @@ gefüllten Woche (Vorwoche, Demo und anderes Konto zählen nicht), die leere
 Woche ohne erfundene Aussagen, Route mit Kontogrenze. Frontend-Build
 bestanden.
 
-**Offen.** Der vierwöchige Familienversuch aus Masterplan Abschnitt 10 kann
+**Offen.** Der vierwöchige Familienversuch aus Masterplan (archiv/MASTERPLAN.md) Abschnitt 10 kann
 jetzt beginnen; die Ausgangslage ist der erste Rückblick. Ob die Kinder
 ihren eigenen Rückblick sehen sollen, ist offen (die Route erlaubt es, die
 Kinderansicht zeigt ihn nicht). Die Verlässlichkeitszahl (D34) ist damit
@@ -1124,7 +1140,7 @@ verabreden.
 # Fächerübersicht auf dem Lernstand 0.73.0
 
 Stand 16.09.2026, abends. Viertes Paket der Reihenfolge aus D67; löst die
-offene Datenbedeutung aus FAECHERUEBERSICHT.md.
+offene Datenbedeutung aus archiv/FAECHERUEBERSICHT.md.
 
 **Gebaut (D71).** `lernstand.subject_overview`: je Fach die Verteilung der
 Stufen über die nicht veralteten Themen der offiziellen Themenlisten seit
@@ -1145,7 +1161,7 @@ dem Zeitfenster, Reihenfolge Wackler zuerst, „kein Verlauf“ ohne Wechsel,
 Route für Kind und Eltern mit Kontogrenze. Frontend-Build bestanden.
 
 **Offen.** Live-Abnahme auf 320/390/430 px und im Dunkelmodus
-(Abnahmeliste in FAECHERUEBERSICHT.md). Elternstartseite bleibt
+(Abnahmeliste in archiv/FAECHERUEBERSICHT.md). Elternstartseite bleibt
 Folgeentscheidung. Fächer ohne Themenliste (kein Klausurtermin) haben keinen
 gemessenen Stand; ob Übungsthemen aus dem Unterricht (learning_topics)
 später mitzählen, ist offen.
@@ -1155,7 +1171,7 @@ später mitzählen, ist offen.
 # Nachholen als Lage 0.72.0
 
 Stand 16.09.2026, abends. Drittes Paket der Reihenfolge aus D67; Schritt 3
-aus MENTOR_EINSTIEG.md.
+aus archiv/MENTOR_EINSTIEG.md.
 
 **Gebaut (D70).** Die Lage „nachholen“ gab es seit 0.69.0 in
 `mentor_opening.situation`, aber ohne Einstieg außer dem Plan und ohne Ende.
@@ -1178,7 +1194,7 @@ Knopf setzt `caught_up`; Abschluss durch das Modell ebenso, danach kein
 Nachholen mehr. Frontend-Build bestanden.
 
 **Offen.** Live an einer echten versäumten Stunde prüfen (Konto mit 14
-offenen Stunden). Schritte 2, 4 und 5 aus MENTOR_EINSTIEG.md (Erklären als
+offenen Stunden). Schritte 2, 4 und 5 aus archiv/MENTOR_EINSTIEG.md (Erklären als
 eigener Einstieg, Kontrollieren mit Foto, Verfassung) bleiben offen.
 
 ---
@@ -1270,7 +1286,7 @@ Eichung an zwei Themen: terra gleichwertig zu sol, luna erfand Vorgeschichte;
 `opening_model = gpt-5.6-terra` gesetzt. Vokabeltrainer: Einstieg unter Lernen
 mit Sprachauswahl, Rücksetzen je Sprache für Eltern, Vorlesen entfernt.
 Klausurkarte: Entfernen nur noch unter „Themen bearbeiten (Eltern)“.
-Konzept: MENTOR_EINSTIEG.md (Nachholen in 0.72.0; Erklären, Kontrollieren noch offen).
+Konzept: archiv/MENTOR_EINSTIEG.md (Nachholen in 0.72.0; Erklären, Kontrollieren noch offen).
 
 **Klausurseite neu (0.67.0, D62).** `Klausuren.svelte` komplett neu: drei
 Punkte mit Ampel, aufklappbare Themenliste mit Stufen, Gefühl je Arbeit und
@@ -1516,7 +1532,7 @@ Fälligkeit und Hilfe bleiben in der rechten Spalte untereinander bei 320/390/43
 
 Produktionsbuild erfolgreich. Bestehende Browserabläufe für Tagesdashboard (einschließlich Speichern und Fehler), Elternansicht und Kinderlernen erfolgreich. Geometrieprüfung: Hilfe unter Datum, gleiche rechte Kante, mindestens 44 px Hilfe-Bedienfläche und kein horizontaler Überlauf auf den vier Breiten. Helle/dunkle iPhone-Screenshots visuell geprüft. Browser verfügt nicht über vollständige Emoji-Schriften; echte Apple-Emoji/PWA-Abnahme steht aus.
 
-Grafische Fachübersicht als getrenntes Folgepaket in [FAECHERUEBERSICHT.md](FAECHERUEBERSICHT.md) ausgearbeitet. Kompakte Statusbalken, Verlauf und Drilldown sind Ziel; Bewertungs-/Trendregeln bleiben offen. Einbau in Elternstartseite ausdrücklich spätere Entscheidung.
+Grafische Fachübersicht als getrenntes Folgepaket in [FAECHERUEBERSICHT.md](archiv/FAECHERUEBERSICHT.md) ausgearbeitet. Kompakte Statusbalken, Verlauf und Drilldown sind Ziel; Bewertungs-/Trendregeln bleiben offen. Einbau in Elternstartseite ausdrücklich spätere Entscheidung.
 
 Veröffentlichung blockiert: Git-Push konnte sich nicht authentifizieren (could not read Username). Nur lokal auf Branch codex/iphone-ui-0331 vorbereitet; weder Remote-Veröffentlichung noch Live-Installation behauptet. Änderungspaket separat gesichert.
 

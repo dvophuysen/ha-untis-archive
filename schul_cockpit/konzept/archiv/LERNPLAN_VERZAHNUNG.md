@@ -1,3 +1,5 @@
+> Archiviert am 24.09.2026. Historischer Stand, gilt nicht mehr. Maßgeblich sind [konzept/README.md](../README.md) und die dort verlinkten Dokumente.
+
 # Umsetzungsstand 0.28.0
 
 Plan, Nachmittagsplan, Fächer-Vorbereitung und Mentor verwenden jetzt `learning_plan.py`. Die ursprünglichen Anforderungen bleiben unten als Designreferenz erhalten; die historische Ist-Beschreibung bezieht sich auf 0.27.1.

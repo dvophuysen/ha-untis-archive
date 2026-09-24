@@ -1,3 +1,5 @@
+> Archiviert am 24.09.2026. Historischer Stand, gilt nicht mehr. Maßgeblich sind [konzept/README.md](../README.md) und die dort verlinkten Dokumente.
+
 # Der Mentor als Begleiter: Situationen, Rollen, Einstiege
 
 Stand 16.09.2026. Entwurf zur Abstimmung, noch nicht gebaut.

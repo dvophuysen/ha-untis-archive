@@ -1,3 +1,5 @@
+> Archiviert am 24.09.2026. Historischer Stand, gilt nicht mehr. Maßgeblich sind [konzept/README.md](../README.md) und die dort verlinkten Dokumente.
+
 > Ergänzung vom 12.09.2026: [Gemeinsamer Lernplan und Wiederholungen](LERNPLAN_VERZAHNUNG.md). Gemeinsame Planung ab 0.28.0 umgesetzt; Abdeckung und Grenzen stehen im verlinkten Dokument.
 
 # Schulmentor für die Kinder der Familie

@@ -1,3 +1,5 @@
+> Archiviert am 24.09.2026. Historischer Stand, gilt nicht mehr. Maßgeblich sind [konzept/README.md](../README.md) und die dort verlinkten Dokumente.
+
 > Fortschreibung: [Masterplan](MASTERPLAN.md) und [aktueller Mentor-Betrieb](MENTOR_BETRIEB.md).
 
 # Lernraum – Gesamtkonzept und technische Umsetzung

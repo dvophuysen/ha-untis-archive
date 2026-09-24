@@ -1,3 +1,11 @@
+## 1.13.17
+
+- Familienansicht: Neu ist „So wurde die App genutzt“ unter dem Wochenrückblick, nur für Eltern. Oben eine Zeile („5 Tage aktiv · 3 Mentor-Einheiten · …“), aufgeklappt die Woche: wann gearbeitet wurde, Zeit in der App, Mentor-Einheiten mit Hilfeanfragen und selbst gelösten Aufgaben, Vokabeln mit „Weiß ich nicht“ und ob die Wörter später saßen, Aufgaben vor oder nach dem Fälligkeitstag, Check-ins, Uploads. Auffälligkeiten stehen mit Beleg, möglicher Deutung und dem, was die App nicht sehen kann. Keine Punktzahl, kein Vergleich zwischen Geschwistern.
+- Die App merkt sich dafür, wie lange sie je Tag und Ansicht sichtbar war (nach 90 Tagen gelöscht), und bei jeder Nachricht an den Mentor, ob es eine Bitte um Hilfe war.
+- Für eine Home-Assistant-Nachricht an die Eltern am Sonntagabend gibt es den Bericht als Text (`/api/notify/{id}/usage-week`, Anleitung in DOCS.md).
+- Der Wochenrückblick rechnet mit dem Berliner Datum statt dem des Containers.
+- Dokumentation aufgeräumt: alte Konzepte liegen im Archiv, konzept/README.md ist der einzige Einstieg, fehlende Entscheidungen sind nachgetragen, README beschreibt ehrlich, was an Azure geht.
+
 ## 1.13.16
 
 - Mentor, Hausaufgabenhilfe: Hilfe kommt nach einer Hilfeleiter – erst Rückfrage, dann Hinweis auf Regel oder Stelle, dann ein ähnliches Beispiel, höchstens der erste Teilschritt der eigenen Aufgabe. Jede Bitte um Hilfe geht eine Stufe höher, ein eigener Versuch setzt zurück, und den nächsten Schritt gibt es erst nach einem eigenen Beitrag. Ist das Kind erkennbar müde oder frustriert, geht es schneller und mit Pausenangebot. Abfragen (Vokabeln, Formen) bleiben wie bisher.
@@ -1407,7 +1415,7 @@
 - Materialien sind Bestandteil vorhandener Datenbanksicherungen; JSON-Verlaufsexport.
 - Kontogebundene API, keine Offline-Zwischenspeicherung der Lernantworten.
 - Optionaler KI-Endpunkt in der Add-on-Konfiguration; ohne Verbindung weiter nutzbar.
-- Gesamtkonzept und Betriebsgrenzen: `LERNKONZEPT.md`.
+- Gesamtkonzept und Betriebsgrenzen: `konzept/archiv/LERNKONZEPT.md`.
 
 # Changelog
 

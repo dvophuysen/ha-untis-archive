@@ -1,3 +1,5 @@
+> Archiviert am 24.09.2026. Historischer Stand, gilt nicht mehr. Maßgeblich sind [konzept/README.md](../README.md) und die dort verlinkten Dokumente.
+
 ## Gemeinsame Planung ab 0.28.0
 
 **Plan** und **Lernen → Heute** zeigen dieselben Lernaktionen. Die Auswahl richtet sich nach Lernbedarf und nahen Klausuren. „Voller Tag“, „Normal“ und „Mehr Luft“ ändern den heutigen Vorschlag. Minuten dienen als Orientierung, weitere Einheiten können bewusst freiwillig gestartet werden; freie Zeit ist kein Lernauftrag. „Nächste sieben Tage“ öffnet die begrenzte Vorschau. „Bearbeitet, noch offen und spätere Kurzchecks“ zeigt ursprüngliche Rückmeldungen, Gespräche, Aufgabenbelege und nächste Termine. Kinder öffnen den passenden Mentor direkt; Eltern lesen die Kinderverläufe, Tests bleiben getrennt.
@@ -80,7 +82,7 @@ Gab es vor der neuen Buchführung bereits KI-Aufrufe im laufenden Monat, müssen
 
 Ein persistenter Auftrag je Kind wird nur bei ausdrücklich aktivierter Hintergrunderschließung ausgeführt. Neue/geänderte Stoffeinträge werden in kleinen Gruppen erschlossen. Der Dienst prüft alle 60 Sekunden, ein Kind erhält höchstens einen Batch je zehn Minuten. Bei Fehlern wird vier Stunden vertagt. Elternfreigabe und KI-Schuljahresfreigabe werden erneut geprüft. Ein Neustart setzt nicht die Kostenbuchführung zurück.
 
-Die bestehenden SQLite-Datenbanken und ihr Backupverfahren bleiben erhalten. Neue Tabellen werden bei ID-Neuzuordnung des Archivkontos mitgeführt. Die vorhandene Nur-Lese-API liefert jetzt auch Mentorverläufe, Lernbelege, Kostenbuchungen und Klausurversuche; keine Binärdateien oder Zugangsdaten. Anleitung: [READ_ACCESS.md](READ_ACCESS.md).
+Die bestehenden SQLite-Datenbanken und ihr Backupverfahren bleiben erhalten. Neue Tabellen werden bei ID-Neuzuordnung des Archivkontos mitgeführt. Die vorhandene Nur-Lese-API liefert jetzt auch Mentorverläufe, Lernbelege, Kostenbuchungen und Klausurversuche; keine Binärdateien oder Zugangsdaten. Anleitung: [READ_ACCESS.md](../../READ_ACCESS.md).
 
 ## Qualitätsprüfung und weitere Ausbauschritte
 

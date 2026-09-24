@@ -1,3 +1,5 @@
+> Archiviert am 24.09.2026. Historischer Stand, gilt nicht mehr. Maßgeblich sind [konzept/README.md](../README.md) und die dort verlinkten Dokumente.
+
 ## Nachprüfung 0.28.0 / Korrektur 0.28.1
 
 Live: Version 0.28.0 gestartet, Plan und Wochenvorschau erreichbar. Geschichts-Demo gruppiert neun erfundene Unterrichtsstunden und drei Hausaufgaben in drei wählbare Themenbereiche. Daraus wurde ein gespeicherter Klausurentwurf mit sechs Aufgaben über alle drei Bereiche erzeugt. Nicht freigegeben: Der Umfang erscheint für 15 Minuten zu groß; Zeitkalibrierung und vollständiger Druck-/Foto-/Bewertungsdurchlauf bleiben offen.

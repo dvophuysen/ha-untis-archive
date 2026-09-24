@@ -1,3 +1,5 @@
+> Archiviert am 24.09.2026. Historischer Stand, gilt nicht mehr. Maßgeblich sind [konzept/README.md](../README.md) und die dort verlinkten Dokumente.
+
 > Maßgebliche Zielbeschreibung: [abgestimmter Masterplan](MASTERPLAN.md). Implementierter Stand und Grenzen: [Mentor 0.25.0](MENTOR_BETRIEB.md). Der folgende Text dokumentiert die frühere Architekturvorarbeit.
 
 # Lernmentor: Fähigkeiten erkennen, verstehen und dauerhaft verbinden

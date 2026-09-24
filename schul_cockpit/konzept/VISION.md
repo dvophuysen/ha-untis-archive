@@ -1,6 +1,6 @@
 # Vision
 
-Stand: 13.09.2026. Langfristiger Zielzustand, keine Fertigmeldung.
+Stand: 13.09.2026, „Erfolg messen“ ergänzt am 24.09.2026. Langfristiger Zielzustand, keine Fertigmeldung.
 
 ## Hauptziel
 
@@ -35,8 +35,11 @@ Feste Regeln sichern Identitäten, Termine, Erledigungen, Zugriffsgrenzen, Koste
 
 - Organisation: weniger vergessene Materialien und versäumte Aufgaben; Datenquelle und Selbstbericht kenntlich machen.
 - Selbstständigkeit: mehr eigene Planung und sinnvolle Hilfenutzung; nicht beobachtete elterliche Erinnerungen nicht als messbar ausgeben.
-- Lernen: vergleichbare neue Aufgaben gelingen mit zeitlichem Abstand und weniger Hilfe.
+- Lernen: vergleichbare neue Aufgaben gelingen mit zeitlichem Abstand und weniger Hilfe. Identische Aufgaben oder eine gerade gezeigte Musterlösung reichen dafür nicht.
 - Alltag: Kinder und Eltern berichten weniger Konflikte und Überforderung.
 - Frühzeitigkeit: Schwierigkeiten werden vor Prüfungsdruck sichtbar und bearbeitet.
+- Vorbereitung: Abdeckung der Themen einer Arbeit und Ergebnisse ohne Hilfe. Fehlende Prüfungsdaten heißen nicht „sicher vorbereitet“.
+- Zutrauen: nur aus freiwilligen Rückmeldungen der Kinder. Klicks, Lobreaktionen oder Chatlänge messen keine Motivation.
+- Betrieb: Fehlbewertungen, verlorene oder doppelte Antworten, Latenz und Kosten je nützlicher Einheit. Ein billiger, fachlich falscher Ablauf ist kein Gewinn.
 
-App-Öffnungen, Tokens, Bildschirmzeit und Übungsmenge sind keine eigenständigen Erfolgsziele. Ein zeitlicher Zusammenhang zwischen Nutzung und Verbesserung beweist nicht die Wirksamkeit der App. Automatische Entscheidungen über externe Nachhilfe oder medizinische Diagnosen gehören nicht zum System.
+App-Öffnungen, Tokens, Bildschirmzeit und Übungsmenge sind keine eigenständigen Erfolgsziele. Ein zeitlicher Zusammenhang zwischen Nutzung und Verbesserung beweist nicht die Wirksamkeit der App; wenige Nutzende und wechselnder Unterricht erlauben keine Wirkungsstudie, und andere Erklärungen wie neue Vorgaben der Lehrkraft, leichtere Aufgaben oder Hilfe der Eltern sind mitzuprüfen. Steigt die Belastung über mehrere Rückmeldungen oder bleibt ein erheblicher Bewertungsfehler ungeklärt, wird der betroffene Ablauf reduziert oder pausiert. Automatische Entscheidungen über externe Nachhilfe oder medizinische Diagnosen gehören nicht zum System.

@@ -4,7 +4,7 @@
 // When the page is loaded at https://ha.local/api/hassio_ingress/abc/,
 // fetch('api/health') resolves to https://ha.local/api/hassio_ingress/abc/api/health.
 
-function joinUrl(path) {
+export function joinUrl(path) {
   return path.startsWith('/') ? `.${path}` : `./${path}`;
 }
 

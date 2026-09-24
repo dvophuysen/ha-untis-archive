@@ -4,6 +4,7 @@
   import { untrack } from 'svelte';
   import FamilyDayCheck from '../lib/FamilyDayCheck.svelte';
   import WeekReview from '../lib/WeekReview.svelte';
+  import UsageWeek from '../lib/UsageWeek.svelte';
   import { api } from '../lib/api.js';
   import { setActiveAccount } from '../lib/store.svelte.js';
 
@@ -64,6 +65,7 @@
         <div class="now">{kid.now.icon} {kid.now.label}</div>
         <FamilyDayCheck {kid} day={data.today} {open} />
         <WeekReview accountId={kid.account_id} />
+        <UsageWeek accountId={kid.account_id} />
 
         <div class="summary-links">
           <button class="summary-link" onclick={() => open(kid, 'klausuren')}><span>Arbeiten & Tests</span><strong>{kid.exams.length ? `${kid.exams.length} angekündigt` : 'Keine eingetragen'} <ActionLabel /></strong></button>

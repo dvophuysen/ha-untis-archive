@@ -1,19 +1,14 @@
 """Wochenrückblick: dieselben Zahlen für Kind und Eltern, ohne Modellaufruf."""
 from __future__ import annotations
 
-from datetime import date
-
 from fastapi import APIRouter, Depends
 
 from .. import week_review
 from ..auth import CurrentUser, get_current_user
+from ..learning import today_local
 from .learning import access
 
 router = APIRouter(prefix="/accounts/{account_id}/week-review")
-
-
-def today_local() -> date:
-    return date.today()
 
 
 @router.get("")
