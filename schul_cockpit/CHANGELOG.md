@@ -1,3 +1,7 @@
+## 1.13.29
+
+- Nachbesserung zu 1.13.28: Unscharfe Lautschrift führt nicht mehr zur Bitte um ein neues Foto, und eine Seite, deren einzige Zweifel die Eintragungen des Kindes sind, steht nicht mehr wegen ihrer niedrigen Gesamtsicherheit zum Gegenlesen.
+
 ## 1.13.28
 
 - Materialien: „Wartet auf deinen Blick“ und „bitte prüfen“ stehen nur noch an Seiten, die wirklich unsicher gelesen sind. Bisher zählte jede noch nicht bestätigte Seite mit, auch sauber gelesene und automatisch geholte.

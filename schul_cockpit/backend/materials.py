@@ -301,7 +301,10 @@ _PHOTO_REASON = re.compile(r"unscharf|verschwommen|verwackelt|abgeschnitten|ange
 
 
 def _photo_doubt(d: dict) -> bool:
-    return bool(_PHOTO_REASON.search(d.get("reason") or ""))
+    """Das Foto stand der Lesung im Weg. Unscharfe Lautschrift zählt nicht: Die
+    braucht niemand, also auch kein neues Foto."""
+    reason = d.get("reason") or ""
+    return bool(_PHOTO_REASON.search(reason)) and not _IPA_REASON.search(reason)
 
 
 # In Buch, Arbeitsheft und Arbeitsblatt ist Handschrift die Eintragung des
@@ -357,12 +360,17 @@ def needs_review(row) -> bool:
     # führte das zum Bestätigen ohne Hinsehen. Eine sauber gelesene Eintragung
     # kostet jetzt keinen Blick mehr, eine unleserliche Stelle schon: Sie ist
     # das Eingeständnis, nicht gelesen zu haben.
-    if review_doubts(doubts_of(row), row["kind"]):
+    doubts = doubts_of(row)
+    if review_doubts(doubts, row["kind"]):
         return True
     # Eine unleserliche Stelle in der Eintragung des Kindes zählt nicht (D165).
     text = proofread.PUPIL.sub("", (row["content_text"] if "content_text" in keys else "") or "")
     if proofread.UNREADABLE.search(text):
         return True
+    # Nennt die Lesung ihre Zweifel und keiner davon braucht einen Blick, ist
+    # die niedrige Gesamtsicherheit durch eben diese Stellen erklärt (D165).
+    if doubts:
+        return False
     confidence = row["confidence"] if "confidence" in keys else None
     return confidence is not None and confidence < REVIEW_CONFIDENCE
 

@@ -434,10 +434,14 @@ def test_only_real_doubts_ask_the_parents(env):
     pupil = _read(client, kind="workbook", content_text="c) 7/9 + 6/9 = ___ [Kind: 1 4/9]", pupil_entries=True,
                   doubts=[{"text": "c) 7/9 + 6/9 = ___ [Kind: 1 4/9]", "reason": "handgeschriebene gemischte Zahl unsicher"}])
     clean = _read(client)
+    blurry_ipa = _read(client, confidence=0.5, doubts=[{"text": "child [tʃaɪld]", "reason": "Lautschrift im Bild etwas unscharf"}])
+    unsure_pupil = _read(client, kind="workbook", confidence=0.6, content_text="a) 1/10 + 7/10 = ___",
+                         doubts=[{"text": "a) 1/10 + 7/10 = ___", "reason": "Ergebnisfeld leer, nicht ausgefüllt"}])
     real = _read(client, doubts=[{"text": "child [tʃaɪld] Kind", "alternative": "chill", "reason": "Wort unsicher"}])
     listing = client.get(URL).json()
     by_id = {m["id"]: m for m in listing["materials"]}
-    assert [i for i in (ipa, pupil, clean, real) if by_id[i]["needs_review"]] == [real]
+    assert [i for i in (ipa, pupil, clean, blurry_ipa, unsure_pupil, real) if by_id[i]["needs_review"]] == [real]
+    assert not by_id[blurry_ipa]["retake"] and not by_id[unsure_pupil]["retake"]
     assert listing["needs_check"] == 1
 
 
