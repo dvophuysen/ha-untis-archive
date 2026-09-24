@@ -119,23 +119,28 @@ async def upload(
     if not mime:
         raise HTTPException(415, "Bitte ein Foto (JPEG, PNG, WebP) oder ein PDF verwenden.")
     source_label = source_label.strip()
-    if source_label and source_label not in store.BOOK_PARTS:
+    # Eine Stelle ohne erkennbaren Buchteil („S. 105“ ohne Buch) heißt in der
+    # Einkaufsliste „Unbekannte Quelle“. Bis 1.13.31 lehnte der Server ihr Foto
+    # als unbekannten Buchteil ab, und in der App geschah scheinbar nichts. Jetzt
+    # belegt das Foto die Stelle; welches Buch es ist, erkennt die Auswertung.
+    unknown_part = source_label == sources.UNKNOWN_PART
+    if source_label and not unknown_part and source_label not in store.BOOK_PARTS:
         raise HTTPException(422, "Unbekannter Buchteil.")
     # Getippt oder gewählt: gespeichert wird die Schreibweise des Stundenplans.
     subject_name = store.canonical_subject(account_id, subject_name) or ""
     # Ein Blatt (Seite 0) wird nicht je Fach beansprucht, sondern an seinen
     # Eintrag gehängt (homework_id oder lesson_id, D85).
     claimed = bool(source_label and source_page and subject_name)
-    if source_label and not kind:
+    if source_label and not kind and not unknown_part:
         kind = {"Arbeitsheft": "workbook", "Grammatikheft": "workbook", "Arbeitsblatt": "worksheet"}.get(source_label, "book_page")
-    if claimed and not title.strip() and kind != "toc":
+    if claimed and not title.strip() and kind != "toc" and not unknown_part:
         title = f"{source_label} {sources.page_list([source_page])}" if source_page else source_label
     hints = {
         "kind": kind if kind in store.KINDS else "",
         "subject_name": subject_name or None,
         "title": title.strip() or None,
         "task_id": task_id, "topic_id": topic_id, "lesson_id": lesson_id, "exam_id": exam_id, "homework_id": homework_id,
-        "source_label": source_label or None,
+        "source_label": (source_label or None) if not unknown_part else None,
         "source_page": source_page if source_page else None,
     }
     try:

@@ -1,3 +1,8 @@
+## 1.13.32
+
+- Fehler behoben: Ein Foto für eine Stelle mit „Unbekannte Quelle“ (eine Seitenzahl ohne Buch in der Hausaufgabe) wurde vom Server abgelehnt, und in der App passierte scheinbar nichts. Jetzt belegt das Foto die Stelle, welches Buch es ist, erkennt die Auswertung.
+- Scheitert ein Hochladen, springt die Seite zur Fehlermeldung, statt sie oben unbemerkt anzuzeigen.
+
 ## 1.13.31
 
 - Digitale Bücher: Der automatische Abruf brach bei Büchern mit Doppelseiten ab, sobald eine ungerade Seite bestellt war, und verwarf dabei die schon aufgenommenen Seiten, bei jedem Lauf neu. Jetzt wird die Seite unter ihrer linken Hälfte abgelegt.

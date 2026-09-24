@@ -1,4 +1,5 @@
 <script>
+  import { tick } from 'svelte';
   import { api } from '../lib/api.js';
   import ActionLabel from '../lib/ActionLabel.svelte';
   import { subjectStyle } from '../lib/subjectStyle.js';
@@ -352,6 +353,9 @@
         else if (saved?.blurry) notices = [...notices, { id: saved.id, kind: 'blurry' }];
       } catch (e) {
         error = e.message;
+        // Der Fehler steht oben; wer unten in der Liste getippt hat, sähe sonst nichts.
+        await tick();
+        document.querySelector('.error-box')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
       uploading -= 1;
     }

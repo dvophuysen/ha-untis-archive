@@ -739,6 +739,9 @@ def _sheet_near(sheets: dict, subject: str, entry_date: str, days: int = 5) -> i
     return None
 
 
+UNKNOWN_PART = "Unbekannte Quelle"
+
+
 def claim(account_id: int, subject: str, label: str, page: int, material_id: int) -> None:
     """Ein Foto einer Stelle zuordnen und die Stelle sofort als belegt führen."""
     with closing(webapp_conn()) as conn, conn:
@@ -752,9 +755,10 @@ def claim(account_id: int, subject: str, label: str, page: int, material_id: int
             "WHERE account_id=? AND lower(subject_name)=lower(?) AND part_label=? AND page=?",
             (material_id, now_iso(), account_id, subject.strip(), label, page))
         # Die Datei weiß danach selbst, welche Seite sie zeigt.
+        # „Unbekannte Quelle“ ist kein Buchteil und gehört nicht in die Datei.
         conn.execute("UPDATE materials SET source_label=COALESCE(NULLIF(source_label,''),?),"
                      "source_page=COALESCE(source_page,?),updated_at=? WHERE id=? AND account_id=?",
-                     (label, page or None, now_iso(), material_id, account_id))
+                     (None if label == UNKNOWN_PART else label, page or None, now_iso(), material_id, account_id))
 
 
 def _claims(account_id: int) -> dict[tuple, int]:

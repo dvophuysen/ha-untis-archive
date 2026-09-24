@@ -222,3 +222,22 @@ def test_an_abbreviated_follow_on_page_only_counts_after_the_plural_marker():
         assert [pages for _, _, pages in sources.page_hits(einzeln)] == [[int(einzeln.split()[-1].split('/')[0])]]
     # Rückwärts oder weit weg ist keine Folgeseite, sondern etwas anderes.
     assert [pages for _, _, pages in sources.page_hits('pp. 216/5')] == [[216]]
+
+
+def test_a_photo_can_take_a_page_of_an_unknown_source(env):
+    """„S. 105“ ohne Buch heißt „Unbekannte Quelle“. Bis 1.13.31 lehnte der
+    Server das Foto dazu als unbekannten Buchteil ab (422), und in der App
+    passierte scheinbar nichts. Jetzt belegt es die Stelle."""
+    import io
+    from PIL import Image
+    client, _, _ = env
+    client.app.include_router(materials_routes.router, prefix='/api')
+    history(homework=[(1, 'EN', '12 irregular verbs (chart p. 206 - drive/drove)', '2026-09-14')])
+    need = sources.ledger(1)['subjects'][0]
+    assert need['missing'][0]['label'] == 'Unbekannte Quelle'
+    shot = io.BytesIO(); Image.new('RGB', (40, 30), (200, 200, 200)).save(shot, 'PNG')
+    r = client.post('/api/accounts/1/materials', files={'file': ('seite.png', shot.getvalue(), 'image/png')},
+                    data={'subject_name': need['subject'], 'source_label': 'Unbekannte Quelle', 'source_page': '206'})
+    assert r.status_code == 200, r.text
+    assert r.json()['source_label'] in (None, '') and r.json()['source_page'] == 206
+    assert sources.ledger(1)['missing_total'] == 0
