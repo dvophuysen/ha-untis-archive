@@ -1,3 +1,7 @@
+## 1.13.20
+
+- KI-Kosten: Die Preistabelle kennt gpt-6-sol und gpt-6-luna. Eine Stufe lässt sich damit auf diese Modelle stellen, ohne einen eigenen Preis einzutragen. Solange keine Stufe sie nutzt, ändert sich nichts.
+
 ## 1.13.19
 
 - Familienansicht: „Wochenbericht aufs Handy“. Die App schickt einmal in der Woche (Voreinstellung Sonntag 18 Uhr) je Kind eine kurze Nachricht mit der Kopfzeile und den Auffälligkeiten des Nutzungsberichts an die gewählten Elterngeräte; Tippen öffnet die App. Geräte, die Erinnerungen eines Kindes bekommen, lassen sich nicht auswählen. Mit Testnachricht.

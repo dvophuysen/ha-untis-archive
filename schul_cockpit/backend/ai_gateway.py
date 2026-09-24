@@ -38,7 +38,10 @@ RATES = {'gpt-5.6-sol': (10.0, 45.0), 'gpt-5.6-terra': (5.0, 18.0), 'gpt-5.6-lun
          # auf den Eingang und 1,5 auf den Ausgang. Bis 1.13.10 stand für mini ein
          # Platzhalter von 0,40/1,80 €, der den Ausgang unter Listenpreis buchte.
          'gpt-5-mini': (0.5, 3.0), 'gpt-5-nano': (0.1, 0.6),
-         'gpt-5': (2.5, 15.0), 'gpt-5.1': (2.5, 15.0)}
+         'gpt-5': (2.5, 15.0), 'gpt-5.1': (2.5, 15.0),
+         # GPT-6 (seit 22.09.2026) nach derselben Regel: Listenpreis Standard
+         # Global bis zur langen Kontextstufe, Sol 2.00/10.00, Luna 0.10/0.50 USD.
+         'gpt-6-sol': (4.0, 15.0), 'gpt-6-luna': (0.2, 0.75)}
 # Modelle, deren Satz ein Platzhalter ist. Die Elternansicht sagt das dazu,
 # damit eine geschätzte Buchung nicht wie eine gemessene aussieht.
 ESTIMATED: set[str] = set()

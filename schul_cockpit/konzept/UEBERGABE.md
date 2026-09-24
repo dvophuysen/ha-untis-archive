@@ -26,7 +26,7 @@ stehen im [CHANGELOG](../CHANGELOG.md), die Begründungen in
   Modell stärker ist (D145). Seit 1.13.15 ist der Mentor-Kontext für das
   Prompt-Caching sortiert, Cache- und Denk-Token werden je Aufruf
   gespeichert (D149). Live stehen seit dem Ausfall der ersten Foundry
-  alle Stufen auf gpt-5-mini (Foundry 2); Zielbild siehe D160.
+  alle Stufen auf gpt-5-mini (Foundry 2); Zielbild siehe D162.
 
 ## Repository seit 24.09.2026
 
@@ -37,12 +37,16 @@ Das öffentliche Repository wurde mit bereinigter Historie neu angelegt (keine K
 - Kosten: Ab 01.10. die Token-Erfassung auswerten
   (`GET /api/accounts/{id}/learning/mentor` als Elternteil → `budget.tokens`),
   dann den Mentor-Kontext entschlacken (D149); Structured Output offen.
-- Modelle für Foundry 2 (Nutzerentscheidung 24.09.): **gpt-5.6-luna** für
-  klein/niedrig (Lesen, Vokabeln, Hintergrund; günstiger als gpt-5-mini,
-  laut D132 gleich gut beim Vokabellesen) und **gpt-5.6-terra** für
-  mittel/hoch (Mentor, Kontrolle, sorgfältige Lesung). Keine
-  Sonderfreischaltung nötig; zu klären sind Angebot in der Region und
-  Kontingent (TPM).
+- Modelle (D162, ersetzt D160): Ziel sind **gpt-6-luna** für die Lese-
+  und Vokabelstufen und **gpt-6-sol** für Mentor und sorgfältige Lesung,
+  auf Dauer auf Foundry 2. Offen: Kontingentanträge auf Foundry 2 (Sweden
+  Central, Global Standard, je 100, mit Region). Ab 28.09. (neues Guthaben
+  auf Foundry 1) dort beide bereitstellen und gegen gpt-5-mini eichen,
+  auch die Bildlesung; die App bleibt bis zur Bewilligung auf gpt-5-mini
+  (Nutzerentscheidung „nur testen“). Preise stehen seit 1.13.20 in `RATES`.
+  Der Router in Norway East (10 Einheiten, fest auf gpt-5.6-terra) ist nur
+  Reserve. Der Nutzer arbeitet mit Azure Cloud Shell; Befehle als Bash-Block
+  geben, Schlüssel bleiben in Shell-Variablen.
 - Azure-Zugang für die nächste Session: Der Nutzer legt eine App-Registrierung mit „Cognitive Services Contributor“ auf der Foundry-2-Ressource und „Cognitive Services Usages Reader“ auf dem Abonnement an und trägt `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SUBSCRIPTION_ID` in die Claude-Umgebung ein. Dann: Token per Client-Credentials von login.microsoftonline.com holen (beide Hosts sind erreichbar, `az` ist nicht installiert), in management.azure.com Modelle und Kontingent der Ressource prüfen, Luna und Terra bereitstellen, mit `vocab/{fach}/compare` und `materials/{id}/analysis/compare` gegen gpt-5-mini eichen (D129: nie durch Umstellen und Neulesen), Kontingentantrag formulieren, Stufen in den Add-on-Optionen umstellen und `RATES` in `ai_gateway.py` um die gpt-5.6-Sätze prüfen. Nie Schlüssel ausgeben.
 - Mentor: An den nächsten echten Gesprächen ansehen, ob die Hilfeleiter
   (D150) zu zäh wirkt; Übungseinheiten haben noch keine.

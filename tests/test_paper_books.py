@@ -622,6 +622,16 @@ def test_a_cheaper_model_does_not_reread_what_a_stronger_one_read(env, monkeypat
     assert unlinked in [m for _, m in analysis.due()]
 
 
+
+def test_the_switch_to_gpt6_rereads_only_what_a_weaker_model_read():
+    """Der geplante Wechsel auf GPT-6: Sol liest die Seiten neu, die während des
+    Ausfalls von gpt-5-mini gelesen wurden, nicht die gründlichen von
+    gpt-5.6-sol. Luna als erste Lesung löst gar nichts aus."""
+    from backend import material_analysis as analysis
+    assert analysis._stronger('gpt-6-sol', 'gpt-5-mini')
+    assert not analysis._stronger('gpt-6-sol', 'gpt-5.6-sol')
+    assert not analysis._stronger('gpt-6-luna', 'gpt-5-mini')
+
 def test_background_analysis_has_its_own_tier_apart_from_copying(env, monkeypatch):
     """Die Unterrichtsauswertung läuft auf einer eigenen Stufe: Sie verträgt laut
     Eichung die günstige, das Abschreiben von Buchseiten nicht (D94)."""
