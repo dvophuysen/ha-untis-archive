@@ -60,6 +60,15 @@ Das öffentliche Repository wurde mit bereinigter Historie neu angelegt (keine K
   Chat-Fotos klappt und ob sie beim Üben auftauchen (D143), und an einer
   echten Kontrolle mit zwei, drei Heftseiten, ob der Mentor alle Seiten
   prüft und was ein Zug dann kostet (D141).
+- Gegenlesen (D165, 1.13.28–1.13.30): Eltern sehen nur noch echte Zweifel;
+  Lautschrift, Zeichensetzung und Eintragungen des Kindes zählen nicht,
+  unscharfe oder abgeschnittene Fotos gehen als Bitte ans Kind („neu
+  fotografieren“, ersetzt das alte Foto). Stand 24.09.: Kind B 0 zum
+  Gegenlesen, 1 Foto-Bitte; Kind A 2. Nach einigen Tagen ansehen, ob neue
+  Zweifel-Formulierungen durchrutschen (`review_doubts()`).
+- KI-Kosten seit gpt-5-mini: rund 1,40 € am Tag angerechnet (September bis
+  18.09. rund 10 € am Tag). Nachtlauf-Kontrolle am 25.09. vorgemerkt: wirkt
+  D145, und sind Kind Bs zwölf nächtliche Vokabel-Aufrufe weg?
 - Eltern: Der Nutzungsbericht „So wurde die App genutzt“ läuft seit 1.13.17
   (D159). Die Wochennachricht an die Eltern verschickt die App seit
   1.13.19 selbst (D161); nach zwei, drei Wochen mit ihm prüfen,
