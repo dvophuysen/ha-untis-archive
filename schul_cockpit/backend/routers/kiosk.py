@@ -125,7 +125,7 @@ def kiosk_login_form(request: Request, err: str = "") -> HTMLResponse:
     try:
         rows = conn.execute(
             "SELECT id, display_name FROM users "
-            "WHERE role IN ('admin','parent','kid') "
+            "WHERE role IN ('admin','parent','child') "
             "AND pin_hash IS NOT NULL "
             "ORDER BY display_name"
         ).fetchall()

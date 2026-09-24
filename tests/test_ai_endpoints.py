@@ -289,3 +289,68 @@ def test_without_tail_keys_the_payload_stays_one_block():
     content = payload['input'][0]['content']
     assert [p['type'] for p in content] == ['input_text', 'input_image']
     assert json.loads(content[0]['text']) == {'a': 1, 'b': 2}
+
+
+def _throttling_client(answers, calls):
+    """Liefert der Reihe nach die vorgegebenen Antworten: eine Zahl ist eine
+    Drosselung mit dieser Wartezeit in Millisekunden, None eine gültige Antwort."""
+    class FakeClient:
+        def __init__(self, **kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): pass
+        async def post(self, url, **kwargs):
+            answer = answers[len(calls)]
+            calls.append(url)
+            request = httpx.Request('POST', url)
+            if answer is not None:
+                return httpx.Response(429, headers={'retry-after-ms': str(answer)}, json={'error': {'code': '429'}}, request=request)
+            body = {'status': 'completed', 'usage': {'input_tokens': 100, 'output_tokens': 10},
+                    'output': [{'type': 'message', 'role': 'assistant',
+                                'content': [{'type': 'output_text', 'text': json.dumps(reply())}]}]}
+            return httpx.Response(200, json=body, request=request)
+    return FakeClient
+
+
+def test_a_throttled_call_waits_as_told_and_tries_again(setup):
+    """Eine Drosselung kostet nichts und ist nach Sekunden vorbei: Die App
+    wartet, so lange Azure es sagt, statt dem Kind einen Fehler zu zeigen."""
+    client, _, patch = setup
+    both(patch)
+    session = start(client)
+    calls, waits = [], []
+    patch.setattr(ai.httpx, 'AsyncClient', _throttling_client([1500, 800, None], calls))
+    async def sleep(seconds): waits.append(seconds)
+    patch.setattr(ai.asyncio, 'sleep', sleep)
+    r = client.post(B + f"/sessions/{session['id']}/turn",
+                    json={'text': 'Ich fange an.', 'request_key': 'zug-drossel-1', 'version': session['version'], 'kind': 'message'})
+    assert r.status_code == 200, r.text
+    assert len(calls) == 3 and waits == [1.5, 0.8]
+
+
+def test_a_long_or_repeated_throttling_still_ends_in_the_known_error(setup):
+    client, _, patch = setup
+    both(patch)
+    session = start(client)
+    waits = []
+    async def sleep(seconds): waits.append(seconds)
+    patch.setattr(ai.asyncio, 'sleep', sleep)
+    # Nennt Azure eine Minute, wartet die App nicht.
+    calls = []
+    patch.setattr(ai.httpx, 'AsyncClient', _throttling_client([60000], calls))
+    r = client.post(B + f"/sessions/{session['id']}/turn",
+                    json={'text': 'Ich fange an.', 'request_key': 'zug-drossel-2', 'version': session['version'], 'kind': 'message'})
+    assert r.status_code == 502 and len(calls) == 1 and waits == []
+    # Nach zwei neuen Versuchen ist Schluss.
+    calls = []
+    patch.setattr(ai.httpx, 'AsyncClient', _throttling_client([100, 100, 100], calls))
+    r = client.post(B + f"/sessions/{session['id']}/turn",
+                    json={'text': 'Ich fange an.', 'request_key': 'zug-drossel-3', 'version': session['version'], 'kind': 'message'})
+    assert r.status_code == 502 and len(calls) == 3
+
+
+def test_the_wait_comes_from_either_header_or_a_default():
+    make = lambda **h: httpx.Response(429, headers=h)
+    assert ai.retry_wait(make(**{'retry-after-ms': '2500'})) == 2.5
+    assert ai.retry_wait(make(**{'retry-after': '3'})) == 3.0
+    assert ai.retry_wait(make(**{'retry-after': '90'})) is None
+    assert ai.retry_wait(make()) == 5.0

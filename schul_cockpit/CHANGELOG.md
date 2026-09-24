@@ -1,3 +1,8 @@
+## 1.13.21
+
+- Kiosk: Die Kinder stehen wieder in der Anmeldeliste. Die Anmeldung suchte nach einer Rolle, die es nicht gibt, und bot nur die Eltern an.
+- KI: Meldet Azure „zu viele Anfragen“, wartet die App die genannte Zeit (höchstens 20 Sekunden) und versucht es bis zu zweimal neu, statt sofort einen Fehler zu zeigen. Eine Drosselung kostet nichts.
+
 ## 1.13.20
 
 - KI-Kosten: Die Preistabelle kennt gpt-6-sol und gpt-6-luna. Eine Stufe lässt sich damit auf diese Modelle stellen, ohne einen eigenen Preis einzutragen. Solange keine Stufe sie nutzt, ändert sich nichts.

@@ -5,6 +5,7 @@ cache writes and a currency/tax buffer. They are budget charges, not an Azure
 invoice. Unknown models/expired rates fail closed. No provider conversation state.
 """
 from __future__ import annotations
+import asyncio
 import json
 import base64
 import io
@@ -318,6 +319,23 @@ def settle(key, result=None, error=None):
 
 
 EFFORTS=('low','medium','high')
+# Eine Drosselung (429) hat nichts gekostet und ist nach Sekunden vorbei. Bis
+# 1.13.20 gab die App sofort auf, das Kind sah einen Fehler. Jetzt wartet sie,
+# so lange Azure es nennt, höchstens RATE_WAIT_MAX Sekunden, und versucht es
+# bis zu RATE_RETRIES Mal neu. Nennt Azure eine längere Wartezeit, bleibt es
+# beim Fehler: Ein Kind soll nicht minutenlang auf eine Antwort warten.
+RATE_RETRIES=2
+RATE_WAIT_MAX=20.0
+
+
+def retry_wait(response):
+    """Wie lange Azure nach einer Drosselung warten lässt, in Sekunden;
+    None, wenn es länger ist, als die App wartet."""
+    for name,scale in (('retry-after-ms',1000),('retry-after',1)):
+        try: wait=float(response.headers[name])/scale
+        except (KeyError,ValueError): continue
+        return None if wait>RATE_WAIT_MAX else max(0.5,wait)
+    return 5.0
 
 
 async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, tier=None, effort=None,
@@ -387,7 +405,12 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
         # abgeschnitten wurde (D119).
         patience=min(300,max(90,round(max_output/50)))
         async with httpx.AsyncClient(timeout=patience,follow_redirects=False) as client:
-            response=await client.post(endpoint,json=payload,headers={'api-key':api_key})
+            for attempt in range(RATE_RETRIES+1):
+                response=await client.post(endpoint,json=payload,headers={'api-key':api_key})
+                wait=retry_wait(response) if response.status_code==429 and attempt<RATE_RETRIES else None
+                if wait is None: break
+                LOG.info('KI-Aufruf (%s) gedrosselt, neuer Versuch in %.1f s',purpose,wait)
+                await asyncio.sleep(wait)
             response.raise_for_status();result=response.json()
         if not isinstance(result,dict): raise ValueError('Invalid envelope')
         settle(key,result)
