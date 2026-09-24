@@ -31,5 +31,4 @@ exec python -m uvicorn backend.main:app \
     --host "${WEBAPP_HOST}" \
     --port "${WEBAPP_PORT}" \
     --log-level "${WEBAPP_LOG_LEVEL}" \
-    --proxy-headers \
-    --forwarded-allow-ips '*'
+    --no-proxy-headers

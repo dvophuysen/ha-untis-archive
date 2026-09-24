@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from .auth import from_ingress
 from .config import SETTINGS
 from .pin_auth import SESSION_COOKIE, SESSION_TTL_DAYS
 from .db import init_webapp_db
@@ -173,7 +174,7 @@ async def slide_pin_cookie(request: Request, call_next):
     if path.startswith("/api/auth/"):
         return response
     cookie = request.cookies.get(SESSION_COOKIE)
-    used_pin = cookie and not request.headers.get("x-remote-user-id")
+    used_pin = cookie and not (request.headers.get("x-remote-user-id") and from_ingress(request))
     if used_pin and 200 <= response.status_code < 400:
         is_https = (
             request.url.scheme == "https"

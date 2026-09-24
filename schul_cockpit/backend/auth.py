@@ -1,8 +1,9 @@
 """Auth resolution — two paths.
 
-1. **HA Ingress headers** (X-Remote-User-Id / Name). Trusted because Ingress
-   is the only path into the container from within HA. New users are
-   auto-provisioned; the first one becomes admin.
+1. **HA Ingress headers** (X-Remote-User-Id / Name). Trusted only when the
+   connection comes from the Supervisor's Ingress proxy (172.30.32.2); the
+   direct port reaches the same listener, and there the headers are ignored.
+   New users are auto-provisioned; the first one becomes admin.
 2. **PIN session cookie** (sc_session). Used when the add-on is reached over
    its direct port — the path that makes an installable PWA + offline
    possible. Cookie is set by POST /api/auth/login after a valid PIN.
@@ -14,6 +15,8 @@ logged-in HA user.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
+import os
 import sqlite3
 from datetime import datetime, timezone
 
@@ -34,11 +37,35 @@ class CurrentUser:
     auth_source: str  # 'ingress' | 'pin'
 
 
+LOG = logging.getLogger("schul_cockpit.auth")
+
+# Der Ingress-Proxy des Supervisors spricht das Add-on immer von dieser Adresse
+# an. Direktport, Tunnel und LAN erreichen denselben Port und können die
+# Kopfzeilen frei setzen.
+INGRESS_PEERS = frozenset(
+    p.strip() for p in os.environ.get("WEBAPP_INGRESS_PEERS", "172.30.32.2").split(",") if p.strip()
+)
+
+
+def from_ingress(request) -> bool:
+    """Ob die Anfrage unmittelbar vom Ingress-Proxy kommt. Maßgeblich ist die
+    Gegenstelle der Verbindung, keine Kopfzeile; uvicorn läuft dafür ohne
+    --proxy-headers, sonst stünde hier die Adresse aus X-Forwarded-For."""
+    client = getattr(request, "client", None)
+    return bool(client and client.host in INGRESS_PEERS)
+
+
 def _headers_user(request: Request) -> tuple[str, str] | None:
     ha_user_id = request.headers.get("x-remote-user-id")
     ha_user_name = request.headers.get("x-remote-user-name") or ""
     if ha_user_id:
-        return ha_user_id, ha_user_name
+        if from_ingress(request):
+            return ha_user_id, ha_user_name
+        # Bis 1.13.11 galt die Kopfzeile von überall: Wer den Direktport
+        # erreichte, war mit einer bekannten HA-Benutzer-ID ohne PIN angemeldet.
+        client = getattr(request, "client", None)
+        LOG.warning("Ingress-Kopfzeile von %s ignoriert (nicht vom Ingress-Proxy)",
+                    client.host if client else "unbekannt")
     if SETTINGS.dev_fake_user_id:
         return SETTINGS.dev_fake_user_id, SETTINGS.dev_fake_user_name or "dev"
     return None

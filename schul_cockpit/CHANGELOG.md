@@ -1,3 +1,7 @@
+## 1.13.12
+
+- Sicherheit: Die Anmeldung aus dem HA-Seitenmenü (Ingress) gilt nur noch, wenn die Anfrage tatsächlich vom HA-Supervisor kommt. Über die direkte Adresse ließ sich die Kopfzeile bisher fälschen, und wer eine HA-Benutzer-ID kannte, war ohne PIN angemeldet. Dort gilt jetzt immer die PIN; eine ignorierte Kopfzeile steht mit ihrer Herkunft im Log.
+
 ## 1.13.11
 
 - Sicherheit: Die Auslieferung der App-Dateien gab über den Direktport ohne Anmeldung beliebige Dateien des Containers heraus, auch die Add-on-Optionen mit den KI-Schlüsseln. Angefragt werden kann jetzt nur noch, was im Frontend-Verzeichnis liegt.
