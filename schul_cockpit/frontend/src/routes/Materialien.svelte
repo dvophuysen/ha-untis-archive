@@ -296,6 +296,12 @@
   // nächste Datei gehört genau zu dieser Stelle.
   let claim = $state(null);
 
+  // Eine unscharfe oder abgeschnittene Seite neu aufnehmen: das nächste Foto ersetzt sie (D165).
+  function retake(m, viaCamera) {
+    claim = { replaces: m.id };
+    (viaCamera ? camera : picker)?.click();
+  }
+
   function photoFor(subject, need, item, viaCamera) {
     // Bei einer Stelle ohne Buchteil bekommt das Foto das vermutete Buch mit.
     // Ein Blatt (Seite 0) bekommt seinen Eintrag mit, nie das Fach allein.
@@ -322,7 +328,10 @@
     for (const file of list) {
       const body = new FormData();
       body.append('file', file);
-      if (target) {
+      if (target?.replaces) {
+        // Neues Foto derselben Seite: Art, Fach und Stelle übernimmt der Server (D165).
+        body.append('replaces', String(target.replaces));
+      } else if (target) {
         body.append('subject_name', target.subject);
         body.append('source_label', target.label);
         body.append('source_page', String(target.page));
@@ -346,7 +355,9 @@
       }
       uploading -= 1;
     }
-    message = target
+    message = target?.replaces
+      ? 'Danke, das neue Foto ersetzt das alte. Ich lese es gerade.'
+      : target
       ? `${target.label} ${target.page ? `S. ${target.page}` : ''} abgehakt. Ich lese es gerade.`
       : upload.kind === 'toc' ? 'Inhaltsverzeichnis gespeichert. Ich lese die Kapitel daraus, sobald alle Seiten da sind.'
       : upload.kind === 'exam_notice' ? 'Offizielle Themenliste gespeichert. Jedes Thema kommt mit seinen Stellen auf die Liste und wird vorgezogen.'
@@ -477,6 +488,23 @@
 
 <!-- Lesungen mit Folgen gegenlesen: Eine Themenliste bindet Stellen, ein Verzeichnis
      Kapitel. Bis ein Elternteil bestätigt, steht die Lesung hier zur Kontrolle. -->
+<!-- Unscharf oder abgeschnitten: Das kann niemand besser lesen, es braucht ein
+     neues Foto. Die Bitte geht an alle, die hier sind, auch an das Kind (D165). -->
+{#if (data?.materials ?? []).some((m) => m.retake)}
+  <div class="card retake">
+    <strong>Bitte noch einmal fotografieren</strong>
+    {#each (data.materials ?? []).filter((m) => m.retake) as m (m.id)}
+      <div class="retake-item">
+        <p><b>{m.title || 'Ohne Titel'}</b>{m.subject_name ? ` · ${subjectStyle(m.subject_name).name}` : ''}<br /><small class="muted">{m.retake}</small></p>
+        <div class="row gap-sm">
+          <button class="primary" disabled={busy || uploading} onclick={() => retake(m, true)}>📷 Neu fotografieren</button>
+          <button class="quiet" disabled={busy || uploading} onclick={() => retake(m, false)}>Datei wählen</button>
+        </div>
+      </div>
+    {/each}
+  </div>
+{/if}
+
 {#if data?.can_manage && (data.materials ?? []).some((m) => m.needs_review)}
   <div class="card review">
     <strong>Bitte gegenlesen</strong>
@@ -711,8 +739,9 @@
       {#if m.summary}<small class="dim">{m.summary}</small>{/if}
     </span>
     <span class="state" class:warn={m.analysis_state === 'failed' && m.analysis_error !== '429'} class:wait={m.analysis_error === '429'}>
-      {m.analysis_state === 'ready' && !m.verified && data.can_manage
+      {m.needs_review && data.can_manage
         ? 'bitte prüfen'
+        : m.retake ? 'neu fotografieren'
         : m.analysis_state === 'failed' && m.analysis_error === '429' ? 'wartet auf KI-Rahmen'
         : STATE_NAMES[m.analysis_state] ?? ''}
     </span>
@@ -875,7 +904,7 @@
   {/if}
 
   {#if data.can_manage && data.needs_check > 0}
-    <div class="banner">{data.needs_check} Eintrag/Einträge warten auf deinen Blick. Du kannst sie unten öffnen und korrigieren.</div>
+    <div class="banner">{data.needs_check === 1 ? '1 Eintrag wartet' : `${data.needs_check} Einträge warten`} auf deinen Blick, siehe „Bitte gegenlesen“ oben.</div>
   {/if}
   {#if waitingBudget}
     <p class="muted">{waitingBudget} {waitingBudget === 1 ? 'Seite wartet' : 'Seiten warten'} auf den KI-Rahmen und werden im nächsten Lauf gelesen.</p>
@@ -919,6 +948,7 @@
   .wanted>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;list-style:none}
   .wanted>summary::-webkit-details-marker{display:none}
   .review{border-left:4px solid var(--warm,#b26a00)}
+  .retake{border-left:4px solid var(--accent)}.retake-item{padding:8px 0;border-top:1px solid var(--border)}.retake-item:first-of-type{border-top:0}.retake-item p{margin:0 0 6px;overflow-wrap:anywhere}
   .notice-row{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between}
   .books .book{border-top:1px solid var(--border);padding:6px 0}
   .books .book>summary{cursor:pointer;min-height:40px;display:flex;align-items:center;font-size:0.9rem}

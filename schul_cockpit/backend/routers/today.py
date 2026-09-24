@@ -115,6 +115,8 @@ async def today(
         # Vor einer Arbeit: Heftseiten, die der Unterricht nennt und die weder
         # digital noch fotografiert vorliegen. Höchstens drei Bitten.
         "photo_requests": await photo_requests(account_id, today_iso),
+        # Seiten, die das Kind noch einmal fotografieren soll (D165).
+        "retakes": _retakes(account_id),
         # Ob der Tag schon durchgegangen wurde — davon hängt die Abendkarte ab
         # und am nächsten Morgen die zweite Mitteilung.
         "day_close": {
@@ -122,6 +124,14 @@ async def today(
             "reliability": day_close.reliability(account_id, today_date),
         },
     }
+
+
+def _retakes(account_id: int) -> list[dict]:
+    try:
+        from .. import materials as store
+        return store.retakes(account_id)
+    except Exception:
+        return []
 
 
 async def photo_requests(account_id: int, day: str) -> list[dict]:

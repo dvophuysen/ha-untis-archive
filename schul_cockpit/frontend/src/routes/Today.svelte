@@ -87,6 +87,14 @@
       {#if nextSchoolDay}<PackingChecklist {accountId} schoolDay={nextSchoolDay} />{:else}
         <p class="muted">In den nächsten Tagen steht keine Schule an.</p>
       {/if}
+      {#if data?.retakes?.length}
+        <!-- Unscharf oder abgeschnitten: ein neues Foto statt Gegenlesen durch die Eltern (D165). -->
+        <h4>Bitte noch einmal fotografieren</h4>
+        {#each data.retakes as r (r.id)}
+          <p class="photo-request"><strong>{r.title}</strong> <span class="muted">· {r.reason}</span>
+            <a href="#/materialien">neu fotografieren</a></p>
+        {/each}
+      {/if}
       {#if data?.photo_requests?.length}
         <!-- Nur vor einer Arbeit, höchstens drei Bitten, konkret mit Heft und Seite. -->
         <h4>Für die Arbeit brauche ich noch</h4>

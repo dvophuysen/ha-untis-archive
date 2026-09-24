@@ -679,11 +679,15 @@ def test_only_an_uncertain_reading_goes_to_review():
     sauber = {**gedruckt, "handwritten": 1, "pupil_entries": 1,
               "content_text": "a) 2/7 + 4/7 = ___ [Kind: 6/7]"}
     assert needs_review(sauber) is False
-    # Eine gemeldete Zweifelsstelle schon.
-    unsicher = {**sauber, "doubts": '[{"text": "[Kind: 6/7]", "alternative": "[Kind: 5/7]", "reason": "6 oder 5"}]'}
+    # Eine gemeldete Zweifelsstelle am gedruckten Text schon.
+    unsicher = {**sauber, "doubts": '[{"text": "a) 2/7 + 4/7", "alternative": "a) 2/7 + 1/7", "reason": "4 oder 1"}]'}
     assert needs_review(unsicher) is True
-    # Und eine Stelle, die gar nicht gelesen werden konnte.
-    assert needs_review({**sauber, "content_text": "a) 2/7 + 4/7 = ___ [Kind: […]]"}) is True
+    # An der Eintragung des Kindes nicht mehr: Die Kontrolle prüft sie am Foto (D165).
+    eintrag = {**sauber, "doubts": '[{"text": "[Kind: 6/7]", "alternative": "[Kind: 5/7]", "reason": "6 oder 5"}]'}
+    assert needs_review(eintrag) is False
+    assert needs_review({**sauber, "content_text": "a) 2/7 + 4/7 = ___ [Kind: […]]"}) is False
+    # Eine gedruckte Stelle, die gar nicht gelesen werden konnte, bleibt ein Grund.
+    assert needs_review({**sauber, "content_text": "a) […] = ___ [Kind: 6/7]"}) is True
     # Eine Themenliste und ein Verzeichnis immer: daraus entstehen Stellen und
     # Kapitel, ein falsch gelesener Zettel wirkt wochenlang weiter.
     assert needs_review({**gedruckt, "kind": "exam_notice"}) is True

@@ -343,28 +343,29 @@ def test_a_doubt_is_the_only_thing_that_asks_for_a_second_pair_of_eyes(env):
     insight = analysis.Insight(kind="workbook", subject_name="Mathematik", title="Brüche", summary="Kurz",
                                content_text=seite, confidence=0.95, page_type="mixed", handwritten=True,
                                pupil_entries=True,
-                               doubts=[{"text": "[Kind: 6/7]", "alternative": "[Kind: 5/7]", "reason": "6 oder 5"}])
+                               doubts=[{"text": "i) 2/7 + 4/7", "alternative": "i) 2/7 + 1/7", "reason": "4 oder 1 im Zähler"}])
     with closing(db.webapp_conn()) as conn:
         row = conn.execute("SELECT * FROM materials WHERE id=?", (body["id"],)).fetchone()
         analysis._apply(conn, 1, row, insight)
     after = client.get(f"{URL}/{body['id']}").json()
     assert after["needs_review"] is True
-    assert [d["alternative"] for d in after["doubts"]] == ["[Kind: 5/7]"]
+    assert [d["alternative"] for d in after["doubts"]] == ["i) 2/7 + 1/7"]
     # Gezeigt wird der Auszug, nicht die ganze Seite.
-    assert after["review"]["shortened"] and after["review"]["spots"] == 1
+    # Die Eintragung des Kindes steht als Zusammenhang markiert daneben, ist aber kein Grund (D165).
+    assert after["review"]["shortened"] and after["review"]["spots"] == 2
     gezeigt = "".join(s.get("text", "") for s in after["review"]["segments"])
-    assert "[Kind: 6/7]" in gezeigt and "1 Berechne." not in gezeigt
+    assert "i) 2/7 + 4/7" in gezeigt and "1 Berechne." not in gezeigt
 
-    # „Heißt 5/7“: Der Text wird berichtigt, die Stelle ist erledigt, und die
+    # „Heißt 1/7“: Der Text wird berichtigt, die Stelle ist erledigt, und die
     # Korrektur der Eltern überschreibt keine spätere Lesung mehr.
     fixed = client.post(f"{URL}/{body['id']}/doubts/resolve",
-                        json={"text": "[Kind: 6/7]", "replace": "[Kind: 5/7]"}).json()
-    assert "[Kind: 5/7]" in fixed["content_text"] and "[Kind: 6/7]" not in fixed["content_text"]
+                        json={"text": "i) 2/7 + 4/7", "replace": "i) 2/7 + 1/7"}).json()
+    assert "i) 2/7 + 1/7" in fixed["content_text"] and "i) 2/7 + 4/7" not in fixed["content_text"]
     assert fixed["doubts"] == [] and fixed["needs_review"] is False
     assert "content_text" in fixed["locked_fields"]
     # Dieselbe Stelle ein zweites Mal gibt es nicht mehr.
     assert client.post(f"{URL}/{body['id']}/doubts/resolve",
-                       json={"text": "[Kind: 6/7]", "replace": "[Kind: 4/7]"}).status_code == 409
+                       json={"text": "i) 2/7 + 4/7", "replace": "i) 2/7 + 3/7"}).status_code == 409
 
 
 def test_a_doubt_can_simply_be_confirmed_without_changing_the_text(env):
@@ -373,11 +374,11 @@ def test_a_doubt_can_simply_be_confirmed_without_changing_the_text(env):
     insight = analysis.Insight(kind="workbook", subject_name="Mathematik", title="Brüche",
                                content_text="a) 1/2 + 1/2 = ___ [Kind: 1]", confidence=0.95,
                                handwritten=True, pupil_entries=True,
-                               doubts=[{"text": "[Kind: 1]", "alternative": "[Kind: 7]", "reason": "1 oder 7"}])
+                               doubts=[{"text": "a) 1/2 + 1/2", "alternative": "a) 1/2 + 1/4", "reason": "2 oder 4 im Nenner"}])
     with closing(db.webapp_conn()) as conn:
         row = conn.execute("SELECT * FROM materials WHERE id=?", (body["id"],)).fetchone()
         analysis._apply(conn, 1, row, insight)
-    kept = client.post(f"{URL}/{body['id']}/doubts/resolve", json={"text": "[Kind: 1]"}).json()
+    kept = client.post(f"{URL}/{body['id']}/doubts/resolve", json={"text": "a) 1/2 + 1/2"}).json()
     assert kept["content_text"] == "a) 1/2 + 1/2 = ___ [Kind: 1]"
     assert kept["doubts"] == [] and kept["needs_review"] is False
     # Ohne Änderung bleibt der Text frei für eine spätere, bessere Lesung.
@@ -413,3 +414,49 @@ def test_an_overlong_doubt_does_not_throw_away_the_whole_reading():
     assert insight.content_text == "Seitentext"
     assert len(insight.doubts) == 12 and len(insight.doubts[0].reason) == 120
     assert len(insight.title) == 160 and len(insight.topics) == 6
+
+
+def _read(client, **insight):
+    body = upload(client).json()
+    defaults = dict(kind="book_page", subject_name="Englisch", title="Vokabeln", summary="Kurz",
+                    content_text="admission [əd'mɪʃn] Eintritt\nchild [tʃaɪld] Kind", confidence=0.95)
+    with closing(db.webapp_conn()) as conn:
+        row = conn.execute("SELECT * FROM materials WHERE id=?", (body["id"],)).fetchone()
+        analysis._apply(conn, 1, row, analysis.Insight(**{**defaults, **insight}))
+    return body["id"]
+
+
+def test_only_real_doubts_ask_the_parents(env):
+    """Lautschrift und Eintragungen des Kindes brauchen keinen Blick der Eltern,
+    und was sauber gelesen ist, zählt nicht als „wartet auf deinen Blick“ (D165)."""
+    client = client_for(env)
+    ipa = _read(client, doubts=[{"text": "admission [əd'mɪʃn]", "reason": "Lautschrift (Betonungszeichen) klein"}])
+    pupil = _read(client, kind="workbook", content_text="c) 7/9 + 6/9 = ___ [Kind: 1 4/9]", pupil_entries=True,
+                  doubts=[{"text": "c) 7/9 + 6/9 = ___ [Kind: 1 4/9]", "reason": "handgeschriebene gemischte Zahl unsicher"}])
+    clean = _read(client)
+    real = _read(client, doubts=[{"text": "child [tʃaɪld] Kind", "alternative": "chill", "reason": "Wort unsicher"}])
+    listing = client.get(URL).json()
+    by_id = {m["id"]: m for m in listing["materials"]}
+    assert [i for i in (ipa, pupil, clean, real) if by_id[i]["needs_review"]] == [real]
+    assert listing["needs_check"] == 1
+
+
+def test_a_blurry_page_goes_to_the_child_and_a_new_photo_replaces_it(env):
+    client = client_for(env)
+    blurry = _read(client, kind="book_page", subject_name="Mathematik", title="Brüche S. 12",
+                   content_text="25 d) […]\ne) […]",
+                   doubts=[{"text": "d) […]", "reason": "Aufgabe unten abgeschnitten, Brüche unscharf"}])
+    with closing(db.webapp_conn()) as conn:
+        conn.execute("INSERT INTO material_links(material_id,kind,target_id,origin,created_at) VALUES(?,?,?,?,?)",
+                     (blurry, "task", 7, "test", "now"))
+    item = next(m for m in client.get(URL).json()["materials"] if m["id"] == blurry)
+    assert item["retake"] and item["needs_review"] is False
+    assert [r["id"] for r in store.retakes(1)] == [blurry]
+    new = upload(client, replaces=str(blurry)).json()
+    assert new["id"] != blurry
+    with closing(db.webapp_conn()) as conn:
+        old = conn.execute("SELECT hidden FROM materials WHERE id=?", (blurry,)).fetchone()
+        moved = conn.execute("SELECT 1 FROM material_links WHERE material_id=? AND kind='task' AND target_id=7",
+                             (new["id"],)).fetchone()
+    assert old["hidden"] == 1 and moved
+    assert store.retakes(1) == []

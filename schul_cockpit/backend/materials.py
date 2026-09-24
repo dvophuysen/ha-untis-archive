@@ -288,6 +288,57 @@ def doubts_of(row) -> list[dict]:
     return [d for d in found if isinstance(d, dict) and (d.get("text") or "").strip()]
 
 
+# Zweifel, für die niemand gegenlesen muss (D165). Die Lautschrift braucht die
+# App nicht: Der Vokabeltrainer arbeitet mit Wort, Bedeutung und Sprachausgabe.
+# Eine unsichere Ziffer in der Eintragung des Kindes ([Kind: …]) prüft die
+# Kontrolle am Foto selbst, nicht an der Abschrift (D123). Und was unscharf oder
+# abgeschnitten ist, kann niemand besser lesen als das Modell: Es braucht ein
+# neues Foto, und das macht das Kind.
+_IPA_REASON = re.compile(r"lautschrift|\bipa\b|betonung|aussprachezeichen|phonet", re.I)
+_PHOTO_REASON = re.compile(r"unscharf|verschwommen|verwackelt|abgeschnitten|angeschnitten|verdeckt|zu dunkel|"
+                           r"schlecht beleuchtet|spiegel|nicht (?:im|auf dem) (?:foto|bild)|fehl\w* (?:im|auf dem) (?:foto|bild)|"
+                           r"au(?:ß|ss)erhalb des (?:fotos|bildes)", re.I)
+
+
+def _photo_doubt(d: dict) -> bool:
+    return bool(_PHOTO_REASON.search(d.get("reason") or ""))
+
+
+# In Buch, Arbeitsheft und Arbeitsblatt ist Handschrift die Eintragung des
+# Kindes; im Heftaufschrieb ist sie der Stoff selbst und bleibt ein Grund.
+_PUPIL_REASON = re.compile(r"eingetragen|eintragung|ausgefüllt|ergebnisfeld|lösungsfeld|handgeschrieben|handschrift", re.I)
+PRINTED_KINDS = ("book_page", "workbook", "worksheet")
+
+
+def review_doubts(doubts: list[dict], kind: str = "") -> list[dict]:
+    """Die Zweifel, die wirklich ein Elternteil brauchen."""
+    return [d for d in doubts
+            if not _IPA_REASON.search(d.get("reason") or "")
+            and not proofread.PUPIL.search(d.get("text") or "")
+            and not (kind in PRINTED_KINDS and _PUPIL_REASON.search(d.get("reason") or ""))
+            and not _photo_doubt(d)]
+
+
+def retake_reason(row) -> str:
+    """Warum das Kind die Seite noch einmal fotografieren soll; leer, wenn nicht.
+    Nur bei einer Lesung, der das Foto im Weg stand: eine unscharfe Seite, die
+    trotzdem sauber gelesen wurde, braucht kein neues Foto."""
+    keys = row.keys() if hasattr(row, "keys") else row
+    if (row["origin"] if "origin" in keys else "") == "book_fetch" or row["kind"] in REVIEW_KINDS:
+        return ""
+    if row["analysis_state"] != "ready" or row["verified"] or ("hidden" in keys and row["hidden"]):
+        return ""
+    doubts = doubts_of(row)
+    photo = [d for d in doubts if _photo_doubt(d)]
+    if photo:
+        return photo[0]["reason"]
+    text = proofread.PUPIL.sub("", (row["content_text"] if "content_text" in keys else "") or "")
+    sharp = row["sharpness"] if "sharpness" in keys else None
+    if sharp is not None and sharp < BLURRY_BELOW and (review_doubts(doubts, row["kind"]) or proofread.UNREADABLE.search(text)):
+        return "Das Foto ist unscharf; einige Stellen ließen sich nicht sicher lesen."
+    return ""
+
+
 def needs_review(row) -> bool:
     keys = row.keys() if hasattr(row, "keys") else row
     if (row["origin"] if "origin" in keys else "") == "book_fetch":
@@ -296,16 +347,21 @@ def needs_review(row) -> bool:
         return False
     if row["kind"] in REVIEW_KINDS:
         return True
+    # Braucht die Seite ein neues Foto, ist das eine Bitte an das Kind, nicht an
+    # die Eltern (D165).
+    if retake_reason(row):
+        return False
     # Gegengelesen wird, wo die Lesung unsicher ist, nicht wo Handschrift steht
     # (D118). Handschrift allein verlangte bisher immer einen Blick (D77); bei
     # einer Arbeitsheftseite mit drei eingetragenen Brüchen unter sechzig Zeilen
     # führte das zum Bestätigen ohne Hinsehen. Eine sauber gelesene Eintragung
     # kostet jetzt keinen Blick mehr, eine unleserliche Stelle schon: Sie ist
     # das Eingeständnis, nicht gelesen zu haben.
-    if doubts_of(row):
+    if review_doubts(doubts_of(row), row["kind"]):
         return True
-    text = row["content_text"] if "content_text" in keys else ""
-    if proofread.UNREADABLE.search(text or ""):
+    # Eine unleserliche Stelle in der Eintragung des Kindes zählt nicht (D165).
+    text = proofread.PUPIL.sub("", (row["content_text"] if "content_text" in keys else "") or "")
+    if proofread.UNREADABLE.search(text):
         return True
     confidence = row["confidence"] if "confidence" in keys else None
     return confidence is not None and confidence < REVIEW_CONFIDENCE
@@ -316,6 +372,7 @@ def _public(row, with_links=None) -> dict:
     result["has_file"] = bool(row["filename"])
     result["locked_fields"] = json.loads(row["locked_fields"] or "[]")
     result["needs_review"] = needs_review(row)
+    result["retake"] = retake_reason(row)
     # Die gedruckte Seite ohne die Eintragungen des Kindes: So schlägt das Kind
     # im Lernraum dieselbe Seite auf, die der Mentor als Grundlage hat (D101).
     keys = row.keys()
@@ -326,7 +383,7 @@ def _public(row, with_links=None) -> dict:
     if "doubts" in keys:
         result["doubts"] = doubts_of(row)
     if result["needs_review"] and "content_text" in keys:
-        result["review"] = proofread.view(row["content_text"] or "", result.get("doubts") or [])
+        result["review"] = proofread.view(row["content_text"] or "", review_doubts(result.get("doubts") or [], row["kind"]))
     result["blurry"] = bool("sharpness" in keys and row["sharpness"] is not None and row["sharpness"] < BLURRY_BELOW)
     if with_links is not None:
         result["links"] = with_links
@@ -382,7 +439,7 @@ def listing(account_id: int, *, subject: str | None = None, kind: str | None = N
             "captured_at,created_by,filename,mime_type,page_count,verified,contains_solutions,hidden,"
             "locked_fields,analysis_state,analysis_model,analysis_version,analyzed_at,analysis_error,"
             "confidence,created_at,updated_at,origin,source_book,source_page,source_label,printed_pages,page_type,handwritten,"
-            "pupil_entries,doubts,"
+            "pupil_entries,doubts,sharpness,"
             # Der gelesene Text gehört in die Liste, wo er gegengelesen werden
             # soll — sonst hätte die Karte nichts zu zeigen.
             "CASE WHEN verified=0 AND (kind IN ('exam_notice','notes','toc') OR handwritten=1 OR pupil_entries=1 "
@@ -392,6 +449,45 @@ def listing(account_id: int, *, subject: str | None = None, kind: str | None = N
             " ORDER BY COALESCE(document_date,substr(created_at,1,10)) DESC, id DESC LIMIT ? OFFSET ?",
             tuple(args)).fetchall()
         return [_public(r, links(conn, r["id"])) for r in rows]
+
+
+def retakes(account_id: int, days: int = 30, limit: int = 3) -> list[dict]:
+    """Seiten, die das Kind noch einmal fotografieren soll, die jüngsten zuerst (D165)."""
+    since = (datetime.now(timezone.utc).date().toordinal() - days)
+    from datetime import date
+    since_iso = date.fromordinal(since).isoformat()
+    with closing(webapp_conn()) as conn:
+        rows = conn.execute(
+            "SELECT id,kind,subject_name,title,origin,analysis_state,verified,hidden,doubts,sharpness,content_text,"
+            "source_label,source_page FROM materials WHERE account_id=? AND hidden=0 AND verified=0 "
+            "AND analysis_state='ready' AND COALESCE(origin,'')!='book_fetch' AND substr(created_at,1,10)>=? "
+            "AND (COALESCE(doubts,'') NOT IN ('','[]') OR sharpness<?) ORDER BY created_at DESC, id DESC LIMIT 40",
+            (account_id, since_iso, BLURRY_BELOW)).fetchall()
+    out = []
+    for r in rows:
+        why = retake_reason(r)
+        if why:
+            out.append({"id": r["id"], "title": r["title"] or "Ohne Titel", "subject_name": r["subject_name"],
+                        "kind": r["kind"], "source_label": r["source_label"], "source_page": r["source_page"],
+                        "reason": why})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def replace(account_id: int, old_id: int, new_id: int) -> None:
+    """Ein neues Foto ersetzt ein altes: Bezüge wandern mit, das alte wird
+    ausgeblendet, nicht gelöscht (D165)."""
+    with closing(webapp_conn()) as conn, conn:
+        old = conn.execute("SELECT id FROM materials WHERE id=? AND account_id=? AND COALESCE(origin,'')!='book_fetch'",
+                           (old_id, account_id)).fetchone()
+        if not old:
+            return
+        conn.execute("INSERT OR IGNORE INTO material_links(material_id,kind,target_id,origin,relation,created_at) "
+                     "SELECT ?,kind,target_id,origin,relation,created_at FROM material_links WHERE material_id=?",
+                     (new_id, old_id))
+        conn.execute("UPDATE materials SET hidden=1,updated_at=? WHERE id=?",
+                     (datetime.now(timezone.utc).isoformat(), old_id))
 
 
 def detail(account_id: int, material_id: int) -> dict | None:

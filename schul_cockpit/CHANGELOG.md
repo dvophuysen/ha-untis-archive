@@ -1,3 +1,9 @@
+## 1.13.28
+
+- Materialien: „Wartet auf deinen Blick“ und „bitte prüfen“ stehen nur noch an Seiten, die wirklich unsicher gelesen sind. Bisher zählte jede noch nicht bestätigte Seite mit, auch sauber gelesene und automatisch geholte.
+- Kein Gegenlesen mehr für die Lautschrift in Vokabelseiten und für unsichere Ziffern in den eigenen Eintragungen des Kindes (die Kontrolle schaut dafür aufs Foto).
+- Unscharfe oder abgeschnittene Fotos: Statt dass die Eltern raten, bittet die App das Kind in „Heute“ und in den Materialien, die Seite noch einmal zu fotografieren. Das neue Foto ersetzt das alte samt Zuordnung.
+
 ## 1.13.27
 
 - Mentor: Auswahlaufgaben. Beim Abfragen, zum Aufwärmen, um einen Denkfehler zu finden oder wenn das Kind müde ist, kann der Mentor eine Aufgabe mit drei oder vier Antworten zum Antippen stellen, immer mit plausiblen falschen dabei. Die App mischt sie und wertet selbst aus: Eine falsche Wahl erklärt sofort den Denkfehler dahinter (ohne KI-Kosten), nach einer richtigen folgt eine offene Aufgabe zum selben Inhalt. Eine gewählte Antwort zählt als „wiedererkannt“, nie als „sitzt“.

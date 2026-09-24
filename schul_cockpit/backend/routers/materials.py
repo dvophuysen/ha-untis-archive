@@ -89,6 +89,8 @@ async def upload(
     homework_id: int | None = Form(default=None),
     source_label: str = Form(default=""),
     source_page: int | None = Form(default=None),
+    # Ein neues Foto für eine unscharfe oder abgeschnittene Seite (D165).
+    replaces: int | None = Form(default=None),
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     """Drop a photo or PDF. Everything else is proposed by the analysis.
@@ -97,6 +99,16 @@ async def upload(
     belegt genau diese Stelle, ohne dass die Auswertung sie erst erkennen muss.
     """
     access(user, account_id, write=True)
+    old = store.detail(account_id, replaces) if replaces else None
+    if replaces and (not old or old.get("origin") == "book_fetch"):
+        raise HTTPException(404, "Das Material zum Ersetzen gibt es nicht.")
+    if old:
+        # Das neue Foto zeigt dieselbe Seite: Art, Fach und Stelle übernehmen.
+        kind = kind or old.get("kind") or ""
+        subject_name = subject_name or old.get("subject_name") or ""
+        title = title or old.get("title") or ""
+        source_label = source_label or old.get("source_label") or ""
+        source_page = source_page or old.get("source_page")
     content = await file.read(store.MAX_FILE + 1)
     await file.close()
     if not content:
@@ -137,6 +149,8 @@ async def upload(
             sources.claim(account_id, subject_name, source_label.strip(), int(source_page), material_id)
         except Exception:
             _LOGGER.warning("Zuordnung des Fotos zur Stelle nicht gespeichert", exc_info=True)
+    if old:
+        store.replace(account_id, old["id"], material_id)
     background.add_task(_run_analysis, account_id, material_id)
     found = store.detail(account_id, material_id) or {"id": material_id}
     # Dieselbe Seite schon einmal fotografiert? Dann sagen wir es gleich,
@@ -215,7 +229,10 @@ def index(
         "kinds": list(store.KINDS),
         "can_write": True,
         "can_manage": manage,
-        "needs_check": sum(1 for m in items if not m["verified"]),
+        # Nur, was wirklich einen Blick braucht; sauber Gelesenes zählt nicht
+        # mit, auch wenn es niemand bestätigt hat (D118, D165).
+        "needs_check": sum(1 for m in items if m.get("needs_review")),
+        "retakes": [m["id"] for m in items if m.get("retake")],
         "pending_analysis": pending,
     }
 
