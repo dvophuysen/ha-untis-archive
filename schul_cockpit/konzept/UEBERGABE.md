@@ -28,6 +28,10 @@ stehen im [CHANGELOG](../CHANGELOG.md), die Begründungen in
   gespeichert (D149). Live stehen seit dem Ausfall der ersten Foundry
   alle Stufen auf gpt-5-mini (Foundry 2); Zielbild siehe D160.
 
+## Repository seit 24.09.2026
+
+Das öffentliche Repository wurde mit bereinigter Historie neu angelegt (keine Kindernamen, keine Schule, keine Adressen, keine Arbeits-E-Mail; D148, Thema 10 der Prüfung). Das alte liegt privat als `dvophuysen/ha-untis-archive-alt` und ist für diese Sessions nicht freigegeben. Add-on-Store und HACS laufen unter derselben Adresse weiter; HACS kennt das neue Repository, installiert ist dort noch v0.5.1, verfügbar v0.5.3 (Update und HA-Neustart macht der Nutzer). Nie wieder echte Namen, Adressen, Hostnamen oder Schulkennungen in Code, Tests, Kommentare oder Commit-Texte schreiben.
+
 ## Offen
 
 - Kosten: Ab 01.10. die Token-Erfassung auswerten
