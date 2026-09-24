@@ -13,7 +13,9 @@ import re
 from contextlib import closing
 from datetime import date, datetime, timedelta, timezone
 
-from pydantic import Field, ValidationError
+from typing import Annotated
+
+from pydantic import BeforeValidator, Field, ValidationError
 
 from . import ai_gateway as ai
 from . import materials as store
@@ -31,24 +33,38 @@ ANALYSIS_VERSION = 5
 PAGE_TYPES = ("text", "table", "handwriting", "figure", "formula", "mixed")
 
 
+def _clip(limit: int):
+    """Kürzt zu lange Texte und Listen einer Antwort, statt sie abzulehnen.
+
+    Bis 1.13.13 verwarf eine einzige Zweifelsnotiz mit 130 statt 120 Zeichen
+    die ganze, bezahlte Lesung einer Seite samt ihrem Text."""
+    def cut(value):
+        return value[:limit] if isinstance(value, (str, list)) else value
+    return BeforeValidator(cut)
+
+
+def ClippedStr(limit: int):
+    return Annotated[str, _clip(limit), Field(max_length=limit)]
+
+
 class Doubt(InputModel):
     """Eine Stelle, bei der die Lesung selbst unsicher ist (D118). `text` ist
     die gelesene Stelle wortgetreu, damit sie im content_text wiederzufinden
     ist; `alternative` die andere Lesart, wenn es eine gibt."""
-    text: str = Field(default="", max_length=120)
-    alternative: str = Field(default="", max_length=120)
-    reason: str = Field(default="", max_length=120)
+    text: ClippedStr(120) = ""
+    alternative: ClippedStr(120) = ""
+    reason: ClippedStr(120) = ""
 
 
 class Insight(InputModel):
     kind: str = Field(default="other", max_length=20)
-    subject_name: str = Field(default="", max_length=120)
-    title: str = Field(default="", max_length=160)
-    summary: str = Field(default="", max_length=600)
+    subject_name: ClippedStr(120) = ""
+    title: ClippedStr(160) = ""
+    summary: ClippedStr(600) = ""
     document_date: str = Field(default="", max_length=10)
     content_text: str = Field(default="", max_length=30000)
-    topics: list[str] = Field(default_factory=list, max_length=6)
-    references: list[str] = Field(default_factory=list, max_length=12)
+    topics: Annotated[list[str], _clip(6)] = Field(default_factory=list, max_length=6)
+    references: Annotated[list[str], _clip(12)] = Field(default_factory=list, max_length=12)
     contains_solutions: bool = False
     unreadable: bool = False
     confidence: float = Field(default=0.0, ge=0, le=1)
@@ -69,9 +85,9 @@ class Insight(InputModel):
     # Vorsortierung für ein loses Blatt: die Nummer aus hinweise.blatt_kandidaten,
     # die am besten passt, und warum. Ein Vorschlag zum Antippen, keine Bindung (D85).
     sheet_candidate: int = Field(default=0, ge=0, le=9)
-    sheet_reason: str = Field(default="", max_length=200)
+    sheet_reason: ClippedStr(200) = ""
     # Wo die Lesung unsicher war: steuert allein, ob jemand gegenlesen muss (D118).
-    doubts: list[Doubt] = Field(default_factory=list, max_length=12)
+    doubts: Annotated[list[Doubt], _clip(12)] = Field(default_factory=list, max_length=12)
 
 
 INSTRUCTION = (

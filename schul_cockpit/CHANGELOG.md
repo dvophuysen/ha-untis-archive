@@ -1,3 +1,8 @@
+## 1.13.14
+
+- KI-Kosten: Eine gründliche Seitenlesung wird nicht mehr verworfen, nur weil eine Zweifelsnotiz oder der Titel etwas zu lang geraten ist; das Zuviel wird gekürzt. Bisher war die Lesung bezahlt und die Seite behielt die schwächere erste Lesung.
+- Einstiegshilfen zu Hausaufgaben bekommen genug Platz für ihr Nachdenken. Bei der bisherigen Grenze kam oft keine Antwort zurück, bezahlt war sie trotzdem; eine unbrauchbare Antwort bricht die übrigen Einstiegshilfen der Runde nicht mehr ab.
+
 ## 1.13.13
 
 - Sicherheit: Die PIN-Sperre zählt jetzt auch gleichzeitige Versuche; bisher ließen sich mit parallelen Anfragen beliebig viele PINs prüfen. Wer weiterrät, wartet länger: nach 5 Fehlversuchen 5 Minuten, dann 15 Minuten, 1 Stunde und danach 24 Stunden. Eine richtige PIN setzt alles zurück; Eltern entsperren, indem sie eine neue PIN setzen.

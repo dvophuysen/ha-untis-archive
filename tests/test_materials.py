@@ -402,3 +402,14 @@ def test_the_page_is_read_on_the_small_tier_and_the_careful_one_is_a_bonus(env, 
     insight, tier = asyncio.run(analysis.read_material(1, row))
     assert stufen == ["klein", "hoch"], "erst klein, dann die gründliche Stufe"
     assert tier == "klein" and insight.content_text == "Text"
+
+
+def test_an_overlong_doubt_does_not_throw_away_the_whole_reading():
+    """Bis 1.13.13 verwarf eine Zweifelsnotiz mit 130 statt 120 Zeichen die
+    ganze, bezahlte Lesung einer Seite samt ihrem Text."""
+    raw = {"content_text": "Seitentext", "title": "T" * 200,
+           "doubts": [{"text": "Stelle", "reason": "r" * 130}] * 14, "topics": ["a"] * 8}
+    insight = analysis.Insight.model_validate(raw)
+    assert insight.content_text == "Seitentext"
+    assert len(insight.doubts) == 12 and len(insight.doubts[0].reason) == 120
+    assert len(insight.title) == 160 and len(insight.topics) == 6

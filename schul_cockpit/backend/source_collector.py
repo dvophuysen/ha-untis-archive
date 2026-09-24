@@ -641,14 +641,21 @@ async def prepare_intros(account_id: int, limit: int = 8) -> dict:
                    "letzte_stunden": lessons, "material": texts,
                    "material_fehlt": task.get("source_state") == "missing"}
         try:
+            # Das Nachdenken zählt zum Ausgabebudget. Bei 600 blieb für die
+            # Antwort oft nichts übrig („incomplete"), bezahlt war sie trotzdem;
+            # abgerechnet wird der Verbrauch, die Grenze reserviert nur.
             raw, _, _ = await ai.complete(account_id, ai.SOURCES, INTRO_INSTRUCTION + json.dumps(Intro.model_json_schema()),
-                                          context, None, max_output=600)
+                                          context, None, max_output=2000)
             intro = Intro.model_validate_json(raw).intro.strip()
         except ValidationError:
             log.warning("Einstiegshilfe für Aufgabe %s nicht auswertbar", task["id"])
             continue
         except Exception as exc:
-            log.warning("Einstiegshilfe für Aufgabe %s nicht möglich: %s", task["id"], getattr(exc, "status_code", type(exc).__name__))
+            status = getattr(exc, "status_code", None)
+            log.warning("Einstiegshilfe für Aufgabe %s nicht möglich: %s", task["id"], status or type(exc).__name__)
+            if status == 502:
+                # Nur diese Antwort war unbrauchbar; die übrigen Aufgaben nicht aufgeben.
+                continue
             break
         with closing(webapp_conn()) as conn, conn:
             conn.execute("UPDATE tasks SET intro=?,intro_at=? WHERE id=? AND account_id=?",
