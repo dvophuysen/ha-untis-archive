@@ -62,6 +62,13 @@ def exam_kind(title: str | None) -> str:
     return "Arbeit"
 
 
+def _brief(text: str, limit: int = 60) -> str:
+    """Ein Grund in Kurzform: bis zum ersten Semikolon, höchstens eine Zeile.
+    Der volle Wortlaut steht in den Materialien."""
+    head = (text or "").split(";")[0].strip()
+    return head if len(head) <= limit else head[:limit].rsplit(" ", 1)[0] + " …"
+
+
 def _plural(n: int, one: str, many: str) -> str:
     return f"{n} {one if n == 1 else many}"
 
@@ -203,7 +210,7 @@ def acute(account_id: int, tasks: list[dict], today: date, now: datetime, evenin
     if retakes:
         rows.append({"key": "retake", "tone": "warn", "icon": "📷",
                      "title": f"{_plural(len(retakes), 'Seite', 'Seiten')} neu fotografieren",
-                     "detail": " · ".join(f"„{r['title']}“" for r in retakes[:2]) + f" · {retakes[0]['reason']}",
+                     "detail": " · ".join(f"„{r['title']}“" for r in retakes[:2]) + f" · {_brief(retakes[0]['reason'])}",
                      "go": go("materialien", section="fotos")})
     return rows, ok
 

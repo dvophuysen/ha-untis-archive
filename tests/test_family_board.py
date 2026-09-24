@@ -190,3 +190,18 @@ def test_the_dashboard_brings_the_board_in_one_request(env, monkeypatch):
     assert kid["board"]["status"]["label"] == "Eingreifen"
     assert kid["board"]["acute"][0]["key"] == "overdue"
     assert "plan" not in kid
+
+
+def test_the_today_page_skips_a_day_where_everything_is_cancelled(env, monkeypatch):
+    client, state, patch = env
+    from datetime import timedelta
+    from backend.routers import today as today_routes
+    first, second = (date.today() + timedelta(days=1)).isoformat(), (date.today() + timedelta(days=2)).isoformat()
+    lesson = lambda day, cancelled: {"id": 1, "date": day, "start_time": 800, "end_time": 845,
+                                     "is_cancelled": cancelled, "was_absent": False}
+    monkeypatch.setattr(today_routes, "lessons_for_date", lambda c, a, d: {
+        first: [lesson(first, True)], second: [lesson(second, False)]}.get(d, []))
+    monkeypatch.setattr(today_routes, "upcoming_exams", lambda *a, **kw: [])
+    monkeypatch.setattr(today_routes, "hidden_keys", lambda a: set())
+    client.app.include_router(today_routes.router, prefix="/api")
+    assert client.get("/api/accounts/1/today").json()["next"]["date"] == second

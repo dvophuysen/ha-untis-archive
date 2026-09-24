@@ -44,7 +44,8 @@ async def today(
         lessons = [l for l in lessons if not lesson_is_hidden(l, hidden)]
 
         # Nächster Schultag — für den Stundenplan-Block nach Schulschluss.
-        # Wochenende/Ferien überspringen wir bis zu 7 Tagen voraus.
+        # Wochenende, Ferien und ganz ausfallende Tage überspringen wir bis zu
+        # 7 Tagen voraus.
         next_block: dict | None = None
         for offset in range(1, 8):
             cand_iso = (today_date + timedelta(days=offset)).isoformat()
@@ -52,7 +53,9 @@ async def today(
                 l for l in lessons_for_date(conn, account_id, cand_iso)
                 if not lesson_is_hidden(l, hidden)
             ]
-            if cand:
+            # Ein Tag, an dem alles ausfällt, ist kein Schultag: die Tasche
+            # gilt dann für den Tag danach (wie auf der Startseite, D166).
+            if any(not l["is_cancelled"] and not l["was_absent"] for l in cand):
                 for l in cand:
                     l["checkin"] = None
                     l["caught_up"] = False
