@@ -72,8 +72,9 @@ def test_the_review_puts_the_weeks_numbers_into_plain_sentences(env):
     seed(patch)
     view = asyncio.run(week_review.review(1, TODAY))
     assert view["week"] == {"start": "2026-09-14", "end": "2026-09-20", "label": "14.09. bis 20.09."}
-    # Abende vor einem Schultag: So, Mo, Di, Mi und der heutige Do (Fr folgt); zwei davon ohne Erinnerung erledigt.
-    assert view["evenings"]["current"]["evenings"] == 5 and view["evenings"]["current"]["own"] == 2
+    # Abende vor einem Schultag: So, Mo, Di, Mi; der heutige Do ist noch nicht vorbei
+    # und zählt erst, wenn er abgeschlossen ist. Zwei ohne Erinnerung erledigt.
+    assert view["evenings"]["current"]["evenings"] == 4 and view["evenings"]["current"]["own"] == 2
     assert view["evenings"]["previous"]["own"] == 1
     assert [u["title"] for u in view["stages"]["ups"]] == ["a-/o-Deklination", "Brüche kürzen"]
     assert [d["title"] for d in view["stages"]["downs"]] == ["Konjugation"] and view["stages"]["checks_passed"] == 1
@@ -82,7 +83,7 @@ def test_the_review_puts_the_weeks_numbers_into_plain_sentences(env):
     assert view["costs_eur"] == 0.71     # 0,41 abgerechnet plus 0,30 reserviert; Vorwoche und anderes Konto zählen nicht
     assert view["material_missing"][0]["subject"] == "Latein" and view["exams_ahead"][0]["date"] == "2026-09-21"
     lines = view["lines"]
-    assert lines[0] == "An 2 von 5 Abenden vor einem Schultag war vor der Erinnerung alles erledigt (Vorwoche 1 von 2)."
+    assert lines[0] == "An 2 von 4 Abenden vor einem Schultag war vor der Erinnerung alles erledigt (Vorwoche 1 von 2)."
     assert lines[1] == "2 Themen eine Stufe weiter: a-/o-Deklination (sitzt), Brüche kürzen (gefestigt)."
     assert lines[2] == "1 Thema zurück: Konjugation (wackelt)."
     assert lines[3] == "1 Kurzprüfung nach Tagen bestanden (gefestigt)."

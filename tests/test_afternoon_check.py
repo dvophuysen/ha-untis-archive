@@ -75,7 +75,7 @@ def test_the_question_goes_out_once_after_the_last_lesson(env):
     client, _, patch = setup(env)
     sent = []
     device(patch, sent)
-    patch.setattr(r, 'snapshot', lambda *a: dict(homework=0, material=0, feedback=0))
+    patch.setattr(r, 'snapshot', lambda *a, **kw: dict(homework=0, material=0, feedback=0))
     enable(client)
     # Letzte Stunde endet 09:45 (die ausgefallene 10:45 zählt nicht); 20 Minuten später ist es fällig.
     r.run_once(at(9, 50))
@@ -96,7 +96,7 @@ def test_no_question_when_disabled_or_already_answered(env):
     client, _, patch = setup(env)
     sent = []
     device(patch, sent)
-    patch.setattr(r, 'snapshot', lambda *a: dict(homework=0, material=0, feedback=0))
+    patch.setattr(r, 'snapshot', lambda *a, **kw: dict(homework=0, material=0, feedback=0))
     enable(client, afternoon_enabled=False)
     r.run_once(at(10, 5))
     assert sent == []
@@ -196,3 +196,31 @@ def test_the_task_is_not_touched_once_someone_closed_it(env):
         c.execute("UPDATE tasks SET status='done' WHERE id=?", (saved['task_id'],))
         c.execute("UPDATE materials SET subject_name='LATEIN',title='x',analysis_state='ready' WHERE id=?", (saved['material_id'],))
     assert ac.refine(1, saved['material_id']) is None
+
+
+def test_no_question_on_a_sick_day_or_after_the_reminder_time(env):
+    """Krank zu Hause: kein Schultag, keine Frage. Und endet die Schule erst
+    nach der Erinnerungszeit, übernimmt der Abend; die Frage ginge ins Leere."""
+    client, _, patch = setup(env)
+    sent = []
+    device(patch, sent)
+    patch.setattr(r, 'snapshot', lambda *a, **kw: dict(homework=0, material=0, feedback=0))
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:
+        c.execute("UPDATE lessons SET was_absent=1 WHERE date=?", (MONDAY,))
+    enable(client)
+    patch.setattr(ac, 'now_local', lambda: at(14, 0))
+    assert not client.get(URL).json()['school_day']
+    r.run_once(at(10, 5))
+    assert sent == []
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:
+        c.execute("UPDATE lessons SET was_absent=0")
+    enable(client, remind_at='14:00')
+    r.run_once(at(10, 5))
+    assert len(sent) == 1
+    # Schulschluss 15:30, Erinnerung ab 15:00: um 15:50 ist schon Abend.
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:
+        c.execute("INSERT INTO lessons(id,account_id,date,start_time,end_time,subject_name,code,was_absent) "
+                  "VALUES(9,1,'2026-09-15',1445,1530,'Sport',NULL,0)")
+    enable(client, remind_at='15:00')
+    r.run_once(at(15, 50, day=15))
+    assert len(sent) == 1

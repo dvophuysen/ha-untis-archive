@@ -196,7 +196,8 @@ def test_the_today_page_skips_a_day_where_everything_is_cancelled(env, monkeypat
     client, state, patch = env
     from datetime import timedelta
     from backend.routers import today as today_routes
-    first, second = (date.today() + timedelta(days=1)).isoformat(), (date.today() + timedelta(days=2)).isoformat()
+    from backend.learning import today_local
+    first, second = (today_local() + timedelta(days=1)).isoformat(), (today_local() + timedelta(days=2)).isoformat()
     lesson = lambda day, cancelled: {"id": 1, "date": day, "start_time": 800, "end_time": 845,
                                      "is_cancelled": cancelled, "was_absent": False}
     monkeypatch.setattr(today_routes, "lessons_for_date", lambda c, a, d: {

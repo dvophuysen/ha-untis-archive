@@ -439,7 +439,7 @@ details > summary::after {
 details[open] > summary::after { transform: rotate(90deg); }
 
 /* Schnellzugriff der Startseite: Ziel unter der Kopfzeile, kurz hervorgehoben. */
-[data-section] { scroll-margin-top: 80px; }
+[data-section] { scroll-margin-top: calc(80px + env(safe-area-inset-top, 0px)); }
 .jump-target { animation: jump-target 1.8s ease-out; }
 @keyframes jump-target { 0%, 40% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 3px transparent; } }
 @media (prefers-reduced-motion: reduce) { .jump-target { animation: none; outline: 3px solid var(--accent); } }

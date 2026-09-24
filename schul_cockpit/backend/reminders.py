@@ -17,14 +17,18 @@ ZONE = ZoneInfo('Europe/Berlin')
 DEFAULT_MORNING = '06:45'
 
 
-def snapshot(account, now):
-    """Do not infer physical omissions or generate material requirements."""
-    tomorrow = now.date() + timedelta(days=1)
-    items, fingerprint, schedule = packing_plan(account, tomorrow)
+def snapshot(account, now, morning=False):
+    """Do not infer physical omissions or generate material requirements.
+
+    Abends zählt die Tasche und die Aufgaben für morgen, morgens vor dem
+    Aufbruch die für heute: die Tasche von gestern Abend."""
+    target = now.date() if morning else now.date() + timedelta(days=1)
+    items, fingerprint, schedule = packing_plan(account, target)
     _, _, today_schedule = packing_plan(account, now.date())
     with closing(webapp_conn()) as c:
-        bag = view(account, tomorrow, items, fingerprint, c, schedule)
-        homework = c.execute("SELECT COUNT(*) FROM tasks WHERE account_id=? AND status!='done' AND due_date IS NOT NULL AND due_date<=?", (account, tomorrow.isoformat())).fetchone()[0]
+        bag = view(account, target, items, fingerprint, c, schedule)
+        homework = c.execute("SELECT COUNT(*) FROM tasks WHERE account_id=? AND status IN ('open','in_progress') "
+                             "AND due_date IS NOT NULL AND due_date<=?", (account, target.isoformat())).fetchone()[0]
         ratings = {r['lesson_id'] for r in c.execute('SELECT lesson_id FROM lesson_checkins WHERE account_id=? AND rating IS NOT NULL', (account,))}
     feedback = 0
     for lesson in today_schedule:
@@ -120,12 +124,13 @@ def morning_fallback(setting, now):
     if not due(setting.get('morning_at') or DEFAULT_MORNING, now):
         return 0
     today = now.date()
-    if not packing_plan(account, today)[2]:
+    # Nur an Tagen mit Unterricht: Fällt alles aus, gibt es keine Fachliste.
+    if not packing_plan(account, today)[0]:
         return 0
     yesterday = (today - timedelta(days=1)).isoformat()
     if day_close.closure(account, yesterday):
         return 0
-    counts = snapshot(account, now)
+    counts = snapshot(account, now, morning=True)
     if not (counts['homework'] or counts['material']):
         return 0
     sent, url = 0, app_notify.own_panel()

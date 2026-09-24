@@ -129,9 +129,16 @@ def week(account_id: int, today: date | None = None) -> dict:
         overdue = c.execute(
             "SELECT COUNT(*) FROM tasks WHERE account_id=? AND status IN ('open','in_progress') AND due_date IS NOT NULL "
             "AND due_date<?", (account_id, today.isoformat())).fetchone()[0]
+        # Gezählt werden Bewertungen; eine reine Notiz ist kein Check-in.
         checkins = [dict(r) for r in c.execute(
-            "SELECT k.created_at,k.rating,u.role,u.is_admin FROM lesson_checkins k LEFT JOIN users u ON u.id=k.user_id "
-            "WHERE k.account_id=? AND substr(k.created_at,1,10) BETWEEN ? AND ?", args)]
+            "SELECT k.id,k.created_at,k.rating,u.role,u.is_admin FROM lesson_checkins k LEFT JOIN users u ON u.id=k.user_id "
+            "WHERE k.account_id=? AND k.rating IS NOT NULL AND substr(k.created_at,1,10) BETWEEN ? AND ?", args)]
+        # Wann und von wem: Eine spätere Notiz überschreibt Konto und nicht die
+        # Zeit der Zeile. Das Protokoll hält jede Eingabe mit ihrem Konto fest.
+        checkin_events = [dict(r) for r in c.execute(
+            "SELECT l.target_id,l.created_at,u.role,u.is_admin FROM audit_log l LEFT JOIN users u ON u.id=l.user_id "
+            "WHERE l.account_id=? AND l.target_kind='checkin' AND l.demo_mode=0 "
+            "AND substr(l.created_at,1,10) BETWEEN ? AND ?", args)] if _has(c, "audit_log") else []
         uploads = [dict(r) for r in c.execute(
             "SELECT m.created_at,u.role,u.is_admin FROM materials m LEFT JOIN users u ON u.id=m.created_by "
             "WHERE m.account_id=? AND m.hidden=0 AND COALESCE(m.origin,'upload')!='book_fetch' "
@@ -155,7 +162,10 @@ def week(account_id: int, today: date | None = None) -> dict:
     # Handlungen, keine abgeleiteten Zustände. Rückmeldungen der Eltern zu einer
     # Stunde sind keine Arbeit des Kindes und fallen ganz heraus.
     child_checkins = [k for k in checkins if _who(k) != "parent"]
-    marked = [(local(r["created_at"]), _who(r)) for r in messages + vocab + uploads + afternoon + child_checkins + ticked]
+    logged = {e["target_id"] for e in checkin_events}
+    checkin_stamps = [e for e in checkin_events if _who(e) != "parent"] + \
+        [k for k in child_checkins if k["id"] not in logged]
+    marked = [(local(r["created_at"]), _who(r)) for r in messages + vocab + uploads + afternoon + checkin_stamps + ticked]
     marked = [(t, who) for t, who in marked if inweek(t)]
     days: dict[str, list[tuple[datetime, str | None]]] = defaultdict(list)
     for t, who in marked:
@@ -208,12 +218,14 @@ def week(account_id: int, today: date | None = None) -> dict:
     for e in evidence:
         if inweek(local(e["created_at"])) and not e["help_used"]:
             own[e["session_id"]] += 1
+    # Nach dem ersten Zeitpunkt sortiert, nicht nach „TT.MM.“: Der 01.10. käme
+    # sonst vor dem 28.09.
+    ordered_sessions = sorted(by_session.items(), key=lambda item: min(item[1]["times"]))
     units = []
-    for sid, e in by_session.items():
+    for sid, e in ordered_sessions:
         units.append({"session_id": sid, "subject": e["subject"], "mode": e["mode"], "turns": e["turns"],
                       "help": e["help"], "own_evidence": own.get(sid, 0), "minutes": _minutes(e["times"]),
                       "day": _short(min(e["times"]).date().isoformat())})
-    units.sort(key=lambda u: u["day"])
     modes: dict[str, int] = defaultdict(int)
     for u in units:
         modes[u["mode"]] += 1

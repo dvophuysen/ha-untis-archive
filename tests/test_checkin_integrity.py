@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from test_learning import env, child
 from backend import db
 from backend import family_board
+from backend.learning import today_local
 from backend.routers import checkins, dashboard, notify, today
 
 
@@ -62,7 +63,7 @@ def test_comprehension_ignores_comments_and_supervision_but_gaps_do_not(env):
     assert dashboard._comprehension_for_subjects(1, {7}) == {7: {'hard': 1, 'total': 2}}
     assert dashboard._comprehension_for_subjects(2, {7}) == {7: {'hard': 0, 'total': 0}}
     assert _gap(1, date.today()) == {'unrated_lessons': 2, 'total_lessons': 5}
-    patch.setattr(today, 'lessons_for_date', lambda c, a, d: [dict(id=i, is_cancelled=False, was_absent=False) for i in range(1,6)] if d == date.today().isoformat() else [])
+    patch.setattr(today, 'lessons_for_date', lambda c, a, d: [dict(id=i, is_cancelled=False, was_absent=False) for i in range(1,6)] if d == today_local().isoformat() else [])
     patch.setattr(today, 'upcoming_exams', lambda *a, **kw: [])
     patch.setattr(today, 'hidden_keys', lambda a: set())
     patch.setattr(today, 'lesson_is_hidden', lambda *a: False)

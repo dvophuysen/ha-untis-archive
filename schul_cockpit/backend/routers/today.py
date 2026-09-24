@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from .. import day_close
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..courses import hidden_keys, lesson_is_hidden
+from ..learning import today_local
 from ..db import history_conn, webapp_conn
 from ..queries import lessons_for_date, upcoming_exams
 
@@ -34,7 +35,7 @@ async def today(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     assert_account_access(user, account_id)
-    today_date = date.today()
+    today_date = today_local()
     today_iso = today_date.isoformat()
     conn = history_conn()
     try:

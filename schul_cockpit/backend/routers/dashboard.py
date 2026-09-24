@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends
 
 from .. import family_board, lernstand, usage_report
 from ..auth import CurrentUser, get_current_user, linked_account_ids
+from ..learning import today_local
 from ..db import history_conn, webapp_conn
 from ..exams import account_subjects, resolve_exams
 
@@ -95,8 +96,8 @@ def _comprehension_for_subjects(
     out: dict[int, dict] = {sid: {"hard": 0, "total": 0} for sid in subject_ids}
     if not subject_ids:
         return out
-    horizon = (date.today() - timedelta(days=COMPREHENSION_WINDOW_DAYS)).isoformat()
-    today_iso = date.today().isoformat()
+    horizon = (today_local() - timedelta(days=COMPREHENSION_WINDOW_DAYS)).isoformat()
+    today_iso = today_local().isoformat()
     hconn = history_conn()
     wconn = webapp_conn()
     try:
@@ -136,7 +137,7 @@ def _comprehension_for_subjects(
 
 @router.get("/dashboard")
 async def dashboard(user: CurrentUser = Depends(get_current_user)) -> dict:
-    today = date.today()
+    today = today_local()
     today_iso = today.isoformat()
     account_ids = sorted(linked_account_ids(user.id))
     if not account_ids:

@@ -105,10 +105,14 @@ def reliability(account_id: int, today: date, weeks: int = 4) -> dict:
         evening = date.fromisoformat(day) - timedelta(days=1)
         if evening > today:
             continue
+        row = rows.get(evening.isoformat())
+        # Der heutige Abend ist noch nicht vorbei: Er zählt erst, wenn er
+        # abgeschlossen ist, nie vorher als versäumt.
+        if evening == today and not row:
+            continue
         week = _week_start(date.fromisoformat(day)).isoformat()
         bucket = buckets.setdefault(week, {"week": week, "evenings": 0, "closed": 0, "own": 0})
         bucket["evenings"] += 1
-        row = rows.get(evening.isoformat())
         if not row:
             continue
         bucket["closed"] += 1

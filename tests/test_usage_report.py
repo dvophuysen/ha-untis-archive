@@ -126,3 +126,17 @@ def test_the_feed_for_home_assistant_needs_the_token(env):
     feed = client.get("/api/notify/1/usage-week?token=geheim&day=2026-09-17").json()
     assert feed["title"].startswith("Schul-Cockpit: Woche 14.09. bis 20.09.")
     assert "Auffällig: Nutzung spät am Abend" in feed["text"] and feed["warnings"] >= 3
+
+
+def test_units_keep_their_order_across_a_month_boundary(env):
+    client, state, patch = env
+    with closing(db.webapp_conn()) as c, c:
+        c.executescript(
+            "INSERT INTO mentor_sessions(id,account_id,user_id,subject,goal,status,created_at,updated_at,is_test,is_demo) VALUES"
+            " (71,1,2,'LATEIN','x','active','2026-10-01T16:00:00+02:00','2026-10-01T16:00:00+02:00',0,0),"
+            " (72,1,2,'DEUTSCH','x','active','2026-09-28T16:00:00+02:00','2026-09-28T16:00:00+02:00',0,0);"
+            "INSERT INTO mentor_messages(account_id,session_id,request_key,role,text,payload,user_id,created_at) VALUES"
+            " (1,71,'a','user','x','{}',2,'2026-10-01T16:05:00+02:00'),"
+            " (1,72,'b','user','x','{}',2,'2026-09-28T16:05:00+02:00');")
+    view = usage_report.week(1, date(2026, 10, 1))
+    assert [u["day"] for u in view["mentor"]["units"]] == ["28.09.", "01.10."]

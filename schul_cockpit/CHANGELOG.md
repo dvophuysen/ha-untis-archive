@@ -1,3 +1,16 @@
+## 1.14.3
+
+- Morgen-Erinnerung: prüft jetzt die Tasche für heute (am Vorabend gepackt) und die heute fälligen Aufgaben. Bisher meldete sie fast jeden Morgen „Schultasche“, weil sie auf die Tasche für morgen schaute. An Tagen, an denen alle Stunden ausfallen, kommt sie nicht mehr.
+- Nach der Schule: Wer krank zu Hause ist, bekommt keine Nachfrage „Alles von heute notiert?“ mehr; versäumte Stunden zählen nicht als Schulschluss. Endet die Schule erst nach der Erinnerungszeit, kommt keine Nachmittags-Mitteilung mehr, die auf eine leere Seite führt.
+- Ausgeblendete Kurse bleiben ausgeblendet, auch wenn jemand vertritt. Bisher tauchten sie dann in Tasche, Rückmeldungen und Startseite wieder auf.
+- „Heute“: Ein Tag, an dem alle Stunden ausfallen, gilt nicht mehr als nächster Schultag.
+- Wochenstand: Der heutige Abend zählt erst, wenn er abgeschlossen ist, nicht vorher als versäumt.
+- Nutzungsbericht: Rückmeldungen zu Stunden zählen mit Zeit und Konto jeder einzelnen Eingabe; eine spätere Notiz der Eltern macht eine späte Bewertung des Kindes nicht mehr unsichtbar. Reine Notizen zählen nicht als Check-in. Mentor-Einheiten stehen auch über einen Monatswechsel in der richtigen Reihenfolge. Übersprungene Aufgaben halten keine Erinnerung mehr offen.
+- Startseite: Ein gescheitertes Aktualisieren lässt die Karten stehen, statt sie durch eine Fehlermeldung zu ersetzen. Der Grund für „Nachsteuern“ oder „Eingreifen“ steht unter dem Namen. Der Foto-Grund ist kurz gefasst.
+- Schnellzugriffe: Der Sprung wartet bis zu 15 Sekunden auf eine langsam ladende Seite und bricht ab, sobald man selbst scrollt; auf dem iPhone landet der Abschnitt nicht mehr unter der Kopfzeile; die Hervorhebung bleibt nicht mehr hängen.
+- Materialien: Mit leerem oder nicht ladbarem Fächerverzeichnis lud die Seite sich endlos neu; jede Taste in der Suche lud die Liste; nach einem Kindwechsel standen die Fächer des anderen Kindes im Filter. Behoben.
+- Datum der Startseite und von „Heute“ ausdrücklich in Berliner Zeit.
+
 ## 1.14.2
 
 - Startseite, Tasche: Vor dem Unterricht zählt die Checkliste für heute, die am Vorabend gepackt wurde; während der Schulzeit steht zur Tasche nichts da; nach Schulschluss zählt die Tasche für den nächsten Schultag, am Freitag also schon die für Montag. Gemahnt wird sie erst am Abend direkt vor dem Schultag. Bisher stand nach Mitternacht fälschlich „noch nicht gepackt“ für den übernächsten Tag da.

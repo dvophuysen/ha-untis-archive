@@ -37,13 +37,16 @@ def now_local() -> datetime:
 
 
 def last_lesson_end(account_id: int, day: date) -> datetime | None:
-    """Ende der letzten nicht ausgefallenen Stunde des Tages, ohne ausgeblendete Kurse."""
+    """Ende der letzten besuchten Stunde des Tages: nicht ausgefallen, nicht
+    versäumt, ohne ausgeblendete Kurse. Wer krank zu Hause ist, bekommt keine
+    Nachfrage nach der Schule."""
     try:
         _, _, schedule = packing_plan(account_id, day)
     except Exception:
         LOG.debug("Stundenplan für Konto %s am %s nicht lesbar", account_id, day)
         return None
-    ends = [l["end_hhmm"] for l in schedule if l.get("end_hhmm") and not l.get("is_cancelled")]
+    ends = [l["end_hhmm"] for l in schedule if l.get("end_hhmm") and not l.get("is_cancelled")
+            and not l.get("was_absent")]
     if not ends:
         return None
     hour, minute = map(int, max(ends).split(":"))
@@ -111,6 +114,11 @@ def notify(setting: dict, now: datetime) -> int:
     if not 0 <= (now - target).total_seconds() < WINDOW:
         return 0
     if answers(account, day.isoformat()):
+        return 0
+    # Ab der Erinnerungszeit zeigt „Heute“ den Abend und keine Nachmittagskarte
+    # mehr; die Abend-Erinnerung übernimmt.
+    hour, minute = map(int, evening_from(account).split(":"))
+    if now >= now.replace(hour=hour, minute=minute, second=0, microsecond=0):
         return 0
     sent, url = 0, app_notify.own_panel()
     for service in app_notify.targets(account):

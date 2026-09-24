@@ -31,7 +31,7 @@ def setup(env):
 
 def stand(patch, **counts):
     # Was der Erinnerungsdienst abends sieht; leer heißt erledigt.
-    patch.setattr(r, 'snapshot', lambda *a: dict(dict(homework=0, material=0, feedback=0), **counts))
+    patch.setattr(r, 'snapshot', lambda *a, **kw: dict(dict(homework=0, material=0, feedback=0), **counts))
 
 
 def lessons(*days, cancelled=()):
@@ -99,7 +99,7 @@ def test_the_morning_notification_only_reaches_who_was_not_done(env):
     lessons('2026-09-15')
     enable(client, morning_enabled=True)
     stand(patch, homework=1, feedback=3)
-    patch.setattr(r, 'packing_plan', lambda account, day: ([], 'x', [dict(id=1)]))
+    patch.setattr(r, 'packing_plan', lambda account, day: ([dict(key='m', label='Mathe')], 'x', [dict(id=1)]))
     patch.setattr(app_notify, 'own_panel', lambda: '/e54108c7_schul_cockpit')
     app_notify.set_targets(1, ['mobile_app_kind_iphone'])
     sent = []
@@ -124,7 +124,9 @@ def test_no_morning_notification_when_done_on_a_free_day_or_switched_off(env):
 
     patch.setattr(r, 'packing_plan', lambda account, day: ([], 'x', []))
     r.run_once(MORNING)                                    # kein Unterricht: nichts
-    patch.setattr(r, 'packing_plan', lambda account, day: ([], 'x', [dict(id=1)]))
+    patch.setattr(r, 'packing_plan', lambda account, day: ([], 'x', [dict(id=1, is_cancelled=True)]))
+    r.run_once(MORNING)                                    # alles fällt aus: nichts
+    patch.setattr(r, 'packing_plan', lambda account, day: ([dict(key='m', label='Mathe')], 'x', [dict(id=1)]))
     enable(client, morning_enabled=False)
     r.run_once(MORNING)                                    # abgeschaltet: nichts
     enable(client, morning_enabled=True)

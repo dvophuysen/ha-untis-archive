@@ -1,5 +1,5 @@
 <script>
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { api } from '../lib/api.js';
   import ActionLabel from '../lib/ActionLabel.svelte';
   import { subjectStyle } from '../lib/subjectStyle.js';
@@ -268,11 +268,19 @@
     }
   }
 
+  // Nur Kind und Filter lösen ein Laden aus. load() liest auch die Fächerliste
+  // und die Suche; ohne untrack lud ein leeres Fächerverzeichnis sich endlos
+  // neu, und jede Taste in der Suche lud die Liste.
+  // Die Fächerliste gehört zum Kind: beim Wechsel neu holen.
+  let catalogFor = null;
   $effect(() => {
     void accountId;
     void filterSubject;
     void filterKind;
-    load();
+    untrack(() => {
+      if (catalogFor !== accountId) { catalog = []; catalogFor = accountId; }
+      load();
+    });
   });
 
   $effect(() => { void accountId; void taskId; loadForTask(); });

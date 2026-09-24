@@ -60,11 +60,25 @@ def _subject_short_from_payload(payload_json: str | None) -> str | None:
     return None
 
 
+def _teacher_orig_from_payload(payload_json: str | None) -> int | None:
+    """Die eigentliche Lehrkraft bei einer Vertretung (te[0].orgid). Ohne sie
+    tauchte ein ausgeblendeter Kurs wieder auf, sobald jemand vertrat."""
+    try:
+        te = json.loads(payload_json).get("te") if payload_json else None
+    except (json.JSONDecodeError, TypeError, AttributeError):
+        return None
+    if isinstance(te, list) and te and isinstance(te[0], dict):
+        value = te[0].get("orgid")
+        return value if isinstance(value, int) and value else None
+    return None
+
+
 def _lesson_row(r: sqlite3.Row) -> dict[str, Any]:
     info = dict(r)
     pj = info.pop("period_info_json", None)
     payload = info.pop("payload_json", None)
     info["subject_short"] = _subject_short_from_payload(payload)
+    info.setdefault("teacher_orig_untis_id", _teacher_orig_from_payload(payload))
     info["exam"] = None
     info["lesson_topic"] = None
     if pj:

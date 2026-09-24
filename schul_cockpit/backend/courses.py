@@ -40,12 +40,23 @@ def lesson_is_hidden(lesson: dict, hidden: set[str]) -> bool:
     subject_name/teacher_name for the name fallback."""
     if not hidden:
         return False
-    return course_key(
+    if course_key(
         lesson.get("subject_untis_id"),
         lesson.get("teacher_untis_id"),
         lesson.get("subject_name"),
         lesson.get("teacher_name"),
-    ) in hidden
+    ) in hidden:
+        return True
+    # Bei einer Vertretung steht die vertretende Lehrkraft vorn; der Kurs ist
+    # der der eigentlichen Lehrkraft.
+    if lesson.get("teacher_orig_untis_id") or lesson.get("teacher_orig_name"):
+        return course_key(
+            lesson.get("subject_untis_id"),
+            lesson.get("teacher_orig_untis_id"),
+            lesson.get("subject_name"),
+            lesson.get("teacher_orig_name"),
+        ) in hidden
+    return False
 
 
 def visible_subject_ids(account_id: int, *, days_back: int = 365) -> set | None:

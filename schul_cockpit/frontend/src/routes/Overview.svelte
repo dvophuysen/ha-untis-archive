@@ -53,19 +53,24 @@
 
 {#if loading}
   <div class="empty"><span class="spinner"></span></div>
-{:else if error}
+{:else if error && !data}
   <div class="error-box">{error}</div>
 {:else if data && data.kids.length === 0}
   <div class="empty">Noch keine Kinder verlinkt.</div>
 {:else if data}
+  <!-- Ein gescheitertes Aktualisieren lässt den letzten Stand stehen. -->
+  {#if error}<p class="stale" role="status">Stand nicht aktualisiert: {error}</p>{/if}
   <div class="dash">
     {#each data.kids as kid (kid.account_id)}
       {@const b = kid.board}
       <section class="kid card" aria-label={`Stand von ${kid.name}`} data-status={b.status.level}>
         <header class="kid-head">
           <h2>{kid.name}</h2>
-          <span class="pill {b.status.level}" title={b.status.reasons.join(' · ')}>{b.status.label}</span>
+          <span class="pill {b.status.level}">{b.status.label}</span>
         </header>
+        {#if b.status.level !== 'good' && b.status.reasons.length}
+          <p class="why">{b.status.reasons.slice(0, 3).join(' · ')}</p>
+        {/if}
 
         {#if b.ok.length}
           <button class="okline" onclick={() => open(kid, { page: 'today' })}><span>✓ {b.ok.join(' · ')}</span></button>
@@ -143,6 +148,8 @@
   }
   .kid-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 0.4rem; }
   .kid-head h2 { margin: 0; font-size: 1.1rem; }
+  .why { margin: -0.2rem 0 0.5rem; font-size: 0.8rem; color: var(--fg-muted); overflow-wrap: anywhere; }
+  .stale { margin: 0 0 0.6rem; font-size: 0.82rem; color: var(--warn-fg); }
   .pill { font-size: 0.8rem; font-weight: 650; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
   .pill.good { background: var(--good-bg); color: var(--good-fg); }
   .pill.warn { background: var(--warn-bg); color: var(--warn-fg); }

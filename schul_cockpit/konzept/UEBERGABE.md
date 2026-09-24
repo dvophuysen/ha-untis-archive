@@ -1,6 +1,6 @@
 # Übergabe an die nächste Session
 
-Stand 24.09.2026. Live läuft Schul-Cockpit **1.14.2**. Keine Kindernamen,
+Stand 24.09.2026. Live läuft Schul-Cockpit **1.14.3**. Keine Kindernamen,
 PINs oder Schlüssel in diesem Dokument (D15/D68). Maßgeblicher Einstieg ist
 [README.md](README.md) in diesem Ordner; Einzelheiten zu jedem Release
 stehen im [CHANGELOG](../CHANGELOG.md), die Begründungen in

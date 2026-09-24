@@ -86,6 +86,24 @@ def test_snapshot_uses_due_tasks_material_and_ended_feedback(env):
         c.execute("INSERT INTO packing_items VALUES(1,'2026-09-15','subject:math',1,1,'now',2)")
     assert r.snapshot(1,NOW)==dict(homework=0,material=0,feedback=1,photos=0)
 
+def test_the_morning_snapshot_checks_todays_bag_and_skips_skipped_tasks(env):
+    """Morgens zählt die Tasche von gestern Abend, also die für heute, und nur
+    Aufgaben, die heute oder früher fällig und offen sind."""
+    _,_,patch=setup(env)
+    today=NOW.date().isoformat()
+    def plan(account,day):
+        return ([dict(key='subject:math',label='Mathematik')],'x',[]) if day==NOW.date() else ([dict(key='subject:bio',label='Biologie')],'x',[])
+    patch.setattr(r,'packing_plan',plan)
+    with closing(db.webapp_conn()) as c:
+        c.execute("INSERT INTO packing_items VALUES(1,?,'subject:math',1,1,'now',2)",(today,))
+        c.execute("INSERT INTO tasks(account_id,title,status,source,due_date,created_at,updated_at) VALUES(1,'Morgen','open','manual','2026-09-15','now','now')")
+        c.execute("INSERT INTO tasks(account_id,title,status,source,due_date,created_at,updated_at) VALUES(1,'Übersprungen','skipped','manual','2026-09-01','now','now')")
+    morning=r.snapshot(1,NOW,morning=True)
+    assert (morning['material'],morning['homework'])==(0,0)
+    evening=r.snapshot(1,NOW)
+    assert (evening['material'],evening['homework'])==(1,1)
+
+
 def test_account_remap_keeps_settings_packing_and_delivery_with_child(env):
     from backend.reconcile import _reconcile_accounts
     client,_,_=setup(env)
