@@ -1,3 +1,9 @@
+## 1.13.22
+
+- Sicherheit: Grundsystem von Alpine 3.20 (seit April 2026 ohne Sicherheitsupdates) auf Alpine 3.24, damit auch ein aktuelles Chromium für die Buchseiten (Version 152). FastAPI 0.141 mit Starlette 1.7, python-multipart 0.0.32, uvicorn 0.53, aktuelle Mindeststände für cryptography, Pillow und pypdf.
+- Oberfläche wird mit Node 24 und Vite 8 gebaut; `npm audit` meldet keine Lücken mehr. Die ausgelieferte Datei ist etwas kleiner.
+- Nur noch für aarch64 und amd64: Home Assistant unterstützt die 32-Bit-Plattformen (armv7, armhf, i386) nicht mehr.
+
 ## 1.13.21
 
 - Kiosk: Die Kinder stehen wieder in der Anmeldeliste. Die Anmeldung suchte nach einer Rolle, die es nicht gibt, und bot nur die Eltern an.

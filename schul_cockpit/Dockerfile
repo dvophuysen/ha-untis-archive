@@ -1,10 +1,10 @@
 ARG BUILD_FROM
 
 # ---------- frontend build stage ----------
-FROM node:20-alpine AS frontend
+FROM node:24-alpine AS frontend
 WORKDIR /build
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm install --no-audit --no-fund
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 # vite.config.js liest die Add-on-Version aus ../config.yaml (relativ zu
 # vite.config.js) — im Docker-Build-Kontext fehlt sie sonst und der Bundle
@@ -23,15 +23,14 @@ ENV LANG=C.UTF-8 \
 # software GPU. Alpine's Chromium ships no SwiftShader driver, so without
 # them WebGL is unavailable and readers that draw with WebGL (BiBox) show
 # an empty page.
-RUN apk add --no-cache sqlite-libs libffi openssl chromium chromium-chromedriver nss freetype harfbuzz ttf-freefont poppler-utils \
+RUN apk add --no-cache sqlite-libs libffi openssl chromium chromium-chromedriver nss freetype harfbuzz font-freefont poppler-utils \
         mesa-vulkan-swrast mesa-egl mesa-gles mesa-gl mesa-dri-gallium
 
 WORKDIR /app
 
 COPY backend/requirements.txt ./
-# Need build tools transiently for cryptography on architectures without
-# a prebuilt wheel (mostly armv7/armhf). Remove them again afterwards to
-# keep the image small.
+# Build tools only in case a package has no prebuilt wheel for this
+# architecture; removed again afterwards to keep the image small.
 RUN apk add --no-cache --virtual .build-deps \
         gcc musl-dev libffi-dev openssl-dev python3-dev cargo \
     && pip install --no-cache-dir -r requirements.txt \

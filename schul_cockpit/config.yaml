@@ -1,14 +1,11 @@
 name: Schul-Cockpit
-version: "1.13.21"
+version: "1.13.22"
 slug: schul_cockpit
 description: Mobile Schul-App für Kinder und Eltern, basierend auf dem UNTIS-Archive-Datenbestand.
 url: https://github.com/dvophuysen/ha-untis-archive/tree/main/schul_cockpit
 arch:
   - aarch64
   - amd64
-  - armv7
-  - armhf
-  - i386
 init: false
 startup: services
 boot: auto
