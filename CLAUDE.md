@@ -64,8 +64,14 @@
   Versions-Bump in `schul_cockpit/config.yaml` plus einen Eintrag in
   `schul_cockpit/CHANGELOG.md` — sonst zeigt HA kein Update an.
 - **HA-Komponente `untis_archive`:** sichtbare Änderungen brauchen einen
-  Bump in `custom_components/untis_archive/manifest.json` (triggert den
-  Release-Workflow in `.github/workflows/release.yml`).
+  Bump in `custom_components/untis_archive/manifest.json`. Pushes aus
+  Claude-Sitzungen starten keine GitHub-Workflows: das Release
+  (`.github/workflows/release.yml`) und die Tests (`tests.yml`) per
+  `workflow_dispatch` anstoßen (GitHub-MCP `actions_run_trigger`). Danach in
+  HACS `hacs/repository/refresh` per Websocket, `update.install` auf
+  `update.untis_archive_update_2`; wirksam erst nach einem HA-Neustart, den
+  der Nutzer auslöst. Tests der Komponente: `tests_ha/` (siehe dortige
+  `conftest.py`).
 
 # Dauerhafter lesender Schul-Datenzugriff
 
