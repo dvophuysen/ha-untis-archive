@@ -479,10 +479,10 @@
   .dot.ok { background: var(--rating-3); }
   .dot.warn { background: var(--rating-2); }
   .dot.bad { background: var(--rating-1); }
-  .point-go { font-size: 0.8rem; font-weight: 600; text-decoration: none; padding: 0.2rem 0.6rem; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-elevated); color: inherit; min-height: 30px; display: inline-flex; align-items: center; cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .point-go { font-size: 0.8rem; font-weight: 600; text-decoration: none; padding: 0.2rem 0.6rem; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-elevated); color: inherit; min-height: 44px; display: inline-flex; align-items: center; cursor: pointer; font-family: inherit; white-space: nowrap; }
   .go { min-height: 44px; padding: 0.5rem 1rem; border-radius: 12px; font-weight: 650; justify-self: start; }
   .feel-row { display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; flex-wrap: wrap; }
-  .feel { font-size: 0.75rem; min-height: 30px; padding: 0.2rem 0.6rem; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-elevated); color: inherit; }
+  .feel { font-size: 0.75rem; min-height: 44px; padding: 0.2rem 0.6rem; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-elevated); color: inherit; }
   .feel.active { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
   .detail { margin-top: 0.8rem; padding-top: 0.6rem; border-top: 1px solid var(--border); }
   .lead { margin: 0 0 0.6rem; font-size: 0.9rem; }
@@ -499,7 +499,7 @@
   .stage.wackelt { background: var(--rating-2); color: #fff; border-color: transparent; }
   .stage.sitzt { background: var(--rating-3); color: #fff; border-color: transparent; }
   .stage.gefestigt { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
-  .missing { color: var(--rating-1); font-weight: 600; }
+  .missing { color: var(--bad-fg); font-weight: 600; }
   .add-topic { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
   .add-topic input { flex: 1; min-width: 0; font-size: 16px; padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-elevated); color: inherit; }
   .also { margin-top: 0.6rem; font-size: 0.88rem; }

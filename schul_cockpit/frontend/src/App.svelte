@@ -110,6 +110,11 @@
   // Übersicht-Tab nur für Eltern mit mind. zwei verlinkten Kindern. Bei
   // einem Kind ist „Heute" der natürliche Einstieg, das Dashboard wäre
   // dann eine reine Solo-Spalte.
+  // Welcher Reiter unten markiert ist, auch auf Unterseiten: Vokabeln gehören
+  // zu Lernen, Materialien und die Verwaltungsseiten zu den Übersichten.
+  const TAB_OF = { vokabeln: 'learning', plan: 'more', tasks: 'more', week: 'more', subjects: 'more', subject: 'more',
+                   klausuren: 'more', absences: 'more', materialien: 'more', changes: 'more', courses: 'more', exams: 'more' };
+  const activeTab = $derived(TAB_OF[route.name] ?? route.name);
   const navItems = $derived.by(() => {
     const items = [
       { name: 'today', icon: '☀️', label: 'Heute' },
@@ -274,8 +279,8 @@
     <nav class="bottom-nav" aria-label="Hauptnavigation">
       {#each navItems as item}
         <button
-          class:active={route.name === item.name || (item.name === 'more' && ['plan','tasks','week','subjects','subject','klausuren','absences'].includes(route.name))}
-          aria-current={route.name === item.name || (item.name === 'more' && ['plan','tasks','week','subjects','subject','klausuren','absences'].includes(route.name)) ? 'page' : undefined}
+          class:active={activeTab === item.name}
+          aria-current={activeTab === item.name ? 'page' : undefined}
           onclick={() => navigate(item.name)}
         >
           <span class="icon" aria-hidden="true">{item.icon}</span><span>{item.label}</span>

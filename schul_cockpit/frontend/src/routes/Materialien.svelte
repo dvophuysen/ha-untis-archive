@@ -908,7 +908,7 @@
 {/if}
 
 <style>
-  .doubts { margin: 4px 0 6px; padding-left: 18px; color: var(--rating-1); font-weight: 600; line-height: 1.4; }
+  .doubts { margin: 4px 0 6px; padding-left: 18px; color: var(--bad-fg); font-weight: 600; line-height: 1.4; }
   .candidates { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 8px 8px; font-size: 0.85rem; }
   .candidates button { min-height: 36px; padding: 4px 10px; text-align: left; }
   .assign { display: block; margin-top: 4px; max-width: 100%; font-size: 0.85rem; }
@@ -940,8 +940,7 @@
   .reading mark.flagged{background:var(--rating-1-soft,#ffd4d4);box-shadow:inset 0 -2px 0 var(--rating-1)}
   .reading .gap{display:inline;padding:0 6px;min-height:0;border:1px dashed var(--border);border-radius:6px;background:none;color:var(--fg-muted);font-size:0.85rem}
   .doubt-row{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:2px 0 6px;font-size:0.9rem}
-  .doubt-row>span{color:var(--rating-1);font-weight:600}
-  .doubt-row button{min-height:36px;padding:4px 10px}
+  .doubt-row>span{color:var(--bad-fg);font-weight:600}
   .doubt-fix{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px}
   .doubt-fix input{flex:1 1 14rem;min-width:0;min-height:40px;margin:0}
   .doubt-fix button{min-height:40px;padding:4px 12px}
@@ -955,7 +954,6 @@
   .wanted .count{color:var(--fg-muted);font-size:.9rem;white-space:nowrap}
   .need{padding:8px 0;border-top:1px solid var(--border)}
   .need .what{margin:0 0 4px}
-  .need .quote{margin:0 0 4px;font-style:italic;overflow-wrap:anywhere}
   .checklist{list-style:none;margin:4px 0 0;padding:0;display:grid;gap:2px}
   .checklist li{display:grid;grid-template-columns:1.4rem minmax(0,1fr) auto;align-items:center;gap:6px;min-height:44px}
   .checklist .box{width:18px;height:18px;border:2px solid var(--fg-muted);border-radius:5px}

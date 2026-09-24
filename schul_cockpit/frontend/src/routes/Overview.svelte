@@ -76,7 +76,7 @@
         <!-- Plan-Grid: fixe Periodenzeilen, damit gleiche Stunden über die
              Tage hinweg untereinander stehen (wie das Woche-Layout). -->
         <div class="block">
-          <h3><button class="schedule-link" onclick={() => open(kid, 'week')}>Stundenplan {kid.plan.is_weekend ? '· nächste Woche' : '· diese Woche'} <ActionLabel /></button></h3>
+          <h3><button class="schedule-link" onclick={() => open(kid, 'week')}>Stundenplan {kid.plan.is_weekend ? '· nächste Woche' : kid.plan.columns.some((c) => c.is_filler) ? '· die nächsten fünf Schultage' : '· diese Woche'} <ActionLabel /></button></h3>
           <div
             class="plan-grid"
             style="grid-template-rows: auto repeat({kid.plan.period_times.length || 1}, minmax(26px, auto));"
@@ -174,19 +174,6 @@
     display: flex; align-items: center; gap: 0.4rem;
     font-weight: 700;
   }
-  .emoji-h { font-size: 0.85rem; }
-  .count {
-    background: var(--bg-elevated);
-    color: var(--fg);
-    padding: 0 0.4rem;
-    border-radius: 8px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: none;
-    letter-spacing: 0;
-    border: 1px solid var(--border);
-  }
-  .small { font-size: 0.8rem; }
 
   /* Plan-Grid — fünf feste Mo–Fr-Spalten, eine Zeile pro Periode (über
      alle Tage hinweg gemeinsame Startzeit). Vergangene Wochentage rollen
@@ -246,8 +233,8 @@
     color: var(--fg-dim);
     font-weight: 400;
   }
-  .cell-new { font-weight: 600; color: var(--substitution); }
-  .cell-swap { font-size: 0.65rem; color: var(--substitution); }
+  .cell-new { font-weight: 600; color: var(--substitution-fg); }
+  .cell-swap { font-size: 0.65rem; color: var(--substitution-fg); }
   .cell-exam {
     position: absolute;
     top: -5px; right: -4px;

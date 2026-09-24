@@ -11,6 +11,7 @@
   --school-soft: #eaf1fc;
   --learn-soft: #f0ebfa;
   --warm-soft: #fff3dd;
+  --bad-soft: #fde7e5;
   --accent-fg: #ffffff;
   --rating-1: #ef4444;
   --rating-2: #f59e0b;
@@ -19,6 +20,13 @@
   --substitution: #8b5cf6;
   --exam: #db2777;
   --absent: #fb7185;
+  /* Dieselben Bedeutungen als Schriftfarbe: Die Signalfarben oben sind für
+     Punkte und Ränder gedacht und erreichen als Text auf Weiß nur 2:1 bis 4:1. */
+  --bad-fg: #b91c1c;
+  --good-fg: #047857;
+  --warn-fg: #b45309;
+  --absent-fg: #be123c;
+  --substitution-fg: #6d28d9;
   --radius: 18px;
   --radius-sm: 8px;
   --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.04);
@@ -37,8 +45,14 @@
     --school-soft: #233448;
     --learn-soft: #322e47;
     --warm-soft: #3c3426;
+    --bad-soft: #45262a;
     --accent-fg: #112d2b;
     --border: #354650;
+    --bad-fg: #fca5a5;
+    --good-fg: #6ee7b7;
+    --warn-fg: #fcd34d;
+    --absent-fg: #fda4af;
+    --substitution-fg: #c4b5fd;
   }
 }
 
@@ -385,7 +399,7 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
 
 .error-box {
   background: rgba(239,68,68,0.1);
-  color: var(--rating-1);
+  color: var(--bad-fg);
   border: 1px solid rgba(239,68,68,0.3);
   border-radius: var(--radius-sm);
   padding: 0.6rem 0.8rem;
@@ -406,3 +420,19 @@ label { display: block; font-size: 0.85rem; color: var(--fg-muted); margin-botto
 /* Keyboard access and comfortable movement across the shared interface. */
 a:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+
+/* Aufklappbereiche: Ohne Pfeil sahen zugeklappte Bereiche wie leere Karten
+   aus. Der Browserpfeil ist überall ausgeblendet, deshalb ein eigener. */
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::after {
+  content: '›';
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--accent);
+  font-size: 1.3rem;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: transform .15s;
+}
+details[open] > summary::after { transform: rotate(90deg); }

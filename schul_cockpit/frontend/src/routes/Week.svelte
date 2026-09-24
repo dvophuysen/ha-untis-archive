@@ -173,7 +173,7 @@
   /* Day header gets the medic emoji when every real lesson of that day
      was missed — a 'whole day off sick' at-a-glance signal. */
   .week-grid .cell.header.absent-day {
-    color: var(--absent);
+    color: var(--absent-fg);
     font-weight: 700;
   }
   .day-absent { margin-left: 2px; font-size: 0.75rem; }

@@ -198,7 +198,7 @@
   .due.overdue { background: var(--rating-1); color: #fff; padding:2px 5px; }
   .due.soon { background: var(--warm-soft); color:var(--fg); padding:2px 5px; }
   .row-error {
-    color: var(--rating-1);
+    color: var(--bad-fg);
     font-size: 0.75rem;
     margin-top: 4px;
   }

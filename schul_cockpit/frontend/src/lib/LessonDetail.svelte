@@ -122,7 +122,7 @@
 </script>
 
 <div class="modal-backdrop" onclick={onclose} role="presentation">
-  <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog">
+  <div class="modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape') onclose(); }} role="dialog" aria-modal="true" aria-label="Stunde" tabindex="-1">
     <div class="row between" style="margin-bottom:0.4rem;">
       <h2 style="margin:0; font-size:1.1rem;">{lesson.subject_name ?? lesson.subject_short ?? 'Stunde'}</h2>
       <button class="ghost" onclick={onclose}>✕</button>

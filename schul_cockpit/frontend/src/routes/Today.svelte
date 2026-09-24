@@ -150,18 +150,17 @@
   .evening h3{margin-top:0}
   .evening h4{margin:12px 0 4px}
   .photo-request{margin:4px 0;overflow-wrap:anywhere}
-  .photo-request a{margin-left:6px}
+  .photo-request a{display:inline-block;margin:-12px 0 -12px 6px;padding:12px 4px}
   .fold>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;list-style:none}
   .fold>summary::-webkit-details-marker{display:none}
   .fold>summary h3{margin:0}
   .fold:not([open])>summary h3{opacity:.75;font-weight:600}
   h3{font-size:1.1rem;margin:0 0 8px}h4{margin:16px 0 8px}.section-head h3{margin:0}.section-head{margin-bottom:8px}
-  .section-head>a,.text-action{font-size:.9rem}.section-head h3 a{font:inherit;color:var(--fg)}.text-action{padding:8px 0;background:transparent;border:0;color:var(--accent);text-align:left}
+  .section-head>a,.text-action{font-size:.9rem}.text-action{padding:8px 0;background:transparent;border:0;color:var(--accent);text-align:left}
   .next-lesson{padding:10px 0;border-bottom:1px solid var(--border)}.save-message{min-height:1.3em;color:var(--accent);font-size:.9rem;margin:6px 0}
-  .learning-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border)}.learning-row:last-child{border:0}.learning-row p{margin:4px 0;overflow-wrap:anywhere}
-  .open-action{padding:10px;border:1px solid var(--border);border-radius:10px;min-height:44px;flex-shrink:0}.exam-link{display:block;padding:12px 0;border-bottom:1px solid var(--border)}
+  .exam-link{display:block;padding:12px 0;border-bottom:1px solid var(--border)}
   .school-done{padding:8px 0;background:transparent;border:0;margin-bottom:8px}.school-done .section-head{margin-bottom:4px}.school-done p{margin:4px 0}.school-done h3{font-size:1rem}
   .school:not(.school-done){background:var(--school-soft)}.obligations{border-top:4px solid var(--accent)}.practice{background:var(--learn-soft)}
   .tomorrow{background:var(--accent-soft);border-left:4px solid var(--accent)}
-  @media(max-width:380px){.day-section{padding:10px}.learning-row{flex-wrap:wrap}}
+  @media(max-width:380px){.day-section{padding:10px}}
 </style>

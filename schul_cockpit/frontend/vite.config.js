@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
@@ -15,10 +15,26 @@ function readVersion() {
   }
 }
 
+// Der Service Worker liegt unverarbeitet in public/. Seine Cache-Kennung
+// bekommt hier die Add-on-Version, damit jede neue Version den alten Cache
+// verwirft; bis 1.13.23 stand dort fest „0.34.0“.
+function stampServiceWorker(version) {
+  return {
+    name: 'stamp-service-worker',
+    apply: 'build',
+    writeBundle(options) {
+      const file = new URL(`${options.dir ?? 'dist'}/sw.js`, `file://${process.cwd()}/`);
+      const text = readFileSync(file, 'utf8');
+      if (!text.includes('__APP_VERSION__')) throw new Error('sw.js ohne __APP_VERSION__');
+      writeFileSync(file, text.replaceAll('__APP_VERSION__', version));
+    },
+  };
+}
+
 // Ingress prepends an absolute path like /api/hassio_ingress/<token>/.
 // We use relative asset paths so the build is path-independent.
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [svelte(), stampServiceWorker(readVersion())],
   base: './',
   define: {
     __APP_VERSION__: JSON.stringify(readVersion()),

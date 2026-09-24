@@ -51,7 +51,7 @@
 </script>
 
 <div class="modal-backdrop" onclick={onclose} role="presentation">
-  <div class="modal task-detail" onclick={(e) => e.stopPropagation()} role="dialog" aria-label="Hausaufgabe">
+  <div class="modal task-detail" onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape') onclose(); }} role="dialog" aria-modal="true" aria-label="Hausaufgabe" tabindex="-1">
     <div class="row between head">
       <h2>{subjectStyle(task.subject_name || task.title).emoji} {task.subject_name || 'Aufgabe'}</h2>
       <button class="ghost" onclick={onclose} aria-label="Schließen">✕</button>
@@ -127,10 +127,10 @@
   .facts { display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.8rem; margin: 0.6rem 0; font-size: 0.9rem; }
   .facts dt { color: var(--fg-muted); }
   .facts dd { margin: 0; }
-  .facts .overdue { color: var(--rating-1); font-weight: 600; }
-  .state.ready { color: var(--rating-3); }
+  .facts .overdue { color: var(--bad-fg); font-weight: 600; }
+  .state.ready { color: var(--good-fg); }
   .state.pending { color: var(--warm, #b26a00); }
-  .state.missing { color: var(--rating-1); }
+  .state.missing { color: var(--bad-fg); }
   .assignment { font-size: 1.05rem; font-weight: 600; margin: 0.4rem 0; }
   .notes { color: var(--fg-muted); white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 0.4rem; }
   .intro { border-left: 4px solid var(--accent); padding: 0.4rem 0.7rem; margin: 0.6rem 0; background: var(--accent-soft); border-radius: 0 8px 8px 0; }

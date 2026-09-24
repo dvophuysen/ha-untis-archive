@@ -52,7 +52,7 @@
 </script>
 
 <div class="modal-backdrop" onclick={onclose} role="presentation">
-  <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog">
+  <div class="modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === 'Escape') onclose(); }} role="dialog" aria-modal="true" aria-label="Aufgabe bearbeiten" tabindex="-1">
     <div class="row between" style="margin-bottom:0.6rem;">
       <h2 style="margin:0; font-size:1.1rem;">{isExisting ? 'Aufgabe bearbeiten' : 'Neue Aufgabe'}</h2>
       <button class="ghost" onclick={onclose} aria-label="Schließen">✕</button>

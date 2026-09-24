@@ -374,7 +374,7 @@
   .muted { font-size: 0.85rem; opacity: 0.8; }
   .small { margin-top: 0.8rem; }
   .reading { margin: 0.2rem 0.4rem 0.6rem; }
-  .notice { padding: 0.8rem; background: #fff0cf; color: #493a12; border-radius: 12px; }
+  .notice { padding: 0.8rem; background: var(--warm-soft); color: var(--fg); border-radius: 12px; }
   .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.6rem 0 0; }
   button { min-height: 44px; padding: 0.6rem 0.9rem; border: 1px solid var(--border, #d4e0da); border-radius: 12px; background: var(--bg-card, #fff); color: inherit; font: inherit; cursor: pointer; }
   button.primary, .unit.chosen { background: var(--accent, #247552); color: var(--accent-fg, #fff); border-color: transparent; }
@@ -393,8 +393,8 @@
   input { font: inherit; font-size: 1.15rem; box-sizing: border-box; width: 100%; padding: 0.8rem; margin: 0.4rem 0; border: 1px solid var(--border, #ccc); border-radius: 10px; background: var(--bg-card, #fff); color: inherit; }
   .verdict { padding: 0.8rem; border-radius: 12px; border: 1px solid var(--border, #d4e0da); }
   .verdict.correct { background: var(--accent-soft, #e6f2ec); }
-  .verdict.partial, .verdict.unclear { background: #fff0cf; }
-  .verdict.incorrect { background: #fde7e5; }
+  .verdict.partial, .verdict.unclear { background: var(--warm-soft); }
+  .verdict.incorrect { background: var(--bad-soft); }
   .verdict p { margin: 0.2rem 0; }
   .result p { margin: 0.3rem 0; }
 </style>

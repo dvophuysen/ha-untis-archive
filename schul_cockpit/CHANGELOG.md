@@ -1,3 +1,13 @@
+## 1.13.24
+
+- Aufklappbereiche (etwa „Schon vorziehen“, „Üben & vorbereiten“, Materialien) zeigen wieder einen Pfeil; zugeklappt sahen sie wie leere Karten aus.
+- Unten ist der passende Reiter auch auf Unterseiten markiert: Vokabeln unter Lernen, Materialien und Verwaltungsseiten unter Übersichten.
+- Bessere Lesbarkeit: Rote, grüne, gelbe und violette Schrift hat eigene, kräftigere Töne (vorher teils nur 2:1 Kontrast), im Dunkelmodus hellere. Die gelben Hinweiskästen leuchten im Dunkelmodus nicht mehr.
+- Größere Tippflächen für die farbigen Seitenangaben in Aufgaben, „fotografieren“ und die Knöpfe an Arbeiten.
+- Familien-Stundenplan: Unter der Woche heißt er „die nächsten fünf Schultage“, weil vergangene Tage schon die nächste Woche zeigen.
+- Dialoge schließen mit Escape. Ein neuer Stand der App leert den Offline-Speicher zuverlässig (die Kennung stand seit Version 0.34 fest).
+- Aufgeräumt: zwei ungenutzte Komponenten und ungenutzte Stilregeln entfernt, Build-Warnungen von 43 auf 24.
+
 ## 1.13.23
 
 - Ordnerfreigabe in der neuen Schreibweise (`homeassistant_config`, nur lesend, weiter unter `/config`); die alte Form `config:ro` kündigt der Supervisor ab. Keine sichtbare Änderung.

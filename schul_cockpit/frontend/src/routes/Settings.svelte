@@ -680,7 +680,7 @@
             </div>
           {/if}
         {:else}
-          <div style="color: var(--rating-1);">
+          <div style="color: var(--bad-fg);">
             Klasse konnte nicht automatisch erkannt werden{#if erl.klasse_name} (gefundener Name: {erl.klasse_name}){/if}.
             Bitte unten manuell festlegen.
           </div>
