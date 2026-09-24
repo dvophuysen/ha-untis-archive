@@ -38,3 +38,6 @@ DB_FILENAME = "history.db"
 DOCS_SUBDIR = "docs"
 
 DEFAULT_CLIENT_NAME = "ha-untis-archive"
+
+# WebUntis-Fehlercode für falschen Benutzernamen oder falsches Passwort.
+INVALID_CREDENTIALS = -8504

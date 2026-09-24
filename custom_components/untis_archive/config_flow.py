@@ -13,6 +13,7 @@ UX choices:
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -28,6 +29,7 @@ from .const import (
     CONF_STUDENT_ID,
     CONF_USERNAME,
     DOMAIN,
+    INVALID_CREDENTIALS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,7 +39,7 @@ _LOGGER = logging.getLogger(__name__)
 # user-facing messages. Anything not in this map falls back to the generic
 # ``invalid_auth`` plus the raw server message in the description.
 _ERR_CODES = {
-    -8504: "invalid_credentials",  # bad credentials
+    INVALID_CREDENTIALS: "invalid_credentials",
     -8500: "invalid_school",       # no such school
     -8502: "invalid_school",       # ambiguous / not found
     -8998: "too_many_requests",
@@ -119,6 +121,48 @@ class UntisArchiveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=_build_schema(defaults),
+            errors=errors,
+            description_placeholders=placeholders,
+        )
+
+    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> FlowResult:
+        """WebUntis lehnt das gespeicherte Passwort ab: nur das neue abfragen."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        entry = self._get_reauth_entry()
+        errors: dict[str, str] = {}
+        placeholders: dict[str, str] = {"error_detail": "", "account": entry.title}
+        if user_input is not None:
+            client = UntisClient(
+                entry.data[CONF_SERVER],
+                entry.data[CONF_SCHOOL],
+                entry.data[CONF_USERNAME],
+                user_input[CONF_PASSWORD],
+            )
+            try:
+                await client.login()
+            except UntisAuthError as err:
+                placeholders["error_detail"] = str(err)
+                errors["base"] = _ERR_CODES.get(err.code or 0, "invalid_auth")
+            except UntisApiError as err:
+                placeholders["error_detail"] = str(err)
+                errors["base"] = "cannot_connect"
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.exception("Unexpected error during reauth")
+                placeholders["error_detail"] = repr(err)
+                errors["base"] = "unknown"
+            finally:
+                await client.close()
+            if not errors:
+                return self.async_update_reload_and_abort(
+                    entry, data_updates={CONF_PASSWORD: user_input[CONF_PASSWORD]}
+                )
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
             errors=errors,
             description_placeholders=placeholders,
         )

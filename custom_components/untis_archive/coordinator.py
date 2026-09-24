@@ -10,6 +10,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import UntisApiError, UntisAuthError, UntisClient
@@ -26,6 +27,7 @@ from .const import (
     DOMAIN,
     HOMEWORK_WINDOW_DAYS_BACK,
     HOMEWORK_WINDOW_DAYS_FORWARD,
+    INVALID_CREDENTIALS,
     UPDATE_INTERVAL_HOURS,
     WINDOW_DAYS_BACK,
     WINDOW_DAYS_FORWARD,
@@ -111,6 +113,13 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 session = await client.login()
             except UntisAuthError as err:
+                # Nur ein abgelehntes Passwort löst die Neuanmeldung in HA aus;
+                # eine vorübergehende Sperre (zu viele Versuche) oder ein
+                # Netzfehler nicht.
+                if err.code == INVALID_CREDENTIALS:
+                    raise ConfigEntryAuthFailed(
+                        f"WebUntis lehnt die Zugangsdaten ab: {err}"
+                    ) from err
                 raise UpdateFailed(f"WebUntis-Login fehlgeschlagen: {err}") from err
 
             elem_id = data.get(CONF_STUDENT_ID) or session.person_id

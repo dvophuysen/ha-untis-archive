@@ -30,7 +30,7 @@ stehen im [CHANGELOG](../CHANGELOG.md), die Begründungen in
 
 ## Repository seit 24.09.2026
 
-Das öffentliche Repository wurde mit bereinigter Historie neu angelegt (keine Kindernamen, keine Schule, keine Adressen, keine Arbeits-E-Mail; D148, Thema 10 der Prüfung). Das alte liegt privat als `dvophuysen/ha-untis-archive-alt` und ist für diese Sessions nicht freigegeben. Add-on-Store und HACS laufen unter derselben Adresse weiter; HACS kennt das neue Repository, installiert ist dort noch v0.5.1, verfügbar v0.5.3 (Update und HA-Neustart macht der Nutzer). Nie wieder echte Namen, Adressen, Hostnamen oder Schulkennungen in Code, Tests, Kommentare oder Commit-Texte schreiben.
+Das öffentliche Repository wurde mit bereinigter Historie neu angelegt (keine Kindernamen, keine Schule, keine Adressen, keine Arbeits-E-Mail; D148, Thema 10 der Prüfung). Das alte liegt privat als `dvophuysen/ha-untis-archive-alt` und ist für diese Sessions nicht freigegeben. Add-on-Store und HACS laufen unter derselben Adresse weiter; HACS kennt das neue Repository, installiert ist v0.5.3; v0.5.4 (Datenbank im Executor, Recorder ohne große Listen, Neuanmeldung bei abgelehntem Passwort) braucht nach dem HACS-Update einen HA-Neustart, den der Nutzer macht. Tests der Komponente: `tests_ha/` mit pytest-homeassistant-custom-component unter Python 3.13. Nie wieder echte Namen, Adressen, Hostnamen oder Schulkennungen in Code, Tests, Kommentare oder Commit-Texte schreiben.
 
 ## Offen
 
@@ -47,7 +47,11 @@ Das öffentliche Repository wurde mit bereinigter Historie neu angelegt (keine K
   auch die Bildlesung; die App bleibt bis zur Bewilligung auf gpt-5-mini
   (Nutzerentscheidung „nur testen“). Preise stehen seit 1.13.20 in `RATES`.
   Der Router in Norway East (10 Einheiten, fest auf gpt-5.6-terra) ist nur
-  Reserve. Der Nutzer arbeitet mit Azure Cloud Shell; Befehle als Bash-Block
+  Reserve. Plan B, falls der Antrag im Oktober wieder scheitert: die VMs
+  samt Netz und die Speech-Gruppe aus dem Abo von Foundry 1 in das von
+  Foundry 2 umziehen (n8n mit App Service und Zertifikat bleibt), dann
+  trägt Foundry 1 (Stufe 1, gpt-6 verfügbar) die App; vorher Probelauf mit
+  der Umzugsprüfung von Azure. Der Nutzer arbeitet mit Azure Cloud Shell; Befehle als Bash-Block
   geben, Schlüssel bleiben in Shell-Variablen.
 - Azure-Zugang für die nächste Session: Der Nutzer legt eine App-Registrierung mit „Cognitive Services Contributor“ auf der Foundry-2-Ressource und „Cognitive Services Usages Reader“ auf dem Abonnement an und trägt `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SUBSCRIPTION_ID` in die Claude-Umgebung ein. Dann: Token per Client-Credentials von login.microsoftonline.com holen (beide Hosts sind erreichbar, `az` ist nicht installiert), in management.azure.com Modelle und Kontingent der Ressource prüfen, Luna und Terra bereitstellen, mit `vocab/{fach}/compare` und `materials/{id}/analysis/compare` gegen gpt-5-mini eichen (D129: nie durch Umstellen und Neulesen), Kontingentantrag formulieren, Stufen in den Add-on-Optionen umstellen und `RATES` in `ai_gateway.py` um die gpt-5.6-Sätze prüfen. Nie Schlüssel ausgeben.
 - Mentor: An den nächsten echten Gesprächen ansehen, ob die Hilfeleiter

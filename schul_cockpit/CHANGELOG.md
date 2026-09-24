@@ -1,3 +1,7 @@
+## 1.13.23
+
+- Ordnerfreigabe in der neuen Schreibweise (`homeassistant_config`, nur lesend, weiter unter `/config`); die alte Form `config:ro` kündigt der Supervisor ab. Keine sichtbare Änderung.
+
 ## 1.13.22
 
 - Sicherheit: Grundsystem von Alpine 3.20 (seit April 2026 ohne Sicherheitsupdates) auf Alpine 3.24, damit auch ein aktuelles Chromium für die Buchseiten (Version 152). FastAPI 0.141 mit Starlette 1.7, python-multipart 0.0.32, uvicorn 0.53, aktuelle Mindeststände für cryptography, Pillow und pypdf.

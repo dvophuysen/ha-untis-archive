@@ -10,6 +10,7 @@ All writes happen via the synchronous ``sqlite3`` module wrapped with
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import sqlite3
@@ -44,6 +45,19 @@ def _lock_for(db_path: Path) -> threading.RLock:
             _DB_LOCKS[key] = lock
         return lock
 
+
+
+def _locked(method):
+    """Lesen unter derselben Sperre wie das Schreiben. Sensoren und Kalender
+    lesen seit 0.5.4 im Executor, also in mehreren Threads gleichzeitig auf
+    derselben Verbindung; ohne Sperre vermischten sich die Ergebnisse."""
+
+    @functools.wraps(method)
+    def inner(self, *args, **kwargs):
+        with self._write_lock:
+            return method(self, *args, **kwargs)
+
+    return inner
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS accounts (
@@ -764,6 +778,7 @@ class UntisStorage:
             )
             return "inserted"
 
+    @_locked
     def get_latest_import_time(self, account_id: int) -> int | None:
         row = self._conn.execute(
             "SELECT latest_import_time FROM accounts WHERE id=?",
@@ -1136,6 +1151,7 @@ class UntisStorage:
 
     # ---- read helpers ---------------------------------------------------
 
+    @_locked
     def lessons_for_day(self, account_id: int, day: str) -> list[dict[str, Any]]:
         cur = self._conn.execute(
             """SELECT * FROM lessons
@@ -1145,6 +1161,7 @@ class UntisStorage:
         )
         return [dict(row) for row in cur.fetchall()]
 
+    @_locked
     def lessons_between(
         self, account_id: int, start_day: str, end_day: str
     ) -> list[dict[str, Any]]:
@@ -1156,6 +1173,7 @@ class UntisStorage:
         )
         return [dict(row) for row in cur.fetchall()]
 
+    @_locked
     def open_homework(self, account_id: int) -> list[dict[str, Any]]:
         cur = self._conn.execute(
             """SELECT * FROM homework
@@ -1208,6 +1226,7 @@ class UntisStorage:
                 r["subject_name"] = name
             r["subject_code"] = code
 
+    @_locked
     def missed_lessons(
         self, account_id: int, start_day: str, end_day: str
     ) -> list[dict[str, Any]]:
@@ -1222,6 +1241,7 @@ class UntisStorage:
         )
         return [dict(row) for row in cur.fetchall()]
 
+    @_locked
     def absences_between(
         self, account_id: int, start_day: str, end_day: str
     ) -> list[dict[str, Any]]:
@@ -1234,6 +1254,7 @@ class UntisStorage:
         )
         return [dict(row) for row in cur.fetchall()]
 
+    @_locked
     def recent_lesson_changes(
         self, account_id: int, since_iso: str
     ) -> list[dict[str, Any]]:
@@ -1252,6 +1273,7 @@ class UntisStorage:
         )
         return [dict(row) for row in cur.fetchall()]
 
+    @_locked
     def lessons_missing_lstext(
         self, account_id: int, start_day: str, end_day: str
     ) -> list[dict[str, Any]]:

@@ -18,7 +18,7 @@ from typing import Any
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -205,17 +205,44 @@ def _absence_event(row: dict[str, Any]) -> CalendarEvent | None:
 
 
 class _BaseCalendar(CoordinatorEntity[UntisCoordinator], CalendarEntity):
+    """``event`` wird bei jedem Schreiben des Zustands gefragt, in der
+    Ereignisschleife. Die Termine dafür liest ``_load`` deshalb je
+    Aktualisierung einmal im Executor; ``event`` wählt nur noch aus.
+    """
+
     _attr_has_entity_name = True
 
     def __init__(self, coordinator: UntisCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
         self._entry = entry
+        self._candidates: list[CalendarEvent] = []
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": f"UNTIS Archive – {entry.title}",
             "manufacturer": "WebUntis",
             "model": "Untis Archive",
         }
+
+    def _load(self) -> list[CalendarEvent]:
+        """Die Termine, aus denen ``event`` wählt; läuft im Executor."""
+        raise NotImplementedError
+
+    async def _async_reload(self, write: bool = True) -> None:
+        try:
+            self._candidates = await self.hass.async_add_executor_job(self._load)
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Kalender %s: Termine nicht lesbar", self.entity_id)
+            self._candidates = []
+        if write:
+            self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        await self._async_reload(write=False)
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self.hass.async_create_task(self._async_reload())
 
 
 class UntisCalendar(_BaseCalendar):
@@ -226,15 +253,28 @@ class UntisCalendar(_BaseCalendar):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_calendar"
 
+    def _load(self) -> list[CalendarEvent]:
+        # Heute und morgen: Nach Mitternacht gilt bis zur nächsten
+        # Aktualisierung schon der neue Tag.
+        today = dt_util.now().date()
+        events: list[CalendarEvent] = []
+        for day in (today, today + timedelta(days=1)):
+            for row in self.coordinator.storage.lessons_for_day(
+                self.coordinator.account_id, day.isoformat()
+            ):
+                try:
+                    events.append(_event_from_row(row))
+                except (KeyError, ValueError, TypeError):
+                    continue
+        return events
+
     @property
     def event(self) -> CalendarEvent | None:
         now = dt_util.now()
-        today_rows = self.coordinator.storage.lessons_for_day(
-            self.coordinator.account_id, now.date().isoformat()
-        )
         upcoming: CalendarEvent | None = None
-        for row in today_rows:
-            ev = _event_from_row(row)
+        for ev in self._candidates:
+            if ev.start.date() != now.date():
+                continue
             if ev.end >= now and (upcoming is None or ev.start < upcoming.start):
                 upcoming = ev
         return upcoming
@@ -274,18 +314,16 @@ class UntisEreignisseCalendar(_BaseCalendar):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_calendar_ereignisse"
 
+    def _load(self) -> list[CalendarEvent]:
+        today = dt_util.now().date()
+        return self._build_events(today, today + timedelta(days=31))
+
     @property
     def event(self) -> CalendarEvent | None:
         # Nächstes anstehendes Ereignis (Klassenarbeit oder Fehlzeit-Beginn).
         now = dt_util.now()
-        window_end = now + timedelta(days=30)
-        try:
-            events = self._build_events(now.date(), window_end.date())
-        except Exception:  # noqa: BLE001
-            _LOGGER.exception("Ereignis-Kalender (event) fehlgeschlagen")
-            return None
         upcoming: CalendarEvent | None = None
-        for ev in events:
+        for ev in self._candidates:
             ev_start = (
                 ev.start
                 if isinstance(ev.start, datetime)

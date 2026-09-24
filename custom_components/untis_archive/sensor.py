@@ -29,7 +29,7 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -71,18 +71,58 @@ async def async_setup_entry(
 
 
 class _Base(CoordinatorEntity[UntisCoordinator], SensorEntity):
+    """Gemeinsamer Unterbau: Wert und Attribute werden einmal je Aktualisierung
+    im Executor aus der Datenbank gelesen und zwischengespeichert.
+
+    Bis 0.5.3 lasen ``native_value`` und ``extra_state_attributes`` die
+    SQLite-Datenbank direkt, in der Ereignisschleife von Home Assistant und
+    bei jedem Schreiben des Zustands zweimal.
+    """
+
     _attr_has_entity_name = True
+    # Die Listen stehen für Dashboards im Zustand, gehören aber nicht in die
+    # Verlaufsdatenbank: Der Fach-Verlauf ist größer als 16 KB, der Recorder
+    # warnte bei jeder Aktualisierung und speicherte ihn trotzdem nicht.
+    _unrecorded_attributes = frozenset({"items", "subjects", "subject_list", "periods"})
 
     def __init__(self, coordinator: UntisCoordinator, entry: ConfigEntry, slug: str) -> None:
         super().__init__(coordinator)
         self._entry = entry
         self._slug = slug
+        self._value: int | None = None
+        self._attrs: dict[str, Any] = {}
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": f"UNTIS Archive – {entry.title}",
             "manufacturer": "WebUntis",
             "model": "Untis Archive",
         }
+
+    def _compute(self) -> tuple[int, dict[str, Any]]:
+        """Wert und Attribute aus der Datenbank; läuft im Executor."""
+        raise NotImplementedError
+
+    async def _async_recompute(self, write: bool = True) -> None:
+        self._value, self._attrs = await self.hass.async_add_executor_job(self._compute)
+        if write:
+            self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # Den ersten Zustand schreibt die Plattform selbst nach dieser Methode.
+        await self._async_recompute(write=False)
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self.hass.async_create_task(self._async_recompute())
+
+    @property
+    def native_value(self) -> int | None:
+        return self._value
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return self._attrs
 
 
 class LehrstoffHeuteSensor(_Base):
@@ -98,14 +138,9 @@ class LehrstoffHeuteSensor(_Base):
         today = date.today().isoformat()
         return self.coordinator.storage.lessons_for_day(self.coordinator.account_id, today)
 
-    @property
-    def native_value(self) -> int:
+    def _compute(self) -> tuple[int, dict[str, Any]]:
         rows = self._read()
-        return sum(1 for r in rows if (r.get("lstext") or r.get("lstext_manual_override")))
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        rows = self._read()
+        value = sum(1 for r in rows if (r.get("lstext") or r.get("lstext_manual_override")))
         items = []
         for r in rows:
             text = r.get("lstext_manual_override") or r.get("lstext") or ""
@@ -121,7 +156,7 @@ class LehrstoffHeuteSensor(_Base):
                     "lstext": text,
                 }
             )
-        return {"items": items}
+        return value, {"items": items}
 
 
 class HausaufgabenOffenSensor(_Base):
@@ -133,14 +168,9 @@ class HausaufgabenOffenSensor(_Base):
         self._attr_translation_key = "hausaufgaben_offen"
         self._attr_name = "Hausaufgaben offen"
 
-    @property
-    def native_value(self) -> int:
-        return len(self.coordinator.storage.open_homework(self.coordinator.account_id))
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def _compute(self) -> tuple[int, dict[str, Any]]:
         items = self.coordinator.storage.open_homework(self.coordinator.account_id)
-        return {
+        return len(items), {
             "items": [
                 {
                     # Echte WebUntis-Hausaufgaben-ID — der einzige wirklich
@@ -189,14 +219,9 @@ class VersaeumterStoffSensor(_Base):
             self.coordinator.account_id, start, end
         )
 
-    @property
-    def native_value(self) -> int:
-        return len(self._missed())
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def _compute(self) -> tuple[int, dict[str, Any]]:
         rows = self._missed()
-        return {
+        return len(rows), {
             "items": [
                 {
                     "date": r.get("date"),
@@ -228,15 +253,10 @@ class FehlzeitenSchuljahrSensor(_Base):
             self.coordinator.account_id, start, end
         )
 
-    @property
-    def native_value(self) -> int:
-        return len(self._absences())
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def _compute(self) -> tuple[int, dict[str, Any]]:
         rows = self._absences()
         unexcused = [r for r in rows if not r.get("is_excused")]
-        return {
+        return len(rows), {
             "unexcused_count": len(unexcused),
             "items": [
                 {
@@ -275,12 +295,7 @@ class StundenplanAenderungenSensor(_Base):
             self.coordinator.account_id, since
         )
 
-    @property
-    def native_value(self) -> int:
-        return len(self._changes())
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def _compute(self) -> tuple[int, dict[str, Any]]:
         rows = self._changes()
         items = []
         for r in rows[:50]:
@@ -302,7 +317,7 @@ class StundenplanAenderungenSensor(_Base):
                     "change_types": types,
                 }
             )
-        return {"items": items}
+        return len(rows), {"items": items}
 
 
 class FachVerlaufSensor(_Base):
@@ -330,20 +345,7 @@ class FachVerlaufSensor(_Base):
             self.coordinator.account_id, start, end
         )
 
-    @property
-    def native_value(self) -> int:
-        rows = self._rows()
-        subjects: set[str] = set()
-        for r in rows:
-            if (r.get("code") or "") == "cancelled":
-                continue
-            name = r.get("subject_name")
-            if name:
-                subjects.add(name)
-        return len(subjects)
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
+    def _compute(self) -> tuple[int, dict[str, Any]]:
         rows = self._rows()
         grouped: dict[str, list[dict[str, Any]]] = {}
         for r in rows:
@@ -371,7 +373,8 @@ class FachVerlaufSensor(_Base):
         for name, items in grouped.items():
             items.sort(key=lambda x: (x["date"] or "", x["start"] or 0), reverse=True)
             subjects_capped[name] = items[:80]
-        return {
+        # Zustand: Anzahl Fächer mit mindestens einer nicht ausgefallenen Stunde.
+        return len(subjects_capped), {
             "subject_list": sorted(subjects_capped.keys()),
             "subjects": subjects_capped,
         }
@@ -443,10 +446,6 @@ class KrankheitsperiodenSensor(_Base):
         periods.sort(key=lambda p: p["start_date"], reverse=True)
         return periods
 
-    @property
-    def native_value(self) -> int:
-        return len(self._build())
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        return {"periods": self._build()}
+    def _compute(self) -> tuple[int, dict[str, Any]]:
+        periods = self._build()
+        return len(periods), {"periods": periods}

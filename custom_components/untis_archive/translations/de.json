@@ -12,6 +12,13 @@
           "password": "Passwort",
           "student_id": "Schüler-ID (optional, sonst Auto-Discovery)"
         }
+      },
+      "reauth_confirm": {
+        "title": "WebUntis-Passwort erneuern",
+        "description": "WebUntis lehnt das gespeicherte Passwort für {account} ab. Bitte das aktuelle Passwort eingeben.\n\n{error_detail}",
+        "data": {
+          "password": "Passwort"
+        }
       }
     },
     "error": {
@@ -23,18 +30,33 @@
       "unknown": "Unerwarteter Fehler. Details siehe Home-Assistant-Log."
     },
     "abort": {
-      "already_configured": "Dieses Konto ist bereits eingerichtet."
+      "already_configured": "Dieses Konto ist bereits eingerichtet.",
+      "reauth_successful": "Das neue Passwort ist gespeichert."
     }
   },
   "entity": {
     "sensor": {
-      "lehrstoff_heute": { "name": "Lehrstoff heute" },
-      "hausaufgaben_offen": { "name": "Hausaufgaben offen" },
-      "versaeumter_stoff": { "name": "Versäumter Stoff" },
-      "fehlzeiten_schuljahr": { "name": "Fehlzeiten Schuljahr" },
-      "stundenplan_aenderungen": { "name": "Stundenplan-Änderungen (7 Tage)" },
-      "fach_verlauf": { "name": "Fach-Verlauf" },
-      "krankheitsperioden": { "name": "Krankheitsperioden" }
+      "lehrstoff_heute": {
+        "name": "Lehrstoff heute"
+      },
+      "hausaufgaben_offen": {
+        "name": "Hausaufgaben offen"
+      },
+      "versaeumter_stoff": {
+        "name": "Versäumter Stoff"
+      },
+      "fehlzeiten_schuljahr": {
+        "name": "Fehlzeiten Schuljahr"
+      },
+      "stundenplan_aenderungen": {
+        "name": "Stundenplan-Änderungen (7 Tage)"
+      },
+      "fach_verlauf": {
+        "name": "Fach-Verlauf"
+      },
+      "krankheitsperioden": {
+        "name": "Krankheitsperioden"
+      }
     }
   }
 }

@@ -1,5 +1,5 @@
 name: Schul-Cockpit
-version: "1.13.22"
+version: "1.13.23"
 slug: schul_cockpit
 description: Mobile Schul-App für Kinder und Eltern, basierend auf dem UNTIS-Archive-Datenbestand.
 url: https://github.com/dvophuysen/ha-untis-archive/tree/main/schul_cockpit
@@ -30,7 +30,10 @@ ports:
 ports_description:
   8099/tcp: Direkter App-Zugriff (PIN-Login) für die Installation auf dem Home-Bildschirm
 map:
-  - config:ro
+  # history.db der Komponente, nur lesend, am alten Pfad /config.
+  - type: homeassistant_config
+    read_only: true
+    path: /config
 options:
   log_level: info
   external_url: ""
