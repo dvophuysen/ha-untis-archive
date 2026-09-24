@@ -495,7 +495,7 @@
 <!-- Unscharf oder abgeschnitten: Das kann niemand besser lesen, es braucht ein
      neues Foto. Die Bitte geht an alle, die hier sind, auch an das Kind (D165). -->
 {#if (data?.materials ?? []).some((m) => m.retake)}
-  <div class="card retake">
+  <div class="card retake" data-section="fotos">
     <strong>Bitte noch einmal fotografieren</strong>
     {#each (data.materials ?? []).filter((m) => m.retake) as m (m.id)}
       <div class="retake-item">

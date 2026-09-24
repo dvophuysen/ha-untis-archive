@@ -79,17 +79,17 @@
 <p class="save-message" role="status">{message}</p>
 {#if loading}<p>Lade deinen Tag …</p>{:else}
   {#if evening}
-    <section class="day-section evening">
+    <section class="day-section evening" data-section="aufgaben">
       <h3>{nextIsTomorrow ? 'Für morgen' : 'Für den nächsten Schultag'}</h3>
       {#each work.due as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{:else}
         <p class="all-clear"><span aria-hidden="true">✓</span> Keine Aufgabe mehr offen.</p>
       {/each}
-      {#if nextSchoolDay}<PackingChecklist {accountId} schoolDay={nextSchoolDay} />{:else}
+      {#if nextSchoolDay}<div data-section="tasche"><PackingChecklist {accountId} schoolDay={nextSchoolDay} /></div>{:else}
         <p class="muted">In den nächsten Tagen steht keine Schule an.</p>
       {/if}
       {#if data?.retakes?.length}
         <!-- Unscharf oder abgeschnitten: ein neues Foto statt Gegenlesen durch die Eltern (D165). -->
-        <h4>Bitte noch einmal fotografieren</h4>
+        <h4 data-section="fotos">Bitte noch einmal fotografieren</h4>
         {#each data.retakes as r (r.id)}
           <p class="photo-request"><strong>{r.title}</strong> <span class="muted">· {r.reason}</span>
             <a href="#/materialien">neu fotografieren</a></p>
@@ -113,7 +113,7 @@
       {#if activeUpcoming.length}<p class="next-lesson"><strong>{activeUpcoming[0].subject_name || activeUpcoming[0].subject_short}</strong> · {activeUpcoming[0].start_hhmm}{#if activeUpcoming[0].room} · Raum {activeUpcoming[0].room}{/if}</p>{/if}
       {#if beforeSchool}<PackingChecklist {accountId} schoolDay={data.date} />{/if}
       {#if !beforeSchool}{#each lessons.upcoming as lesson (lesson.id)}<LessonCard {accountId} {lesson} preview />{/each}{/if}
-      {#if lessons.open.length}<h4>Noch kurz zurückmelden · {lessons.open.length}</h4><p class="eyebrow">Wie gut hast du den Stoff verstanden?</p>
+      {#if lessons.open.length}<h4 data-section="rueckmelden">Noch kurz zurückmelden · {lessons.open.length}</h4><p class="eyebrow">Wie gut hast du den Stoff verstanden?</p>
         {#each lessons.open as lesson (lesson.id)}<LessonCard {accountId} {lesson} onsaved={feedbackSaved} />{/each}
       {:else if data.lessons.length && !activeUpcoming.length}<p class="muted">Keine offenen Rückmeldungen zu beendeten Stunden.</p>
       {:else if !data.lessons.length}<p class="muted">Heute ist kein Unterricht eingetragen.</p>{/if}
@@ -122,13 +122,13 @@
       {/if}
     </section>
   {/if}
-  {#if !evening}<section class="day-section obligations">
+  {#if !evening}<section class="day-section obligations" data-section="aufgaben">
     <div class="section-head"><h3>Heute erledigen</h3><button class="text-action" onclick={() => creating = true}>Aufgabe ergänzen</button></div>
     {#each work.due as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{:else}{#if error}<p>Aufgabenstand bitte aktualisieren.</p>{:else}<p class="all-clear"><span aria-hidden="true">🎉</span><strong>Für morgen ist nichts mehr offen!</strong></p>{/if}{/each}
   </section>
   {/if}
   {#if work.ahead.length}<details class="day-section fold" open={!evening}><summary><h3>Schon vorziehen</h3></summary>{#each work.ahead as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</details>{/if}
-  {#if work.undated.length}<details class="day-section fold" open={!evening}><summary><h3>Noch ohne Termin</h3></summary>{#each work.undated as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</details>{/if}
+  {#if work.undated.length}<details class="day-section fold" open={!evening} data-section="ohne-termin"><summary><h3>Noch ohne Termin</h3></summary>{#each work.undated as task (task.id)}<TaskRow {accountId} {task} onchange={taskSaved} onopen={t => editing = t} />{/each}</details>{/if}
   <details class="day-section practice fold" open={!evening}>
     <summary><h3>Üben &amp; vorbereiten</h3></summary>
     <a class="exam-link" href="#/learning"><ActionLabel label="Zum Lernbereich" /></a>
@@ -140,7 +140,7 @@
     {:else}{#if !planError}<p class="muted">Heute ist keine zusätzliche Übung eingeplant.</p>{/if}{/each}
   </details>
   <!-- Abends steht dieselbe Liste bereits oben in der Karte für morgen. -->
-  {#if data?.next && !evening}<section class="day-section tomorrow">
+  {#if data?.next && !evening}<section class="day-section tomorrow" data-section="tasche">
     <h3>Nächster Schultag · {formatShortDate(data.next.date)}</h3>
     <PackingChecklist {accountId} schoolDay={data.next.date} />
   </section>{/if}

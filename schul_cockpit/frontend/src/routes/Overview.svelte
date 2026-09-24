@@ -1,15 +1,15 @@
 <script>
+  // Startseite der Eltern (D166): je Kind eine Karte. Oben der Status, dann was
+  // jetzt offen ist, die Arbeiten chronologisch mit dem Lernstand ihrer Themen,
+  // zuletzt was sich über Wochen abzeichnet. Jeder Baustein springt zum Kind in
+  // den passenden Abschnitt. Die Seite „Heute“ des Kindes wird nicht wiederholt.
   import ActionLabel from '../lib/ActionLabel.svelte';
-  import {subjectStyle} from '../lib/subjectStyle.js';
+  import { subjectStyle } from '../lib/subjectStyle.js';
   import { untrack } from 'svelte';
-  import FamilyDayCheck from '../lib/FamilyDayCheck.svelte';
-  import WeekReview from '../lib/WeekReview.svelte';
-  import UsageWeek from '../lib/UsageWeek.svelte';
   import ParentReportSettings from '../lib/ParentReportSettings.svelte';
   import { api } from '../lib/api.js';
   import { setActiveAccount } from '../lib/store.svelte.js';
-
-  let { navigate } = $props();
+  import { jumpHash } from '../lib/jump.js';
 
   let data = $state(null);
   let loading = $state(true);
@@ -38,14 +38,17 @@
     return () => { request++; clearInterval(timer); window.removeEventListener('focus', refresh); };
   });
 
-  function open(kid, page = 'today', ...args) {
+  function open(kid, target) {
+    if (!target) return;
     setActiveAccount(kid.account_id);
-    navigate(page, ...args);
+    window.location.hash = jumpHash(target);
   }
 
-  function planDate(iso) {
-    return iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.';
-  }
+  const STAGES = [['sitzt', 'sitzt'], ['wackelt', 'wackelt'], ['angefangen', 'angefangen'], ['neu', 'noch nicht geübt']];
+  const inDays = (n) => (n <= 0 ? 'heute' : n === 1 ? 'morgen' : `in ${n} Tagen`);
+  const examTitle = (x) => `${subjectStyle(x.subject_name).name}-${x.kind}`;
+  const pages = (n) => `${n} ${n === 1 ? 'Seite fehlt' : 'Seiten fehlen'}`;
+  const stageText = (x) => STAGES.filter(([k]) => x.stages[k]).map(([k, label]) => `${x.stages[k]} ${label}`).join(', ');
 </script>
 
 {#if loading}
@@ -57,192 +60,137 @@
 {:else if data}
   <div class="dash">
     {#each data.kids as kid (kid.account_id)}
-      <section class="kid card">
+      {@const b = kid.board}
+      <section class="kid card" aria-label={`Stand von ${kid.name}`} data-status={b.status.level}>
         <header class="kid-head">
           <h2>{kid.name}</h2>
-          <button class="ghost open-btn" onclick={() => open(kid, 'today')}>Kinderansicht <ActionLabel /></button>
+          <span class="pill {b.status.level}" title={b.status.reasons.join(' · ')}>{b.status.label}</span>
         </header>
 
-        <div class="now">{kid.now.icon} {kid.now.label}</div>
-        <FamilyDayCheck {kid} day={data.today} {open} />
-        <WeekReview accountId={kid.account_id} />
-        <UsageWeek accountId={kid.account_id} />
+        {#if b.ok.length}
+          <button class="okline" onclick={() => open(kid, { page: 'today' })}><span>✓ {b.ok.join(' · ')}</span></button>
+        {/if}
+        {#each b.acute as r (r.key)}
+          <button class="row {r.tone}" onclick={() => open(kid, r.go)}>
+            <span class="ic" aria-hidden="true">{r.icon}</span>
+            <span class="tx"><b>{r.title}</b><small>{r.detail}</small></span>
+            <span class="go"><ActionLabel /></span>
+          </button>
+        {/each}
 
-        <div class="summary-links">
-          <button class="summary-link" onclick={() => open(kid, 'klausuren')}><span>Arbeiten & Tests</span><strong>{kid.exams.length ? `${kid.exams.length} angekündigt` : 'Keine eingetragen'} <ActionLabel /></strong></button>
-          <button class="summary-link" class:needs-attention={kid.support.length > 0} onclick={() => open(kid, 'subjects')}><span>Fächer</span><strong>{kid.support.length ? `${kid.support.length} mit offenen Fragen` : 'Keine gehäuften Fragen'} <ActionLabel /></strong></button>
-          {#if kid.support.length}<div class="support-subjects">{#each kid.support as s}<button onclick={() => open(kid, 'subject', s.subject_id)}>{subjectStyle(s.subject_name || s.subject_short).emoji} {subjectStyle(s.subject_name || s.subject_short).name} <ActionLabel /></button>{/each}</div>{/if}
-        </div>
-        <!-- Plan-Grid: fixe Periodenzeilen, damit gleiche Stunden über die
-             Tage hinweg untereinander stehen (wie das Woche-Layout). -->
-        <div class="block">
-          <h3><button class="schedule-link" onclick={() => open(kid, 'week')}>Stundenplan {kid.plan.is_weekend ? '· nächste Woche' : kid.plan.columns.some((c) => c.is_filler) ? '· die nächsten fünf Schultage' : '· diese Woche'} <ActionLabel /></button></h3>
-          <div
-            class="plan-grid"
-            style="grid-template-rows: auto repeat({kid.plan.period_times.length || 1}, minmax(26px, auto));"
-          >
-            {#each kid.plan.columns as col, ci}
-              {#if col.is_today}
-                <div
-                  class="plan-today-frame"
-                  style="grid-column: {ci + 1}; grid-row: 1 / span {kid.plan.period_times.length + 1};"
-                ></div>
+        {#if b.exams.length || b.later.length}
+          <h3 class="sec">Arbeiten</h3>
+          {#each b.exams as x (x.exam_key)}
+            <button class="exam" onclick={() => open(kid, x.go)}>
+              <span class="l1"><b>{examTitle(x)} {x.day}</b><span class="when" class:hot={x.days_until <= 7}>{inDays(x.days_until)}</span></span>
+              {#if x.topics}
+                <span class="stack" role="img" aria-label={`Lernstand: ${stageText(x)}`}>
+                  {#each STAGES as [k] (k)}{#if x.stages[k]}<i class={k} style="flex:{x.stages[k]}"></i>{/if}{/each}
+                </span>
               {/if}
-              <div
-                class="plan-head"
-                class:is-today={col.is_today}
-                class:filler={col.is_filler}
-                style="grid-column: {ci + 1}; grid-row: 1;"
-              >
-                <strong>{col.weekday}</strong>
-                <span class="plan-date">{planDate(col.date)}</span>
+              <span class="l3">
+                <span>{x.topics ? `${x.practiced} von ${x.topics} ${x.topics === 1 ? 'Thema' : 'Themen'} geübt` : 'Themen noch unbekannt'}</span>
+                {#if x.missing}<span class="badge {x.days_until <= 7 ? 'bad' : 'warn'}">{pages(x.missing)}</span>
+                {:else if x.material_ok}<span>Material ✓</span>{/if}
+              </span>
+            </button>
+          {/each}
+          {#if b.later.length}
+            <p class="later">Später:
+              {#each b.later as x, i (x.exam_key)}{i ? ' · ' : ' '}<button class="link" onclick={() => open(kid, x.go)}>{subjectStyle(x.subject_name).name} {x.day.slice(3)}</button>{#if x.missing}<span class="badge warn">{x.missing} {x.missing === 1 ? 'fehlt' : 'fehlen'}</span>{:else if !x.topics}<span class="badge mute">Themen unbekannt</span>{/if}{/each}
+            </p>
+          {/if}
+        {/if}
+
+        {#if b.watch.length}
+          <h3 class="sec">Beobachten</h3>
+          {#each b.watch as r (r.key)}
+            {#if r.go}
+              <button class="row {r.tone}" onclick={() => open(kid, r.go)}>
+                <span class="ic" aria-hidden="true">{r.icon}</span>
+                <span class="tx"><b>{r.title}</b><small>{r.detail}</small></span>
+                <span class="go"><ActionLabel /></span>
+              </button>
+            {:else}
+              <div class="row {r.tone}">
+                <span class="ic" aria-hidden="true">{r.icon}</span>
+                <span class="tx"><b>{r.title}</b><small>{r.detail}</small></span>
               </div>
-            {/each}
+            {/if}
+          {/each}
+        {/if}
 
-            {#each kid.plan.period_times as t, pi}
-              {#each kid.plan.columns as col, ci}
-                {@const l = col.lessons.find((x) => x.start_hhmm === t)}
-                <div class="plan-slot" style="grid-column: {ci + 1}; grid-row: {pi + 2};">
-                  {#if l}
-                    <button
-                      class="plan-cell"
-                      class:cancelled={l.is_cancelled}
-                      class:substitution={!l.is_cancelled && (l.is_irregular || l.is_subject_substituted)}
-                      class:has-exam={l.has_exam}
-                      onclick={() => open(kid, 'week')}
-                      title={(l.start_hhmm ?? '') + ' ' + (l.subject_name ?? '')}
-                    >
-                      {#if l.is_cancelled}
-                        <span class="cell-old">{l.subject_orig_short || l.subject_short}</span>
-                      {:else if l.is_subject_substituted && l.subject_orig_short}
-                        <span class="cell-old">{l.subject_orig_short}</span>
-                        <span class="cell-new">{l.subject_short}</span>
-                      {:else}
-                        <span class="cell-label">{l.subject_short}</span>
-                        {#if l.is_irregular || l.is_teacher_substituted || l.is_room_substituted}
-                          <span class="cell-swap">⇄</span>
-                        {/if}
-                      {/if}
-                      {#if l.has_exam && !l.is_cancelled}
-                        <span class="cell-exam">📝</span>
-                      {/if}
-                    </button>
-                  {/if}
-                </div>
-              {/each}
-            {/each}
-          </div>
-        </div>
-
+        <button class="ghost child-view" onclick={() => open(kid, { page: 'today' })}><ActionLabel label={`Kinderansicht ${kid.name}`} /></button>
       </section>
     {/each}
   </div>
+  <p class="legend" aria-hidden="true">
+    {#each STAGES as [k, label] (k)}<span><i class={k}></i>{label}</span>{/each}
+  </p>
   <ParentReportSettings />
 {/if}
 
 <style>
-  .summary-links{display:grid;gap:8px}.summary-link{display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:left;border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg-elevated);font-size:.9rem}.summary-link strong{font-size:.85rem}.needs-attention{background:color-mix(in srgb,var(--rating-2) 15%,var(--bg-card))}.support-subjects{display:flex;flex-wrap:wrap;gap:6px}.support-subjects button{font-size:.85rem;min-height:44px}.schedule-link{background:transparent;border:0;padding:8px 0;text-align:left;color:var(--accent);min-height:44px}
-  .dash {
-    display: grid;
-    gap: 1rem;
-    grid-template-columns: 1fr;
+  .dash { display: grid; gap: 1rem; grid-template-columns: 1fr; align-items: start; }
+  @media (min-width: 720px) { .dash { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .kid, .legend { --s-sitzt: #059669; --s-wackelt: #d97706; --s-angefangen: #f59e0b; --s-neu: #cbd5e1; }
+  .kid {
+    --warn-bg: var(--warm-soft); --good-bg: color-mix(in srgb, var(--good-fg) 12%, var(--bg-card));
+    padding: 0.8rem; display: flex; flex-direction: column; gap: 0.1rem; min-width: 0;
   }
-  @media (min-width: 720px) {
-    .summary-links{display:grid;gap:8px}.summary-link{display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:left;border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg-elevated);font-size:.9rem}.summary-link strong{font-size:.85rem}.needs-attention{background:color-mix(in srgb,var(--rating-2) 15%,var(--bg-card))}.support-subjects{display:flex;flex-wrap:wrap;gap:6px}.support-subjects button{font-size:.85rem;min-height:44px}.schedule-link{background:transparent;border:0;padding:8px 0;text-align:left;color:var(--accent);min-height:44px}
-  .dash { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (prefers-color-scheme: dark) {
+    .kid, .legend { --s-sitzt: #34d399; --s-wackelt: #fbbf24; --s-angefangen: #fb923c; --s-neu: #475569; }
   }
+  .kid-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 0.4rem; }
+  .kid-head h2 { margin: 0; font-size: 1.1rem; }
+  .pill { font-size: 0.8rem; font-weight: 650; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+  .pill.good { background: var(--good-bg); color: var(--good-fg); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn-fg); }
+  .pill.bad { background: var(--bad-soft); color: var(--bad-fg); }
 
-  .kid { padding: 0.8rem; display: flex; flex-direction: column; gap: 0.5rem; }
-  .kid-head { display: flex; justify-content: space-between; align-items: center; }
-  .kid-head h2 { margin: 0; font-size: 1.05rem; }
-  .open-btn { font-size: 0.85rem; min-height: 32px; padding: 0.2rem 0.5rem; }
-
-  .now {
-    font-size: 0.85rem;
-    color: var(--fg-muted);
-    padding: 0.3rem 0.1rem;
-    border-bottom: 1px solid var(--border);
+  button.okline {
+    display: block; width: 100%; text-align: left; border: 0; border-radius: 10px; padding: 9px 10px;
+    background: var(--good-bg); color: var(--good-fg); font-size: 0.88rem; font-weight: 550; min-height: 44px;
+    margin-bottom: 0.2rem;
   }
-
-  .block { padding-top: 0.4rem; }
-  .block h3 {
-    margin: 0 0 0.35rem;
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--fg-muted);
-    display: flex; align-items: center; gap: 0.4rem;
-    font-weight: 700;
+  .row {
+    display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left; min-height: 48px;
+    padding: 9px 4px; background: transparent; color: var(--fg); border: 0; border-top: 1px solid var(--border);
+    border-radius: 0;
   }
-
-  /* Plan-Grid — fünf feste Mo–Fr-Spalten, eine Zeile pro Periode (über
-     alle Tage hinweg gemeinsame Startzeit). Vergangene Wochentage rollen
-     in die Folgewoche; „heute" bekommt einen Rahmen, der per Overlay
-     hinter den Zellen läuft, damit die Zellen sauber alignt bleiben. */
-  .plan-grid {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    column-gap: 3px;
-    row-gap: 2px;
-    position: relative;
+  .row .ic { width: 22px; flex: none; text-align: center; }
+  .row .tx { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .row .tx b { font-weight: 600; }
+  .row.bad .tx b { color: var(--bad-fg); }
+  .row.warn .tx b { color: var(--warn-fg); }
+  .row small, .l3, .when, .later { color: var(--fg-muted); }
+  .row small { display: block; font-size: 0.8rem; margin-top: 1px; }
+  .go { color: var(--accent); flex: none; align-self: center; }
+  .sec {
+    font-size: 0.74rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-muted);
+    margin: 0.9rem 2px 0.3rem; font-weight: 650;
   }
-  .plan-today-frame {
-    outline: 2px solid var(--accent);
-    background: color-mix(in oklab, var(--accent) 8%, transparent);
-    border-radius: 6px;
-    pointer-events: none;
-    z-index: 0;
+  .exam {
+    display: block; width: 100%; text-align: left; background: transparent; color: var(--fg);
+    border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 9px 4px;
   }
-  .plan-head, .plan-slot { position: relative; z-index: 1; }
-  .plan-head { text-align: center; padding: 0.15rem 0 0.25rem; line-height: 1.1; }
-  .plan-head strong { font-size: 0.75rem; }
-  .plan-head.is-today strong { color: var(--accent); }
-  .plan-head.filler .plan-date { color: var(--fg-dim); }
-  .plan-date { display: block; font-size: 0.65rem; color: var(--fg-muted); }
-
-  .plan-slot { display: flex; min-width: 0; }
-  .plan-cell {
-    position: relative;
-    flex: 1;
-    border: 1px solid var(--border);
-    background: var(--bg-elevated);
-    padding: 0.18rem 0.15rem;
-    font-size: 0.68rem;
-    line-height: 1.1;
-    border-radius: 4px;
-    cursor: pointer;
-    min-height: 24px;
-    color: var(--fg);
-    text-align: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.2rem;
-  }
-  .plan-cell.cancelled {
-    background: var(--bg-elevated);
-    border-style: dashed;
-    color: var(--fg-dim);
-  }
-  .plan-cell.substitution { outline: 1px solid var(--substitution); }
-  .plan-cell.has-exam { outline: 2px solid var(--exam); }
-
-  .cell-label { font-weight: 500; }
-  .cell-old {
-    text-decoration: line-through;
-    color: var(--fg-dim);
-    font-weight: 400;
-  }
-  .cell-new { font-weight: 600; color: var(--substitution-fg); }
-  .cell-swap { font-size: 0.65rem; color: var(--substitution-fg); }
-  .cell-exam {
-    position: absolute;
-    top: -5px; right: -4px;
-    font-size: 0.6rem;
-    background: var(--bg-card);
-    border-radius: 50%;
-    padding: 0 1px;
-    line-height: 1;
-  }
-
+  .sec + .exam { border-top: 0; }
+  .l1 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .l1 b { font-weight: 600; overflow-wrap: anywhere; }
+  .when { font-size: 0.8rem; white-space: nowrap; }
+  .when.hot { color: var(--bad-fg); font-weight: 650; }
+  .stack { display: flex; height: 8px; border-radius: 5px; overflow: hidden; background: var(--s-neu); gap: 2px; margin-top: 6px; }
+  .stack i, .legend i { display: block; height: 100%; }
+  .sitzt { background: var(--s-sitzt); } .wackelt { background: var(--s-wackelt); }
+  .angefangen { background: var(--s-angefangen); } .neu { background: var(--s-neu); }
+  .l3 { display: flex; justify-content: space-between; gap: 8px; font-size: 0.8rem; margin-top: 4px; }
+  .badge { display: inline-block; font-size: 0.74rem; font-weight: 650; padding: 1px 7px; border-radius: 999px; margin-left: 4px; white-space: nowrap; }
+  .badge.warn { background: var(--warn-bg); color: var(--warn-fg); }
+  .badge.bad { background: var(--bad-soft); color: var(--bad-fg); }
+  .badge.mute { background: var(--bg-elevated); color: var(--fg-muted); border: 1px solid var(--border); }
+  .later { font-size: 0.84rem; padding: 8px 4px 0; margin: 0; border-top: 1px solid var(--border); line-height: 2; }
+  .link { background: transparent; border: 0; padding: 0; min-height: 0; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; }
+  .child-view { align-self: flex-end; font-size: 0.85rem; color: var(--accent); min-height: 44px; margin-top: 0.4rem; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.8rem; color: var(--fg-muted); margin: 0.8rem 2px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
 </style>

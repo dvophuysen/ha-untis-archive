@@ -135,13 +135,13 @@ async def assess(account, word, body):
                 'feedback': 'Die Bedeutungsprüfung ist gerade nicht verfügbar. Dein Lernstand bleibt unverändert. Du kannst es erneut versuchen oder ohne Wertung weitergehen.'}
 
 
-async def submit(account, body):
+async def submit(account, body, user_id=None):
     word = vocab.prepare_attempt(account, body)  # ownership before any paid call
     if body.stage == 2 or body.gave_up:
-        return vocab.attempt(account, body)
+        return vocab.attempt(account, body, user_id=user_id)
     assessment = await assess(account, word, body)
     # Re-check ownership and active source after awaiting the remote decision.
     current = vocab.prepare_attempt(account, body)
     if context(current, body) != context(word, body):
         raise HTTPException(409, 'Die Buchquelle wurde geändert. Bitte die Karte neu öffnen; dein Stand bleibt unverändert.')
-    return vocab.attempt(account, body, assessment=assessment)
+    return vocab.attempt(account, body, assessment=assessment, user_id=user_id)

@@ -1,6 +1,6 @@
 """Explicit Untis lateness must never become absence or block feedback."""
 import sqlite3
-from datetime import date
+from datetime import date, datetime, time
 from threading import RLock
 from contextlib import closing
 
@@ -9,8 +9,13 @@ import pytest
 from test_learning import env
 from test_checkin_integrity import install, post
 from test_storage_concurrent import UntisStorage
-from backend import db
-from backend.routers import dashboard
+from backend import db, family_board
+
+
+def _gap(account_id, day):
+    """Rückmeldelücke der Startseite, abends: alle Stunden des Tages sind vorbei."""
+    got = family_board.feedback(account_id, day, datetime.combine(day, time(23, 59)))
+    return {'unrated_lessons': got['earlier'] + got['today'], 'total_lessons': got['total']}
 
 
 def seed(env):
@@ -38,9 +43,9 @@ def test_lateness_ignored_without_duration_threshold_and_feedback_saved(env, rea
         # No rewriting source records; future source sync can still correct them.
         assert c.execute('SELECT was_absent FROM main.lessons WHERE id=1').fetchone()[0] == 1
         assert c.execute('SELECT COUNT(*) FROM absences').fetchone()[0] == 1
-    assert dashboard._feedback_gap(1, date.fromisoformat(day))['total_lessons'] == 5
+    assert _gap(1, date.fromisoformat(day))['total_lessons'] == 5
     assert post(client,1,rating=3).status_code == 200
-    assert dashboard._feedback_gap(1, date.fromisoformat(day))['unrated_lessons'] == 4
+    assert _gap(1, date.fromisoformat(day))['unrated_lessons'] == 4
 
 
 @pytest.mark.parametrize('reason', ['Abwesend', 'Krank', None])

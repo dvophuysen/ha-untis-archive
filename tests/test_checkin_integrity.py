@@ -1,6 +1,6 @@
 """Comments, comprehension and account-wide reminders must remain distinct."""
 from contextlib import closing
-from datetime import date
+from datetime import date, datetime, time
 import sqlite3
 import sys
 from pathlib import Path
@@ -8,7 +8,14 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from test_learning import env, child
 from backend import db
+from backend import family_board
 from backend.routers import checkins, dashboard, notify, today
+
+
+def _gap(account_id, day):
+    """Rückmeldelücke der Startseite, abends: alle Stunden des Tages sind vorbei."""
+    got = family_board.feedback(account_id, day, datetime.combine(day, time(23, 59)))
+    return {'unrated_lessons': got['earlier'] + got['today'], 'total_lessons': got['total']}
 
 
 def install(env):
@@ -54,7 +61,7 @@ def test_comprehension_ignores_comments_and_supervision_but_gaps_do_not(env):
     post(client, 4, rating=3)
     assert dashboard._comprehension_for_subjects(1, {7}) == {7: {'hard': 1, 'total': 2}}
     assert dashboard._comprehension_for_subjects(2, {7}) == {7: {'hard': 0, 'total': 0}}
-    assert dashboard._feedback_gap(1, date.today()) == {'unrated_lessons': 2, 'total_lessons': 5}
+    assert _gap(1, date.today()) == {'unrated_lessons': 2, 'total_lessons': 5}
     patch.setattr(today, 'lessons_for_date', lambda c, a, d: [dict(id=i, is_cancelled=False, was_absent=False) for i in range(1,6)] if d == date.today().isoformat() else [])
     patch.setattr(today, 'upcoming_exams', lambda *a, **kw: [])
     patch.setattr(today, 'hidden_keys', lambda a: set())
@@ -116,8 +123,8 @@ def test_hidden_courses_do_not_count_as_open_feedback(env):
     # Dashboard, ohne im Stundenplan zu erscheinen.
     client, _, _ = install(env)
     from backend.courses import course_key
-    assert dashboard._feedback_gap(1, date.today())['total_lessons'] == 5
+    assert _gap(1, date.today())['total_lessons'] == 5
     with closing(db.webapp_conn()) as c:
         c.execute("INSERT INTO hidden_courses(account_id,course_key,created_at) VALUES(1,?,'now')",
                   (course_key(7, None, 'Testfach', None),))
-    assert dashboard._feedback_gap(1, date.today()) == {'unrated_lessons': 0, 'total_lessons': 0}
+    assert _gap(1, date.today()) == {'unrated_lessons': 0, 'total_lessons': 0}

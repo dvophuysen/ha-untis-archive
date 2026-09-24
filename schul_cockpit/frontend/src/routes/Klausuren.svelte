@@ -17,7 +17,10 @@
   let archive = $state(null);
   let archiveOpen = $state(false);
   let pastOpen = $state(false);
-  let openKey = $state(new URLSearchParams(window.location.hash.split('?')[1] || '').get('exam') || '');
+  // Direkt zu einer Arbeit: ?exam=… oder der Schnellzugriff der Startseite ?s=arbeit-….
+  const query = new URLSearchParams(window.location.hash.split('?')[1] || '');
+  const jumped = (query.get('s') || '').startsWith('arbeit-') ? query.get('s').slice(7) : '';
+  let openKey = $state(query.get('exam') || jumped);
   let newTopic = $state({});
 
   const canManage = $derived(!!(appState.me && (appState.me.is_admin || appState.me.role === 'parent')));
@@ -270,7 +273,7 @@
       {@const M = material(e)}
       {@const U = ueben(e)}
       {@const topics = liveTopics(e)}
-      <div class="card exam" class:compact={far}>
+      <div class="card exam" class:compact={far} data-section={`arbeit-${e.exam_key}`}>
         <button class="exam-head" onclick={() => toggle(e)} aria-expanded={open}>
           <span class="icon" aria-hidden="true">{st.emoji}</span>
           <span class="who">

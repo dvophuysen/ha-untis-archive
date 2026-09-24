@@ -1,6 +1,7 @@
 import asyncio
 import json
 import pytest
+from contextlib import closing
 from fastapi import HTTPException
 from test_vocab_catalog import env, fixture, legacy, attempts
 from backend import db, vocab, vocab_semantic as sem
@@ -100,5 +101,7 @@ def test_real_route_uses_semantic_and_rejects_client_override(env):
     patch.setattr(sem.ai,'complete',complete)
     payload=body(wid,confirm=True).model_dump()
     assert client.post('/api/accounts/1/learning/vocab/attempts',json=payload).json()['result']=='incorrect'
+    with closing(db.webapp_conn()) as c:
+        assert c.execute('SELECT user_id FROM vocab_attempts ORDER BY id DESC').fetchone()[0]==state.user.id
     payload['assessment']={'result':'correct'}
     assert client.post('/api/accounts/1/learning/vocab/attempts',json=payload).status_code==422

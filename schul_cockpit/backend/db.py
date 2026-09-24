@@ -1083,3 +1083,8 @@ CREATE TABLE IF NOT EXISTS parent_report_deliveries (
  status TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(week, account_id, service)
 );
 """))
+
+# Wer bei einer Handlung angemeldet war. Der Nutzungsbericht trennt damit das
+# eigene Gerät des Kindes vom Elterngerät; ältere Zeilen bleiben ohne Angabe.
+_MIGRATIONS.append(("mentor_messages_user_001", "ALTER TABLE mentor_messages ADD COLUMN user_id INTEGER"))
+_MIGRATIONS.append(("vocab_attempts_user_001", "ALTER TABLE vocab_attempts ADD COLUMN user_id INTEGER"))

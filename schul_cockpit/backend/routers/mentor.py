@@ -254,9 +254,9 @@ def session_label(mode,goal,task):
     return goal or ''
 
 
-def add_message(c,sid,account,key,role,text,payload=None,author=None):
-    return c.execute('INSERT OR IGNORE INTO mentor_messages(account_id,session_id,request_key,role,text,payload,author,created_at) VALUES(?,?,?,?,?,?,?,?)',
-                     (account,sid,key,role,text,json.dumps(payload or {},ensure_ascii=False),author,now_iso())).lastrowid
+def add_message(c,sid,account,key,role,text,payload=None,author=None,user_id=None):
+    return c.execute('INSERT OR IGNORE INTO mentor_messages(account_id,session_id,request_key,role,text,payload,author,user_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)',
+                     (account,sid,key,role,text,json.dumps(payload or {},ensure_ascii=False),author,user_id,now_iso())).lastrowid
 
 
 async def open_unit(account_id,sid,tier=None,persist=True):
@@ -1118,7 +1118,7 @@ def wrong_choice(c,account_id,s,user,body,task,index,seconds,topic_mode):
     die Antwort fällt aus der Auswahl. Bleibt nur noch die richtige übrig,
     nennt die App sie, statt das Kind sie durch Ausschluss finden zu lassen."""
     opts=task['optionen'];picked=opts[index]
-    uid=add_message(c,s['id'],account_id,body.request_key,'user',picked['text'],{'kind':'choice'},author=author_of(user,s))
+    uid=add_message(c,s['id'],account_id,body.request_key,'user',picked['text'],{'kind':'choice'},author=author_of(user,s),user_id=user.id)
     denk=(picked.get('denkfehler') or '').strip()
     evidence=None
     if not s['is_test']:
@@ -1268,7 +1268,7 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
         offen=json.loads(s.get('source_json') or '{}').get('solution') if check else None
         if offen and not offen.get('confirmed') and not finish and not body.attachment_id and not fresh_pages:
             rest={k:v for k,v in json.loads(s.get('source_json') or '{}').items() if k!='solution'}
-            add_message(c,sid,account_id,body.request_key,'user',text or 'Ja',author=author_of(user,s))
+            add_message(c,sid,account_id,body.request_key,'user',text or 'Ja',author=author_of(user,s),user_id=user.id)
             if wants_new_photo(text):
                 c.execute('UPDATE mentor_sessions SET source_json=?,version=version+1,updated_at=? WHERE id=?',
                           (json.dumps(rest,ensure_ascii=False),now_iso(),sid))
@@ -1295,12 +1295,12 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
             chosen_right=True
         at_cap=not homework and not check and ((topic_mode and s['turns']>=lernstand.MAX_TURNS) or (not topic_mode and (s['turns']>=12 or seconds>=s['max_minutes']*60)))
         if not finish and at_cap and s['turns']>=(s.get('end_proposed_turn') or 0)+PROPOSE_EVERY:
-            add_message(c,sid,account_id,body.request_key,'user',text or ('Foto ansehen' if body.attachment_id else 'Weiter'),author=author_of(user,s))
+            add_message(c,sid,account_id,body.request_key,'user',text or ('Foto ansehen' if body.attachment_id else 'Weiter'),author=author_of(user,s),user_id=user.id)
             add_message(c,sid,account_id,body.request_key,'assistant',CAP_TEXT,{'choices':END_CHOICES_TOPIC if topic_mode else END_CHOICES,'task':public_task(s['current_task']),'assessment':None})
             c.execute('UPDATE mentor_sessions SET end_proposed_turn=?,version=version+1,elapsed_seconds=?,updated_at=? WHERE id=?',(s['turns'],seconds,now_iso(),sid))
             return view(c,get_session(c,account_id,sid))
         if finish:
-            add_message(c,sid,account_id,body.request_key,'user',text or 'Für heute fertig',author=author_of(user,s))
+            add_message(c,sid,account_id,body.request_key,'user',text or 'Für heute fertig',author=author_of(user,s),user_id=user.id)
             if homework:
                 end='Gut, wir machen für heute Pause. Das Gespräch bleibt offen, bis du die Hausaufgabe abhakst.'
             elif check:
@@ -1435,7 +1435,7 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
             if live['version']!=s['version'] or live['pending_key']!=body.request_key:raise HTTPException(409,'Die Einheit wurde inzwischen geändert.')
             uid=add_message(c,sid,account_id,body.request_key,'user',text or ('Foto ansehen' if body.attachment_id else 'Meine Seiten ansehen' if fresh_pages else 'Bitte helfen'),({'attachment_id':body.attachment_id} if body.attachment_id else {})|({'material_ids':fresh_pages} if fresh_pages else {})|({'spoken':True} if body.spoken else {})
                            # Art der Anfrage und erkannte Verfassung für den Nutzungsbericht der Eltern.
-                           |{'kind':kind}|({'verfassung':lage['signale']} if lage else {}),author=author_of(user,s))
+                           |{'kind':kind}|({'verfassung':lage['signale']} if lage else {}),author=author_of(user,s),user_id=user.id)
             if fresh_pages:
                 live_source=json.loads(live.get('source_json') or '{}')
                 for e in live_source.get('eingebunden') or []:

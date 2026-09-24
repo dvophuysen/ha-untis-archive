@@ -8,7 +8,9 @@ sehen kann (D126 G17/G18). Sichtbar nur für Eltern.
 
 Quellen sind die Zeitstempel, die die App ohnehin speichert, dazu seit
 1.13.17 die Art jeder Anfrage an den Mentor und die Nutzungszeit je Tag
-(`usage_days`, 90 Tage). Kein Modellaufruf.
+(`usage_days`, 90 Tage). Seit 1.14.0 trägt jede Handlung das angemeldete
+Konto; Uhrzeit-Auffälligkeiten zählen nur auf der Anmeldung des Kindes (D166).
+Kein Modellaufruf.
 """
 
 from __future__ import annotations
@@ -49,6 +51,15 @@ def local(ts) -> datetime | None:
     except ValueError:
         return None
     return dt.replace(tzinfo=TZ) if dt.tzinfo is None else dt.astimezone(TZ)
+
+
+def _who(row: dict) -> str | None:
+    """Wer war angemeldet: „child“, „parent“ oder None, wenn die Zeile kein Konto
+    trägt (ältere Daten, Abgleich aus Home Assistant). Kinder nutzen oft die
+    Geräte der Eltern (D82); gezählt wird die Anmeldung, nicht wer davorsaß."""
+    if row.get("role") is None and row.get("is_admin") is None:
+        return None
+    return "parent" if (row.get("is_admin") or row.get("role") in ("admin", "parent")) else "child"
 
 
 def _odd_hour(dt: datetime) -> bool:
@@ -92,8 +103,8 @@ def week(account_id: int, today: date | None = None) -> dict:
     with closing(webapp_conn()) as c:
         args = (account_id, lo, hi)
         messages = [dict(r) for r in c.execute(
-            "SELECT m.session_id,m.created_at,m.payload,s.subject,s.source_json FROM mentor_messages m "
-            "JOIN mentor_sessions s ON s.id=m.session_id WHERE m.account_id=? AND m.role='user' "
+            "SELECT m.session_id,m.created_at,m.payload,s.subject,s.source_json,u.role,u.is_admin FROM mentor_messages m "
+            "JOIN mentor_sessions s ON s.id=m.session_id LEFT JOIN users u ON u.id=m.user_id WHERE m.account_id=? AND m.role='user' "
             "AND s.is_test=0 AND s.is_demo=0 AND substr(m.created_at,1,10) BETWEEN ? AND ?", args)]
         opened = [dict(r) for r in c.execute(
             "SELECT s.id,s.created_at,s.subject,s.source_json FROM mentor_sessions s WHERE s.account_id=? "
@@ -106,8 +117,9 @@ def week(account_id: int, today: date | None = None) -> dict:
         vocab, solved = [], {}
         if _has(c, "vocab_attempts"):
             vocab = [dict(r) for r in c.execute(
-                "SELECT word_id,created_at,result,answer,seconds FROM vocab_attempts WHERE account_id=? "
-                "AND substr(created_at,1,10) BETWEEN ? AND ? ORDER BY created_at,id", args)]
+                "SELECT a.word_id,a.created_at,a.result,a.answer,a.seconds,u.role,u.is_admin FROM vocab_attempts a "
+                "LEFT JOIN users u ON u.id=a.user_id WHERE a.account_id=? "
+                "AND substr(a.created_at,1,10) BETWEEN ? AND ? ORDER BY a.created_at,a.id", args)]
             solved = {r[0]: r[1] for r in c.execute(
                 "SELECT word_id,MAX(created_at) FROM vocab_attempts WHERE account_id=? AND result='correct' "
                 "GROUP BY word_id", (account_id,))}
@@ -121,27 +133,46 @@ def week(account_id: int, today: date | None = None) -> dict:
             "SELECT k.created_at,k.rating,u.role,u.is_admin FROM lesson_checkins k LEFT JOIN users u ON u.id=k.user_id "
             "WHERE k.account_id=? AND substr(k.created_at,1,10) BETWEEN ? AND ?", args)]
         uploads = [dict(r) for r in c.execute(
-            "SELECT created_at FROM materials WHERE account_id=? AND hidden=0 AND COALESCE(origin,'upload')!='book_fetch' "
-            "AND substr(created_at,1,10) BETWEEN ? AND ?", args)]
+            "SELECT m.created_at,u.role,u.is_admin FROM materials m LEFT JOIN users u ON u.id=m.created_by "
+            "WHERE m.account_id=? AND m.hidden=0 AND COALESCE(m.origin,'upload')!='book_fetch' "
+            "AND substr(m.created_at,1,10) BETWEEN ? AND ?", args)]
         afternoon = [dict(r) for r in c.execute(
-            "SELECT created_at FROM afternoon_checks WHERE account_id=? AND substr(created_at,1,10) BETWEEN ? AND ?",
+            "SELECT a.created_at,u.role,u.is_admin FROM afternoon_checks a LEFT JOIN users u ON u.id=a.user_id "
+            "WHERE a.account_id=? AND substr(a.created_at,1,10) BETWEEN ? AND ?",
             args)] if _has(c, "afternoon_checks") else []
+        # Abgehakt in der App: das Protokoll kennt das Konto. Was der Abgleich aus
+        # Home Assistant als erledigt meldet, trägt nur die Abgleichszeit.
+        ticked = [dict(r) for r in c.execute(
+            "SELECT l.created_at,u.role,u.is_admin FROM audit_log l LEFT JOIN users u ON u.id=l.user_id "
+            "WHERE l.account_id=? AND l.target_kind='task' AND l.demo_mode=0 AND l.label LIKE '%→ done' "
+            "AND substr(l.created_at,1,10) BETWEEN ? AND ?", args)] if _has(c, "audit_log") else []
         usage = [dict(r) for r in c.execute(
             "SELECT day,actor,first_at,last_at,opens,active_seconds,views_json FROM usage_days "
             "WHERE account_id=? AND day BETWEEN ? AND ?", (account_id, start.isoformat(), end.isoformat()))] \
             if _has(c, "usage_days") else []
 
-    # Wann war das Kind tätig? Nur Handlungen, keine abgeleiteten Zustände.
-    child_checkins = [k for k in checkins if not (k["is_admin"] or k["role"] in ("admin", "parent"))]
-    stamps = [local(r["created_at"]) for r in messages + vocab + uploads + afternoon + child_checkins]
-    stamps += [local(r["completed_at"]) for r in done]
-    stamps = [t for t in stamps if inweek(t)]
-    days: dict[str, list[datetime]] = defaultdict(list)
-    for t in stamps:
-        days[t.date().isoformat()].append(t)
-    active_days = [{"day": d, "label": _short(d), "from": min(ts).strftime("%H:%M"), "to": max(ts).strftime("%H:%M")}
-                   for d, ts in sorted(days.items())]
-    odd = sorted({(t.date().isoformat(), t.strftime("%H:%M")) for t in stamps if _odd_hour(t)})
+    # Wann wurde für das Kind gearbeitet, und auf welcher Anmeldung? Nur
+    # Handlungen, keine abgeleiteten Zustände. Rückmeldungen der Eltern zu einer
+    # Stunde sind keine Arbeit des Kindes und fallen ganz heraus.
+    child_checkins = [k for k in checkins if _who(k) != "parent"]
+    marked = [(local(r["created_at"]), _who(r)) for r in messages + vocab + uploads + afternoon + child_checkins + ticked]
+    marked = [(t, who) for t, who in marked if inweek(t)]
+    days: dict[str, list[tuple[datetime, str | None]]] = defaultdict(list)
+    for t, who in marked:
+        days[t.date().isoformat()].append((t, who))
+
+    def _span(ts):
+        return {"from": min(ts).strftime("%H:%M"), "to": max(ts).strftime("%H:%M")} if ts else None
+
+    active_days = []
+    for d, items in sorted(days.items()):
+        ts = [t for t, _ in items]
+        active_days.append({"day": d, "label": _short(d), **_span(ts),
+                            "own": _span([t for t, who in items if who == "child"]),
+                            "parent": _span([t for t, who in items if who == "parent"])})
+    # Spät oder früh zählt nur auf der Anmeldung des Kindes: Auf dem Elterngerät
+    # oder ohne Kontoangabe sagt die Uhrzeit nichts über das Kind.
+    odd = sorted({(t.date().isoformat(), t.strftime("%H:%M")) for t, who in marked if who == "child" and _odd_hour(t)})
     odd_days: dict[str, list[str]] = defaultdict(list)
     for d, hm in odd:
         odd_days[d].append(hm)
@@ -277,7 +308,7 @@ def week(account_id: int, today: date | None = None) -> dict:
             "Nutzung spät am Abend oder früh am Morgen",
             "; ".join(f"{_short(d)} {', '.join(hms[:3])}" for d, hms in sorted(odd_days.items())[:4]),
             "Eine Aufgabe kurz vor der Frist, oder es wurde Schlafenszeit.",
-            "Ob das Gerät eines Elternteils benutzt wurde; ein Gespräch gilt immer als Gespräch des Kindes (D82)."))
+            "Ob das Kind selbst am Gerät saß; gezählt wird nur die Anmeldung des Kindes."))
     if overdue:
         warnings.append(_warn(
             f"{_plural(overdue, 'Aufgabe', 'Aufgaben')} überfällig",
@@ -299,8 +330,13 @@ def week(account_id: int, today: date | None = None) -> dict:
         head.append(f"rund {app['child_minutes']} Min. in der App")
     head.append(_plural(len(warnings), "Auffälligkeit", "Auffälligkeiten"))
 
+    def _day_text(d):
+        if d["parent"] and not d["own"]:
+            return f"{d['label']} {d['from']}–{d['to']} auf dem Elterngerät"
+        return f"{d['label']} {d['from']}–{d['to']}" + (" (auch Elterngerät)" if d["parent"] else "")
+
     lines = [f"Aktiv an {_plural(len(active_days), 'Tag', 'Tagen')}"
-             + (": " + ", ".join(f"{d['label']} {d['from']}–{d['to']}" for d in active_days) if active_days else ".")]
+             + (": " + ", ".join(_day_text(d) for d in active_days) if active_days else ".")]
     if app["measured_days"]:
         lines.append(f"In der App rund {app['child_minutes']} Minuten, {app['opens']}-mal geöffnet"
                      + (f"; auf dem Elternkonto {app['parent_minutes']} Minuten." if app["parent_minutes"] else "."))

@@ -21,6 +21,7 @@
   import ExamSetup from './routes/ExamSetup.svelte';
   import { api } from './lib/api.js';
   import { startUsagePing } from './lib/usagePing.js';
+  import { jumpTo, sectionParam } from './lib/jump.js';
 
   async function logout() {
     try { await api.post('/api/auth/logout'); } catch (_) { /* ignore */ }
@@ -73,6 +74,12 @@
     const path = args.length ? `${name}/${args.join('/')}` : name;
     window.location.hash = `#/${path}`;
   }
+
+  // Schnellzugriff mit Abschnitt (?s=…): nach dem Seitenwechsel dorthin rollen.
+  $effect(() => {
+    route;
+    return jumpTo(sectionParam());
+  });
 
   onMount(() => {
     loadMe();

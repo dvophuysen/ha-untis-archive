@@ -1,6 +1,6 @@
 # Übergabe an die nächste Session
 
-Stand 24.09.2026. Live läuft Schul-Cockpit **1.13.17**. Keine Kindernamen,
+Stand 24.09.2026. Live läuft Schul-Cockpit **1.14.0**. Keine Kindernamen,
 PINs oder Schlüssel in diesem Dokument (D15/D68). Maßgeblicher Einstieg ist
 [README.md](README.md) in diesem Ordner; Einzelheiten zu jedem Release
 stehen im [CHANGELOG](../CHANGELOG.md), die Begründungen in
@@ -69,10 +69,13 @@ Das öffentliche Repository wurde mit bereinigter Historie neu angelegt (keine K
 - KI-Kosten seit gpt-5-mini: rund 1,40 € am Tag angerechnet (September bis
   18.09. rund 10 € am Tag). Nachtlauf-Kontrolle am 25.09. vorgemerkt: wirkt
   D145, und sind Kind Bs zwölf nächtliche Vokabel-Aufrufe weg?
-- Eltern: Der Nutzungsbericht „So wurde die App genutzt“ läuft seit 1.13.17
-  (D159). Die Wochennachricht an die Eltern verschickt die App seit
-  1.13.19 selbst (D161); nach zwei, drei Wochen mit ihm prüfen,
-  ob Schwellen und Auffälligkeiten passen.
+- Eltern: Startseite seit 1.14.0 als Karte je Kind mit Status, offenen
+  Punkten, Arbeiten mit Lernstand-Balken und „Beobachten“; jeder Baustein
+  springt zum Kind in den Abschnitt (D166). Mit dem Nutzer nach einigen
+  Tagen prüfen, ob die Status-Regeln zu oft oder zu selten anschlagen.
+  Der Nutzungsbericht (D159) speist nur noch die Wochennachricht (D161);
+  späte Nutzung zählt nur auf der Anmeldung des Kindes, Mentor und
+  Vokabeln speichern das angemeldete Konto erst ab 1.14.0.
 - Seit 0.74 kein Release für Fachübersicht, Elternüberblick und
   Übungsklausuren.
 - Zielbild Mentor (D126), Stufe 2: Lagebesprechung und Lagebild für die

@@ -1553,7 +1553,7 @@ def prepare_attempt(account_id: int, body: AttemptIn) -> dict:
     return w
 
 
-def attempt(account_id: int, body: AttemptIn, *, assessment: dict | None = None) -> dict:
+def attempt(account_id: int, body: AttemptIn, *, assessment: dict | None = None, user_id: int | None = None) -> dict:
     w = prepare_attempt(account_id, body)
     meanings = json.loads(w["meanings_json"] or "[]")
     feedback = ""
@@ -1575,8 +1575,8 @@ def attempt(account_id: int, body: AttemptIn, *, assessment: dict | None = None)
         return {"result": "unclear", "feedback": feedback or f"Ich habe „{body.answer.strip()}“ verstanden. Meintest du „{matched}“?",
                 "matched": matched, "can_confirm": assessment is None, "word": public_word(w)}
     with closing(webapp_conn()) as c, c:
-        inserted = c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,spoken,seconds,edits,created_at,unit_scope) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                  (account_id, w["id"], body.stage, body.direction, body.answer[:300], result, int(body.spoken), seconds, body.edits, now_iso(), body.unit_scope or None))
+        inserted = c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,spoken,seconds,edits,created_at,unit_scope,user_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                  (account_id, w["id"], body.stage, body.direction, body.answer[:300], result, int(body.spoken), seconds, body.edits, now_iso(), body.unit_scope or None, user_id))
         if assessment is not None:
             c.execute("INSERT INTO vocab_answer_assessments(attempt_id,protocol,decision,evidence_json) VALUES(?,?,?,?)",
                       (inserted.lastrowid, assessment['protocol'], result, json.dumps(assessment, ensure_ascii=False)))

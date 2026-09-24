@@ -52,6 +52,10 @@ def test_a_wrong_choice_is_answered_without_the_model(setup):
     assert next(o for o in s['task']['optionen'] if o['id'] == index)['aus']
     # Dieselbe Antwort zählt nicht zweimal.
     assert send(client, s, kind='choice', text=wrong['text'], option=index).status_code == 409
+    # Jede Eingabe trägt die Anmeldung, von der sie kam (Nutzungsbericht: eigenes Gerät).
+    with closing(db.webapp_conn()) as c:
+        users = {r[0] for r in c.execute("SELECT user_id FROM mentor_messages WHERE role='user'")}
+    assert users == {2}
 
 
 def test_a_right_choice_counts_as_recognized_and_asks_for_an_open_task(setup):

@@ -1,25 +1,32 @@
 """Eltern-Dashboard — Aggregator über alle verlinkten Kinder.
 
-Bündelt pro Kind den schnellen Eltern-Überblick in einem Roundtrip:
-NOW-Streifen, anstehende Klausuren mit Lern-Ampel, Fächer mit
-Unterstützungsbedarf (`Mitlernen`), offene Hausaufgaben, 5-Tage-Plan-Grid
-und Feedback-Lücken. Die Ampel-Heuristik lebt hier zentral, damit
-Eltern-Dashboard und Kinder-Klausurenseite denselben Punkt anzeigen.
+Bündelt pro Kind den Eltern-Überblick in einem Roundtrip: anstehende
+Klausuren mit Lern-Ampel, Fächer mit Unterstützungsbedarf (`Mitlernen`),
+offene Hausaufgaben und die Karte der Startseite (`board`, D166: Status,
+was jetzt offen ist, Arbeiten, was sich abzeichnet).
 """
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import time
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends
 
+from .. import family_board, lernstand, usage_report
 from ..auth import CurrentUser, get_current_user, linked_account_ids
-from ..courses import hidden_keys, lesson_is_hidden
 from ..db import history_conn, webapp_conn
 from ..exams import account_subjects, resolve_exams
-from ..queries import lessons_for_date, lessons_in_range
 
 router = APIRouter()
+_LOG = logging.getLogger(__name__)
+# Themenlisten nachziehen, ohne die Startseite warten zu lassen: je Arbeit
+# höchstens alle zehn Minuten, ein Modellaufruf nur bei geändertem Text.
+_TOPICS_REFRESH: dict[tuple[int, str], float] = {}
+_TOPICS_EVERY = 600.0
+_BACKGROUND: set[asyncio.Task] = set()
 
 # Mitlernen + Klausur-Score: 21 Tage ≈ 3 Schulwochen — robust gegen
 # einzelne Ausreißer, ohne dass alte Stimmungen das Bild verfälschen.
@@ -28,9 +35,6 @@ COMPREHENSION_MIN_CHECKINS = 3
 COMPREHENSION_HARD_RATIO = 0.30
 EXAM_RED_DAYS = 14
 EXAM_ORANGE_DAYS = 21
-FEEDBACK_GAP_DAYS = 7
-
-_WEEKDAY_LABELS = ["Mo", "Di", "Mi", "Do", "Fr"]
 
 
 # ---------- Helpers ------------------------------------------------------
@@ -69,24 +73,6 @@ def _hw_urgency(due_date: str | None, today: date) -> str | None:
     if delta <= 7:
         return "orange"
     return "green"
-
-
-def _plan_columns(today: date) -> list[tuple[int, date, bool, bool]]:
-    """Fünf Spalten Mo–Fr. Vergangene Wochentage rollen in die Folgewoche;
-    am Wochenende rollt das gesamte Grid auf nächste Woche."""
-    today_wd = today.weekday()  # Mo=0, So=6
-    cols: list[tuple[int, date, bool, bool]] = []
-    for col_wd in range(5):
-        days_until = (col_wd - today_wd) % 7
-        d = today + timedelta(days=days_until)
-        if today_wd >= 5:
-            # Wochenende → gesamte Woche ist „nächste".
-            cols.append((col_wd, d, False, True))
-        else:
-            is_today = col_wd == today_wd
-            is_filler = col_wd < today_wd  # dieser Wochentag ist schon vorbei
-            cols.append((col_wd, d, is_today, is_filler))
-    return cols
 
 
 def _short_label(name: str | None, fallback_short: str | None) -> str:
@@ -145,170 +131,6 @@ def _comprehension_for_subjects(
     return out
 
 
-def _now_state(account_id: int, today: date) -> dict:
-    """Wo ist das Kind gerade? Schule / Pause / Schluss / Wochenende."""
-    today_iso = today.isoformat()
-    hconn = history_conn()
-    try:
-        rows = lessons_for_date(hconn, account_id, today_iso)
-        hidden = hidden_keys(account_id)
-        rows = [l for l in rows if not lesson_is_hidden(l, hidden)]
-        real = [l for l in rows if not l.get("is_cancelled")]
-        if not real:
-            return _next_school_day_label(hconn, account_id, today)
-    finally:
-        hconn.close()
-
-    now_hm = datetime.now().strftime("%H:%M")
-    for l in real:
-        s, e = l.get("start_hhmm"), l.get("end_hhmm")
-        if s and e and s <= now_hm < e:
-            return {
-                "state": "in_school",
-                "icon": "📚",
-                "label": f"jetzt {l.get('subject_short') or l.get('subject_name') or '–'} · bis {e}",
-            }
-    first = real[0]
-    if first.get("start_hhmm") and now_hm < first["start_hhmm"]:
-        return {
-            "state": "before_school",
-            "icon": "📅",
-            "label": f"Schule ab {first['start_hhmm']} · {first.get('subject_short') or first.get('subject_name') or ''}",
-        }
-    last = real[-1]
-    return {
-        "state": "after_school",
-        "icon": "🏠",
-        "label": f"Schulschluss {last.get('end_hhmm') or ''}".strip(),
-    }
-
-
-def _next_school_day_label(hconn, account_id: int, today: date) -> dict:
-    hidden = hidden_keys(account_id)
-    for offset in range(1, 8):
-        d = today + timedelta(days=offset)
-        rows = lessons_for_date(hconn, account_id, d.isoformat())
-        rows = [
-            l for l in rows
-            if not lesson_is_hidden(l, hidden) and not l.get("is_cancelled")
-        ]
-        if not rows:
-            continue
-        first = sorted(rows, key=lambda x: x.get("start_hhmm") or "")[0]
-        wd = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][d.weekday()]
-        return {
-            "state": "next_day",
-            "icon": "📅",
-            "label": f"nächste Schule {wd} {first.get('start_hhmm', '')} · "
-                     f"{first.get('subject_short') or first.get('subject_name') or ''}",
-        }
-    return {"state": "no_school", "icon": "🌴", "label": "kein Schultag in Sicht"}
-
-
-def _plan_for_account(account_id: int, today: date) -> dict:
-    cols = _plan_columns(today)
-    dates = [c[1] for c in cols]
-    start_iso = min(dates).isoformat()
-    end_iso = max(dates).isoformat()
-    hconn = history_conn()
-    try:
-        lessons = lessons_in_range(hconn, account_id, start_iso, end_iso)
-    finally:
-        hconn.close()
-    hidden = hidden_keys(account_id)
-    lessons = [l for l in lessons if not lesson_is_hidden(l, hidden)]
-    by_date: dict[str, list[dict]] = {}
-    for l in lessons:
-        by_date.setdefault(l["date"], []).append(l)
-
-    def _cell(l: dict) -> dict:
-        orig_name = l.get("subject_orig_name")
-        return {
-            "lesson_id": l["id"],
-            "start_hhmm": l.get("start_hhmm"),
-            "end_hhmm": l.get("end_hhmm"),
-            "subject_short": _short_label(l.get("subject_name"), l.get("subject_short")),
-            "subject_name": l.get("subject_name"),
-            # Für ersetzte Fächer („Mu → MA"): den ursprünglichen Kürzel
-            # gleich mitliefern, damit die Zelle ihn durchgestrichen
-            # neben das neue Fach setzen kann.
-            "subject_orig_short": _short_label(orig_name, None) if orig_name else None,
-            "subject_orig_name": orig_name,
-            "is_subject_substituted": bool(l.get("is_subject_substituted")),
-            "is_teacher_substituted": bool(l.get("is_teacher_substituted")),
-            "is_room_substituted": bool(l.get("is_room_substituted")),
-            "room": l.get("room"),
-            "is_cancelled": bool(l.get("is_cancelled")),
-            "is_irregular": bool(l.get("is_irregular")),
-            "has_exam": bool(l.get("exam")),
-        }
-
-    # Spalten- *und* Zeit-Achse: damit das Grid im Frontend wie das Woche-
-    # Layout fix auf eine Stunden-Achse alignt (Periode 1 bei allen Tagen
-    # in derselben Zeile), sammeln wir hier die Vereinigung aller
-    # vorkommenden Startzeiten über die 5 Tage. Leere Zellen entstehen
-    # automatisch, wo ein Tag in der Periode keine Stunde hat.
-    all_start_times: set[str] = set()
-    for l in lessons:
-        t = l.get("start_hhmm")
-        if t:
-            all_start_times.add(t)
-    period_times = sorted(all_start_times)
-
-    columns = []
-    for wd, d, is_today, is_filler in cols:
-        day_lessons = sorted(
-            (_cell(l) for l in by_date.get(d.isoformat(), [])),
-            key=lambda x: x["start_hhmm"] or "",
-        )
-        columns.append({
-            "weekday": _WEEKDAY_LABELS[wd],
-            "date": d.isoformat(),
-            "is_today": is_today,
-            "is_filler": is_filler,
-            "lessons": day_lessons,
-        })
-    return {
-        "columns": columns,
-        "period_times": period_times,
-        "is_weekend": today.weekday() >= 5,
-    }
-
-
-def _feedback_gap(account_id: int, today: date) -> dict:
-    """Stunden der letzten 7 Tage, die tatsächlich stattgefunden haben
-    (nicht cancelled, Kind nicht abwesend, kein ausgeblendeter Kurs) und
-    noch keinen Checkin haben. Ausgeblendete Kurse zählen nicht: die
-    Französisch und Religion eines Kindes, das sie nicht besucht, standen sonst als „zwei
-    Rückmeldungen offen" da, ohne im Stundenplan zu erscheinen."""
-    horizon = (today - timedelta(days=FEEDBACK_GAP_DAYS)).isoformat()
-    today_iso = today.isoformat()
-    hidden = hidden_keys(account_id)
-    hconn = history_conn()
-    wconn = webapp_conn()
-    try:
-        lesson_rows = hconn.execute(
-            "SELECT * FROM lessons WHERE account_id = ? "
-            "AND date >= ? AND date <= ? "
-            "AND (code IS NULL OR LOWER(code) != 'cancelled') "
-            "AND was_absent = 0",
-            (account_id, horizon, today_iso),
-        ).fetchall()
-        ids = [r["id"] for r in lesson_rows if not lesson_is_hidden(dict(r), hidden)]
-        if not ids:
-            return {"unrated_lessons": 0, "total_lessons": 0}
-        placeholder = ",".join("?" for _ in ids)
-        rated = wconn.execute(
-            f"SELECT COUNT(DISTINCT lesson_id) AS c FROM lesson_checkins "
-            f"WHERE account_id = ? AND rating IS NOT NULL AND lesson_id IN ({placeholder})",
-            [account_id, *ids],
-        ).fetchone()["c"]
-    finally:
-        hconn.close()
-        wconn.close()
-    return {"unrated_lessons": len(ids) - rated, "total_lessons": len(ids)}
-
-
 # ---------- Endpoint -----------------------------------------------------
 
 
@@ -359,7 +181,7 @@ async def _dashboard_for_account(account_id: int, name: str, today: date) -> dic
     all_subject_ids = {s["subject_untis_id"] for s in subjects}
 
     # Klausuren bis Schuljahresende (12 Monate Lookahead deckt das ab).
-    exam_data = await resolve_exams(account_id, days_ahead=365)
+    exam_data = await resolve_exams(account_id, days_ahead=365, past_days=365)
     exams_raw = [e for e in exam_data["exams"] if e["date"] >= today_iso]
     exam_subject_ids = {
         e.get("subject_untis_id") for e in exams_raw if e.get("subject_untis_id")
@@ -435,13 +257,42 @@ async def _dashboard_for_account(account_id: int, name: str, today: date) -> dic
             "urgency": _hw_urgency(r["due_date"], today),
         })
 
+    _refresh_topics(account_id, exams_raw, exam_data["exams"], today)
+    from .today import evening_from
+    now = datetime.now(usage_report.TZ)
+    board = await asyncio.to_thread(
+        family_board.board, account_id, tasks_out, exams_raw, exam_data["exams"], support,
+        today, now, evening_from(account_id))
+
+    # Stundenplan-Raster und Tagesstreifen stehen nicht mehr auf der Startseite
+    # (D166); der Plan liegt unter Übersichten → Woche.
     return {
         "account_id": account_id,
         "name": name,
-        "now": _now_state(account_id, today),
         "exams": exams_out,
         "support": support,
         "tasks": {"open_count": len(tasks_out), "items": tasks_out},
-        "plan": _plan_for_account(account_id, today),
-        "feedback_gap": _feedback_gap(account_id, today),
+        "board": board,
     }
+
+
+def _refresh_topics(account_id: int, upcoming: list[dict], entries: list[dict], today: date) -> None:
+    from .exams import scope_start
+    stamp = time.monotonic()
+    for e in upcoming:
+        key = (account_id, e.get("exam_key") or "")
+        if not key[1] or (date.fromisoformat(e["date"]) - today).days > family_board.NEAR_DAYS:
+            continue
+        if stamp - _TOPICS_REFRESH.get(key, -1e9) < _TOPICS_EVERY:
+            continue
+        _TOPICS_REFRESH[key] = stamp
+        since = scope_start(e.get("subject_name"), e["date"], entries)
+
+        async def run(e=e, since=since):
+            try:
+                await lernstand.ensure_topics(account_id, e["exam_key"], e.get("subject_name"), since, e["date"])
+            except Exception:
+                _LOG.warning("Themenliste für %s nicht nachgezogen", e.get("subject_name"), exc_info=True)
+        task = asyncio.get_running_loop().create_task(run())
+        _BACKGROUND.add(task)
+        task.add_done_callback(_BACKGROUND.discard)

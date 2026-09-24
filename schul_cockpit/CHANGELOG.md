@@ -1,3 +1,11 @@
+## 1.14.0
+
+- Neue Startseite für Eltern: je Kind eine Karte mit einem klaren Status (Im Griff, Nachsteuern, Eingreifen), darunter nur, was jetzt offen ist, oder eine grüne Zeile, wenn alles erledigt ist. Die Arbeiten stehen in zeitlicher Reihenfolge, jede mit einem Balken für den Lernstand ihrer Themen und dem Materialstand; spätere Arbeiten in einer Zeile. Unter „Beobachten“ steht, was sich über Wochen abzeichnet.
+- Jeder Baustein ist ein Schnellzugriff: Ein Tipp wählt das Kind und springt auf die passende Seite in den richtigen Abschnitt, bei einer Arbeit direkt auf ihre aufgeklappte Karte.
+- Wochenrückblick, Nutzungstexte und Stundenplan-Raster sind von der Startseite verschwunden. Der Stundenplan liegt unter Übersichten → Stundenplan.
+- Was für morgen ansteht, gilt vor der Erinnerungszeit des Kindes noch nicht als Versäumnis. Rückmeldungen zählen nur für Stunden, die schon vorbei sind.
+- Nutzungsbericht: Die App merkt sich jetzt, welches Konto bei Mentor und Vokabeln angemeldet war. Späte Nutzung zählt nur noch auf der Anmeldung des Kindes; was auf dem Elterngerät geschah, steht getrennt. Erledigte Aufgaben zählen mit der Uhrzeit des Abhakens, nicht mit der Abgleichszeit aus Home Assistant.
+
 ## 1.13.32
 
 - Fehler behoben: Ein Foto für eine Stelle mit „Unbekannte Quelle“ (eine Seitenzahl ohne Buch in der Hausaufgabe) wurde vom Server abgelehnt, und in der App passierte scheinbar nichts. Jetzt belegt das Foto die Stelle, welches Buch es ist, erkennt die Auswertung.
