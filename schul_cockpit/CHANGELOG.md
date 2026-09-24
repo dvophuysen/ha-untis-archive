@@ -1,3 +1,8 @@
+## 1.13.27
+
+- Mentor: Auswahlaufgaben. Beim Abfragen, zum Aufwärmen, um einen Denkfehler zu finden oder wenn das Kind müde ist, kann der Mentor eine Aufgabe mit drei oder vier Antworten zum Antippen stellen, immer mit plausiblen falschen dabei. Die App mischt sie und wertet selbst aus: Eine falsche Wahl erklärt sofort den Denkfehler dahinter (ohne KI-Kosten), nach einer richtigen folgt eine offene Aufgabe zum selben Inhalt. Eine gewählte Antwort zählt als „wiedererkannt“, nie als „sitzt“.
+- Die Knöpfe unter den Nachrichten bleiben Wege weiter („Gib mir einen Tipp“ zählt jetzt als Bitte um Hilfe), nie Antworten.
+
 ## 1.13.26
 
 - Beschriftungen in Formularen (Aufgabe, Stunde, Arbeiten einrichten, Einstellungen) gehören jetzt zu ihrem Feld: Antippen der Beschriftung setzt den Cursor ins Feld, Screenreader lesen sie vor.

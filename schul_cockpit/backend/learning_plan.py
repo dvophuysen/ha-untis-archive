@@ -14,6 +14,14 @@ from . import mentor_context as mc
 INTERVALS = (2, 7, 14, 30, 60)
 
 
+def _recognized(e):
+    """Ob der Beleg eine gewählte Antwort einer Auswahlaufgabe ist."""
+    try:
+        return bool(json.loads(e.get('task_json') or '{}').get('optionen'))
+    except (TypeError, ValueError):
+        return False
+
+
 def replay(evidence):
     level = 0; due = None; last_day = None; success_day = None; first_success = None; failure_day = None; variants = set()
     label = 'Noch nicht selbstständig geprüft'; rationale = ''
@@ -25,6 +33,11 @@ def replay(evidence):
         last_day = day; rationale = e['rationale']
         if e['result'] == 'uncertain':
             label = 'Bewertung ungeklärt · keine Rückstufung'
+            continue
+        if e['result'] == 'correct' and not e['help_used'] and _recognized(e):
+            # Gewählt statt formuliert: gezeigt, aber noch nicht selbstständig (D164).
+            label = 'Wiedererkannt · selbst formulieren steht aus'
+            due = (d + timedelta(days=2)).isoformat()
             continue
         if e['result'] == 'correct' and not e['help_used']:
             # Same-day answers and a known task never grow retention intervals.

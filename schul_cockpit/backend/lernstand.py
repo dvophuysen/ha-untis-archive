@@ -58,6 +58,13 @@ def is_clean(a: dict) -> bool:
             and (a.get("edits") or 0) < MANY_EDITS)
 
 
+def recognized(a: dict) -> bool:
+    """Eine gewählte Antwort einer Auswahlaufgabe: Wiedererkennen, nicht selbst
+    formuliert (D164). Sie bricht eine saubere Folge, wenn sie falsch ist, zählt
+    aber nie für „sitzt“ und nie als bestandene Kurzprüfung."""
+    return (a.get("task_form") or "") == "erkennen"
+
+
 def kind_of(a: dict) -> str:
     """Die Aufgabenart, gelesen am Operator der Aufgabe (Bilde, Erkläre, Übersetze …)."""
     words = (a.get("task_kind") or "").strip().casefold().split()
@@ -115,7 +122,7 @@ def replay(answers: list[dict]) -> dict:
             if any(not is_clean(r) for r in rows):
                 stage, sat, checks = "wackelt", None, 0
                 reason = _why(rows, "bei der Prüfung ")
-            elif len(rows) >= CHECK_ANSWERS:
+            elif len([r for r in rows if not recognized(r)]) >= CHECK_ANSWERS:
                 checks += 1
                 if checks >= 2 and (day - sat).days >= CHECK_AFTER[1]:
                     stage = "gefestigt"
@@ -124,13 +131,14 @@ def replay(answers: list[dict]) -> dict:
                     stage = "sitzt"
                     reason = f"nach {(day - sat).days} Tagen bestätigt, zweite Prüfung folgt"
             continue
-        tail = 0
+        clean_tail: list[dict] = []
         for r in reversed(rows):
             if not is_clean(r):
                 break
-            tail += 1
-        kinds = {kind_of(r) for r in rows[len(rows) - tail:]} if tail else set()
-        clean_tail = rows[len(rows) - tail:] if tail else []
+            if not recognized(r):
+                clean_tail.append(r)
+        tail = len(clean_tail)
+        kinds = {kind_of(r) for r in clean_tail}
         # „Sitzt" verlangt, dass auch eine der schwierigeren Aufgaben getroffen
         # hat (D97): Der Nutzer bindet die Einschätzung ausdrücklich daran, dass
         # die Aufgaben aus Buch und Arbeitsheft „auch in den schwierigeren

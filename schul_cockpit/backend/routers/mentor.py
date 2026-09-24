@@ -4,6 +4,7 @@ import asyncio
 import base64
 import io
 import json
+import random
 import re
 import sqlite3
 from contextlib import closing
@@ -47,13 +48,22 @@ class TurnIn(InputModel):
     request_key:str=Field(min_length=8,max_length=80,pattern=r'^[a-zA-Z0-9_-]+$')
     version:int=Field(ge=0)
     text:str=Field(default='',max_length=4000)
-    kind:Literal['message','answer','hint','example','finish']='message'
+    kind:Literal['message','answer','hint','example','finish','choice']='message'
     attachment_id:int|None=None
+    # Gewählte Antwort einer Auswahlaufgabe: die Nummer in task.optionen (D164).
+    option:int|None=Field(default=None,ge=0,le=3)
     # Signale fürs Zögern: Sekunden von der Aufgabe bis zum Absenden, Löschungen beim Tippen.
     seconds:int|None=Field(default=None,ge=0,le=36000)
     edits:int|None=Field(default=None,ge=0,le=10000)
     # Der Text kam aus der Spracheingabe: Hörfehler sind möglich, keine Rechtschreibfehler.
     spoken:bool=False
+
+class Option(InputModel):
+    """Eine Antwortmöglichkeit einer Auswahlaufgabe (D164)."""
+    text:str=Field(min_length=1,max_length=120)
+    richtig:bool=False
+    # Bei einer falschen Antwort: welcher Denkfehler dahintersteckt, ein Satz an das Kind.
+    denkfehler:str=Field(default='',max_length=300)
 
 class Task(InputModel):
     # Das, woran gearbeitet wird: der Textabschnitt, die Tabelle, die Gleichung,
@@ -75,6 +85,8 @@ class Task(InputModel):
     # „Erkenne“ als Auswahl und als freie Antwort zwei verschiedene Dinge sind (D97).
     form:Literal['auswahl','zuordnen','luecke','kurz','frei']='kurz'
     afb:int=Field(ge=1,le=3)
+    # Antwortmöglichkeiten zum Antippen; die App mischt und wertet aus (D164).
+    optionen:list[Option]=Field(default_factory=list,max_length=4)
 
 class Assessment(InputModel):
     result:Literal['correct','partial','incorrect','uncertain']
@@ -140,7 +152,23 @@ def get_session(c,account_id,sid):
 def public_task(t):
     if not t:return None
     if isinstance(t,str): t=json.loads(t)
-    return {k:v for k,v in t.items() if k not in ('solution',)}
+    pub={k:v for k,v in t.items() if k not in ('solution','optionen','aus')}
+    # Welche Antwort richtig ist und welcher Denkfehler hinter den anderen
+    # steckt, bleibt beim Server; das Kind sieht Text und Nummer (D164).
+    if t.get('optionen'):
+        aus=set(t.get('aus') or [])
+        pub['optionen']=[{'id':i,'text':o['text'],'aus':i in aus} for i,o in enumerate(t['optionen'])]
+    return pub
+
+
+def prepare_task(task):
+    """Eine Auswahlaufgabe vor dem Speichern: Reihenfolge mischen, Form und
+    Anforderungsbereich festlegen. Die richtige Antwort stünde sonst meist
+    zuerst, und eine gewählte Antwort ist Wiedererkennen, also afb 1."""
+    if task and task.optionen:
+        random.shuffle(task.optionen)
+        task.form='auswahl';task.afb=1
+    return task
 
 
 def elapsed(s):
@@ -244,6 +272,8 @@ async def open_unit(account_id,sid,tier=None,persist=True):
     reply=Reply.model_validate_json(raw)
     if reply.action=='task' and not reply.task:reply.action='clarify'
     if reply.action=='finish':reply.action='clarify'
+    if reply.task and options_fault(reply.task):reply.task.optionen=[]
+    prepare_task(reply.task)
     reply.choices=safe_choices([x[:80] for x in reply.choices][:3],reply.task.model_dump() if reply.task else None)
     if reply.action=='task':reply.message=strip_echo(reply.message,reply.task) or reply.message
     if persist:
@@ -888,7 +918,7 @@ HOMEWORK_MODES=('homework_help','homework_check')
 # Was sich in einem Gespräch von Zug zu Zug ändert. Es steht im Aufruf hinter
 # den Bildern, damit Anweisung, Unterricht, Material und Buchseiten als
 # gleichbleibender Anfang aus dem Cache kommen können.
-TURN_TAIL=('messages','summary','phase','current_task','help_count','task_help','read_at',
+TURN_TAIL=('auswahl','messages','summary','phase','current_task','help_count','task_help','read_at',
            'topic','abfrage','verfassung','ohne_aufgabe','incoming')
 # Die Rückfrage der Kontrolle zur gefundenen Bearbeitung (D123).
 SOLUTION_CHOICES=['Ja, das ist mein neuester Stand','Nein, ich zeige ein neues Foto']
@@ -908,7 +938,7 @@ CHECK_INSTRUCTION='''Du bist ein freundlicher Nachhilfe-Coach für ein Schulkind
 SCHEMA_TAIL='Antworte ausschließlich im folgenden JSON-Schema: '
 # Vorlage und Auftrag, und jedes nur einmal (G1, G2 aus D126). Gilt für
 # jede Einheit, die Aufgaben stellt — auch für den Einstieg.
-TASK_RULE=('Eine Aufgabe besteht aus Vorlage und Auftrag. task.vorlage ist das, woran gearbeitet wird, und steht wörtlich in der Aufgabe: der Textabschnitt, die Tabelle, die Gleichung, die drei Aussagen, die Beschreibung der Abbildung. Das Kind hat das Material nicht vor sich — „Lies S. 15, Z. 3-6“ ohne den Abschnitt ist keine Aufgabe, sondern eine Sackgasse. Zitierst du aus dem vorliegenden Material, gib den Wortlaut unverändert wieder und nenne die Stelle in task.quelle („Textband S. 15, Z. 2-3“). Baust du die Vorlage selbst, lass task.quelle leer und behaupte keine Fundstelle. Erfinde nie eine Stelle, die du nicht wirklich im Material gelesen hast; zähle Zeilen nur, wenn sie dort gezählt sind. Braucht eine Aufgabe keine Vorlage — eine reine Wissensfrage, eine Rechnung, die du selbst stellst —, bleibt task.vorlage leer und der Auftrag steht für sich. Die Aufgabe steht im Aufgabenfeld, nicht in der Nachricht: message ist, was du dem Kind daneben sagst, und wiederholt weder den Auftrag noch die Vorlage; eine Ankündigung wie „Erste Aufgabe:“ ist überflüssig. choices sind mögliche Antworten oder echte Handlungen („Ich brauche Hilfe“, „Noch ein Beispiel“), nie Arbeitshinweise und nie eine Wiederholung der Aufgabe. Null bis drei; bei einer offenen Aufgabe meist null. ')
+TASK_RULE=('Eine Aufgabe besteht aus Vorlage und Auftrag. task.vorlage ist das, woran gearbeitet wird, und steht wörtlich in der Aufgabe: der Textabschnitt, die Tabelle, die Gleichung, die drei Aussagen, die Beschreibung der Abbildung. Das Kind hat das Material nicht vor sich — „Lies S. 15, Z. 3-6“ ohne den Abschnitt ist keine Aufgabe, sondern eine Sackgasse. Zitierst du aus dem vorliegenden Material, gib den Wortlaut unverändert wieder und nenne die Stelle in task.quelle („Textband S. 15, Z. 2-3“). Baust du die Vorlage selbst, lass task.quelle leer und behaupte keine Fundstelle. Erfinde nie eine Stelle, die du nicht wirklich im Material gelesen hast; zähle Zeilen nur, wenn sie dort gezählt sind. Braucht eine Aufgabe keine Vorlage — eine reine Wissensfrage, eine Rechnung, die du selbst stellst —, bleibt task.vorlage leer und der Auftrag steht für sich. Die Aufgabe steht im Aufgabenfeld, nicht in der Nachricht: message ist, was du dem Kind daneben sagst, und wiederholt weder den Auftrag noch die Vorlage; eine Ankündigung wie „Erste Aufgabe:“ ist überflüssig. choices sind Wege weiterzureden („Ich brauche einen Tipp“, „Noch ein Beispiel“, „Ich probiere es selbst“), nie Antworten auf die Aufgabe, nie Arbeitshinweise und nie eine Wiederholung der Aufgabe; Antwortmöglichkeiten gehören in task.optionen. Null bis drei; bei einer offenen Aufgabe meist null. '+mopen.AUSWAHL_RULE)
 # Ein Thema der offiziellen Themenliste: Die App misst die Stufe, der Mentor liefert Aufgaben in
 # wechselnden Arten und den fachlichen Grund. Keine Uhr, keine Minuten.
 TOPIC_RULE=('topic ist ein Thema der offiziellen Themenliste der Lehrkraft für eine Arbeit. Übe dieses Thema. '
@@ -922,7 +952,7 @@ TOPIC_RULE=('topic ist ein Thema der offiziellen Themenliste der Lehrkraft für 
             'Sobald topic.reached sitzt oder gefestigt meldet: action finish, eine Zeile, was gezeigt wurde, keine weitere Aufgabe. '
             'Wechsle die Aufgabenart (task.operator: Erkenne, Bilde, Übersetze, Wende an, Erkläre, auch die umgekehrte Richtung); dieselbe Art zweimal nacheinander nur nach einem Fehler. '
             'Aufgabenformen aus dem eigenen Heft: Sieh in topic.material nach, wie dort geübt wird — Lücke, Zuordnung, eigener Satz, Formenbestimmung, Rechenweg — und wandle eine dieser Formen ab. Übernommen wird die Form, nicht der Inhalt. '
-            'task.form sagt, was das Kind tut: auswahl, zuordnen, luecke, kurz oder frei. Auswahl und Zuordnung nur, wo das Material sie auch benutzt, in aller Regel beim Wortschatz; bei Bilden, Übersetzen und Erklären nie, dort liegt der Wert im Selbsterzeugen. '
+            'task.form sagt, was das Kind tut: auswahl, zuordnen, luecke, kurz oder frei. Zuordnung nur, wo das Material sie auch benutzt, in aller Regel beim Wortschatz; für Auswahlaufgaben gilt die Regel oben. '
             'Hat das Kind einen berechtigten Einwand, gilt: ein Satz dazu, und im selben Zug die berichtigte Aufgabe. Frag nie um Erlaubnis weiterzumachen und stelle keine Rückfrage, die das Kind nur mit „ja“ beantworten kann. '
             'Steigere innerhalb der Einheit: anfangen darfst du leicht und wiedererkennend, aber es muss mindestens eine Aufgabe mit afb 2 oder 3 kommen, die das Kind selbst löst. Die App wertet „sitzt“ erst, wenn auch eine schwierigere Aufgabe getroffen hat. '
             'Ist topic.check true, ist dies eine Kurzprüfung Tage später: keine Erklärung vorweg, direkt kurze Aufgaben verschiedener Art, erklären erst nach einem Fehler. '
@@ -1000,6 +1030,7 @@ def safe_choices(choices, task):
     solution=_plain(haystack)
     # Antwortmöglichkeiten einer Auswahlaufgabe: „A) …“ bis „D) …“ im Aufgabentext.
     options=[_plain(x) for x in re.findall(r'^\s*[A-Da-d]\)\s*(.+)$',str(data.get('prompt') or ''),re.M)]
+    options+=[_plain(o.get('text') if isinstance(o,dict) else '') for o in data.get('optionen') or []]
     kept=[]
     for choice in choices:
         flat=_plain(choice)
@@ -1062,6 +1093,69 @@ def task_fault(reply, haystack):
     if vorlage and not quelle and _PLACE.search(task.prompt or ''):
         return ('Deine Vorlage ist selbst gebaut, die Aufgabe verweist aber auf eine Fundstelle. Entweder zitierst '
                 'du aus dem Material und nennst die Stelle in task.quelle, oder du lässt den Verweis weg.')
+    return options_fault(task)
+
+
+def record_choice(c,account_id,s,message_id,chosen,result,body,topic_mode,why=''):
+    """Eine gewählte Antwort als Beleg: Sie zählt als wiedererkannt, nie als
+    selbst formuliert. Der Lernstand liest das an task_form „erkennen“ und an
+    der Option im Aufgabentext (D164)."""
+    task=json.loads(s['current_task']);help_used=bool(s['task_help'])
+    why=why or ('Richtige Antwort gewählt: „'+chosen+'“ (wiedererkannt, noch nicht selbst formuliert).')
+    if s['skill_id']:
+        c.execute('INSERT INTO mentor_evidence(account_id,skill_id,session_id,message_id,task_json,answer,result,rationale,help_used,variant_hash,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                  (account_id,s['skill_id'],s['id'],message_id,s['current_task'],chosen,result,why,int(help_used),mc.fingerprint(task['prompt']),now_iso()))
+        lp.refresh_skill(c,account_id,s['skill_id'])
+    if topic_mode and s.get('topic_id'):
+        lernstand.record_answer(c,account_id,s['topic_id'],s['id'],message_id,task.get('operator',''),result,help_used,
+                                body.seconds,body.edits,False,afb=1,task_form='erkennen')
+        lernstand.refresh(c,s['topic_id'],s['id'])
+    return {'result':result,'rationale':why,'help_used':help_used,'label':'Deine Auswahl'}
+
+
+def wrong_choice(c,account_id,s,user,body,task,index,seconds,topic_mode):
+    """Eine falsch gewählte Antwort, ohne Modellaufruf: der Denkfehler dazu,
+    die Antwort fällt aus der Auswahl. Bleibt nur noch die richtige übrig,
+    nennt die App sie, statt das Kind sie durch Ausschluss finden zu lassen."""
+    opts=task['optionen'];picked=opts[index]
+    uid=add_message(c,s['id'],account_id,body.request_key,'user',picked['text'],{'kind':'choice'},author=author_of(user,s))
+    denk=(picked.get('denkfehler') or '').strip()
+    evidence=None
+    if not s['is_test']:
+        evidence=record_choice(c,account_id,s,uid,picked['text'],'incorrect',body,topic_mode,
+                               why=('Gewählt: „'+picked['text']+'“. '+denk).strip())
+    task={**task,'aus':sorted(set(task.get('aus') or [])|{index})}
+    left=[i for i in range(len(opts)) if i not in task['aus']]
+    if len(left)>1:
+        text=' '.join(x for x in ('Nicht ganz.',denk,'Schau noch einmal hin und wähle neu.') if x)
+        payload={'choices':['Gib mir einen Tipp','Erklär es mir'],'task':public_task(task),'assessment':evidence}
+        stored=json.dumps(task,ensure_ascii=False)
+    else:
+        right=next(o for o in opts if o['richtig'])
+        text=' '.join(x for x in ('Nicht ganz.',denk,'Richtig ist: „'+right['text']+'“.') if x)
+        payload={'choices':['Noch eine Aufgabe','Erklär es mir'],'task':None,'assessment':evidence}
+        stored=None
+    add_message(c,s['id'],account_id,body.request_key,'assistant',text,payload)
+    c.execute('UPDATE mentor_sessions SET current_task=?,turns=turns+1,version=version+1,elapsed_seconds=?,updated_at=? WHERE id=?',
+              (stored,seconds,now_iso(),s['id']))
+
+
+def options_fault(task):
+    """Was an den Antwortmöglichkeiten nicht stimmt; None, wenn sie taugen.
+    Nur die richtige Antwort als Knopf hat am 17.09. zum Antippen statt zum
+    Nachdenken geführt (D95); echte Ablenker sind die Bedingung (D164)."""
+    opts=task.optionen if task else []
+    if not opts:
+        return None
+    # Groß- und Kleinschreibung zählt: „etwas Gutes“ und „etwas gutes“ sind
+    # bei einer Rechtschreibfrage genau die Unterscheidung.
+    texts=[' '.join(o.text.split()) for o in opts]
+    if not 3<=len(opts)<=4 or sum(o.richtig for o in opts)!=1 or len(set(texts))!=len(texts):
+        return ('Eine Auswahlaufgabe braucht drei oder vier verschiedene Antworten in task.optionen, genau eine mit '
+                'richtig=true. Stelle sie so noch einmal.')
+    if any(not o.richtig and not o.denkfehler.strip() for o in opts):
+        return ('Zu jeder falschen Antwort gehört in denkfehler ein Satz, welcher Denkfehler dahintersteckt. '
+                'Stelle die Auswahlaufgabe so noch einmal.')
     return None
 
 
@@ -1185,6 +1279,20 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
             c.execute("INSERT OR IGNORE INTO material_links(material_id,kind,target_id,origin,relation,created_at) "
                       "VALUES(?,'task',?,'mensch','ergebnis',?)",(offen['material_id'],rest.get('task_id'),now_iso()))
             text=text or 'Ja, das ist mein neuester Stand'
+        # Eine gewählte Antwort wertet die App selbst aus (D164). Falsch: sofort,
+        # ohne Modellaufruf, mit dem Denkfehler dahinter. Richtig: weiter zum
+        # Mentor, der daraufhin eine offene Aufgabe stellt.
+        chosen_right=False
+        if body.option is not None:
+            current=json.loads(s['current_task']) if s['current_task'] else None
+            opts=(current or {}).get('optionen') or []
+            if not opts or body.option>=len(opts) or body.option in set(current.get('aus') or []):
+                raise HTTPException(409,'Diese Antwort passt nicht mehr zur aktuellen Aufgabe. Bitte den aktuellen Stand laden.')
+            text=opts[body.option]['text']
+            if not opts[body.option]['richtig']:
+                wrong_choice(c,account_id,s,user,body,current,body.option,seconds,topic_mode)
+                return view(c,get_session(c,account_id,sid))
+            chosen_right=True
         at_cap=not homework and not check and ((topic_mode and s['turns']>=lernstand.MAX_TURNS) or (not topic_mode and (s['turns']>=12 or seconds>=s['max_minutes']*60)))
         if not finish and at_cap and s['turns']>=(s.get('end_proposed_turn') or 0)+PROPOSE_EVERY:
             add_message(c,sid,account_id,body.request_key,'user',text or ('Foto ansehen' if body.attachment_id else 'Weiter'),author=author_of(user,s))
@@ -1224,8 +1332,12 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
             else:images=[{'type':'image_url','image_url':{'url':'data:image/jpeg;base64,'+base64.b64encode(image['file_bytes']).decode(),'detail':'high'}}]
         kind=body.kind
         if kind=='answer' and text.endswith('?'):kind='message'
-        if text.casefold() in {'kp','keine ahnung','weiß nicht','weiss nicht','hä','?'}:kind='hint'
+        if body.option is None and text.casefold() in {'kp','keine ahnung','weiß nicht','weiss nicht','hä','?'}:kind='hint'
         ctx['incoming']={'text':text,'kind':kind,'photo_text':transcript,'spoken':body.spoken}
+        if chosen_right:
+            ctx['auswahl']={'ergebnis':'richtig','gewaehlt':text,
+                            'hinweis':'Das Kind hat die richtige Antwort gewählt; die App hat das schon gewertet. Bestätige in einem '
+                                      'Satz und stelle eine offene Aufgabe zum selben Inhalt, bei der es selbst formuliert, keine Auswahl.'}
         # Der geführte Bestand geht jede Runde vollständig mit, damit der Mentor
         # ihn nicht aus den letzten Nachrichten rekonstruieren muss (D91).
         with closing(webapp_conn()) as c:
@@ -1346,6 +1458,8 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
                 lernstand.record_answer(c,account_id,s['topic_id'],sid,uid,task.get('operator',''),a.result,bool(s['task_help'] or help_now),body.seconds,body.edits,reply.re_explained,
                                         afb=task.get('afb'),task_form=task.get('form') or '')
                 lernstand.refresh(c,s['topic_id'],sid)
+            if chosen_right and s['current_task'] and not s['is_test']:
+                evidence=record_choice(c,account_id,s,uid,text,'correct',body,topic_mode)
             task_data=s['current_task'];task_help=int(s['task_help'] or help_now)
             if reply.task and reply.action=='task':
                 if s['current_task'] and mc.fingerprint(reply.task.prompt)==mc.fingerprint(json.loads(s['current_task'])['prompt']):
@@ -1356,7 +1470,8 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
                                   (account_id,s['subject'],reply.task.skill_title,reply.task.objective,s['source_json'],now_iso(),now_iso()))
                         skill=c.execute('SELECT id FROM mentor_skills WHERE account_id=? AND subject=? AND title=?',(account_id,s['subject'],reply.task.skill_title)).fetchone()[0]
                     lp.link_session(c,account_id,s,skill)
-                    task_data=reply.task.model_dump_json();task_help=int(help_now)
+                    task_data=prepare_task(reply.task).model_dump_json();task_help=int(help_now)
+            if chosen_right and task_data==s['current_task']:task_data=None
             if reply.action=='finish':task_data=None
             payload={'choices':safe_choices(reply.choices,task_data),'task':public_task(task_data) if reply.action=='task' else None,'assessment':evidence}
             # Die Aufgabe steht im Kasten; die Nachricht daneben wiederholt sie

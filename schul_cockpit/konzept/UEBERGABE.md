@@ -68,8 +68,9 @@ Das öffentliche Repository wurde mit bereinigter Historie neu angelegt (keine K
   Übungsklausuren.
 - Zielbild Mentor (D126), Stufe 2: Lagebesprechung und Lagebild für die
   Eltern. Entwurf steht, Bau war vom Nutzer zurückgestellt.
-- Antwort-Chips: Das Verhältnis von D95 zu D127 ist nicht entschieden.
-  Ebenfalls offen aus früheren Sessions: der Prüfungs-Kapitelindex.
+- Auswahlaufgaben seit 1.13.27 (D164): an echten Gesprächen ansehen, ob der
+  Mentor sie in den erlaubten Lagen nutzt und ob die Ablenker taugen.
+  Offen aus früheren Sessions: der Prüfungs-Kapitelindex.
 - Vokabeltrainer: Tages- und Wochenverlauf mit Elternübersicht ist in
   [docs/vocabulary-learning-quality.md](../../docs/vocabulary-learning-quality.md)
   verbindlich vorgemerkt, aber nicht gebaut; Grammatikmuster brauchen einen
@@ -85,6 +86,7 @@ Das öffentliche Repository wurde mit bereinigter Historie neu angelegt (keine K
   unter dem Grammatikanhang. Eine Korrekturschnittstelle für die
   Gliederung wäre billig: Einheit und Abschnitt einer Seite von Hand
   setzen, `regroup()` achtet die Festlegung wie `book_chapters.locked`.
+  Nutzerentscheidung 24.09.: erst beobachten, noch nicht bauen (D164).
 - Nachprüfen (Stand 19.09.): zwei Vokabelseiten scheiterten mit einem
   Lesefehler, einige Materialien standen nicht auf „ready“, und im
   Englischbuch von Kind A fehlten die gedruckten Seiten 186 bis 189.
