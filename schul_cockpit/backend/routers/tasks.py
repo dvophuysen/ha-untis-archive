@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from ..audit import is_demo, log as audit_log, snapshot_task
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..db import history_conn, webapp_conn
-from ..sync_worker import sync_account
+from ..sync_worker import reopen_in_ha, sync_account
 
 _LOGGER = logging.getLogger("schul_cockpit.tasks")
 
@@ -219,7 +219,7 @@ async def patch_task(
     conn = webapp_conn()
     try:
         existing = conn.execute(
-            "SELECT id, account_id, status, source FROM tasks WHERE id = ?",
+            "SELECT id, account_id, status, source, ha_uid, completed_at FROM tasks WHERE id = ?",
             (task_id,),
         ).fetchone()
         if existing is None:
@@ -281,6 +281,19 @@ async def patch_task(
         conn.close()
 
     # In demo mode, never push changes back to HA — keeps the kid's real list clean.
+    reopened = (is_ha_task and not demo and existing["status"] == "done"
+                and body.status in ("open", "in_progress") and existing["ha_uid"])
+    if reopened and not await reopen_in_ha(account_id, existing["ha_uid"]):
+        # HA hat nicht mitgemacht: Der Abgleich würde die Aufgabe gleich wieder
+        # abhaken. Lieber ehrlich beim alten Stand bleiben und es sagen.
+        conn = webapp_conn()
+        try:
+            conn.execute("UPDATE tasks SET status = 'done', completed_at = ?, updated_at = ? WHERE id = ?",
+                         (existing["completed_at"] or now, now, task_id))
+        finally:
+            conn.close()
+        raise HTTPException(status_code=502, detail="Die Aufgabe ließ sich in der Home-Assistant-Liste nicht "
+                                                    "wieder öffnen und bleibt erledigt. Bitte gleich nochmal versuchen.")
     if is_ha_task and body.status is not None and not demo:
         try:
             await sync_account(account_id)

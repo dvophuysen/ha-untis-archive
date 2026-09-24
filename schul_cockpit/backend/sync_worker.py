@@ -365,6 +365,32 @@ async def sync_account(account_id: int) -> dict[str, int]:
     return await _sync_one(account_id, row["ha_entity_id"], sup)
 
 
+async def reopen_in_ha(account_id: int, uid: str) -> bool:
+    """Eine in der App wieder geöffnete Aufgabe auch in der HA-Liste wieder
+    öffnen, per UID. Sonst sieht der nächste Abgleich „in HA erledigt, in der
+    App offen“, lässt HA gewinnen, und die Aufgabe ist sofort wieder
+    erledigt (bis 1.13.24 ließ sich eine Untis-Aufgabe so nie wieder öffnen)."""
+    sup = get_supervisor()
+    if not sup.available:
+        return False
+    conn = webapp_conn()
+    try:
+        row = conn.execute(
+            "SELECT ha_entity_id FROM account_todo_lists WHERE account_id = ?",
+            (account_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return False
+    try:
+        await sup.update_todo_item(row["ha_entity_id"], uid, status="needs_action")
+    except SupervisorError as exc:
+        _LOGGER.warning("todo.update_item (wieder öffnen) %s für %s: %s", row["ha_entity_id"], uid, exc)
+        return False
+    return True
+
+
 async def sync_all() -> None:
     sup = get_supervisor()
     if not sup.available:

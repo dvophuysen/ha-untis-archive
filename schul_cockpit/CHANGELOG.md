@@ -1,3 +1,7 @@
+## 1.13.25
+
+- Fehler behoben: Eine erledigte Hausaufgabe aus Untis ließ sich nicht wieder öffnen; sie stand sofort wieder als erledigt da. Die App öffnet sie jetzt auch in der Home-Assistant-Liste wieder. Klappt das nicht, bleibt sie erledigt und die App sagt es, statt still zurückzuspringen.
+
 ## 1.13.24
 
 - Aufklappbereiche (etwa „Schon vorziehen“, „Üben & vorbereiten“, Materialien) zeigen wieder einen Pfeil; zugeklappt sahen sie wie leere Karten aus.
