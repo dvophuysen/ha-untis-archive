@@ -967,3 +967,15 @@ def test_the_message_does_not_repeat_the_task():
     assert strip_echo(text, None) == text
     # Eine Nachricht, die nur die Aufgabe war, bleibt nicht als Rumpf stehen.
     assert strip_echo('Erste Aufgabe: Nenne zu jeder Person die Handlung auf Deutsch.', task) == ''
+
+
+def test_homework_help_climbs_a_help_ladder_and_a_full_check_fits():
+    """Hilfen werden schrittweise gegeben und wieder zurückgenommen (VISION:
+    „reduziert Hilfen schrittweise“, D150); der nächste Schritt kommt erst
+    nach einem eigenen Beitrag. Das fehlende Arbeitsblatt wird nur erwähnt,
+    wenn die Aufgabe eines nennt. Eine volle Kontrollseite passt in eine Antwort."""
+    import backend.routers.mentor as m
+    text = m.HOMEWORK_INSTRUCTION
+    assert 'Hilfeleiter' in text and 'erst, wenn das Kind zum vorigen selbst etwas beigetragen hat' in text
+    assert 'Nennt sie kein Blatt' in text
+    m.Reply.model_validate({'message': 'x' * 3000, 'action': 'explain', 'summary': ''})

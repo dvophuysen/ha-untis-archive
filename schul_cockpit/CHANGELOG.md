@@ -1,3 +1,9 @@
+## 1.13.16
+
+- Mentor, Hausaufgabenhilfe: Hilfe kommt nach einer Hilfeleiter – erst Rückfrage, dann Hinweis auf Regel oder Stelle, dann ein ähnliches Beispiel, höchstens der erste Teilschritt der eigenen Aufgabe. Jede Bitte um Hilfe geht eine Stufe höher, ein eigener Versuch setzt zurück, und den nächsten Schritt gibt es erst nach einem eigenen Beitrag. Ist das Kind erkennbar müde oder frustriert, geht es schneller und mit Pausenangebot. Abfragen (Vokabeln, Formen) bleiben wie bisher.
+- Der Mentor bittet nur noch um ein Foto des Arbeitsblatts, wenn die Hausaufgabe ein Arbeitsblatt nennt, nicht mehr bei Buchaufgaben oder beim Vokabellernen.
+- Kontrolle: Eine volle Seite mit vielen Aufgaben passt in eine Antwort; bisher endete sie mit „nicht eindeutig genug“.
+
 ## 1.13.15
 
 - KI-Kosten: Im Mentor stehen Gesprächsverlauf und neue Nachricht im Aufruf jetzt hinter den Bildern. So kann Azure den gleichbleibenden Anfang (Anweisung, Unterricht, Material, Buchseiten) verbilligt aus dem Cache rechnen; bisher fiel alles hinter dem Verlauf, auch die Bilder, bei jedem Zug heraus. Inhaltlich sieht der Mentor dasselbe.
