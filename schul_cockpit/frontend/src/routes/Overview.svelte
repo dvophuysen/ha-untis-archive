@@ -8,6 +8,7 @@
   // den passenden Abschnitt. Die Seite „Heute“ des Kindes wird nicht wiederholt.
   import ActionLabel from '../lib/ActionLabel.svelte';
   import { subjectStyle } from '../lib/subjectStyle.js';
+  import { formatShortDate } from '../lib/format.js';
   import { untrack } from 'svelte';
   import ParentReportSettings from '../lib/ParentReportSettings.svelte';
   import { api } from '../lib/api.js';
@@ -135,6 +136,10 @@
           </button>
         {/if}
 
+        {#if kid.study}
+          <!-- Lernen heute (D180): nur zur Information, die App steuert selbst nach. -->
+          <button class="okline study" class:open={kid.study.done < kid.study.total} onclick={() => open(kid, { page: 'today' })}><span>Lernen heute: {kid.study.done} von {kid.study.total}{#each kid.study.tight ?? [] as t} · eng bis {subjectStyle(t.subject).name} am {formatShortDate(t.exam_date)}{/each}</span></button>
+        {/if}
         {#if b.ok.length}
           <button class="okline" onclick={() => open(kid, { page: 'today' })}><span>✓ {b.ok.join(' · ')}</span></button>
         {/if}
@@ -246,6 +251,8 @@
     background: var(--good-bg); color: var(--good-fg); font-size: 0.88rem; font-weight: 550; min-height: 44px;
     margin-bottom: 0.2rem;
   }
+  /* Offenes Lernen ist kein Versäumnis: neutral statt grün (D180). */
+  button.okline.study.open { background: var(--bg-elevated); color: var(--fg); }
   .row {
     display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left; min-height: 48px;
     padding: 9px 4px; background: transparent; color: var(--fg); border: 0; border-top: 1px solid var(--border);

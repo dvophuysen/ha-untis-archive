@@ -3,7 +3,7 @@
   // in einem Schritt auswerten. Wer lieber tippt, tippt; beides geht zusammen.
   import { api } from './api.js';
 
-  let { accountId, attemptId, onclose = () => {} } = $props();
+  let { accountId, attemptId, onclose = () => {}, backLabel = 'Zurück zum Raster' } = $props();
   const base = $derived(`/api/accounts/${accountId}/practice/attempts/${attemptId}`);
   let a = $state(null), error = $state(''), busy = $state(''), typing = $state(false), answers = $state({});
   let fileInput = $state(null);
@@ -54,7 +54,7 @@
 </script>
 
 <section class="paper-view">
-  <button class="ghost back" onclick={onclose}>← Zurück zum Raster</button>
+  <button class="ghost back" onclick={onclose}>← {backLabel}</button>
   {#if !a}
     {#if error}<p class="error-box" role="alert">{error}</p>{:else}<span class="spinner"></span>{/if}
   {:else}

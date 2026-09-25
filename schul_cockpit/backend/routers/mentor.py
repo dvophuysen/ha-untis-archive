@@ -4,6 +4,7 @@ import asyncio
 import base64
 import io
 import json
+import logging
 import random
 import re
 import sqlite3
@@ -1239,6 +1240,26 @@ def open_items(quiz):
 
 @router.post('/sessions/{sid}/turn')
 async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_current_user)):
+    out=await _turn(account_id,sid,body,user)
+    note_learning(account_id,sid,user)
+    return out
+
+
+def note_learning(account_id,sid,user):
+    """Eine Antwort im Gespräch kann einen Lernschritt des Tages erledigen (D180):
+    einmal je Antwort festhalten, damit „Geschafft“ neu geprüft wird."""
+    try:
+        with closing(webapp_conn()) as c:
+            row=c.execute('SELECT MAX(id) FROM topic_answers WHERE account_id=? AND session_id=?',(account_id,sid)).fetchone()
+            if not row or not row[0]:return
+            if c.execute("SELECT 1 FROM reward_events WHERE account_id=? AND kind='learn' AND ref=?",(account_id,f'dialog:{row[0]}')).fetchone():return
+        from .. import rewards
+        rewards.note(account_id,'learn',f'dialog:{row[0]}',user)
+    except Exception:
+        logging.getLogger('schul_cockpit.mentor').debug('Lernschritt nicht erfasst',exc_info=True)
+
+
+async def _turn(account_id,sid,body,user):
     access(user,account_id,write=True)
     with closing(webapp_conn()) as c,c:
         c.execute('BEGIN IMMEDIATE');s=get_session(c,account_id,sid)
