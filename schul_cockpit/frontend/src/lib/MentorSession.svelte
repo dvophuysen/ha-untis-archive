@@ -70,6 +70,9 @@
   const choices=$derived(running?.messages.filter(m=>m.role==='assistant').at(-1)?.payload?.choices||[]);
   // Antwortknöpfe gelten nur an der jüngsten Aufgabe, solange sie offen ist (D164).
   const liveTask=$derived.by(()=>{const ms=running?.messages||[];for(let i=ms.length-1;i>=0;i--){if(ms[i].role==='assistant'&&ms[i].payload?.task)return ms[i].payload.task.prompt===running?.task?.prompt?i:-1;}return -1;});
+  // Abbildungen aus abgelegten Seiten (D198): Antippen vergrößert, ohne die App zu verlassen.
+  const figUrl=id=>`./api/accounts/${accountId}/materials/figures/${id}`;
+  let zoom=$state(null);
   function when(iso){if(!iso)return '';return `${formatShortDate(iso.slice(0,10))} ${iso.slice(11,16)}`;}
   onMount(()=>{const t=setInterval(()=>pause(document.hidden),30000);const v=()=>pause(document.hidden);document.addEventListener('visibilitychange',v);return()=>{clearInterval(t);document.removeEventListener('visibilitychange',v);};});
 </script>
@@ -98,15 +101,16 @@
     {/if}
     {#if running.mode==='homework_help'}<p class="hint">{running.task_done?'Diese Hausaufgabe ist abgehakt. Das Gespräch liegt im Archiv und bleibt lesbar.':'Dieses Gespräch bleibt offen, bis du die Hausaufgabe abhakst.'}</p>
     {:else if running.mode==='homework_check'}<p class="hint">{running.task_done?'Diese Hausaufgabe ist abgehakt. Die Kontrolle bleibt lesbar.':'Ich prüfe deine fertige Lösung Aufgabe für Aufgabe. Die richtige Lösung sage ich nicht vor.'}</p>{/if}
-    {#if running.task && running.status==='active'}<details class="task"><summary>Deine aktuelle Aufgabe</summary>{#if running.task.vorlage}<blockquote class="vorlage preserve">{running.task.vorlage}{#if running.task.quelle}<cite>{running.task.quelle}</cite>{/if}</blockquote>{/if}<p class="preserve">{running.task.prompt}</p></details>{/if}
+    {#if running.task && running.status==='active'}<details class="task"><summary>Deine aktuelle Aufgabe</summary>{#if running.task.vorlage}<blockquote class="vorlage preserve">{running.task.vorlage}{#if running.task.quelle}<cite>{running.task.quelle}</cite>{/if}</blockquote>{/if}{#if running.task.abbildung}<button type="button" class="figure" onclick={()=>zoom=running.task.abbildung}><img src={figUrl(running.task.abbildung)} alt={running.task.abbildung_text||'Abbildung zur Aufgabe'} loading="lazy"/></button>{/if}<p class="preserve">{running.task.prompt}</p></details>{/if}
     <div class="messages" aria-live="polite">
       {#each running.messages as m, i}<article class:own={m.role==='user'}><span class="speaker">{m.role!=='user'?'Mentor':m.author==='eltern'?'Eltern':canManage?'Kind':'Du'}</span><p class="preserve">{m.text}</p>
         <!-- Erst das, woran gearbeitet wird, dann der Auftrag (G1). -->
-        {#if m.payload.task}<div class="task"><strong>Deine Aufgabe</strong>{#if m.payload.task.vorlage}<blockquote class="vorlage preserve">{m.payload.task.vorlage}{#if m.payload.task.quelle}<cite>{m.payload.task.quelle}</cite>{/if}</blockquote>{/if}<p class="preserve">{m.payload.task.prompt}</p>{#if m.payload.task.optionen?.length}<div class="optionen" role="group" aria-label="Antwortmöglichkeiten">{#each m.payload.task.optionen as o (o.id)}<button class="option" class:aus={o.aus} disabled={busy||o.aus||!canWrite||i!==liveTask||running.status!=='active'} onclick={()=>act(()=>send('choice',o.text,o.id))}>{o.text}</button>{/each}</div>{/if}</div>{/if}
+        {#if m.payload.task}<div class="task"><strong>Deine Aufgabe</strong>{#if m.payload.task.vorlage}<blockquote class="vorlage preserve">{m.payload.task.vorlage}{#if m.payload.task.quelle}<cite>{m.payload.task.quelle}</cite>{/if}</blockquote>{/if}{#if m.payload.task.abbildung}<button type="button" class="figure" onclick={()=>zoom=m.payload.task.abbildung}><img src={figUrl(m.payload.task.abbildung)} alt={m.payload.task.abbildung_text||'Abbildung zur Aufgabe'} loading="lazy"/><small>{m.payload.task.abbildung_seite||'Abbildung'} · antippen zum Vergrößern</small></button>{/if}<p class="preserve">{m.payload.task.prompt}</p>{#if m.payload.task.optionen?.length}<div class="optionen" role="group" aria-label="Antwortmöglichkeiten">{#each m.payload.task.optionen as o (o.id)}<button class="option" class:aus={o.aus} disabled={busy||o.aus||!canWrite||i!==liveTask||running.status!=='active'} onclick={()=>act(()=>send('choice',o.text,o.id))}>{o.text}</button>{/each}</div>{/if}</div>{/if}
         {#if m.payload.material_ids?.length}<p class="hint">{m.payload.material_ids.length===1?'1 Seite':`${m.payload.material_ids.length} Seiten`} aus deinen Materialien eingebunden</p>{/if}
         {#if m.payload.attachment_id}<a href={`./${base.slice(1)}/photos/${m.payload.attachment_id}`} target="_blank" rel="noreferrer"><ActionLabel label="Dein Foto öffnen" /></a>{/if}
         <!-- Die gefundene Bearbeitung: Das Kind sieht, worüber gesprochen wird, bevor es bestätigt. -->
         {#if m.payload.material}<a class="found" href={`./api/accounts/${accountId}/materials/${m.payload.material.id}/file`} target="_blank" rel="noreferrer"><img src={`./api/accounts/${accountId}/materials/${m.payload.material.id}/file`} alt={`Deine Bearbeitung: ${m.payload.material.label}`} loading="lazy" /><small>{m.payload.material.label}</small></a>{/if}
+        {#if m.payload.picture}<button type="button" class="figure" onclick={()=>zoom=m.payload.picture.figure_id}><img src={figUrl(m.payload.picture.figure_id)} alt="Bild zur Bildbeschreibung" loading="lazy"/><small>{m.payload.picture.seite} · antippen zum Vergrößern</small></button>{/if}
         {#if m.payload.oral_result}
           {@const r=m.payload.oral_result}
           <div class="oral-result" aria-label="Bewertung der Sprechprobe">
@@ -183,10 +187,17 @@
          fragen, und die Antwort war unvollständig (D91). -->
     {#if running.quiz_open?.length}<p class="muted">Noch zu wiederholen: {running.quiz_open.join(', ')}.</p>
     {:else if running.quiz?.length}<p class="muted">Alles wiederholt: {running.quiz.length} {running.quiz.length===1?'Wort':'Wörter'} sitzen.</p>{/if}
+    {#if zoom}<div class="zoom" role="dialog" aria-modal="true" aria-label="Abbildung vergrößert"><button type="button" class="primary" onclick={()=>zoom=null}>Schließen</button><img src={figUrl(zoom)} alt="Abbildung vergrößert"/></div>{/if}
     {#if busy}<p role="status" class="working">{oral?'Einen Moment …':running.messages.length<=1?'Dein Coach schaut sich Thema und Material an …':'Einen Moment – deine Antwort wird vorbereitet …'}</p>{/if}
 </div>
 {/if}
 <style>
+  .figure{display:block;width:100%;padding:0;margin:.4rem 0;border:1px solid var(--border);border-radius:var(--r-sm);background:#fff;text-align:left;cursor:zoom-in}
+  .figure img{display:block;max-width:100%;max-height:340px;margin:0 auto;object-fit:contain}
+  .figure small{display:block;padding:.25rem .5rem;color:#555;background:var(--bg-card)}
+  .zoom{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.92);display:flex;flex-direction:column;gap:.5rem;padding:max(env(safe-area-inset-top),.6rem) .6rem .6rem}
+  .zoom button{align-self:flex-end;min-height:44px}
+  .zoom img{flex:1;min-height:0;width:100%;object-fit:contain;background:#fff}
   .oral-result{margin-top:.5rem;padding:.6rem;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-card)}
   .oral-result ul{list-style:none;margin:.3rem 0;padding:0;display:grid;gap:.35rem}
   .oral-result .scores li{display:grid;grid-template-columns:1fr auto;gap:.1rem .5rem;align-items:center}

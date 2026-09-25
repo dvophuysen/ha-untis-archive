@@ -219,3 +219,25 @@ def test_old_exam_on_paper_counts_for_the_next_exam(paper):
     with closing(db.webapp_conn()) as c:
         rows = [dict(r) for r in c.execute("SELECT topic_id, points FROM topic_answers")]
     assert len(rows) == 1 and rows[0]["points"] == 4, "ohne gültiges Thema zählt die Aufgabe nicht"
+
+
+def test_paper_task_may_print_a_figure_of_the_topic_pages(paper, monkeypatch):
+    """D198: Die Abbildungen der Themenseiten gehen mit; eine Aufgabe darf eine
+    davon mitdrucken, eine erfundene ID wird verworfen."""
+    client, state, patch = paper
+    child(state)
+    from backend import page_figures
+    fig = {"id": 5, "material_id": 9, "kind": "diagramm", "caption": "", "beschreibung": "Gerade durch (0|1) und (2|5).", "seite": "Buch S. 30"}
+    monkeypatch.setattr(page_figures, "for_places", lambda *a, **k: [fig])
+    monkeypatch.setattr(page_figures, "data_uri", lambda account, fid: "data:image/jpeg;base64,QUJD" if fid == 5 else None)
+    seen = []
+    tasks = pack(6)
+    tasks["tasks"][0]["abbildung"] = 5
+    tasks["tasks"][1]["abbildung"] = 77
+    mock(patch, [tasks], seen)
+    a = client.post(BASE, json={"exam_key": KEY, "format": "einstieg"}).json()
+    assert seen[0][1]["abbildungen"][0]["id"] == 5
+    t0, t1 = a["exam"]["tasks"][0], a["exam"]["tasks"][1]
+    assert t0["abbildung"] == 5 and t0["abbildung_seite"] == "Buch S. 30" and t1["abbildung"] is None
+    sheet = client.get(f"{BASE}/attempts/{a['id']}/print").text
+    assert sheet.count('<img class="fig" src="data:image/jpeg;base64,QUJD"') == 1

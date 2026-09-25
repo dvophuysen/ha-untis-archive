@@ -289,6 +289,18 @@ async def collect_sources(account_id: int, user: CurrentUser = Depends(get_curre
     return start_collect(account_id)
 
 
+@router.get("/figures/{figure_id}")
+def figure_image(account_id: int, figure_id: int, user: CurrentUser = Depends(get_current_user)) -> Response:
+    """Eine Abbildung als Ausschnitt ihrer Seite (D198). Vor /{material_id}, sonst
+    liest FastAPI „figures" als Material-ID."""
+    access(user, account_id)
+    from ..page_figures import crop
+    data = crop(account_id, figure_id)
+    if not data:
+        raise HTTPException(404, "Abbildung nicht gefunden.")
+    return Response(data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
 class CompareIn(InputModel):
     tier: str = Field(min_length=1, max_length=20)
     effort: str | None = Field(default=None, pattern=r"^(low|medium|high)$")

@@ -1180,3 +1180,17 @@ CREATE TABLE IF NOT EXISTS oral_sims (
 );
 CREATE INDEX IF NOT EXISTS idx_oral_sims_exam ON oral_sims(account_id, exam_key, id);
 """))
+
+# Abbildungen aus abgelegten Seiten (D198): einmal je Seite im Hintergrund
+# erkannt, mit Lage auf der Seite und Beschreibung.
+_MIGRATIONS.append(("material_figures_001", """
+CREATE TABLE IF NOT EXISTS material_figures (
+ id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL, material_id INTEGER NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
+ idx INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL, box_json TEXT NOT NULL, caption TEXT NOT NULL DEFAULT '',
+ description TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_material_figures_material ON material_figures(material_id);
+CREATE TABLE IF NOT EXISTS material_figure_scans (
+ material_id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL, scanned_at TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0, error TEXT
+);
+"""))

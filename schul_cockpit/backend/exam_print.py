@@ -25,7 +25,11 @@ def sheet(exam, tasks, code=None, space="lines"):
     for i, t in enumerate(tasks):
         room = '' if only_tasks else (f'<div class="space" style="height:{space_mm(t["points"])}mm" '
                                       f'aria-label="Platz für die Antwort"></div>')
-        sections.append(f'<section><div class="q"><h2>Aufgabe {i+1} · {t["points"]} Punkte</h2>'
+        fig = ''
+        if str(t.get("abbildung_src") or "").startswith("data:image/"):
+            # Abbildung aus der abgelegten Seite (D198), als eingebettetes Bild.
+            fig = f'<img class="fig" src="{escape(t["abbildung_src"])}" alt="{escape(t.get("abbildung_text") or "Abbildung")}">'
+        sections.append(f'<section><div class="q"><h2>Aufgabe {i+1} · {t["points"]} Punkte</h2>{fig}'
                         f'<p class="task">{escape(t["prompt"])}</p></div>{room}</section>')
     if code:
         hint = ('Löse im Heft oder auf Karopapier und schreibe die Aufgabennummern dazu. ' if only_tasks
@@ -39,7 +43,7 @@ def sheet(exam, tasks, code=None, space="lines"):
     return f'''<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><style>
     body{{font:11pt/1.4 system-ui,sans-serif;max-width:190mm;margin:16px auto;padding:0 12px;color:#111;background:white}}
     h1{{font-size:15pt;margin:0 0 4px}}h2{{font-size:11.5pt;margin:0 0 3px}}.meta{{margin:0 0 6px;font-size:10pt}}.hint{{margin:0 0 8px;font-size:9.5pt;color:#333}}
-    .task{{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}}section{{margin:0 0 {'8px' if only_tasks else '10px'}}}.q{{break-inside:avoid}}
+    .task{{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}}section{{margin:0 0 {'8px' if only_tasks else '10px'}}}.q{{break-inside:avoid}}.fig{{display:block;max-width:100%;max-height:75mm;margin:2px 0 4px}}
     .space{{margin-top:4px;background:repeating-linear-gradient(white,white 7.8mm,#ccc 7.8mm,#ccc 8mm)}}
     footer{{font-size:8.5pt;color:#555;margin-top:8px}}.tools{{background:#eee;padding:12px;margin-bottom:10px}}button{{font:inherit;padding:10px}}
     @page{{size:A4;margin:12mm}}@media print{{body{{margin:0;padding:0;max-width:none}}.tools{{display:none}}.space{{background:repeating-linear-gradient(white,white 7.8mm,#bbb 7.8mm,#bbb 8mm);-webkit-print-color-adjust:exact;print-color-adjust:exact}}}}

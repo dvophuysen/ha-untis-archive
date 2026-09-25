@@ -76,7 +76,7 @@
         <article class="task">
           <div class="t-head"><strong>Aufgabe {i + 1}</strong><span class="tag">{t.skill_title} · {ROMAN[t.afb]}</span>
             <span class="pts" class:full={f && !f.uncertain && f.points === t.points}>{f?.uncertain ? 'unklar' : `${num(f?.points ?? 0)} / ${t.points}`}</span></div>
-          <p class="preserve">{t.prompt}</p>
+          {#if t.abbildung}<img class="fig" src={`./api/accounts/${accountId}/materials/figures/${t.abbildung}`} alt={t.abbildung_text || 'Abbildung zur Aufgabe'} loading="lazy" />{/if}<p class="preserve">{t.prompt}</p>
           {#if f}<p>{f.rationale}</p><p><strong>Nächster Schritt:</strong> {f.next_step}</p>
             {#if f.transcription}<details><summary>So wurde deine Antwort gelesen</summary><p class="preserve">{f.transcription}</p></details>{/if}{/if}
           <details><summary>Lösung und Punktkriterien</summary><p class="preserve">{t.solution}</p><p class="preserve dim">{t.criteria}</p></details>
@@ -87,7 +87,7 @@
       <p class="notice">Nur ansehen: Die Arbeit ist noch nicht ausgewertet. Drucken geht trotzdem.</p>
       <button class="btn" onclick={() => (printing = true)}>🖨️ Blatt drucken</button>
       {#each a.exam.tasks as t, i}
-        <article class="task"><div class="t-head"><strong>Aufgabe {i + 1}</strong><span class="dim">{t.points} Punkte</span></div><p class="preserve">{t.prompt}</p></article>
+        <article class="task"><div class="t-head"><strong>Aufgabe {i + 1}</strong><span class="dim">{t.points} Punkte</span></div>{#if t.abbildung}<img class="fig" src={`./api/accounts/${accountId}/materials/figures/${t.abbildung}`} alt={t.abbildung_text || 'Abbildung zur Aufgabe'} loading="lazy" />{/if}<p class="preserve">{t.prompt}</p></article>
       {/each}
     {:else}
       <ol class="steps">
@@ -108,7 +108,7 @@
         {#each a.exam.tasks as t, i}
           <article class="task">
             <div class="t-head"><strong>Aufgabe {i + 1}</strong><span class="dim">{t.points} Punkte</span></div>
-            <p class="preserve">{t.prompt}</p>
+            {#if t.abbildung}<img class="fig" src={`./api/accounts/${accountId}/materials/figures/${t.abbildung}`} alt={t.abbildung_text || 'Abbildung zur Aufgabe'} loading="lazy" />{/if}<p class="preserve">{t.prompt}</p>
             <textarea rows="4" bind:value={answers[String(i)]} oninput={remember} placeholder="Deine Antwort. Diktieren geht auch."></textarea>
           </article>
         {/each}
@@ -123,6 +123,7 @@
 </section>
 
 <style>
+  .fig { display: block; max-width: 100%; max-height: 320px; margin: 0.3rem 0; background: #fff; border-radius: var(--r-sm); }
   .paper-view{display:grid;gap:var(--sp-2);margin-top:var(--sp-3);padding-top:var(--sp-3);border-top:1px solid var(--border)}
   .back{justify-self:start;min-height:40px}
   header h3{margin:2px 0 0}

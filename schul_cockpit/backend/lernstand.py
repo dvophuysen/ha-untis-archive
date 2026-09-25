@@ -854,8 +854,19 @@ def context_for(account_id: int, topic_id: int, session_id: int | None = None) -
         # Einstieg „Schulbuch S. 50“ und erfand den Inhalt, obwohl zu diesem Thema
         # kein einziges Material vorlag (D96).
         "material_fehlt": not material,
+        # Abbildungen der Seiten zum Thema, mit Beschreibung; eine Aufgabe darf eine davon zeigen (D198).
+        "abbildungen": _figures(account_id, topic["subject"], places),
         **_exam_form(account_id, topic["exam_key"]),
     }
+
+
+def _figures(account_id: int, subject: str, places: list[dict]) -> list[dict]:
+    try:
+        from .page_figures import for_places
+        return [{k: f[k] for k in ("id", "kind", "caption", "beschreibung", "seite")} for f in for_places(account_id, subject, places)]
+    except Exception:
+        LOG.debug("Abbildungen zum Thema nicht lesbar", exc_info=True)
+        return []
 
 
 def _exam_form(account_id: int, exam_key: str) -> dict:

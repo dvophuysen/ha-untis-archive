@@ -43,9 +43,10 @@ const {chromium}=require('playwright-core');const http=require('http'),fs=requir
   else if(u.endsWith('/learning/mentor/sessions')&&req.method()==='POST'){sessionBody=req.postDataJSON();body=session(55,sessionBody.subject||'Mathematik',sessionBody.goal||'Gleichungen');}
   else if(/\/sessions\/60\/turn$/.test(u)){const b=req.postDataJSON();turns.push(b);const n=oralState.messages.length;oralState={...oralState,version:oralState.version+1,messages:[...oralState.messages,{id:n+1,role:'user',text:b.text,payload:{spoken:b.spoken},author:'kind'},
     b.kind==='finish'?{id:n+2,role:'assistant',text:'Du hast viel erzählt.',payload:{choices:[],oral_result:{reliable:true,scores:[{criterion:'wortschatz',label:'Wortschatz',score:3,evidence:'I have a sister.'},{criterion:'grammatik',label:'Grammatik',score:2,evidence:'She have a dog.'}],weak_spots:[{label:'has statt have',example:'She have a dog.',better:'She has a dog.'}],followups:[],level_note:'Etwa A1+.'}},author:null}
-    :{id:n+2,role:'assistant',text:'Nice! What does your sister like?',payload:{choices:[]},author:null}],status:b.kind==='finish'?'completed':'active'};body=oralState;}
+    :{id:n+2,role:'assistant',text:'Nice! What does your sister like?',payload:{choices:[],picture:{figure_id:9,caption:'',seite:'Buch S. 20'}},author:null}],status:b.kind==='finish'?'completed':'active'};body=oralState;}
   else if(/\/learning\/mentor\/sessions\/\d+$/.test(u)){const id=Number(u.split('/').pop());body=session(id,'Mathematik','Terme');}
   else if(/\/sessions\/\d+\/unarchive$/.test(u)){unarchived=Number(u.split('/').at(-2));body={ok:true};}
+  else if(u.endsWith('/materials/figures/9'))return route.fulfill({status:200,contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=','base64')});
   else if(u.endsWith('/pause'))body=session(55,'Mathematik','Gleichungen');
   else if(u==='/api/accounts/1/practice'&&req.method()==='GET')body={papers:[]};
   else if(u==='/api/accounts/1/practice'&&req.method()==='POST'){practiceBody=req.postDataJSON();body={id:41};}
@@ -139,6 +140,10 @@ const {chromium}=require('playwright-core');const http=require('http'),fs=requir
  await page.getByRole('textbox',{name:/Oder tippen/}).fill('I have a sister.');await page.getByRole('button',{name:'Senden',exact:true}).click();
  await page.getByText('Nice! What does your sister like?').waitFor();
  assert.equal(turns[0].kind,'message');
+ /* D198: Bild zur Bildbeschreibung im Chat, antippen vergrößert in der App */
+ await page.getByRole('img',{name:'Bild zur Bildbeschreibung'}).waitFor();await page.getByText('Buch S. 20 · antippen zum Vergrößern').click();
+ await page.getByRole('dialog',{name:'Abbildung vergrößert'}).waitFor();await page.getByRole('dialog',{name:'Abbildung vergrößert'}).getByRole('button',{name:'Schließen'}).click();
+ assert.equal(await page.getByRole('dialog',{name:'Abbildung vergrößert'}).count(),0);
  await page.getByRole('button',{name:/Beenden und auswerten/}).click();
  await page.getByText('Darauf achten wir beim nächsten Mal').waitFor();
  await page.getByText('Besser: „She has a dog.“').waitFor();

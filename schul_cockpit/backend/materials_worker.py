@@ -95,6 +95,12 @@ async def cycle() -> int:
     for account_id, material_id in _stuck(RESCUE_LIMIT):
         if await analysis.analyze(account_id, material_id):
             done += 1
+    # Abbildungen der Bildseiten verzeichnen (D198), ein paar je Runde.
+    try:
+        from . import page_figures
+        await page_figures.cycle()
+    except Exception:
+        log.info("Abbildungsverzeichnis verschoben")
     day = today_local().isoformat()
     if datetime.now().hour >= NIGHT_HOUR:
         await refresh_calendars(day)

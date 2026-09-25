@@ -90,6 +90,8 @@ class Task(InputModel):
     afb:int=Field(ge=1,le=3)
     # Antwortmöglichkeiten zum Antippen; die App mischt und wertet aus (D164).
     optionen:list[Option]=Field(default_factory=list,max_length=4)
+    # Eine Abbildung aus topic.abbildungen (ID): das Kind sieht den Ausschnitt der Seite (D198).
+    abbildung:int|None=None
 
 class Assessment(InputModel):
     result:Literal['correct','partial','incorrect','uncertain']
@@ -120,6 +122,8 @@ class Reply(InputModel):
     transcription:str=Field(default='',max_length=4000)
     # Der Mentor musste dasselbe ein zweites Mal anders erklären: Verständnislücke, kein Zufall.
     re_explained:bool=False
+    # Sprechprobe: ein Bild aus oral.bilder (ID) für die Bildbeschreibung (D198).
+    bild:int|None=None
 
 class OpeningIn(InputModel):
     spent_eur:float=Field(ge=0,le=1000,allow_inf_nan=False)
@@ -312,6 +316,7 @@ END_QUESTION_CHECK=' Willst du hier aufhören oder noch eine Seite zeigen?'
 END_CHOICES_CHECK=['Für heute fertig','Noch eine Seite zeigen']
 END_QUESTION_ORAL=' Soll ich die Probe jetzt auswerten, oder möchtest du noch weitersprechen?'
 END_CHOICES_ORAL=['Beenden und auswerten','Noch weitersprechen']
+ORAL_PICTURE_TURNS=6  # so viele Züge sieht der Prüfer das gezeigte Bild mit
 ORAL_CAP_TEXT='Das war eine lange Probe. Soll ich sie jetzt auswerten, oder möchtest du noch weitersprechen?'
 
 
@@ -1075,6 +1080,7 @@ TASK_RULE=('Eine Aufgabe besteht aus Vorlage und Auftrag. task.vorlage ist das, 
 # Ein Thema der offiziellen Themenliste: Die App misst die Stufe, der Mentor liefert Aufgaben in
 # wechselnden Arten und den fachlichen Grund. Keine Uhr, keine Minuten.
 TOPIC_RULE=('topic ist ein Thema der offiziellen Themenliste der Lehrkraft für eine Arbeit. Übe dieses Thema. '
+            'topic.abbildungen sind Abbildungen der Seiten zum Thema mit genauer Beschreibung (Bilder, Schaltpläne, Diagramme). Eine Aufgabe darf genau eine davon nutzen: task.abbildung ist dann ihre id, das Kind sieht den Ausschnitt; die Aufgabe muss zur Beschreibung passen. Verweise nie auf eine Abbildung ohne id. '
             'Gelernt wird das Thema, nicht die Buchseite. topic.material ist die Grundlage, nicht der Stoff: Daraus entnimmst du das Niveau, den Wortschatz, die Formen und die Art, wie in diesem Heft geübt wird. '
             'Denk dir als Nachhilfelehrer aus, wie du das Ziel trainierst — eigene Aufgaben zum selben Thema sind ausdrücklich erwünscht, du musst nichts abschreiben. Fehlt Material ganz, übst du das Thema trotzdem, mit Allgemeinwissen, und sagst das. '
             'Was aber nicht im Material steht, schreibst du ihm nicht zu: kein „im Material steht“, kein „laut Text“, kein Zitat und keine Seitenzahl, die du nicht wirklich dort gelesen hast. Eine selbst erfundene Aufgabe ist gut, eine erfundene Quelle ist ein Fehler. '
@@ -1516,6 +1522,18 @@ async def _turn(account_id,sid,body,user):
             ctx['abfrage']={'bestand':stored_quiz,'offen':open_items(stored_quiz)}
         if (topic_mode or oral) and s.get('topic_id'):ctx['topic']=lernstand.context_for(account_id,s['topic_id'],sid)
         oral_context(account_id,s,ctx)
+        # Abbildungen (D198): die der offenen Aufgabe und das gezeigte Bild der
+        # Sprechprobe gehen als Bild mit, damit Antworten daran gemessen werden.
+        from .. import page_figures
+        allowed_figures={f['id'] for f in ((ctx.get('topic') or {}).get('abbildungen') or [])}
+        allowed_pictures={f['id'] for f in ((ctx.get('oral') or {}).get('bilder') or [])}
+        shown=[]
+        if s['current_task'] and json.loads(s['current_task']).get('abbildung'):shown.append(json.loads(s['current_task'])['abbildung'])
+        picture=json.loads(s.get('source_json') or '{}').get('bild')
+        if oral and picture and s['turns']-picture.get('turn',0)<ORAL_PICTURE_TURNS:shown.append(picture['id'])
+        for fid in shown[:2]:
+            part=page_figures.image_part(account_id,fid)
+            if part:images.append(part)
         # Keep the next context bounded even when previous answers were lengthy.
         while len(json.dumps(ctx,ensure_ascii=False).encode())>30000 and ctx['lessons']:ctx['lessons'].pop()
         homework_help=homework
@@ -1590,6 +1608,8 @@ async def _turn(account_id,sid,body,user):
             if versuch:
                 raise HTTPException(502,'Die Aufgabe hätte auf Material verwiesen, das du nicht vor dir hast. Dein Stand bleibt erhalten.')
             note=' WICHTIG: '+fehlt+' '
+        if reply.task and reply.task.abbildung not in allowed_figures:reply.task.abbildung=None
+        if reply.bild not in allowed_pictures:reply.bild=None
         if homework_help or check or oral:
             reply.task=None;reply.assessment=None
             if oral:reply.choices=[]
@@ -1639,9 +1659,18 @@ async def _turn(account_id,sid,body,user):
                         skill=c.execute('SELECT id FROM mentor_skills WHERE account_id=? AND subject=? AND title=?',(account_id,s['subject'],reply.task.skill_title)).fetchone()[0]
                     lp.link_session(c,account_id,s,skill)
                     task_data=prepare_task(reply.task).model_dump_json();task_help=int(help_now)
+                    if reply.task.abbildung:
+                        fig=page_figures.get(account_id,reply.task.abbildung)
+                        task_data=json.dumps({**json.loads(task_data),'abbildung_text':(fig or {}).get('beschreibung',''),'abbildung_seite':(fig or {}).get('seite','')},ensure_ascii=False)
             if chosen_right and task_data==s['current_task']:task_data=None
             if reply.action=='finish':task_data=None
             payload={'choices':safe_choices(reply.choices,task_data),'task':public_task(task_data) if reply.action=='task' else None,'assessment':evidence}
+            if oral and reply.bild:
+                fig=page_figures.get(account_id,reply.bild)
+                if fig:
+                    payload['picture']={'figure_id':fig['id'],'caption':fig['caption'],'seite':fig['seite']}
+                    live_source=json.loads(live.get('source_json') or '{}');live_source['bild']={'id':fig['id'],'turn':s['turns']+1,'beschreibung':fig['beschreibung']}
+                    c.execute('UPDATE mentor_sessions SET source_json=? WHERE id=?',(json.dumps(live_source,ensure_ascii=False),sid))
             # Die Aufgabe steht im Kasten; die Nachricht daneben wiederholt sie
             # nicht noch einmal (G2, D126).
             gesagt=strip_echo(reply.message,reply.task) if reply.action=='task' else reply.message

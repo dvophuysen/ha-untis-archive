@@ -193,6 +193,19 @@ def done_on(account_id: int, exam_key: str, topic_id: int | None, first: str, la
 
 # ------------------------------------------------------------------ Prüfer
 
+def pictures(account_id: int, subject: str | None, limit: int = 12) -> list[dict]:
+    """Bilder für die Bildbeschreibung: Fotos, Zeichnungen, Comics und Karten aus
+    den abgelegten Seiten des Fachs, mit Beschreibung (D198)."""
+    if not subject:
+        return []
+    try:
+        from .page_figures import PICTURE_KINDS, for_subject
+        return [{"id": f["id"], "beschreibung": f["beschreibung"], "seite": f["seite"]}
+                for f in for_subject(account_id, subject, PICTURE_KINDS, limit)]
+    except Exception:
+        LOG.debug("Bilder für die Sprechprobe nicht lesbar", exc_info=True)
+        return []
+
 def spoken_topics(account_id: int, exam_key: str) -> list[dict]:
     """Die Sprechthemen: von Eltern eingetragen. Der Zettel der Lehrkraft
     beschreibt bei einer Sprechprüfung den Ablauf, keine Themen (D195)."""
@@ -225,6 +238,8 @@ def context(account_id: int, source: dict, subject: str, grade) -> dict:
         "niveau": level_for(grade),
         "unterricht": reference_context(account_id, key, subject),
         "baustellen_letztes_mal": open_weak_spots(account_id, key),
+        "bilder": pictures(account_id, subject),
+        "bild_gezeigt": source.get("bild"),
         "antworten_bis_zum_abrunden": FULL_TURNS if source.get("full") else TOPIC_TURNS,
     }
 
@@ -232,9 +247,11 @@ def context(account_id: int, source: dict, subject: str, grade) -> dict:
 ORAL_RULE = (
     "SPRECHPROBE: Du bist der Prüfer einer mündlichen Prüfung in der Fremdsprache (oral.art, oral.thema, "
     "oral.hinweise_eltern). Steht in oral.pruefungsaufbau der Ablauf laut Lehrkraft (etwa Interview, Monologue, "
-    "Dialogue), folgst du ihm in der Gesamtprobe Teil für Teil und kündigst jeden Teil kurz an; eine Bildbeschreibung "
-    "ohne Bild ersetzt du durch ein Bild, das du in zwei, drei einfachen Sätzen beschreibst und das Kind weiter "
-    "beschreiben und deuten lässt; im Dialogue spielst du den Partner. Sprich ausschließlich in der Fremdsprache, freundlich und natürlich, in kurzen Sätzen auf "
+    "Dialogue), folgst du ihm in der Gesamtprobe Teil für Teil und kündigst jeden Teil kurz an; gibt es in oral.bilder "
+    "kein passendes Bild, beschreibst du ein Bild in zwei, drei einfachen Sätzen und lässt das Kind weiter "
+    "beschreiben und deuten; im Dialogue spielst du den Partner. Für eine Bildbeschreibung wähle, wenn vorhanden, ein "
+    "passendes Bild aus oral.bilder (nach beschreibung) und setze bild auf seine id: Das Kind sieht es dann in der App und "
+    "du ab dem nächsten Zug auch; kündige es an („Look at the picture.“). Nur ein Bild je Teil. Sprich ausschließlich in der Fremdsprache, freundlich und natürlich, in kurzen Sätzen auf "
     "dem Niveau oral.niveau und mit Wörtern aus oral.unterricht. Jeder Zug: höchstens eine kurze Reaktion auf das "
     "Gesagte und genau eine Frage oder ein Sprechanlass (erzählen, beschreiben, begründen, nachfragen, Rollenspiel). "
     "Korrigiere während der Probe nicht und bewerte nicht, wie in einer echten Prüfung; die Bewertung kommt am Ende "
@@ -291,7 +308,8 @@ ASSESS_INSTRUCTION = (
     "beim nächsten Mal gezielt prüft). followups: für jede Baustelle aus baustellen_letztes_mal der Stand heute "
     "(besser, gleich, schlechter, nicht_geprueft) mit Zitat. summary: 2 bis 4 Sätze auf Deutsch direkt an das Kind, "
     "ehrlich und ermutigend, mit einem konkreten Tipp. level_note: ein Satz zur Einordnung gegen das Niveau. "
-    "reliable false, wenn das Kind weniger als drei inhaltliche Antworten gegeben hat. kalibrierung enthält Urteile "
+    "reliable false, wenn das Kind weniger als drei inhaltliche Antworten gegeben hat. Gab es eine Bildbeschreibung "
+    "(gezeigtes_bild, das Bild liegt bei), prüfe bei Aufgabe und Inhalt, ob das Beschriebene wirklich zu sehen ist. kalibrierung enthält Urteile "
     "der Eltern zu früheren Bewertungen; richte die Strenge danach aus. Antworte ausschließlich im JSON-Schema: ")
 
 
@@ -329,13 +347,22 @@ async def assess(account_id: int, session: dict, source: dict, grade) -> dict:
            "kriterien": [{"key": k, "name": v} for k, v in CRITERIA],
            "gespraech": talk, "messwerte": measures, "kalibrierung": calibration(account_id, key)}
     ctx.pop("antworten_bis_zum_abrunden", None)
+    ctx.pop("bilder", None)
+    images = []
+    shown = source.get("bild") or (json.loads(session.get("source_json") or "{}").get("bild"))
+    if shown:
+        from .page_figures import image_part
+        part = image_part(account_id, shown["id"])
+        if part:
+            images.append(part)
+            ctx["gezeigtes_bild"] = shown.get("beschreibung") or ""
     if measures["antworten"] < MIN_ANSWERS:
         result = Assessment(scores=[Score(criterion=k, score=1, evidence="", comment="zu kurz") for k, _ in CRITERIA],
                             summary="Das war noch zu kurz für eine Bewertung. Beim nächsten Mal ein paar Fragen mehr, dann sage ich dir, was schon gut klingt.",
                             reliable=False)
     else:
         raw, _, _ = await ai.complete(account_id, "mentor", ASSESS_INSTRUCTION + json.dumps(Assessment.model_json_schema()), ctx,
-                                      max_output=3000, session_id=session["id"], effort="medium")
+                                      images or None, max_output=3000, session_id=session["id"], effort="medium")
         result = Assessment.model_validate_json(raw)
         result.reliable = result.reliable and measures["antworten"] >= MIN_ANSWERS
     seen = {s.criterion for s in result.scores}
