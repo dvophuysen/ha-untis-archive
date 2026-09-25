@@ -84,6 +84,10 @@ def post_checkin(
         )
     finally:
         conn.close()
+    if after and after["rating"] is not None:
+        # Jede Rückmeldung zählt gleich, egal welches Gesicht (D173).
+        from .. import rewards
+        rewards.note(account_id, "feedback", lesson_id, user)
     return {"ok": True, "lesson_id": lesson_id, "rating": after["rating"], "note": after["note"]}
 
 

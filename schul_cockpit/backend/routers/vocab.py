@@ -197,7 +197,12 @@ def cards(account_id: int, subject: str, unit: str, stage: int = 1, direction: s
 async def attempts(account_id: int, body: vocab.AttemptIn, user: CurrentUser = Depends(get_current_user)):
     access(user, account_id, write=True)
     from ..vocab_semantic import submit
-    return await submit(account_id, body, user_id=user.id)
+    result = await submit(account_id, body, user_id=user.id)
+    if result.get('result') != 'unclear':
+        import time
+        from .. import rewards
+        rewards.note(account_id, 'vocab', f"{(result.get('word') or {}).get('id')}:{time.time_ns()}", user)
+    return result
 
 
 @router.delete('/{subject}/attempts')

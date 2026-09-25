@@ -159,6 +159,12 @@ async def photo_requests(account_id: int, day: str) -> list[dict]:
         from ..exams import resolve_exams
         from ..sources import photo_requests as requests
         found = (await resolve_exams(account_id, days_ahead=14)).get("exams", [])
+        try:
+            # „Vorbereitet“ (D173): vor einer Arbeit alle Themen angefangen.
+            from .. import rewards
+            rewards.note_prepared(account_id, found)
+        except Exception:
+            pass
         return requests(account_id, found, day)
     except Exception:
         return []

@@ -262,9 +262,23 @@ async def _dashboard_for_account(account_id: int, name: str, today: date) -> dic
         family_board.board, account_id, tasks_out, exams_raw, exam_data["exams"], support,
         today, now, evening_from(account_id))
 
+    # Serie und neue Abzeichen des Kindes auf seiner Karte (D173), nie im Vergleich.
+    rewards_brief = None
+    try:
+        from .. import rewards
+        r = await asyncio.to_thread(rewards.summary, account_id, now)
+        rewards_brief = {k: r[k] for k in ("streak", "total", "week", "today")}
+        names = {b["key"]: (b["name"], b["emoji"]) for b in r["badges"]}
+        rewards_brief["reached_today"] = [
+            {"name": names.get(x["badge"], (x["badge"], ""))[0], "emoji": names.get(x["badge"], ("", ""))[1],
+             "level": rewards.LEVELS[x["level"] - 1]} for x in r["reached_today"]]
+    except Exception:
+        _LOG.warning("Belohnung für Konto %s nicht lesbar", account_id, exc_info=True)
+
     # Stundenplan-Raster und Tagesstreifen stehen nicht mehr auf der Startseite
     # (D166); der Plan liegt unter Übersichten → Woche.
     return {
+        "rewards": rewards_brief,
         "account_id": account_id,
         "name": name,
         "exams": exams_out,

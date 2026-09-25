@@ -1088,3 +1088,19 @@ CREATE TABLE IF NOT EXISTS parent_report_deliveries (
 # eigene Gerät des Kindes vom Elterngerät; ältere Zeilen bleiben ohne Angabe.
 _MIGRATIONS.append(("mentor_messages_user_001", "ALTER TABLE mentor_messages ADD COLUMN user_id INTEGER"))
 _MIGRATIONS.append(("vocab_attempts_user_001", "ALTER TABLE vocab_attempts ADD COLUMN user_id INTEGER"))
+
+# Serie, Abzeichen und Jahresmedaille (D172, D173). Gezählt wird ab dem ersten
+# Aufruf (reward_config.start_day), nie rückwirkend.
+_MIGRATIONS.append(("rewards_001", """
+CREATE TABLE IF NOT EXISTS reward_config (id INTEGER PRIMARY KEY CHECK (id=1), start_day TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS reward_settings (account_id INTEGER PRIMARY KEY, bonus_until TEXT NOT NULL DEFAULT '17:00');
+CREATE TABLE IF NOT EXISTS reward_activity (account_id INTEGER NOT NULL, day TEXT NOT NULL, first_at TEXT NOT NULL,
+ PRIMARY KEY(account_id, day));
+CREATE TABLE IF NOT EXISTS reward_events (account_id INTEGER NOT NULL, kind TEXT NOT NULL, ref TEXT NOT NULL,
+ day TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(account_id, kind, ref));
+CREATE TABLE IF NOT EXISTS reward_days (account_id INTEGER NOT NULL, school_day TEXT NOT NULL,
+ kind TEXT NOT NULL CHECK(kind IN ('full','rescued')), done_at TEXT NOT NULL, bonus INTEGER NOT NULL DEFAULT 0,
+ PRIMARY KEY(account_id, school_day));
+CREATE TABLE IF NOT EXISTS reward_badges (account_id INTEGER NOT NULL, badge TEXT NOT NULL, level INTEGER NOT NULL,
+ reached_at TEXT NOT NULL, PRIMARY KEY(account_id, badge, level));
+"""))

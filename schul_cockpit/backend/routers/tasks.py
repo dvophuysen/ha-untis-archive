@@ -207,9 +207,13 @@ def create_task(
             label=f"Aufgabe angelegt: {body.title}",
             after=after,
         )
-        return _row_to_task(row)
+        task = _row_to_task(row)
     finally:
         conn.close()
+    # Selbst eingetragen zählt für „Notiert“ (D173).
+    from .. import rewards
+    rewards.note(account_id, "note", task["id"], user)
+    return task
 
 
 @router.patch("/tasks/{task_id}")
@@ -307,6 +311,9 @@ async def patch_task(
             await sync_account(account_id)
         except Exception:
             pass
+    if body.status == "done":
+        from .. import rewards
+        rewards.note(account_id, "task", task_id, user)
 
     return {"ok": True}
 

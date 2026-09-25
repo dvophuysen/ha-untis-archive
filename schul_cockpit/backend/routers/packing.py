@@ -71,4 +71,10 @@ def put_packing(account_id: int, school_day: date, body: PackingIn, user: Curren
                       label=f"Tasche {school_day.isoformat()}: {body.item_key} {'drin' if body.done else 'raus'}",
                       before=before, after=after)
         result = view(account_id, school_day, items, fingerprint, conn, schedule)
+    # Jedes Einpacken ist eine Handlung des Kindes; komplett zählt für „Packprofi“ (D173).
+    from .. import rewards
+    if body.done:
+        rewards.note(account_id, 'pack', f'{school_day.isoformat()}:{body.item_key}', user)
+    if result.get('status') == 'packed':
+        rewards.note(account_id, 'bag', school_day.isoformat(), user)
     return dict(**result, can_write=True)

@@ -124,6 +124,16 @@
           </button>
         {/if}
 
+        <!-- Serie und neue Abzeichen dieses Kindes (D173), nie neben den Geschwistern verglichen. -->
+        {#if kid.rewards}
+          {@const rw = kid.rewards}
+          <button class="rewards" onclick={() => open(kid, { page: 'ich' })} aria-label={`Serie und Abzeichen von ${kid.name}`}>
+            <span class="rw-line"><span>🔥 <b>{rw.streak.current} {rw.streak.current === 1 ? 'Schultag' : 'Schultage'}</b> · Rekord {rw.streak.record}</span><span class="rw-total">{rw.total} geschafft</span></span>
+            <span class="rw-week">{#each rw.week as d, i (d.day)}<i class={d.state} title={d.day}>{d.state === 'full' ? '✓' : d.state === 'rescued' ? '½' : ''}</i>{/each}</span>
+            {#each rw.reached_today ?? [] as n}<span class="rw-new">{n.emoji} Neu: {n.name} {n.level}</span>{/each}
+          </button>
+        {/if}
+
         {#if b.ok.length}
           <button class="okline" onclick={() => open(kid, { page: 'today' })}><span>✓ {b.ok.join(' · ')}</span></button>
         {/if}
@@ -191,6 +201,16 @@
     --warn-bg: var(--warm-soft); --good-bg: color-mix(in srgb, var(--good-fg) 12%, var(--bg-card));
     padding: 0.8rem; display: flex; flex-direction: column; gap: 0.1rem; min-width: 0;
   }
+  .rewards { display: grid; gap: 6px; text-align: left; background: transparent; border: 0; padding: 6px 0; border-radius: 0; min-height: 44px; color: var(--fg); }
+  .rw-line { display: flex; justify-content: space-between; gap: 8px; font-size: var(--fs-sm); }
+  .rw-total { color: var(--fg-muted); font-size: var(--fs-xs); }
+  .rw-week { display: flex; gap: 5px; }
+  .rw-week i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border); display: grid; place-items: center; font-style: normal; font-size: .66rem; color: var(--accent-fg); }
+  .rw-week i.full { background: var(--accent); border-color: var(--accent); }
+  .rw-week i.rescued { background: color-mix(in oklab, var(--accent) 35%, var(--bg-card)); border-color: var(--accent); color: var(--accent); }
+  .rw-week i.open { border-style: dashed; border-color: var(--accent); }
+  .rw-week i.free, .rw-week i.before { border-style: dotted; }
+  .rw-new { background: var(--warm-soft); border-radius: var(--r-sm); padding: 4px 8px; font-size: var(--fs-xs); justify-self: start; }
   .kid-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 0.4rem; }
   .kid-head h2 { margin: 0; font-size: 1.1rem; }
   .plan { display: block; width: 100%; text-align: left; background: transparent; border: 0; padding: 0 0 6px; color: var(--fg); min-height: 0; }

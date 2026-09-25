@@ -1,3 +1,14 @@
+## 1.20.0
+
+- Serie, Abzeichen und Jahresmedaille, gültig ab heute. Frühere Tage zählen nicht.
+- Ein Schultag ist geschafft, wenn alles bis zum nächsten Schultag erledigt, die Tasche gepackt und die Stunden zurückgemeldet sind und das Kind an dem Tag selbst etwas abgehakt hat, egal um wie viel Uhr. Eltern und Testmodus zählen nicht, „Kind am Elterngerät“ schon.
+- Retten statt Joker: Wer einen offenen Tag bis zur ersten Stunde des nächsten Schultags nachholt, behält die Serie. Der Tag zählt dann halb, höchstens einmal pro Woche. Ferien, Wochenenden und Krankheitstage halten die Serie an.
+- Neue Seite „Ich“ in der unteren Leiste: Serie mit Rekord, die Woche als fünf Kreise, geschaffte Tage insgesamt, acht Abzeichen mit je fünf Stufen (Bronze bis Diamant) und eine Medaille je Schuljahr. Im ersten Schuljahr gilt Bronze ab 50 %, Silber ab 65 %, Gold ab 80 % geschaffter Tage. Wer vor 17 Uhr fertig ist, sammelt Frühstarter-Tage; die Uhrzeit stellen Eltern je Kind auf der Seite „Ich“ ein.
+- Die Leiste unten heißt jetzt Heute, Woche, Lernen, Ich (Eltern zusätzlich Familie). Fächer, Arbeiten, Materialien, Nachholen und die Wochenplanung liegen unter „Ich“.
+- Die Geschafft-Karte zeigt Serie, Gesamtzahl und neue Abzeichen. Die Familienkarte zeigt Serie, Wochenkreise und heute verdiente Abzeichen des Kindes.
+- Startseite: In der kurzen Pause einer Doppelstunde steht nicht mehr „Pause“.
+- Korrektur zu 1.19.0: Im Testmodus lässt sich die Tasche nicht abhaken (wie bisher im Demo-Modus); sie wird nicht erst beim Beenden zurückgenommen.
+
 ## 1.19.0
 
 - Elterngeräte: Ein Tipp auf das Personen-Symbol oben rechts fragt „Wer benutzt das Gerät?“. Zur Wahl stehen die eigene Elternansicht, „ansehen“ für jedes Kind (nur lesen) und „benutzt das Gerät“, wenn ein Kind schnell das Handy oder iPad der Eltern nimmt. Kein PIN.

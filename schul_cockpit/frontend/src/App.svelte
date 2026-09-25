@@ -1,11 +1,11 @@
 <script>
-  import ActionLabel from './lib/ActionLabel.svelte';
   import Icon from './lib/Icon.svelte';
   import DeviceSheet from './lib/DeviceSheet.svelte';
   import { view, setViewMode, touchViewMode, expireViewMode } from './lib/viewMode.svelte.js';
   import { onMount } from 'svelte';
   import { appState, loadMe, setActiveAccount, activeAccount } from './lib/store.svelte.js';
   import Today from './routes/Today.svelte';
+  import Ich from './routes/Ich.svelte';
   import Overview from './routes/Overview.svelte';
   import Learning from './routes/Learning.svelte';
   import Week from './routes/Week.svelte';
@@ -145,14 +145,16 @@
   // dann eine reine Solo-Spalte.
   // Welcher Reiter unten markiert ist, auch auf Unterseiten: Vokabeln gehören
   // zu Lernen, Materialien und die Verwaltungsseiten zu den Übersichten.
-  const TAB_OF = { vokabeln: 'learning', plan: 'more', tasks: 'more', week: 'more', subjects: 'more', subject: 'more',
-                   klausuren: 'more', absences: 'more', materialien: 'more', changes: 'more', courses: 'more', exams: 'more' };
+  const TAB_OF = { vokabeln: 'learning', plan: 'ich', tasks: 'ich', subjects: 'ich', subject: 'ich', more: 'ich',
+                   klausuren: 'ich', absences: 'ich', materialien: 'ich', changes: 'ich', courses: 'ich', exams: 'ich' };
   const activeTab = $derived(TAB_OF[route.name] ?? route.name);
   const navItems = $derived.by(() => {
+    // Navigation (D176): Heute, Woche, Lernen, Ich; Eltern zusätzlich Familie.
     const items = [
       { name: 'today', icon: 'heute', label: 'Heute' },
+      { name: 'week', icon: 'woche', label: 'Woche' },
       { name: 'learning', icon: 'lernen', label: 'Lernen' },
-      { name: 'more', icon: 'mehr', label: 'Übersichten' },
+      { name: 'ich', icon: 'ich', label: 'Ich' },
     ];
     if (parentView) {
       items.unshift({ name: 'overview', icon: 'familie', label: 'Familie' });
@@ -277,13 +279,8 @@
       <Lazy load={LAZY.MyChanges} />
     {:else if route.name === 'overview'}
       <Overview {navigate} />
-    {:else if route.name === 'more'}
-      <h2>Übersichten</h2>
-      <div class="overview-links">
-        {#each [['materialien','Materialien','📎'],['week','Stundenplan','🗓️'],['subjects','Fächer','📚'],['klausuren','Arbeiten','📝'],['absences','Nachholen','🧩'],['plan','Aufgaben und Wochenplanung','✅']] as [target,label,icon]}
-          <button onclick={() => navigate(target)}><span aria-hidden="true">{icon}</span> {label} <ActionLabel /></button>
-        {/each}
-      </div>
+    {:else if route.name === 'ich' || route.name === 'more'}
+      <Ich accountId={appState.activeAccountId} name={acc?.name} canManage={parentView} />
     {:else if route.name === 'today'}
       <Today accountId={appState.activeAccountId} />
     {:else if route.name === 'plan' || route.name === 'tasks'}
@@ -335,6 +332,3 @@
 </div>
 {/if}
 
-<style>
-.overview-links{display:grid;gap:12px}.overview-links button{text-align:left;min-height:68px;border-radius:16px;padding:16px;background:var(--bg-card)}.overview-links button span{font-size:1.4rem;margin-right:12px}.overview-links button:nth-child(3n+1){background:var(--school-soft)}.overview-links button:nth-child(3n+2){background:var(--accent-soft)}.overview-links button:nth-child(3n){background:var(--learn-soft)}
-</style>

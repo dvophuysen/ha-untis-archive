@@ -84,6 +84,8 @@
     if (!target) return null;
     return mergeLessons((data?.lessons ?? []).filter(held)).find(g => g.lessons.some(l => l.id === target.id)) ?? null;
   });
+  // Die kurze Pause innerhalb einer Doppelstunde ist keine Pause.
+  const groupRunning = $derived(!!currentGroup && (() => { const t = now.getHours() * 60 + now.getMinutes(); const m = (x) => Math.floor(x / 100) * 60 + x % 100; return m(currentGroup.start_time) <= t && t < m(currentGroup.end_time); })());
   const nextAfterCurrent = $derived.by(() => {
     if (!currentGroup) return null;
     const groups = mergeLessons((data?.lessons ?? []).filter(held));
@@ -112,6 +114,13 @@
   const groupName = (g) => { const s = subjectStyle(g.lessons[0].subject_name || g.lessons[0].subject_short); return `${s.emoji} ${s.name}`; };
   const roomChip = (g) => { const l = g.lessons[0]; return l.is_room_substituted && l.room_orig ? { warn: true, text: `Raum ${l.room} statt ${l.room_orig}` } : l.room ? { warn: false, text: `Raum ${l.room}` } : null; };
 
+  // Serie und neue Abzeichen für die Geschafft-Karte (D173).
+  let gains = $state(null);
+  $effect(() => {
+    if (!done || !accountId) { gains = null; return; }
+    const id = accountId;
+    api.get(`/api/accounts/${id}/rewards`).then((r) => { if (id === accountId && r?.streak) gains = r; }).catch(() => {});
+  });
   // Der Moment „Geschafft“: einmal am Tag, mit kurzer Freude (D173).
   $effect(() => {
     if (!done || !accountId) return;
@@ -148,6 +157,14 @@
       <span class="big-ring" aria-hidden="true"><span>✓</span></span>
       <strong class="focus-big">Geschafft. Freizeit!</strong>
       <span>Alles für {dayWord(nextSchoolDay)} ist erledigt.</span>
+      {#if gains}
+        <span class="gains">
+          <span><b>🔥 {gains.streak.current}</b>{gains.streak.current === 1 ? 'Tag' : 'Tage'} Serie</span>
+          <span><b>{gains.total}</b>geschafft</span>
+          <span><b>{gains.today.bonus ? '⚡' : '✓'}</b>{gains.today.bonus ? 'Frühstarter' : gains.today.kind === 'rescued' ? 'gerettet' : 'heute'}</span>
+        </span>
+        {#each gains.reached_today ?? [] as n}<a class="new-badge" href="#/ich">Neues Abzeichen · {gains.badges.find((b) => b.key === n.badge)?.emoji} {gains.badges.find((b) => b.key === n.badge)?.name}</a>{/each}
+      {/if}
     </section>
   {:else if phase === 'vor' && firstGroup}
     <section class="focus">
@@ -161,7 +178,7 @@
     </section>
   {:else if phase === 'in' && currentGroup}
     <section class="focus">
-      <span class="focus-k">{ph.current ? `Jetzt · bis ${currentGroup.end_hhmm}` : `Pause · gleich ${currentGroup.start_hhmm}`}</span>
+      <span class="focus-k">{groupRunning ? `Jetzt · bis ${currentGroup.end_hhmm}` : `Pause · gleich ${currentGroup.start_hhmm}`}</span>
       <strong class="focus-big">{groupName(currentGroup)}{roomChip(currentGroup) && !roomChip(currentGroup).warn ? `, ${roomChip(currentGroup).text}` : ''}</strong>
       <span class="chips">
         {#if roomChip(currentGroup)?.warn}<span class="chip warn">{roomChip(currentGroup).text}</span>{/if}
@@ -300,6 +317,10 @@
   .big-ring{width:84px;height:84px;border-radius:50%;background:var(--accent-fg);display:grid;place-items:center}
   .big-ring span{width:64px;height:64px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-size:1.8rem;font-weight:800}
   @keyframes rise{from{transform:translateY(8px);opacity:.4}to{transform:none;opacity:1}}
+  .gains{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%}
+  .gains span{background:rgba(255,255,255,.15);border-radius:var(--r-md);padding:var(--sp-2) 4px;font-size:.72rem;display:grid}
+  .gains b{font-size:var(--fs-md)}
+  .new-badge{background:var(--accent-fg);color:var(--accent);border-radius:var(--r-pill);padding:6px 12px;font-weight:700;font-size:var(--fs-xs)}
   .rings{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-2);margin-bottom:var(--sp-2)}
   .ring-btn{display:grid;justify-items:center;gap:3px;padding:var(--sp-2) 4px;border-radius:var(--r-md);min-height:100px;background:var(--bg-card)}
   .ring{width:50px;height:50px;border-radius:50%;display:grid;place-items:center}
