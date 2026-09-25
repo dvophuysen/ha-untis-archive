@@ -285,6 +285,10 @@ async def exams_all(
             meta = exam_meta.get(account_id, e["exam_key"]) if e.get("exam_key") else {}
             e["oral"] = bool(meta.get("oral")) or exam_meta.is_oral_title(e.get("title"))
             e["note"] = meta.get("note") or ""
+            if e["oral"] and e.get("exam_key"):
+                from .. import oral_exam
+                e["references"] = oral_exam.references(account_id, e["exam_key"], e.get("subject_name"))
+                e["oral_sims"] = oral_exam.sims(account_id, e["exam_key"], 10)
         (upcoming if e["date"] >= today_iso else past).append(e)
 
     cutoff = archive_before(account_id)
@@ -385,6 +389,12 @@ def add_topic(account_id: int, body: TopicIn, user: CurrentUser = Depends(get_cu
 class NoteIn(BaseModel):
     exam_key: str = Field(min_length=1, max_length=120)
     note: str = Field(default="", max_length=exam_meta.NOTE_MAX)
+    # Abgewählte Referenzen der Sprechprobe (D194); None lässt sie, wie sie sind.
+    excluded_refs: list[str] | None = Field(default=None, max_length=200)
+
+
+class VerdictIn(BaseModel):
+    verdict: str | None = Field(default=None, pattern="^(streng|passt|mild)$")
 
 
 @router.post("/accounts/{account_id}/exams/note")
@@ -392,7 +402,20 @@ def set_note(account_id: int, body: NoteIn, user: CurrentUser = Depends(get_curr
     """Hinweise der Eltern zu einer Arbeit, etwa worüber in der Sprechprüfung gesprochen wird (D193)."""
     assert_account_access(user, account_id)
     _require_parent(user)
+    if body.excluded_refs is not None:
+        exam_meta.set_excluded_refs(account_id, body.exam_key, [k[:80] for k in body.excluded_refs])
     return exam_meta.set_note(account_id, body.exam_key, body.note)
+
+
+@router.post("/accounts/{account_id}/exams/oral-sims/{sim_id}/verdict")
+def set_verdict(account_id: int, sim_id: int, body: VerdictIn, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Eltern kalibrieren die Bewertung einer Sprechprobe: zu streng, passt, zu mild (D194)."""
+    assert_account_access(user, account_id)
+    _require_parent(user)
+    from .. import oral_exam
+    if not oral_exam.set_verdict(account_id, sim_id, body.verdict):
+        raise HTTPException(404, "Sprechprobe nicht gefunden.")
+    return {"ok": True, "verdict": body.verdict}
 
 
 @router.delete("/accounts/{account_id}/exams/topics/{topic_id}")

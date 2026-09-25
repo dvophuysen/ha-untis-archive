@@ -351,9 +351,28 @@ def test_speaking_exam_is_practised_in_conversation_and_old_paper_steps_go(world
     frozen = sp.ensure(1, MON)
     assert frozen[0]["format"] == "einstieg"
     exam_meta.remember(1, "en", "Sprechprüfung Englisch Jg.6")
-    assert seq("en") == [("dialog", None), ("dialog", None)]
-    assert all(s["title"].startswith("Englisch sprechen: ") for p in sp.plans(1, MON) for s in p["steps"])
+    assert seq("en") == [("oral", None), ("oral", None), ("oral", None)], "zwei Themenproben, eine Gesamtprobe (D194)"
     view = sp.view(1, MON, store=True)
     papers = [s for s in view["steps"] if s["kind"] == "paper"]
     assert papers and all(s["done"] and s["skipped"] for s in papers)
     assert not any(s["waiting"] for s in view["steps"]), "kein Einstiegstest, auf den gewartet wird"
+
+
+def test_speaking_exam_plans_simulations_with_a_one_day_buffer(world):
+    """D194: Je Sprechthema eine Sprechprobe und eine Gesamtprobe, Puffer ein Schultag;
+    erledigt ist ein Schritt mit einer ausgewerteten Probe."""
+    import json as _json
+    from backend import exam_meta
+    ids = exam("en", "Englisch", MON + timedelta(days=3), ["Meine Familie", "Hobbys"])
+    exam_meta.remember(1, "en", "Sprechprüfung Englisch")
+    p = next(p for p in sp.plans(1, MON) if p["exam_key"] == "en")
+    assert [(x["kind"], x["topic_id"]) for x in p["sequence"]] == [("oral", ids[0]), ("oral", ids[1]), ("oral", None)]
+    assert p["days"] == 2, "Donnerstag Prüfung, Mittwoch Puffer: Montag und Dienstag"
+    steps = sp.ensure(1, MON)
+    assert steps[0]["href"] == f"#/learning?oral=en&topic_id={ids[0]}" and steps[0]["title"] == "Sprechprobe Englisch: Meine Familie"
+    good = _json.dumps([{"criterion": "aufgabe", "score": 3, "evidence": "x"}])
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO oral_sims(account_id,exam_key,topic_id,full,session_id,created_at,scores_json,reliable) VALUES(1,'en',?,0,1,?,?,1)",
+                  (ids[0], at(MON, 16).isoformat(), good))
+    view = sp.view(1, MON, store=True)
+    assert view["steps"][0]["done"] and not view["steps"][0].get("skipped")

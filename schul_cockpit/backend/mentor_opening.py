@@ -30,10 +30,17 @@ LAGEN = {
     "begleiten": "Hausaufgabe",
     "kontrollieren": "Lösung prüfen",
     "frei": "Frei üben",
+    "sprechprobe": "Sprechprobe",
 }
 
 # Was das Modell in jeder Lage als ersten Zug tut. Die Stufe bestimmt die App.
 RULES = {
+    "sprechprobe": (
+        "Lage: Sprechprobe für eine Sprechprüfung (oral). Du bist der Prüfer. Einstieg: ein kurzer Satz auf Deutsch, wie es "
+        "läuft (Sprechknopf halten, in ganzen Sätzen antworten, am Ende gibt es eine Bewertung mit Tipps), dann auf "
+        "Englisch bzw. in der Fremdsprache eine freundliche Begrüßung und die erste, leichte Frage zu oral.thema oder, bei "
+        "der Gesamtprobe, zum ersten Teil der Prüfung aus oral.hinweise_eltern. Keine Aufgabe mit Auswahl: action clarify, "
+        "task leer, choices leer."),
     "trainieren": (
         "Lage: Das Kind bereitet eine Arbeit vor; situation.exam nennt Datum und Abstand, topic das Thema mit Stellen und "
         "Originaltext, topic.stage den Stand, topic.note und topic.reason das letzte Mal. Einstieg: höchstens drei Sätze: "
@@ -155,6 +162,12 @@ def situation(account_id: int, session: dict, ctx: dict) -> dict:
         return {"lage": "begleiten", "label": LAGEN["begleiten"], "why": "Hausaufgabe"}
     if mode == "homework_check":
         return {"lage": "kontrollieren", "label": LAGEN["kontrollieren"], "why": "Lösung prüfen"}
+    if mode == "oral":
+        out = {"lage": "sprechprobe", "label": LAGEN["sprechprobe"], "why": "Sprechprüfung vorbereiten"}
+        exam = _exam_for(account_id, {"exam_key": source.get("exam_key")})
+        if exam:
+            out["exam"] = exam
+        return out
     if mode == "topic" and topic:
         if topic.get("check"):
             out = {"lage": "pruefen", "label": LAGEN["pruefen"], "why": "Kurzprüfung fällig"}
@@ -198,7 +211,7 @@ def instruction_for(lage: str, schema: dict) -> str:
 
 def trim(ctx: dict) -> dict:
     """Nur, was der erste Zug braucht: Thema, Material, Stunden, letzte Einheiten."""
-    keep = {k: ctx.get(k) for k in ("grade", "subject", "goal", "source", "topic", "situation", "previous", "book_context", "materials")}
+    keep = {k: ctx.get(k) for k in ("grade", "subject", "goal", "source", "topic", "situation", "previous", "book_context", "materials", "oral")}
     keep["lessons"] = [{k: l.get(k) for k in ("date", "text", "rating", "note", "missed_minutes")} for l in ctx.get("lessons", [])[:6]]
     keep["homework"] = ctx.get("homework", [])[:4]
     return keep

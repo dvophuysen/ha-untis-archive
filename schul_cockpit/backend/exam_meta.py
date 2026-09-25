@@ -7,6 +7,7 @@ Kinder lesen sie, der Lernbegleiter bekommt sie mit.
 """
 from __future__ import annotations
 
+import json
 import re
 from contextlib import closing
 
@@ -53,3 +54,20 @@ def set_note(account_id: int, exam_key: str, note: str) -> dict:
                   "ON CONFLICT(account_id,exam_key) DO UPDATE SET note=excluded.note,note_updated_at=excluded.note_updated_at",
                   (account_id, exam_key, note, now_iso(), now_iso()))
     return get(account_id, exam_key)
+
+
+def excluded_refs(account_id: int, exam_key: str) -> list[str]:
+    """Abgewählte Referenzen der Sprechprobe (D194); voreingestellt zählt alles."""
+    try:
+        with closing(webapp_conn()) as c:
+            row = c.execute("SELECT excluded_refs FROM exam_meta WHERE account_id=? AND exam_key=?", (account_id, exam_key)).fetchone()
+        return json.loads(row[0] or "[]") if row else []
+    except Exception:
+        return []
+
+
+def set_excluded_refs(account_id: int, exam_key: str, keys: list[str]) -> None:
+    with closing(webapp_conn()) as c, c:
+        c.execute("INSERT INTO exam_meta(account_id,exam_key,excluded_refs,updated_at) VALUES(?,?,?,?) "
+                  "ON CONFLICT(account_id,exam_key) DO UPDATE SET excluded_refs=excluded.excluded_refs",
+                  (account_id, exam_key, json.dumps(sorted(set(keys))[:200]), now_iso()))

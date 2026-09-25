@@ -28,6 +28,26 @@
   let noteDraft = $state({});
   let linesDraft = $state({});
   let noteSaved = $state('');
+  // Abgewählte Referenzen der Sprechprobe je Arbeit (D194); ungesehen gilt der Stand vom Server.
+  let refsOff = $state({});
+  function refChecked(e, r) { return refsOff[e.exam_key] ? !refsOff[e.exam_key].includes(r.key) : r.checked; }
+  function toggleRef(e, r) {
+    const now = refsOff[e.exam_key] ?? (e.references || []).filter((x) => !x.checked).map((x) => x.key);
+    refsOff[e.exam_key] = now.includes(r.key) ? now.filter((k) => k !== r.key) : [...now, r.key];
+  }
+  function oralUrl(e, t = null) {
+    return `#/learning?oral=${encodeURIComponent(e.exam_key)}${t ? `&topic_id=${t.id}` : ''}`;
+  }
+  async function setVerdict(e, sim, v) {
+    const next = sim.verdict === v ? null : v;
+    try {
+      await api.post(`/api/accounts/${accountId}/exams/oral-sims/${sim.id}/verdict`, { verdict: next });
+      sim.verdict = next;
+      data = { ...data };
+    } catch (err) {
+      error = err.message;
+    }
+  }
 
   // Eltern-Werkzeuge nicht beim Mitlesen und nicht, wenn das Kind das Gerät benutzt (D183).
   const canManage = $derived(actsAsParent(appState.me));
@@ -232,9 +252,12 @@
     noteSaved = '';
     try {
       const text = noteDraft[exam.exam_key] ?? exam.note ?? '';
-      if (text !== (exam.note || '')) {
-        const r = await api.post(`/api/accounts/${accountId}/exams/note`, { exam_key: exam.exam_key, note: text });
+      const refs = refsOff[exam.exam_key];
+      if (text !== (exam.note || '') || refs) {
+        const r = await api.post(`/api/accounts/${accountId}/exams/note`, { exam_key: exam.exam_key, note: text, ...(refs ? { excluded_refs: refs } : {}) });
         exam.note = r.note;
+        if (refs) exam.references = (exam.references || []).map((x) => ({ ...x, checked: !refs.includes(x.key) }));
+        delete refsOff[exam.exam_key];
       }
       // Eine Zeile je Thema; „Thema: Hinweis“ trennt den Hinweis ab.
       const lines = (linesDraft[exam.exam_key] || '').split('\n').map((l) => l.trim()).filter((l) => l.length >= 2);
@@ -375,6 +398,15 @@
                   <small class="dim">Eine Zeile je Thema, ein Hinweis nach Doppelpunkt, z. B. „Meine Familie: Personen beschreiben“.{#if e.oral} Sobald eigene Sprechthemen da sind, tritt der Stoff aus dem Unterricht zurück.{/if}</small>
                   <textarea rows="3" bind:value={() => linesDraft[e.exam_key] ?? '', (v) => (linesDraft[e.exam_key] = v)}></textarea>
                 </label>
+                {#if e.oral && e.references?.length}
+                  <fieldset class="refs">
+                    <legend><strong>Aus dem Unterricht als Maßstab</strong></legend>
+                    <small class="dim">Keine eigenen Übungen: Der Prüfer nimmt Wörter und Grammatik daraus und bewertet daran. Was hier vorkam, zählt voll; Neues ist Bonus.</small>
+                    {#each e.references as r (r.key)}
+                      <label class="ref"><input type="checkbox" checked={refChecked(e, r)} onchange={() => toggleRef(e, r)} /> {r.label}</label>
+                    {/each}
+                  </fieldset>
+                {/if}
                 <div class="row" style="gap:0.5rem; align-items:center;">
                   <button class="primary" disabled={busyKey === `note-${e.exam_key}`} onclick={() => saveNote(e)}>{busyKey === `note-${e.exam_key}` ? 'Speichert …' : 'Speichern'}</button>
                   {#if noteSaved === e.exam_key}<span class="dim" role="status">Gespeichert.</span>{/if}
@@ -384,7 +416,32 @@
               <p class="exam-note"><b>Hinweise:</b> {e.note}</p>
             {/if}
             {#if e.oral}
-              <p class="lead">Sprechprüfung: Geübt wird im Gespräch mit dem Lernbegleiter, in ganzen Sätzen, mit Rückmeldung, wie es besser klingt. Kein Einstiegstest und keine Übungsarbeit auf Papier.</p>
+              <p class="lead">Sprechprüfung: Geübt wird in Sprechproben mit dem Lernbegleiter als Prüfer, per Sprechknopf. Am Ende jeder Probe gibt es eine Bewertung nach sechs Kriterien und höchstens drei Baustellen, die die nächste Probe gezielt nachprüft. Kein Einstiegstest und keine Übungsarbeit auf Papier.</p>
+              <div class="row" style="gap:0.5rem; flex-wrap:wrap; margin-bottom:0.6rem;">
+                <a class="point-go" href={oralUrl(e)}>🎤 Gesamtprobe</a>
+                {#each topics.filter((t) => !t.vocab) as t (t.id)}<a class="point-go" href={oralUrl(e, t)}>🎤 {t.title}</a>{/each}
+              </div>
+              {#if e.oral_sims?.length}
+                <div class="sims" aria-label="Sprechproben">
+                  <strong>Bisherige Sprechproben</strong>
+                  {#each e.oral_sims as sim (sim.id)}
+                    <div class="sim">
+                      <div class="sim-head"><span>{formatShortDate(sim.created_at.slice(0, 10))} · {sim.topic_title || 'Themenprobe'}</span>
+                        <span class="dim">{sim.reliable ? sim.scores.map((x) => `${x.label.split(' ')[0]} ${x.score}`).join(' · ') : 'zu kurz'}</span></div>
+                      {#if sim.weak_spots?.length}<div class="dim">Baustellen: {sim.weak_spots.map((w) => w.label).join(', ')}</div>{/if}
+                      <div class="feel-row">
+                        <a class="dim" href={`#/learning?session=${sim.session_id}`}>Gespräch lesen</a>
+                        {#if canManage}
+                          <span class="dim">Bewertung war:</span>
+                          {#each [['streng', 'zu streng'], ['passt', 'passt'], ['mild', 'zu mild']] as [v, label]}
+                            <button class="feel" class:active={sim.verdict === v} onclick={() => setVerdict(e, sim, v)}>{label}</button>
+                          {/each}
+                        {/if}
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
             {:else if e.sources?.notice}
               <p class="lead">Die offizielle Themenliste der Lehrkraft legt den Stoff fest.
                 <a href={`#/materialien?material=${e.sources.notice_id}`}>Foto ansehen</a>{#if !e.sources.notice_verified} · <a href={`#/materialien?material=${e.sources.notice_id}`}>Bitte prüfen</a>: Eine Seitenzahl kennt der Unterricht nicht.{/if}</p>
@@ -590,6 +647,11 @@
   .note-box { display: grid; gap: 0.6rem; margin: 0 0 0.8rem; padding: 0.7rem; border: 1px solid var(--border); border-radius: var(--r-sm); }
   .note-box label { display: grid; gap: 0.25rem; }
   .note-box textarea { width: 100%; box-sizing: border-box; font: inherit; }
+  .refs { border: 0; padding: 0; margin: 0; display: grid; gap: 0.3rem; min-width: 0; }
+  .ref { display: flex; gap: 0.4rem; align-items: flex-start; overflow-wrap: anywhere; }
+  .sims { display: grid; gap: 0.5rem; margin: 0 0 0.8rem; }
+  .sim { padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--r-sm); display: grid; gap: 0.25rem; }
+  .sim-head { display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
   .close { width: 100%; margin-top: 0.4rem; }
   .grade-box { flex-shrink: 0; }
   .grade-input { width: 110px; text-align: center; font-weight: 600; min-height: 40px; }

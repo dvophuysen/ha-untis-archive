@@ -1,3 +1,10 @@
+## 1.27.0
+
+- Sprechproben für Sprechprüfungen: Der Lernbegleiter ist Prüfer und spricht nur Englisch (bzw. die Fremdsprache), du antwortest mit dem Sprechknopf, was du sagst, geht direkt ab, und die Fragen werden vorgelesen.
+- Am Ende jeder Probe gibt es eine Bewertung: sechs Kriterien von 1 bis 4 mit Zitat, höchstens drei Baustellen mit besserer Formulierung. Die nächste Probe prüft genau diese Baustellen nach.
+- Eltern kreuzen an der Arbeit an, welcher Stoff aus dem Unterricht als Maßstab zählt, sehen alle Proben mit Bewertung und können sagen, ob sie zu streng, passend oder zu mild war.
+- Der Lernplan plant je Sprechthema eine Probe und eine Gesamtprobe, mit einem Schultag Puffer vor der Prüfung.
+
 ## 1.26.0
 
 - Sprechprüfungen werden erkannt und so geübt: im Gespräch mit dem Lernbegleiter, in ganzen Sätzen, mit Rückmeldung. Einstiegstest, Kurztests und Probearbeit auf Papier entfallen dafür.

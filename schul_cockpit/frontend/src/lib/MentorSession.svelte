@@ -18,15 +18,29 @@
   // Signale fürs Zögern: Zeit von der gestellten Aufgabe bis zum Absenden, Löschungen beim Tippen.
   let taskShownAt=$state(null),edits=$state(0),spoken=$state(false);
   // Spracheingabe: Aufnahme → eigene Erkennung → Text ins Feld, erst dann Senden.
-  async function transcribe(blob,took){const f=new FormData();f.append('file',blob,'aufnahme');f.append('seconds',String(took));const r=await api.post(`${base}/sessions/${running.id}/transcribe`,f);return r.text;}
-  function heard(t){text=text.trim()?`${text.trim()} ${t}`:t;spoken=true;}
-  const speechLabel=$derived(running?`Aufnahme: ${/englisch/i.test(running.subject)?'Englisch oder Deutsch':/spanisch/i.test(running.subject)?'Spanisch oder Deutsch':/franz/i.test(running.subject)?'Französisch oder Deutsch':/latein/i.test(running.subject)?'Latein oder Deutsch':'Deutsch'} · eigene Erkennung`:'');
+  let lastTook=0;
+  async function transcribe(blob,took){lastTook=took;const f=new FormData();f.append('file',blob,'aufnahme');f.append('seconds',String(took));const r=await api.post(`${base}/sessions/${running.id}/transcribe`,f);return r.text;}
+  // Sprechprobe (D194): Das Gesagte geht direkt ab, ungeprüft; bewertet wird, was gesagt wurde.
+  function heard(t){if(oral){const took=lastTook;act(()=>send('message',t,null,{spoken:true,seconds:took}));return;}text=text.trim()?`${text.trim()} ${t}`:t;spoken=true;}
+  const oral=$derived(running?.mode==='oral');
+  // Der Prüfer spricht: seine Nachrichten liest der Browser in der Fremdsprache vor (abschaltbar).
+  const voiceLang=$derived(/spanisch/i.test(running?.subject||'')?'es-ES':/franz/i.test(running?.subject||'')?'fr-FR':'en-GB');
+  let tts=$state((()=>{try{return localStorage.getItem('oralTts')!=='0';}catch{return true;}})());
+  function toggleTts(){tts=!tts;try{localStorage.setItem('oralTts',tts?'1':'0');}catch{/* egal */}if(!tts)window.speechSynthesis?.cancel();}
+  let spokenUpTo=null,spokenSid=null;
+  $effect(()=>{const ms=running?.messages||[];const last=ms.filter(m=>m.role==='assistant').at(-1);if(!oral||!last)return;
+    // Beim Öffnen einer Probe nur Neues vorlesen; eine frisch gestartete beginnt mit der ersten Frage.
+    if(spokenSid!==running.id){spokenSid=running.id;spokenUpTo=ms.length<=1?0:last.id;}
+    if(last.id>spokenUpTo){spokenUpTo=last.id;if(tts&&running.status==='active'&&window.speechSynthesis&&!last.payload?.oral_result){try{window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(last.text);u.lang=voiceLang;u.rate=0.95;window.speechSynthesis.speak(u);}catch{/* ohne Stimme weiter */}}}});
+  onMount(()=>()=>window.speechSynthesis?.cancel());
+  const answers=$derived((running?.messages||[]).filter(m=>m.role==='user').length);
+  const speechLabel=$derived(oral?`Aufnahme: ${voiceLang.startsWith('en')?'Englisch':voiceLang.startsWith('es')?'Spanisch':'Französisch'} · geht direkt ab`:running?`Aufnahme: ${/englisch/i.test(running.subject)?'Englisch oder Deutsch':/spanisch/i.test(running.subject)?'Spanisch oder Deutsch':/franz/i.test(running.subject)?'Französisch oder Deutsch':/latein/i.test(running.subject)?'Latein oder Deutsch':'Deutsch'} · eigene Erkennung`:'');
   $effect(()=>{const prompt=running?.task?.prompt;if(prompt){taskShownAt=Date.now();edits=0;}else{taskShownAt=null;}});
-  async function send(kind='message',value=text,option=null){
+  async function send(kind='message',value=text,option=null,extra={}){
     // Angekreuzt, aber noch nicht eingebunden: geht mit dieser Nachricht mit.
     if(picked.length&&kind!=='finish')await embed();
     const signals=(kind==='answer'||kind==='choice')&&taskShownAt?{seconds:Math.min(36000,Math.round((Date.now()-taskShownAt)/1000)),edits}:{};
-    const r=await api.post(`${base}/sessions/${running.id}/turn`,{request_key:crypto.randomUUID(),version:running.version,text:value,kind,attachment_id:attachment?.id||null,spoken:spoken&&value===text,...(option===null?{}:{option}),...signals});
+    const r=await api.post(`${base}/sessions/${running.id}/turn`,{request_key:crypto.randomUUID(),version:running.version,text:value,kind,attachment_id:attachment?.id||null,spoken:extra.spoken??(spoken&&value===text),...(option===null?{}:{option}),...signals,...(extra.seconds?{seconds:Math.min(36000,Math.round(extra.seconds))}:{})});
     running=r;text='';attachment=null;spoken=false;await tick();end?.scrollIntoView({behavior:'smooth',block:'end'});
   }
   // Die Grundlage der Einheit: dieselben Seiten, die der Mentor hat (D101).
@@ -93,14 +107,26 @@
         {#if m.payload.attachment_id}<a href={`./${base.slice(1)}/photos/${m.payload.attachment_id}`} target="_blank" rel="noreferrer"><ActionLabel label="Dein Foto öffnen" /></a>{/if}
         <!-- Die gefundene Bearbeitung: Das Kind sieht, worüber gesprochen wird, bevor es bestätigt. -->
         {#if m.payload.material}<a class="found" href={`./api/accounts/${accountId}/materials/${m.payload.material.id}/file`} target="_blank" rel="noreferrer"><img src={`./api/accounts/${accountId}/materials/${m.payload.material.id}/file`} alt={`Deine Bearbeitung: ${m.payload.material.label}`} loading="lazy" /><small>{m.payload.material.label}</small></a>{/if}
+        {#if m.payload.oral_result}
+          {@const r=m.payload.oral_result}
+          <div class="oral-result" aria-label="Bewertung der Sprechprobe">
+            {#if !r.reliable}<p class="hint">Zu kurz für eine verlässliche Bewertung.</p>{/if}
+            <ul class="scores">{#each r.scores as sc (sc.criterion)}<li><span class="crit">{sc.label}</span><span class="dots" aria-label={`${sc.score} von 4`}>{#each [1,2,3,4] as n}<i class:on={n<=sc.score}></i>{/each}</span>{#if sc.evidence}<small>„{sc.evidence}“{sc.comment?` · ${sc.comment}`:''}</small>{/if}</li>{/each}</ul>
+            {#if r.weak_spots?.length}<p><strong>Darauf achten wir beim nächsten Mal</strong></p><ul class="weak">{#each r.weak_spots as w}<li><b>{w.label}</b>{#if w.example}<br><small>Du: „{w.example}“</small>{/if}{#if w.better}<br><small>Besser: „{w.better}“</small>{/if}</li>{/each}</ul>{/if}
+            {#if r.followups?.length}<p><strong>Seit dem letzten Mal</strong></p><ul class="weak">{#each r.followups as f}<li>{f.label}: <b>{({besser:'besser',gleich:'gleich',schlechter:'schwächer',nicht_geprueft:'diesmal nicht vorgekommen'})[f.status]}</b></li>{/each}</ul>{/if}
+            {#if r.level_note}<p class="hint">{r.level_note}</p>{/if}
+            <p class="hint">Aussprache wird nicht bewertet; die App sieht nur, was erkannt wurde.</p>
+          </div>
+        {/if}
         {#if m.payload.assessment}<p class="assessment">{m.payload.assessment.rationale}<small>{m.payload.assessment.label}{m.payload.assessment.help_used?' · mit Unterstützung':''}</small></p>{/if}
       </article>{/each}<div bind:this={end}></div>
     </div>
     {#if running.status==='active'&&canWrite}
-      <div class="choices">{#each choices as c}<button disabled={busy||!canWrite} onclick={()=>act(()=>send(c==='Für heute fertig'?'finish':c.includes('Beispiel')?'example':/Tipp/.test(c)?'hint':'message',c))}>{c}</button>{/each}</div>
+      <div class="choices">{#each choices as c}<button disabled={busy||!canWrite} onclick={()=>act(()=>send(c==='Für heute fertig'||c==='Beenden und auswerten'?'finish':c.includes('Beispiel')?'example':/Tipp/.test(c)?'hint':'message',c))}>{c}</button>{/each}</div>
       <form class="composer" onsubmit={e=>{e.preventDefault();act(()=>send(running.task?'answer':'message'));}}>
         {#if speech}<Speech onText={heard} {transcribe} disabled={busy||!canWrite} label={speechLabel}/>{/if}
-        <label for="mentor-answer">{running.task?'Dein Versuch oder deine Frage':running.mode==='homework_check'&&!attachment&&!running.materials?.length?'Foto anhängen oder Seiten aus deinen Materialien wählen, dazu eine Frage, wenn du willst':'Was möchtest du sagen?'}{#if spoken} · erkannt, bitte prüfen{/if}</label>
+        {#if oral}<p class="hint">{speech?'Halte den Sprechknopf und antworte in ganzen Sätzen; was du sagst, geht direkt ab.':'Antworte in ganzen Sätzen.'} <button type="button" class="quiet" onclick={toggleTts}>{tts?'🔊 Vorlesen an':'🔇 Vorlesen aus'}</button></p>{/if}
+        <label for="mentor-answer">{oral?'Oder tippen':running.task?'Dein Versuch oder deine Frage':running.mode==='homework_check'&&!attachment&&!running.materials?.length?'Foto anhängen oder Seiten aus deinen Materialien wählen, dazu eine Frage, wenn du willst':'Was möchtest du sagen?'}{#if spoken} · erkannt, bitte prüfen{/if}</label>
         <textarea id="mentor-answer" bind:value={text} rows="3" maxlength="4000" disabled={busy||!canWrite} placeholder={speech?'… oder tippen':'Deine Antwort oder Frage …'} onbeforeinput={e=>{if((e.inputType||'').startsWith('delete'))edits++;}}></textarea>
         {#if attachment}<p>Foto angehängt. <button type="button" onclick={()=>attachment=null}>Entfernen</button></p>{/if}
         {#if running.materials?.length}
@@ -143,21 +169,32 @@
             {#if pickRoom<=picked.length}<p class="hint">Mehr als {picker.max} Seiten gehen in einem Gespräch nicht.</p>{/if}
           </div>
         {/if}
+        {#if oral}<div class="actions"><button class="primary" disabled={busy||!text.trim()||!canWrite}>Senden</button><button type="button" disabled={busy||!canWrite} onclick={()=>act(()=>send('finish','Beenden und auswerten'))}>Beenden und auswerten{answers<3?' (noch kurz)':''}</button></div>
+        {:else}
         <div class="actions"><button class="primary" disabled={busy||(!text.trim()&&!attachment&&!freshPages&&!picked.length)||!canWrite}>{picked.length?`Senden mit ${picked.length===1?'1 Seite':`${picked.length} Seiten`}`:'Senden'}</button><button type="button" class:primary={running.mode==='homework_check'&&!attachment&&!running.attachments?.length&&!running.materials?.length} disabled={busy||!canWrite} onclick={()=>fileInput?.click()}>{running.mode==='homework_check'?'Fotos der Lösung':homeworkChat?'Fotos zeigen':'Foto zeigen'}</button><input class="file" type="file" accept={homeworkChat?'image/*,application/pdf':'image/*'} multiple={homeworkChat} bind:this={fileInput} onchange={upload}/>{#if homeworkChat}<button type="button" disabled={busy||!canWrite} onclick={()=>act(openPicker)}>Aus Materialien</button>{/if}<a class="material-link" href={`#/materialien/${encodeURIComponent(running.subject||'')}${homeworkChat&&running.task_id?`/${running.task_id}`:''}`} title="Arbeitsblatt, Heftseite oder PDF dauerhaft ablegen"><ActionLabel label="Material hinzufügen" /></a></div>
         <div class="actions"><button type="button" disabled={busy||!canWrite} onclick={()=>act(()=>send('hint','Bitte anders erklären.'))}>Anders erklären</button><button type="button" disabled={busy||!canWrite} onclick={()=>act(()=>send('finish','Für heute fertig.'))}>Für heute fertig</button></div>
+        {/if}
       </form>
-    {:else}<section class="card"><h2>{running.status==='active'?'Gespeicherter Verlauf':running.topic?'Einheit beendet':running.mode==='homework_check'?'Kontrolle beendet':running.untimed?'Unterbrochen':'Für heute geschafft'}</h2><p>{running.summary||'Dein Gespräch und deine Antworten bleiben gespeichert.'}</p>{#if running.topic}<p><strong>Stufe: {running.topic.stage}</strong>{#if running.topic.reason&&running.topic.stage!=='neu'} · {running.topic.reason}{/if}{#if running.topic.next_check} · Kurzprüfung ab {formatShortDate(running.topic.next_check)}{/if}</p><a href="#/klausuren">Zur Arbeit und den anderen Themen</a>{/if}
-      {#if running.status!=='active'&&canWrite}<button class="primary" disabled={busy} onclick={()=>act(resume)}><ActionLabel kind="chat" label="Hier weitermachen" /></button>{/if}
+    {:else}<section class="card"><h2>{running.status==='active'?'Gespeicherter Verlauf':oral?'Sprechprobe ausgewertet':running.topic?'Einheit beendet':running.mode==='homework_check'?'Kontrolle beendet':running.untimed?'Unterbrochen':'Für heute geschafft'}</h2><p>{running.summary||'Dein Gespräch und deine Antworten bleiben gespeichert.'}</p>{#if oral}<a href="#/klausuren">Zur Arbeit und den anderen Proben</a>{:else if running.topic}<p><strong>Stufe: {running.topic.stage}</strong>{#if running.topic.reason&&running.topic.stage!=='neu'} · {running.topic.reason}{/if}{#if running.topic.next_check} · Kurzprüfung ab {formatShortDate(running.topic.next_check)}{/if}</p><a href="#/klausuren">Zur Arbeit und den anderen Themen</a>{/if}
+      {#if running.status!=='active'&&canWrite&&!oral}<button class="primary" disabled={busy} onclick={()=>act(resume)}><ActionLabel kind="chat" label="Hier weitermachen" /></button>{/if}
       <button onclick={()=>act(leave)}>Zur Übersicht</button></section>{/if}
     <!-- Bei einer Abfrage führt die App den Bestand. Was offen ist, steht hier
          und nicht nur im Merkzettel des Modells: Das Kind musste vorher danach
          fragen, und die Antwort war unvollständig (D91). -->
     {#if running.quiz_open?.length}<p class="muted">Noch zu wiederholen: {running.quiz_open.join(', ')}.</p>
     {:else if running.quiz?.length}<p class="muted">Alles wiederholt: {running.quiz.length} {running.quiz.length===1?'Wort':'Wörter'} sitzen.</p>{/if}
-    {#if busy}<p role="status" class="working">{running.messages.length<=1?'Dein Coach schaut sich Thema und Material an …':'Einen Moment – deine Antwort wird vorbereitet …'}</p>{/if}
+    {#if busy}<p role="status" class="working">{oral?'Einen Moment …':running.messages.length<=1?'Dein Coach schaut sich Thema und Material an …':'Einen Moment – deine Antwort wird vorbereitet …'}</p>{/if}
 </div>
 {/if}
 <style>
+  .oral-result{margin-top:.5rem;padding:.6rem;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-card)}
+  .oral-result ul{list-style:none;margin:.3rem 0;padding:0;display:grid;gap:.35rem}
+  .oral-result .scores li{display:grid;grid-template-columns:1fr auto;gap:.1rem .5rem;align-items:center}
+  .oral-result .scores small{grid-column:1/-1;color:var(--fg-muted);overflow-wrap:anywhere}
+  .oral-result .dots{display:inline-flex;gap:3px}
+  .oral-result .dots i{width:12px;height:12px;border-radius:50%;background:var(--border)}
+  .oral-result .dots i.on{background:var(--accent)}
+  .oral-result .weak small{color:var(--fg-muted);overflow-wrap:anywhere}
 .hint{font-size:.85rem;opacity:.8;margin:.2rem 0 .6rem}
 .mentor{max-width:720px;margin:auto;padding-bottom:1.5rem}
 h1{font-size:1.55rem;line-height:1.25;overflow-wrap:anywhere}

@@ -35,7 +35,7 @@ import logging
 import math
 from contextlib import closing
 from datetime import date, datetime, timedelta
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 from . import practice, rewards
 from .db import webapp_conn
@@ -145,11 +145,21 @@ def exam_plan(account_id: int, exam: dict, day: date, school: list[date]) -> dic
     from .exam_meta import oral
     spoken = oral(account_id, exam["exam_key"])
     if spoken:
-        # Sprechprüfung (D193): geübt wird im Gespräch, kein Papier.
-        for t in sorted([t for t in rows if not t["ready"]], key=practice._weakness):
-            seq.append({**dialog(t), "title": f"{subject} sprechen: {t['title']}",
-                        "why": f"Sprechprüfung am {when}. Mit dem Lernbegleiter darüber sprechen, in ganzen Sätzen; "
-                               "er sagt dir, wie es besser klingt."})
+        # Sprechprüfung (D193, D194): Sprechproben mit dem Lernbegleiter als Prüfer,
+        # je Thema, dann eine Gesamtprobe; kein Papier. Fertig ist ein Thema, wenn
+        # die letzten zwei Proben in jedem Kriterium mindestens 3 von 4 haben.
+        from . import oral_exam
+        q = quote(exam["exam_key"], safe="")
+        for t in rows:
+            if not oral_exam.topic_ready(account_id, exam["exam_key"], t["id"]):
+                seq.append({**base, "key": f"oral:{exam['exam_key']}:{t['id']}", "kind": "oral", "format": None, "topic_id": t["id"],
+                            "title": f"Sprechprobe {subject}: {t['title']}", "href": f"#/learning?oral={q}&topic_id={t['id']}",
+                            "why": f"Sprechprüfung am {when}. Ein kurzes Gespräch mit dem Lernbegleiter als Prüfer; am Ende "
+                                   "bekommst du eine Bewertung und Tipps."})
+        if not oral_exam.full_ready(account_id, exam["exam_key"]):
+            seq.append({**base, "key": f"oral:{exam['exam_key']}:full", "kind": "oral", "format": None,
+                        "title": f"Gesamtprobe {subject}", "href": f"#/learning?oral={q}",
+                        "why": f"Alle Themen wie in der echten Sprechprüfung am {when}, mit Bewertung am Ende."})
     elif all(cell["state"] == "offen" for t in rows for cell in t["cells"].values()):
         seq.append(paper("einstieg", f"Einstiegstest {subject}", f"Zeigt, wo du für die Arbeit am {when} stehst."))
     not_ready = [] if spoken else sorted([t for t in rows if not t["ready"]], key=practice._weakness)
@@ -166,9 +176,10 @@ def exam_plan(account_id: int, exam: dict, day: date, school: list[date]) -> dic
                              f"Alle Themen wie in der echten Arbeit am {when}. Zeigt, was noch fehlt."))
     need = len(seq)
     before = [d for d in school if day <= d < exam_day]
-    if len(before) > BUFFER:
+    buffer = 1 if spoken else BUFFER  # Sprechproben brauchen weniger Luft (D194)
+    if len(before) > buffer:
         # Die letzten Schultage vor der Arbeit sind Puffer; gelernt wird davor.
-        window, cutoff, behind = before[:-BUFFER], before[-BUFFER], False
+        window, cutoff, behind = before[:-buffer], before[-buffer], False
     else:
         # Schon im Puffer: was fehlt, kommt jetzt, bis zum Tag vor der Arbeit.
         window, cutoff, behind = before, exam_day, need > 0
@@ -391,6 +402,9 @@ def mark_done(account_id: int, steps: list[dict], day: date, until: date | None 
                     done = _dialog_done(c, account_id, s, first, last)
                 elif s["kind"] == "dialog" and s.get("lesson_id"):
                     done = _lesson_done(c, account_id, s, first, last)
+                elif s["kind"] == "oral":
+                    from . import oral_exam
+                    done = oral_exam.done_on(account_id, s["exam_key"], s.get("topic_id"), first, last)
                 elif s["kind"] == "vocab":
                     if vocab is None:
                         vocab = {_vocab_key(v): v for v in _vocab(account_id, day)}

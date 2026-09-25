@@ -44,6 +44,8 @@ class StartIn(InputModel):
     topic_id:int|None=Field(default=None,ge=1)
     # Mit homework_task_id: nicht helfen, sondern die fertige Lösung vom Foto prüfen (Kontrollieren).
     check:bool=False
+    # Sprechprobe für eine Sprechprüfung (D194): mit topic_id eine Themenprobe, ohne die Gesamtprobe.
+    oral_exam_key:str|None=Field(default=None,min_length=1,max_length=120)
 
 class TurnIn(InputModel):
     request_key:str=Field(min_length=8,max_length=80,pattern=r'^[a-zA-Z0-9_-]+$')
@@ -194,7 +196,8 @@ def view(c,s):
     result={k:v for k,v in s.items() if k not in ('current_task','source_json','pending_key','pending_since','user_id')}
     source=json.loads(s.get('source_json') or '{}')
     result['mode']=source.get('mode','practice');result['task_id']=source.get('task_id')
-    result['untimed']=result['mode'] in (*HOMEWORK_MODES,'topic')
+    result['untimed']=result['mode'] in (*HOMEWORK_MODES,'topic','oral')
+    if result['mode']=='oral':result['oral']={'exam_key':source.get('exam_key'),'full':bool(source.get('full'))}
     result['topic']=topic_view(c,s) if s.get('topic_id') else None
     result['situation']=source.get('situation')
     task=homework_task(c,s['account_id'],source)
@@ -269,6 +272,7 @@ async def open_unit(account_id,sid,tier=None,persist=True):
     await mopen.ensure_exam_date(account_id,s.get('topic_id'))
     ctx,_,_=mc.context(account_id,s)
     if s.get('topic_id'):ctx['topic']=lernstand.context_for(account_id,s['topic_id'],sid)
+    oral_context(account_id,s,ctx)
     lage=mopen.situation(account_id,s,ctx);ctx['situation']=lage
     if lage['lage'] in ('begleiten','kontrollieren'):return None,lage
     raw,_,_=await ai.complete(account_id,ai.OPENING,mopen.instruction_for(lage['lage'],Reply.model_json_schema()),mopen.trim(ctx),max_output=2500,session_id=sid,tier=tier)
@@ -306,6 +310,38 @@ END_CHOICES=['Für heute fertig','Noch weitermachen']
 END_CHOICES_TOPIC=['Für heute fertig','Noch eine Aufgabe']
 END_QUESTION_CHECK=' Willst du hier aufhören oder noch eine Seite zeigen?'
 END_CHOICES_CHECK=['Für heute fertig','Noch eine Seite zeigen']
+END_QUESTION_ORAL=' Soll ich die Probe jetzt auswerten, oder möchtest du noch weitersprechen?'
+END_CHOICES_ORAL=['Beenden und auswerten','Noch weitersprechen']
+ORAL_CAP_TEXT='Das war eine lange Probe. Soll ich sie jetzt auswerten, oder möchtest du noch weitersprechen?'
+
+
+def oral_exam_turns(s):
+    from .. import oral_exam
+    full=json.loads(s.get('source_json') or '{}').get('full')
+    return (oral_exam.FULL_TURNS if full else oral_exam.TOPIC_TURNS)+6
+
+
+async def finish_oral(account_id,sid,s,body,user):
+    """Ende einer Sprechprobe: Bewertung holen, als letzte Nachricht zeigen, Probe speichern (D194)."""
+    from .. import oral_exam
+    source=json.loads(s.get('source_json') or '{}')
+    try:
+        try:grade=dict(mc.snapshot(account_id)['profile'] or {}).get('grade')
+        except Exception:grade=None
+        try:
+            result=await oral_exam.assess(account_id,s,source,grade) if not s['is_test'] else None
+        except (ValidationError,ValueError):
+            raise HTTPException(502,'Die Bewertung war nicht eindeutig genug. Bitte noch einmal „Beenden und auswerten“.') from None
+        with closing(webapp_conn()) as c,c:
+            c.execute('BEGIN IMMEDIATE')
+            text=result['summary'] if result else 'Die Probe ist beendet. Im Testmodus wird nicht bewertet.'
+            add_message(c,sid,account_id,body.request_key,'assistant',text,{'choices':[],'oral_result':result})
+            c.execute("UPDATE mentor_sessions SET status='completed',phase='finished',version=version+1,pending_key=NULL,pending_since=NULL,active_since=NULL,updated_at=? WHERE id=?",
+                      (now_iso(),sid))
+            return view(c,get_session(c,account_id,sid))
+    finally:
+        with closing(webapp_conn()) as c:
+            c.execute('UPDATE mentor_sessions SET pending_key=NULL,pending_since=NULL WHERE id=? AND account_id=? AND pending_key=?',(sid,account_id,body.request_key))
 CONTINUE_RULE=('Du beendest die Einheit nie selbst: action finish heißt nur, dass du das Ende vorschlägst; die App fragt das Kind. '
                'Sagt das Kind „Noch weitermachen“ oder „Noch eine Aufgabe“, machst du mit einer neuen Aufgabe oder Variante weiter, ohne das Ende erneut anzusprechen. ')
 
@@ -467,10 +503,47 @@ def opening(account_id:int,body:OpeningIn,user:CurrentUser=Depends(get_current_u
     return ai.status()
 
 
+ORAL_WELCOME=('Sprechprobe {what}: Ich bin heute dein Prüfer und spreche {lang}. Halte den Sprechknopf und antworte in ganzen Sätzen. '
+              'Zwischendurch korrigiere ich nicht, wie in der echten Prüfung; am Ende bekommst du eine Bewertung mit Tipps.')
+
+
+async def start_oral(account_id,body,user):
+    """Eine Sprechprobe starten (D194): Themenprobe mit topic_id, sonst Gesamtprobe."""
+    from .. import exam_meta
+    key=body.oral_exam_key
+    if not exam_meta.oral(account_id,key):raise HTTPException(422,'Diese Arbeit ist keine Sprechprüfung.')
+    with closing(webapp_conn()) as c,c:
+        c.execute('BEGIN IMMEDIATE')
+        topic=None
+        if body.topic_id:
+            topic=c.execute('SELECT * FROM exam_topics WHERE id=? AND account_id=? AND exam_key=?',(body.topic_id,account_id,key)).fetchone()
+            if not topic:raise HTTPException(404,'Thema nicht gefunden.')
+        subject=topic['subject'] if topic else (c.execute("SELECT subject FROM exam_topics WHERE account_id=? AND exam_key=? AND stale=0 LIMIT 1",(account_id,key)).fetchone() or [None])[0]
+        if not subject:raise HTTPException(422,'Zu dieser Arbeit fehlen noch die Sprechthemen.')
+        for r in c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND is_demo=0 AND status='active' AND json_extract(source_json,'$.mode')='oral' "
+                           "AND json_extract(source_json,'$.exam_key')=? ORDER BY id DESC",(account_id,key)).fetchall():
+            if (r['topic_id'] or None)==(topic['id'] if topic else None):return view(c,get_session(c,account_id,r['id']))
+        source={'mode':'oral','exam_key':key,'topic_id':topic['id'] if topic else None,'full':not topic,
+                'goal_key':'oral:'+key,'voluntary':True}
+        goal=f'Sprechprobe: {topic["title"]}' if topic else 'Gesamtprobe Sprechprüfung'
+        sid=c.execute('INSERT INTO mentor_sessions(account_id,user_id,subject,goal,max_minutes,active_since,source_json,topic_id,created_at,updated_at,is_test) VALUES(?,?,?,?,?,?,?,?,?,?,0)',
+            (account_id,user.id,subject,goal[:250],20,now_iso(),json.dumps(source,ensure_ascii=False),topic['id'] if topic else None,now_iso(),now_iso())).lastrowid
+        lang={'en':'Englisch','es':'Spanisch','fr':'Französisch'}.get(speech_language(subject) or '','die Fremdsprache')
+        add_message(c,sid,account_id,'welcome','assistant',ORAL_WELCOME.format(what=f'„{topic["title"]}“' if topic else 'über alle Themen',lang=lang),{'choices':[]})
+    return await opened(account_id,sid)
+
+
+def oral_context(account_id,s,ctx):
+    source=json.loads(s.get('source_json') or '{}')
+    if source.get('mode')!='oral':return
+    from .. import oral_exam
+    ctx['oral']=oral_exam.context(account_id,source,s['subject'],ctx.get('grade'))
+
+
 @router.post('/sessions')
 async def start(account_id:int,body:StartIn,user:CurrentUser=Depends(get_current_user)):
     access(user,account_id,write=True)
-    if not body.subject and not body.topic_id and not body.homework_task_id:raise HTTPException(422,'Bitte ein Fach wählen.')
+    if not body.subject and not body.topic_id and not body.homework_task_id and not body.oral_exam_key:raise HTTPException(422,'Bitte ein Fach wählen.')
     if body.demo:
         access(user,account_id,parent=True)
         if body.lesson_id or body.skill_id or body.goal_key or body.homework_task_id:raise HTTPException(422,'Im Demo-Modus sind keine echten Unterrichts- oder Lernzielverknüpfungen erlaubt.')
@@ -486,13 +559,16 @@ async def start(account_id:int,body:StartIn,user:CurrentUser=Depends(get_current
     # Parents work together with the child, on the child's own verlauf. Only
     # the demo switch produces something the child must not see.
     parent=is_parent(user)
+    if body.oral_exam_key:
+        return await start_oral(account_id,body,user)
     if body.topic_id:
         if body.lesson_id or body.skill_id or body.goal_key or body.homework_task_id:raise HTTPException(422,'Ein Thema der Themenliste braucht keine weitere Verknüpfung.')
         with closing(webapp_conn()) as c,c:
             c.execute('BEGIN IMMEDIATE')
             topic=c.execute('SELECT * FROM exam_topics WHERE id=? AND account_id=?',(body.topic_id,account_id)).fetchone()
             if not topic:raise HTTPException(404,'Thema nicht gefunden.')
-            existing=c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND topic_id=? AND is_demo=0 AND status='active' ORDER BY id DESC LIMIT 1",(account_id,topic['id'])).fetchone()
+            existing=c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND topic_id=? AND is_demo=0 AND status='active' "
+                               "AND COALESCE(json_extract(source_json,'$.mode'),'')!='oral' ORDER BY id DESC LIMIT 1",(account_id,topic['id'])).fetchone()
             if existing:return view(c,get_session(c,account_id,existing['id']))
             # Drei Tage nach „sitzt" ist die Einheit eine Kurzprüfung: ohne Erklärung vorweg.
             check=lernstand.is_check(dict(topic))
@@ -927,6 +1003,11 @@ def speech_language(subject,requested=None):
 def speech_prompt(c,s):
     """Fach, Thema und die Wörter der aktuellen Aufgabe: so werden Fachbegriffe und
     lateinische Formen erkannt statt zu Alltagswörtern gemacht."""
+    if json.loads(s.get('source_json') or '{}').get('mode')=='oral':
+        # Wörtlich mitschreiben, Fehler und Zögern bleiben stehen: Bewertet wird,
+        # was gesagt wurde (D194). Ein Beispiel im Stil der Antwort lenkt die Erkennung.
+        return ("Umm, yesterday I goed to my grandma and, uh, we was playing cards. She have a cat, it's name is Tom. "
+                "Wörtliche Abschrift eines Schulkindes, Fehler und Zögern bleiben stehen.")
     parts=[f"Schulfach {s['subject']}",f"Thema: {s['goal']}"]
     if s.get('current_task'):
         task=json.loads(s['current_task']);parts.append('Aufgabe: '+' '.join(str(task.get('prompt','')).split())[:220])
@@ -1328,7 +1409,7 @@ async def _turn(account_id,sid,body,user):
         # Homework help has no clock and no turn cap. It ends when the homework
         # is ticked off, never because a practice slot would have run out.
         mode=json.loads(s.get('source_json') or '{}').get('mode')
-        homework=mode=='homework_help';check=mode=='homework_check';topic_mode=mode=='topic'
+        homework=mode=='homework_help';check=mode=='homework_check';topic_mode=mode=='topic';oral=mode=='oral'
         # Ein Thema der Themenliste hat keine Uhr: Es endet mit der Stufe oder wenn das Kind aufhört.
         finish=body.kind=='finish'
         # Grenze erreicht: kein Abbruch, eine Frage ohne Modellaufruf. Das Kind
@@ -1365,13 +1446,17 @@ async def _turn(account_id,sid,body,user):
                 wrong_choice(c,account_id,s,user,body,current,body.option,seconds,topic_mode)
                 return view(c,get_session(c,account_id,sid))
             chosen_right=True
-        at_cap=not homework and not check and ((topic_mode and s['turns']>=lernstand.MAX_TURNS) or (not topic_mode and (s['turns']>=12 or seconds>=s['max_minutes']*60)))
+        at_cap=not homework and not check and ((oral and s['turns']>=oral_exam_turns(s)) or (not oral and topic_mode and s['turns']>=lernstand.MAX_TURNS) or (not topic_mode and not oral and (s['turns']>=12 or seconds>=s['max_minutes']*60)))
         if not finish and at_cap and s['turns']>=(s.get('end_proposed_turn') or 0)+PROPOSE_EVERY:
             add_message(c,sid,account_id,body.request_key,'user',text or ('Foto ansehen' if body.attachment_id else 'Weiter'),author=author_of(user,s),user_id=user.id)
-            add_message(c,sid,account_id,body.request_key,'assistant',CAP_TEXT,{'choices':END_CHOICES_TOPIC if topic_mode else END_CHOICES,'task':public_task(s['current_task']),'assessment':None})
+            add_message(c,sid,account_id,body.request_key,'assistant',ORAL_CAP_TEXT if oral else CAP_TEXT,{'choices':END_CHOICES_ORAL if oral else END_CHOICES_TOPIC if topic_mode else END_CHOICES,'task':public_task(s['current_task']),'assessment':None})
             c.execute('UPDATE mentor_sessions SET end_proposed_turn=?,version=version+1,elapsed_seconds=?,updated_at=? WHERE id=?',(s['turns'],seconds,now_iso(),sid))
             return view(c,get_session(c,account_id,sid))
-        if finish:
+        if finish and oral:
+            # Die Bewertung braucht einen Modellaufruf; sie läuft außerhalb der Sperre (D194).
+            add_message(c,sid,account_id,body.request_key,'user',text or 'Beenden und auswerten',{'kind':'finish'},author=author_of(user,s),user_id=user.id)
+            c.execute('UPDATE mentor_sessions SET pending_key=?,pending_since=?,elapsed_seconds=? WHERE id=?',(body.request_key,now_iso(),seconds,sid))
+        elif finish:
             add_message(c,sid,account_id,body.request_key,'user',text or 'Für heute fertig',author=author_of(user,s),user_id=user.id)
             if homework:
                 end='Gut, wir machen für heute Pause. Das Gespräch bleibt offen, bis du die Hausaufgabe abhakst.'
@@ -1390,8 +1475,13 @@ async def _turn(account_id,sid,body,user):
                       ('active' if homework else 'completed','clarify' if homework else 'finished',seconds,now_iso(),sid))
             if topic_mode and s.get('topic_id'):lernstand.set_note(c,s['topic_id'],s['summary'])
             return view(c,get_session(c,account_id,sid))
-        if not topic_mode:lp.reserve_resume(c,account_id,s,today_local())
-        c.execute('UPDATE mentor_sessions SET pending_key=?,pending_since=?,elapsed_seconds=?,active_since=? WHERE id=?',(body.request_key,now_iso(),seconds,now_iso(),sid))
+        if finish and oral:
+            pass
+        else:
+            if not topic_mode and not oral:lp.reserve_resume(c,account_id,s,today_local())
+            c.execute('UPDATE mentor_sessions SET pending_key=?,pending_since=?,elapsed_seconds=?,active_since=? WHERE id=?',(body.request_key,now_iso(),seconds,now_iso(),sid))
+    if finish and oral:
+        return await finish_oral(account_id,sid,s,body,user)
     try:
         ctx,context_hash,fresh=(demo_data.context if s['is_demo'] else mc.context)(account_id,s)
         if not fresh['enabled'] or not fresh['profile'] or not fresh['profile']['ai_enabled']:raise HTTPException(403,'Die KI-Begleitung wurde pausiert.')
@@ -1424,7 +1514,8 @@ async def _turn(account_id,sid,body,user):
         stored_quiz=json.loads(s.get('quiz_json') or '[]')
         if stored_quiz:
             ctx['abfrage']={'bestand':stored_quiz,'offen':open_items(stored_quiz)}
-        if topic_mode and s.get('topic_id'):ctx['topic']=lernstand.context_for(account_id,s['topic_id'],sid)
+        if (topic_mode or oral) and s.get('topic_id'):ctx['topic']=lernstand.context_for(account_id,s['topic_id'],sid)
+        oral_context(account_id,s,ctx)
         # Keep the next context bounded even when previous answers were lengthy.
         while len(json.dumps(ctx,ensure_ascii=False).encode())>30000 and ctx['lessons']:ctx['lessons'].pop()
         homework_help=homework
@@ -1476,7 +1567,8 @@ async def _turn(account_id,sid,body,user):
             task_id=(ctx.get('source') or {}).get('task_id') or json.loads(s.get('source_json') or '{}').get('task_id')
             sheet=sheet_for_task(account_id,task_id) if task_id else None
             ctx['arbeitsblatt']=sheet or {'vorhanden':False}
-        instruction=CHECK_INSTRUCTION if check else HOMEWORK_INSTRUCTION if homework_help else INSTRUCTION.replace(SCHEMA_TAIL,TASK_RULE+(TOPIC_RULE if topic_mode else '')+CONTINUE_RULE+SCHEMA_TAIL)
+        from .. import oral_exam
+        instruction=INSTRUCTION.replace(SCHEMA_TAIL,oral_exam.ORAL_RULE+CONTINUE_RULE+SCHEMA_TAIL) if oral else CHECK_INSTRUCTION if check else HOMEWORK_INSTRUCTION if homework_help else INSTRUCTION.replace(SCHEMA_TAIL,TASK_RULE+(TOPIC_RULE if topic_mode else '')+CONTINUE_RULE+SCHEMA_TAIL)
         stoff=context_text(ctx)
         note=''
         for versuch in range(2):
@@ -1498,8 +1590,9 @@ async def _turn(account_id,sid,body,user):
             if versuch:
                 raise HTTPException(502,'Die Aufgabe hätte auf Material verwiesen, das du nicht vor dir hast. Dein Stand bleibt erhalten.')
             note=' WICHTIG: '+fehlt+' '
-        if homework_help or check:
+        if homework_help or check or oral:
             reply.task=None;reply.assessment=None
+            if oral:reply.choices=[]
             if reply.action=='task':reply.action='clarify'
         latest,latest_hash,latest_snapshot=(demo_data.context if s['is_demo'] else mc.context)(account_id,s)
         if not latest_snapshot['enabled'] or not latest_snapshot['profile'] or not latest_snapshot['profile']['ai_enabled']:raise HTTPException(409,'Die KI-Begleitung wurde inzwischen pausiert.')
@@ -1508,7 +1601,7 @@ async def _turn(account_id,sid,body,user):
         with closing(webapp_conn()) as c,c:
             c.execute('BEGIN IMMEDIATE');live=get_session(c,account_id,sid)
             if live['version']!=s['version'] or live['pending_key']!=body.request_key:raise HTTPException(409,'Die Einheit wurde inzwischen geändert.')
-            uid=add_message(c,sid,account_id,body.request_key,'user',text or ('Foto ansehen' if body.attachment_id else 'Meine Seiten ansehen' if fresh_pages else 'Bitte helfen'),({'attachment_id':body.attachment_id} if body.attachment_id else {})|({'material_ids':fresh_pages} if fresh_pages else {})|({'spoken':True} if body.spoken else {})
+            uid=add_message(c,sid,account_id,body.request_key,'user',text or ('Foto ansehen' if body.attachment_id else 'Meine Seiten ansehen' if fresh_pages else 'Bitte helfen'),({'attachment_id':body.attachment_id} if body.attachment_id else {})|({'material_ids':fresh_pages} if fresh_pages else {})|({'spoken':True} if body.spoken else {})|({'seconds':body.seconds} if oral and body.spoken and body.seconds else {})
                            # Art der Anfrage und erkannte Verfassung für den Nutzungsbericht der Eltern.
                            |{'kind':kind}|({'verfassung':lage['signale']} if lage else {}),author=author_of(user,s),user_id=user.id)
             if fresh_pages:
@@ -1570,8 +1663,8 @@ async def _turn(account_id,sid,body,user):
                     lernstand.set_note(c,s['topic_id'],reply.summary)
                     tail=mopen.closing_sentence(topic_view(c,{**s,'account_id':account_id}))
                     if tail:reply.message=(reply.message.rstrip()+' '+tail)[:1700]
-                reply.message=(reply.message.rstrip()+(END_QUESTION_TOPIC if topic_mode else END_QUESTION_CHECK if check else END_QUESTION))[:1800]
-                payload['choices']=END_CHOICES_TOPIC if topic_mode else END_CHOICES_CHECK if check else END_CHOICES
+                reply.message=(reply.message.rstrip()+(END_QUESTION_ORAL if oral else END_QUESTION_TOPIC if topic_mode else END_QUESTION_CHECK if check else END_QUESTION))[:1800]
+                payload['choices']=END_CHOICES_ORAL if oral else END_CHOICES_TOPIC if topic_mode else END_CHOICES_CHECK if check else END_CHOICES
                 payload['task']=None;task_data=None
                 end_proposed=s['turns']+1
                 c.execute("UPDATE mentor_messages SET text=?,payload=? WHERE session_id=? AND request_key=? AND role='assistant'",(reply.message,json.dumps(payload,ensure_ascii=False),sid,body.request_key))

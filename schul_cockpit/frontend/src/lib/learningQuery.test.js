@@ -22,3 +22,12 @@ test('öffnet die passende Einheit', async () => {
   assert.equal(calls[2][2].voluntary, true);
   assert.equal(await openFromQuery(api, '/b', queryOf('#/learning')), null);
 });
+
+test('öffnet eine Sprechprobe (D194)', async () => {
+  const calls = [];
+  const api = { post: async (p, b) => (calls.push([p, b]), { id: 3 }) };
+  assert.ok(opensSession(queryOf('#/learning?oral=uid%3Ax')));
+  await openFromQuery(api, '/b', queryOf('#/learning?oral=uid%3Ax&topic_id=5'));
+  await openFromQuery(api, '/b', queryOf('#/learning?oral=uid%3Ax'));
+  assert.deepEqual(calls, [['/b/sessions', { oral_exam_key: 'uid:x', topic_id: 5 }], ['/b/sessions', { oral_exam_key: 'uid:x', topic_id: null }]]);
+});

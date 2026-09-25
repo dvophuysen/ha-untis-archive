@@ -1168,3 +1168,15 @@ CREATE TABLE IF NOT EXISTS exam_meta (
  updated_at TEXT NOT NULL, PRIMARY KEY(account_id, exam_key)
 );
 """))
+
+# Sprechproben (D194): Bewertung je Probe, abgewählte Referenzen je Arbeit.
+_MIGRATIONS.append(("oral_sims_001", """
+ALTER TABLE exam_meta ADD COLUMN excluded_refs TEXT NOT NULL DEFAULT '[]';
+CREATE TABLE IF NOT EXISTS oral_sims (
+ id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL, exam_key TEXT NOT NULL, topic_id INTEGER, full INTEGER NOT NULL DEFAULT 0,
+ session_id INTEGER, created_at TEXT NOT NULL, scores_json TEXT NOT NULL DEFAULT '[]', weak_json TEXT NOT NULL DEFAULT '[]',
+ followups_json TEXT NOT NULL DEFAULT '[]', summary TEXT NOT NULL DEFAULT '', level_note TEXT NOT NULL DEFAULT '',
+ reliable INTEGER NOT NULL DEFAULT 1, measures_json TEXT NOT NULL DEFAULT '{}', verdict TEXT, verdict_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_oral_sims_exam ON oral_sims(account_id, exam_key, id);
+"""))
