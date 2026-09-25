@@ -18,3 +18,4 @@ build/
 schul_cockpit/frontend/node_modules/
 schul_cockpit/frontend/dist/
 
+.claude/worktrees/
