@@ -4,7 +4,9 @@
 Liest über die Ingress-Sitzung und den Lesezugang (READ_ACCESS.md) die
 Nutzungstage von heute: Die App meldet sich jede Minute, solange sie offen ist
 (`usage_days.last_at`). Ausgabe je Konto und Rolle, wie lange das her ist.
-Rückgabewert 1, wenn in den letzten --minutes Minuten jemand aktiv war.
+Rückgabewert 1, wenn in den letzten --minutes Minuten ein Kind aktiv war.
+Eltern werden angezeigt, halten ein Update aber nicht auf (Wunsch des Nutzers
+vom 25.09.2026; die Nutzungstage unterscheiden Elternzugänge nicht).
 
     python3 scripts/ha_activity.py            # Standard: 10 Minuten
     python3 scripts/ha_activity.py --minutes 5
@@ -56,11 +58,11 @@ def main() -> int:
         for row in rows:
             ago = (now - datetime.fromisoformat(row["last_at"])).total_seconds() / 60
             active = ago <= args.minutes
-            busy = busy or active
             who = "Kind" if row["actor"] == "child" else "Eltern"
+            busy = busy or (active and who == "Kind")
             print(f"Konto {account}, {who}: zuletzt vor {ago:.0f} Min."
                   f"{' – AKTIV' if active else ''} (heute {round((row['active_seconds'] or 0) / 60)} Min.)")
-    print("Jemand ist gerade in der App." if busy else f"In den letzten {args.minutes} Minuten war niemand in der App.")
+    print("Ein Kind ist gerade in der App." if busy else f"In den letzten {args.minutes} Minuten war kein Kind in der App.")
     return 1 if busy else 0
 
 

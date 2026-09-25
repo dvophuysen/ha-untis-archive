@@ -29,8 +29,9 @@
   dieser Weg nicht liefern, dafür den REST-Proxy nehmen. Die Add-on-API
   selbst (Verläufe, Materialien, Aufgaben) ist über eine Ingress-Sitzung
   erreichbar; der Kopf des Skripts zeigt den Weg. Vor jedem Einspielen `python3 scripts/ha_activity.py`
-  laufen lassen: Rückgabe 1 heißt, in den letzten zehn Minuten war jemand in
-  der App, dann warten. Add-on-Updates immer selbst
+  laufen lassen: Rückgabe 1 heißt, in den letzten zehn Minuten war ein Kind in
+  der App, dann warten. Elternzugänge halten Updates nicht auf (Wunsch des
+  Nutzers). Add-on-Updates immer selbst
   einspielen, außer der Nutzer sagt ausdrücklich etwas anderes: nach dem Push
   `/store/reload post`, dann `/addons/e54108c7_schul_cockpit/update post`. Der
   Update-Aufruf antwortet mit `unknown_error`, obwohl er anläuft — auf die
