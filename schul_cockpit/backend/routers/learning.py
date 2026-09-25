@@ -209,11 +209,9 @@ async def overview(account_id: int, user: CurrentUser = Depends(get_current_user
                 (account_id, (day + timedelta(days=1)).isoformat()),
             )
         ]
-        done_tasks = conn.execute(
-            "SELECT COALESCE(SUM(estimated_minutes),0) FROM tasks WHERE account_id=? "
-            "AND status='done' AND substr(completed_at,1,10)=?",
-            (account_id, day.isoformat()),
-        ).fetchone()[0]
+        # Der Berliner Tag des Hakens, nicht das UTC-Datum im Zeitstempel.
+        from ..learning_plan import done_minutes
+        done_tasks = sum(m or 0 for m in done_minutes(conn, account_id, day))
         candidates = [
             dict(r)
             for r in conn.execute(
@@ -291,7 +289,9 @@ async def overview(account_id: int, user: CurrentUser = Depends(get_current_user
             selected.append(a)
             remaining -= a["minutes"]
     from .. import learning_plan as lp
-    shared=lp.build(account_id,exams)
+    # Der Plan rechnet synchron über alle Ziele und Stunden: im Threadpool, damit
+    # die Ereignisschleife derweil andere Anfragen bedient (etwa einen Mentor-Zug).
+    shared=await asyncio.to_thread(lp.build,account_id,exams)
     td=shared['today']
     selected=[a for a in candidates if any(g.get('activity_id')==a['id'] for g in td['actions'])]
     for a in selected:a['reason']='Im gemeinsamen Lernplan eingeplant'
@@ -756,7 +756,10 @@ def finish_session(
         current = activity_row(conn, account_id, s["activity_id"])
         snapshot = json.loads(s["snapshot"])
         # Don't attach progress from an old task version to a newer task.
-        if user.role=="child" and not user.is_admin and all(current[k] == snapshot[k] for k in ("prompt", "solution", "criteria")):
+        # Geräterolle statt Kontorolle (D175, D183): Das Kind am Elterngerät
+        # zählt, Eltern, Mitlesen und Testmodus zählen nicht.
+        from ..rewards import acting_child
+        if acting_child(user) and all(current[k] == snapshot[k] for k in ("prompt", "solution", "criteria")):
             old = conn.execute(
                 "SELECT r.streak,s.completed_at FROM learning_reviews r JOIN learning_sessions s ON s.id=r.last_session_id WHERE r.activity_id=?",
                 (s["activity_id"],),

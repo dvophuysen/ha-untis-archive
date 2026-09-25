@@ -201,6 +201,67 @@ def refresh(c, topic_id: int, session_id: int | None = None) -> dict:
     return state
 
 
+def _answer_columns(c, table: str) -> list[str]:
+    return [r[1] for r in c.execute(f"PRAGMA table_info({table})")]
+
+
+def void_session_answers(c, account_id: int, session_id: int) -> set[int]:
+    """„War nur ein Test“ (K11): die Antworten einer Mentor-Einheit aus dem
+    Lernstand nehmen, ohne sie zu verlieren. Sie wandern samt ID nach
+    topic_answers_void; „zählt doch“ holt sie zurück. Antworten aus
+    Übungsarbeiten (negative session_id) sind nie betroffen. Gibt die Themen
+    zurück, deren Stufe neu abzulesen ist."""
+    if not session_id or session_id <= 0:
+        return set()
+    topics = {r[0] for r in c.execute("SELECT DISTINCT topic_id FROM topic_answers WHERE account_id=? AND session_id=?",
+                                      (account_id, session_id))}
+    if not topics:
+        return set()
+    target = set(_answer_columns(c, "topic_answers_void"))
+    cols = [x for x in _answer_columns(c, "topic_answers") if x in target]
+    names = ",".join(cols)
+    c.execute(f"INSERT OR REPLACE INTO topic_answers_void({names},voided_at) SELECT {names},? FROM topic_answers "
+              "WHERE account_id=? AND session_id=?", (now_iso(), account_id, session_id))
+    c.execute("DELETE FROM topic_answers WHERE account_id=? AND session_id=?", (account_id, session_id))
+    return topics
+
+
+def restore_session_answers(c, account_id: int, session_id: int) -> set[int]:
+    """Die mit „War nur ein Test“ herausgenommenen Antworten zurück in den
+    Lernstand. Die ID bleibt, solange sie frei ist; sonst vergibt die Datenbank
+    eine neue (gezählt wird nach Zeitpunkt, nicht nach ID)."""
+    if not session_id or session_id <= 0:
+        return set()
+    topics = {r[0] for r in c.execute(
+        "SELECT DISTINCT v.topic_id FROM topic_answers_void v JOIN exam_topics t ON t.id=v.topic_id "
+        "WHERE v.account_id=? AND v.session_id=?", (account_id, session_id))}
+    if topics:
+        source = set(_answer_columns(c, "topic_answers_void"))
+        cols = [x for x in _answer_columns(c, "topic_answers") if x in source]
+        rest = [x for x in cols if x != "id"]
+        c.execute(f"INSERT INTO topic_answers({','.join(cols)}) SELECT {','.join(cols)} FROM topic_answers_void v "
+                  "WHERE v.account_id=? AND v.session_id=? AND NOT EXISTS(SELECT 1 FROM topic_answers a WHERE a.id=v.id) "
+                  "AND EXISTS(SELECT 1 FROM exam_topics t WHERE t.id=v.topic_id) ORDER BY v.id", (account_id, session_id))
+        c.execute(f"INSERT INTO topic_answers({','.join(rest)}) SELECT {','.join(rest)} FROM topic_answers_void v "
+                  "WHERE v.account_id=? AND v.session_id=? AND EXISTS(SELECT 1 FROM topic_answers a WHERE a.id=v.id "
+                  "AND NOT (a.account_id=v.account_id AND a.session_id=v.session_id AND a.created_at=v.created_at)) "
+                  "AND EXISTS(SELECT 1 FROM exam_topics t WHERE t.id=v.topic_id) ORDER BY v.id", (account_id, session_id))
+    c.execute("DELETE FROM topic_answers_void WHERE account_id=? AND session_id=?", (account_id, session_id))
+    return topics
+
+
+def drop_session_answers(c, account_id: int, session_id: int) -> set[int]:
+    """Eine gelöschte Einheit nimmt ihre Antworten je Thema mit, gezählte und
+    als Test herausgenommene."""
+    if not session_id or session_id <= 0:
+        return set()
+    topics = {r[0] for r in c.execute("SELECT DISTINCT topic_id FROM topic_answers WHERE account_id=? AND session_id=?",
+                                      (account_id, session_id))}
+    c.execute("DELETE FROM topic_answers WHERE account_id=? AND session_id=?", (account_id, session_id))
+    c.execute("DELETE FROM topic_answers_void WHERE account_id=? AND session_id=?", (account_id, session_id))
+    return topics
+
+
 def set_note(c, topic_id: int, note: str) -> None:
     """Der Satz des Mentors zum Ende einer Einheit: der fachliche Grund."""
     if note and note.strip():

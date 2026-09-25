@@ -30,6 +30,12 @@ def _require_parent(user: CurrentUser) -> None:
         raise HTTPException(status_code=403, detail="Admin or parent only")
 
 
+def _require_edit(user: CurrentUser, account_id: int) -> None:
+    """Nur mit Schreibrecht auf das Kind (B12)."""
+    from .exams import _require_edit as check
+    check(user, account_id)
+
+
 @router.get("/accounts/{account_id}/courses")
 def get_courses(
     account_id: int,
@@ -57,6 +63,7 @@ def set_course_hidden(
 ) -> dict:
     assert_account_access(user, account_id)
     _require_parent(user)
+    _require_edit(user, account_id)
     conn = webapp_conn()
     try:
         if body.hidden:
@@ -94,6 +101,7 @@ def hide_whole_subject(
     """Hide/show every course of a subject in one tap."""
     assert_account_access(user, account_id)
     _require_parent(user)
+    _require_edit(user, account_id)
     # Gather all (teacher) courses of this subject from history.
     hconn = history_conn()
     try:
@@ -114,6 +122,8 @@ def hide_whole_subject(
 
     conn = webapp_conn()
     try:
+        # Alle Kurse des Fachs auf einmal oder keiner.
+        conn.execute("BEGIN IMMEDIATE")
         for r in rows:
             key = course_key(r["subject_untis_id"], r["teacher_untis_id"],
                              r["subject_name"], r["teacher_name"])
@@ -132,6 +142,9 @@ def hide_whole_subject(
                     "DELETE FROM hidden_courses WHERE account_id = ? AND course_key = ?",
                     (account_id, key),
                 )
+        conn.execute("COMMIT")
     finally:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
         conn.close()
     return {"ok": True}

@@ -339,6 +339,13 @@ async def finish_oral(account_id,sid,s,body,user):
             result=await oral_exam.assess(account_id,s,source,grade) if not s['is_test'] else None
         except (ValidationError,ValueError):
             raise HTTPException(502,'Die Bewertung war nicht eindeutig genug. Bitte noch einmal „Beenden und auswerten“.') from None
+        except HTTPException as exc:
+            # Die Abschrift wird vorher gekürzt; reicht das nicht, keine
+            # irreführende Materialmeldung, die Probe bleibt offen (A9).
+            if exc.status_code==413:
+                LOG.warning('Sprechprobe %s zu lang für die Bewertung',sid)
+                raise HTTPException(413,'Diese Probe ist zu lang für eine Bewertung in einem Schritt. Dein Gespräch bleibt gespeichert.') from None
+            raise
         with closing(webapp_conn()) as c,c:
             c.execute('BEGIN IMMEDIATE')
             text=result['summary'] if result else 'Die Probe ist beendet. Im Testmodus wird nicht bewertet.'
@@ -430,7 +437,14 @@ async def dashboard(account_id:int,demo:bool=False,user:CurrentUser=Depends(get_
         with closing(webapp_conn()) as c:
             sessions=[dict(r) for r in c.execute('SELECT id,subject,goal,status,phase,summary,updated_at,is_test,is_demo FROM mentor_sessions WHERE account_id=? AND is_demo=1 ORDER BY updated_at DESC LIMIT 30',(account_id,))]
         return dict(**demo_data.snapshot(),demo=True,candidates=[dict(subject=k,title=v,reason='Erfundenes Beispiel für Klasse 6') for k,v in demo_data.TOPICS.items()],sessions=sessions,legacy_sessions=[],progress=[],subjects=list(demo_data.TOPICS),can_manage=True,can_write=demo_can_write,budget=ai.status(),today={},exams=[],warnings=[])
-    s=mc.snapshot(account_id)
+    # Ein Schnappschuss für den ganzen Aufruf: Der Plan darunter las ihn ein zweites Mal.
+    from .. import request_cache
+    with request_cache.scope():
+        return await _dashboard(account_id,user)
+
+
+async def _dashboard(account_id,user):
+    s=mc.shared_snapshot(account_id)
     with closing(webapp_conn()) as c:
         sessions,archived=session_lists(c,account_id)
         legacy=[dict(r) for r in c.execute('SELECT id,subject,goal,status,updated_at,is_test,is_demo FROM mentor_sessions WHERE account_id=? AND is_test=1 AND is_demo=0 ORDER BY updated_at DESC LIMIT 30',(account_id,))] if is_parent(user) else []
@@ -756,10 +770,14 @@ def counts(account_id:int,sid:int,body:CountsIn,user:CurrentUser=Depends(get_cur
         if body.counts:
             # A single answer a parent took back by hand stays taken back.
             c.execute("UPDATE mentor_evidence SET invalidated=0 WHERE session_id=? AND account_id=? AND rationale NOT LIKE 'Zurückgenommen:%'",(sid,account_id))
+            topics=lernstand.restore_session_answers(c,account_id,sid)
         else:
             c.execute('UPDATE mentor_evidence SET invalidated=1 WHERE session_id=? AND account_id=?',(sid,account_id))
+            # Auch die Antworten je Thema: Stufe, Raster und Plan zählen sie sonst weiter (K11).
+            topics=lernstand.void_session_answers(c,account_id,sid)
         for row in c.execute('SELECT DISTINCT skill_id FROM mentor_evidence WHERE session_id=? AND account_id=?',(sid,account_id)).fetchall():
             lp.refresh_skill(c,account_id,row[0])
+        for tid in sorted(topics):lernstand.refresh(c,tid,sid)
         return view(c,get_session(c,account_id,sid))
 
 
@@ -962,6 +980,16 @@ def material_drop(account_id:int,sid:int,mid:int,user:CurrentUser=Depends(get_cu
         return view(c,get_session(c,account_id,sid))
 
 
+def chat_jpeg(blob):
+    """Ein Chatfoto als JPEG bis 1600 Pixel, aufrecht gedreht."""
+    from PIL import Image,ImageOps
+    img=Image.open(io.BytesIO(blob))
+    if img.width*img.height>50_000_000:raise ValueError()
+    img.load()
+    img=ImageOps.exif_transpose(img).convert('RGB');img.thumbnail((1600,1600))
+    out=io.BytesIO();img.save(out,format='JPEG',quality=85);return out.getvalue()
+
+
 @router.post('/sessions/{sid}/photos')
 async def photo(account_id:int,sid:int,file:UploadFile=File(...),user:CurrentUser=Depends(get_current_user)):
     access(user,account_id,write=True)
@@ -972,12 +1000,9 @@ async def photo(account_id:int,sid:int,file:UploadFile=File(...),user:CurrentUse
     if len(blob)>20*1024*1024:raise HTTPException(413,'Bitte ein kleineres Bild verwenden.')
     original=blob
     try:
-        from PIL import Image,ImageOps,UnidentifiedImageError
-        img=Image.open(io.BytesIO(blob))
-        if img.width*img.height>50_000_000:raise ValueError()
-        img.load()
-        img=ImageOps.exif_transpose(img).convert('RGB');img.thumbnail((1600,1600))
-        out=io.BytesIO();img.save(out,format='JPEG',quality=85);blob=out.getvalue()
+        # Ein Foto bis 50 Megapixel zu dekodieren dauert Sekunden: im Threadpool,
+        # nicht in der Ereignisschleife, die derweil alle anderen Anfragen hält.
+        blob=await asyncio.to_thread(chat_jpeg,blob)
     except Exception:raise HTTPException(422,'Das Bild konnte nicht geöffnet werden. Bitte ein Foto oder einen Screenshot als JPEG/PNG verwenden.') from None
     digest=mc.fingerprint(base64.b64encode(blob).decode())
     with closing(webapp_conn()) as c,c:
@@ -1110,7 +1135,21 @@ Aufgaben sind kurze offene Aufgaben mit fachlich richtiger Musterlösung und tra
 # frustriert, unter Zeitdruck. Sie wird in der App erkannt und nicht dem Modell
 # überlassen, damit dieselben Signale immer dasselbe auslösen.
 SHORT_ANSWERS={'kp','keine ahnung','weiß nicht','weiss nicht','hä','?','ka','nö','ne','egal','weiter'}
+# Weitere Ausweichantworten. Kurz allein heißt nicht ausweichen: „12“, „3/4“,
+# „x=2“ oder „servi“ sind Antworten, und bisher zählte jede Zahl als einsilbig (A12).
+EVASIVE=SHORT_ANSWERS|{'weiß ich nicht','weiss ich nicht','ich weiß nicht','ich weiss nicht','ich weiß es nicht','ich weiss es nicht',
+                       'idk','hm','hmm','hmmm','mhm','kein plan','keine lust','ok','okay','ja','jo','jaja'}
+# Beginn ab 19 Uhr zählt als späte Stunde (D93).
 LATE_HOUR=19
+
+
+def evasive(text):
+    """Ob eine Antwort ausweicht statt antwortet: „kp“, „weiß nicht“, nur Satzzeichen."""
+    said=' '.join((text or '').casefold().split())
+    if not said:return False
+    if said in EVASIVE:return True
+    bare=re.sub(r'[^\w\s]','',said).strip()
+    return not bare or bare in EVASIVE
 
 
 def condition(c, s, now=None):
@@ -1121,7 +1160,7 @@ def condition(c, s, now=None):
     zum Schluss steht etwas, das geklappt hat."""
     recent=[r[0] or '' for r in c.execute(
         "SELECT text FROM mentor_messages WHERE session_id=? AND role='user' ORDER BY id DESC LIMIT 4",(s['id'],))]
-    kurz=sum(1 for x in recent if x.strip().casefold() in SHORT_ANSWERS or len(x.strip())<=3)
+    kurz=sum(1 for x in recent if evasive(x))
     stunde=int((now or now_iso())[11:13] or 0)
     signals=[]
     if kurz>=2:signals.append('einsilbig')
@@ -1156,6 +1195,16 @@ def _plain(text):
     return re.sub(r'[^0-9a-zäöüß]+','',(text or '').casefold())
 
 
+def _tokens(text):
+    return re.findall(r'[0-9a-zäöüß]+',(text or '').casefold())
+
+
+def _contains(words,part):
+    """Ob die Wortfolge part zusammenhängend in words steht."""
+    n=len(part)
+    return bool(n) and any(words[i:i+n]==part for i in range(len(words)-n+1))
+
+
 def safe_choices(choices, task):
     """Antwort-Chips, die die Aufgabe nicht verraten.
 
@@ -1170,14 +1219,17 @@ def safe_choices(choices, task):
     haystack=' '.join(str(data.get(k) or '') for k in ('solution','criteria'))
     solution=_plain(haystack)
     # Antwortmöglichkeiten einer Auswahlaufgabe: „A) …“ bis „D) …“ im Aufgabentext.
-    options=[_plain(x) for x in re.findall(r'^\s*[A-Da-d]\)\s*(.+)$',str(data.get('prompt') or ''),re.M)]
-    options+=[_plain(o.get('text') if isinstance(o,dict) else '') for o in data.get('optionen') or []]
+    raw_options=re.findall(r'^\s*[A-Da-d]\)\s*(.+)$',str(data.get('prompt') or ''),re.M)
+    raw_options+=[o.get('text') if isinstance(o,dict) else '' for o in data.get('optionen') or []]
+    options=[(_plain(x),_tokens(x)) for x in raw_options]
     kept=[]
     for choice in choices:
-        flat=_plain(choice)
+        flat=_plain(choice);words=_tokens(choice)
         if len(flat)<4:
             kept.append(choice);continue
-        if flat in solution or any(flat==o or flat in o or o in flat for o in options if o):
+        # Eine kurze Option steckt im Chip nur als ganze Wörter: „er“ steckt nicht
+        # in „Erst kurz erklären“, „12“ aber in „Ist es 12?“ (B10).
+        if flat in solution or any(flat==o or flat in o or (o in flat if len(o)>=5 else _contains(words,t)) for o,t in options if o):
             LOG.info('Antwort-Chip verworfen, er verrät die Lösung: %s',choice[:60])
             continue
         kept.append(choice)
@@ -1374,9 +1426,25 @@ def open_items(quiz):
     return [x['item'] for x in (quiz or []) if x['state'] in ('falsch','offen')]
 
 
+# Wie lange ein Zug legitim laufen darf, bevor seine Sperre als liegen geblieben
+# gilt (A10): zwei Modellversuche à 90 s, bis zu zweimal 20 s Drosselung je
+# Versuch, dazu Buchseiten und Bilder. Mit 120 s lief ein zweiter Tipp parallel.
+PENDING_STALE=400
+# Ein Zug je Einheit zugleich, in diesem Prozess. Die Sperre in der Datenbank
+# bleibt für den Fall, dass der Prozess mitten im Zug neu startet.
+_TURN_LOCKS:dict[int,asyncio.Lock]={}
+
+
 @router.post('/sessions/{sid}/turn')
 async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_current_user)):
-    out=await _turn(account_id,sid,body,user)
+    lock=_TURN_LOCKS.setdefault(sid,asyncio.Lock())
+    # Zwischen Prüfen und Nehmen liegt kein await: kein zweiter Zug schlüpft durch.
+    if lock.locked():raise HTTPException(409,'Eine Antwort wird bereits vorbereitet.')
+    try:
+        async with lock:
+            out=await _turn(account_id,sid,body,user)
+    finally:
+        if not lock.locked() and _TURN_LOCKS.get(sid) is lock:_TURN_LOCKS.pop(sid,None)
     note_learning(account_id,sid,user)
     return out
 
@@ -1408,7 +1476,7 @@ async def _turn(account_id,sid,body,user):
         if s['status']!='active':raise HTTPException(409,'Diese Einheit ist abgeschlossen.')
         if s['pending_key']:
             age=(datetime.fromisoformat(now_iso())-datetime.fromisoformat(s['pending_since'])).total_seconds()
-            if age<120:raise HTTPException(409,'Eine Antwort wird bereits vorbereitet.')
+            if age<PENDING_STALE:raise HTTPException(409,'Eine Antwort wird bereits vorbereitet.')
         text=body.text.strip()
         # Frisch eingebundene Seiten sind schon etwas zum Ansehen, auch ohne Text.
         fresh_pages=[e['id'] for e in json.loads(s.get('source_json') or '{}').get('eingebunden') or [] if not e.get('gezeigt')]
@@ -1591,6 +1659,10 @@ async def _turn(account_id,sid,body,user):
         from .. import figures
         drawing=' '+figures.SPEC_HELP+' Eine Aufgabe darf so eine Abbildung in task.figur mitbringen, wenn sie ohne Bild nicht gut geht; der Auftrag bezieht sich dann auf die IDs darin. ' if figures.suits(s['subject']) and not (oral or homework_help or check) else ''
         instruction=INSTRUCTION.replace(SCHEMA_TAIL,oral_exam.ORAL_RULE+CONTINUE_RULE+SCHEMA_TAIL) if oral else CHECK_INSTRUCTION if check else HOMEWORK_INSTRUCTION if homework_help else INSTRUCTION.replace(SCHEMA_TAIL,TASK_RULE+drawing+(TOPIC_RULE if topic_mode else '')+CONTINUE_RULE+SCHEMA_TAIL)
+        # Über der Grenze von ai_gateway nach Vorrang kürzen statt 413 (A9);
+        # ein Kontext, der passt, bleibt unverändert. Platz für den Hinweis beim zweiten Versuch.
+        trimmed=mc.fit_context(ctx,instruction+json.dumps(Reply.model_json_schema())+' '*600)
+        if trimmed:LOG.info('Kontext der Einheit %s gekürzt: %s',sid,', '.join(trimmed))
         stoff=context_text(ctx)
         note=''
         for versuch in range(2):
@@ -1621,7 +1693,9 @@ async def _turn(account_id,sid,body,user):
             reply.task=None;reply.assessment=None
             if oral:reply.choices=[]
             if reply.action=='task':reply.action='clarify'
-        latest,latest_hash,latest_snapshot=(demo_data.context if s['is_demo'] else mc.context)(account_id,s)
+        # Der zweite Blick liest nur, was der Stand braucht (A8): Stundentexte,
+        # Auftrag, Freigabe. Material, Fotos und andere Verläufe zählen nicht.
+        latest,latest_hash,latest_snapshot=demo_data.context(account_id,s) if s['is_demo'] else mc.context(account_id,s,version_only=True)
         if not latest_snapshot['enabled'] or not latest_snapshot['profile'] or not latest_snapshot['profile']['ai_enabled']:raise HTTPException(409,'Die KI-Begleitung wurde inzwischen pausiert.')
         # Do not persist a stale task/evaluation after source or task changes.
         if latest_hash!=context_hash:raise HTTPException(409,'Unterricht oder Aufgaben wurden inzwischen aktualisiert. Bitte mit dem neuen Stand fortfahren.')
@@ -1655,7 +1729,9 @@ async def _turn(account_id,sid,body,user):
                 lernstand.refresh(c,s['topic_id'],sid)
             if chosen_right and s['current_task'] and not s['is_test']:
                 evidence=record_choice(c,account_id,s,uid,text,'correct',body,topic_mode)
-            task_data=s['current_task'];task_help=int(s['task_help'] or help_now)
+            # task_help zählt die Hilfen zur laufenden Aufgabe (A12); überall sonst
+            # wird es nur als ja/nein gelesen. Eine neue Aufgabe beginnt von vorn.
+            task_data=s['current_task'];task_help=int(s['task_help'] or 0)+int(help_now)
             if reply.task and reply.action=='task':
                 if s['current_task'] and mc.fingerprint(reply.task.prompt)==mc.fingerprint(json.loads(s['current_task'])['prompt']):
                     reply.task=None
@@ -1684,9 +1760,12 @@ async def _turn(account_id,sid,body,user):
             # nicht noch einmal (G2, D126).
             gesagt=strip_echo(reply.message,reply.task) if reply.action=='task' else reply.message
             add_message(c,sid,account_id,body.request_key,'assistant',gesagt or reply.message,payload)
+            # help_count zählt die ganze Einheit (Verfassung, D93).
             help_count=s['help_count']+int(help_now)
             # No endless loop: two hints on a task then an explicit break/finish choice.
-            if help_count>=2 and reply.action!='finish':payload['choices']=['Anderes Beispiel','Für heute fertig']
+            # Je Aufgabe, nicht je Einheit: Bisher standen nach zwei Hinweisen
+            # für immer nur noch diese zwei Knöpfe da, auch bei jeder neuen Aufgabe (A12).
+            if task_help>=2 and task_data and reply.action!='finish':payload['choices']=['Anderes Beispiel','Für heute fertig']
             c.execute('UPDATE mentor_messages SET payload=? WHERE session_id=? AND request_key=? AND role=\'assistant\'',(json.dumps(payload,ensure_ascii=False),sid,body.request_key))
             # Das Modell darf das Ende vorschlagen, nie setzen (D73): Stand und
             # Grund kommen in die Nachricht, dazu die Frage; die Einheit bleibt
@@ -1758,6 +1837,8 @@ def delete_session(account_id:int,sid:int,body:DeleteSessionIn,user:CurrentUser=
         if session['skill_id']:skills.add(session['skill_id'])
         c.execute('DELETE FROM mentor_reviews WHERE last_evidence_id IN (SELECT id FROM mentor_evidence WHERE account_id=? AND session_id=?)',(account_id,sid))
         c.execute('DELETE FROM mentor_evidence WHERE account_id=? AND session_id=?',(account_id,sid))
+        # Die Antworten je Thema gehen mit der Einheit, die Stufe wird neu abgelesen (K11).
+        topics=lernstand.drop_session_answers(c,account_id,sid)
         c.execute('DELETE FROM learning_plan_blocks WHERE account_id=? AND session_id=?',(account_id,sid))
         # Costs remain accounted for after removal of a learning attempt.
         c.execute('UPDATE mentor_ai_calls SET session_id=NULL WHERE account_id=? AND session_id=?',(account_id,sid))
@@ -1774,6 +1855,7 @@ def delete_session(account_id:int,sid:int,body:DeleteSessionIn,user:CurrentUser=
                 for table in ('mentor_reviews','learning_skill_state','learning_plan_links'):
                     c.execute(f'DELETE FROM {table} WHERE account_id=? AND skill_id=?',(account_id,skill))
                 c.execute('DELETE FROM mentor_skills WHERE account_id=? AND id=?',(account_id,skill))
+        for tid in sorted(topics):lernstand.refresh(c,tid)
     return {'ok':True,'deleted_session_id':sid}
 
 

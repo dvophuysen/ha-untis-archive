@@ -6,6 +6,7 @@ IServ exam plan, and a second place to maintain them only drifts.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import sqlite3
@@ -17,6 +18,8 @@ from pydantic import BaseModel, Field
 
 from ..auth import CurrentUser, assert_account_access, get_current_user, require_admin
 from ..db import history_conn, webapp_conn
+# Der Tag in Berlin, nicht im Container (UTC): kurz vor Mitternacht sonst schon morgen.
+from ..learning import today_local
 from ..exams import (
     DEFAULT_EXCLUDE_KEYWORDS,
     _norm,
@@ -39,6 +42,25 @@ def _require_parent(user: CurrentUser) -> None:
     from ..view_mode import acts_as_parent
     if not acts_as_parent(user):
         raise HTTPException(status_code=403, detail="Admin or parent only")
+
+
+def _require_edit(user: CurrentUser, account_id: int) -> None:
+    """Schreibrecht auf das Kind (B12): Ein nur lesend verknüpftes Konto darf
+    hier bisher alles, was die Verknüpfung erlaubte, nämlich auch schreiben."""
+    if user.is_admin:
+        return
+    with closing(webapp_conn()) as conn:
+        link = conn.execute("SELECT can_edit FROM user_account_links WHERE user_id=? AND account_id=?",
+                            (user.id, account_id)).fetchone()
+    if not link or not link[0]:
+        raise HTTPException(403, "Nur Lesezugriff")
+
+
+def _learning_write(user: CurrentUser, account_id: int, parent: bool = False) -> None:
+    """Wie jeder andere Schreibzugriff auf den Lernstand: verknüpft, mit
+    Schreibrecht, nicht im Testmodus des Entwicklers; mit parent nur Eltern."""
+    from .learning import access
+    access(user, account_id, write=True, parent=parent)
 
 
 # ---- App-facing: relevant exams -----------------------------------------
@@ -78,7 +100,7 @@ def _progress_map(account_id: int) -> dict:
 def school_year_start(day: date | None = None) -> date:
     """The 1st of August. German school years start there, and the summer
     holidays straddle the turn of the month either way."""
-    day = day or date.today()
+    day = day or today_local()
     return date(day.year if day.month >= 8 else day.year - 1, 8, 1)
 
 
@@ -189,7 +211,7 @@ def practice_by_subject(account_id: int, days: int = PRACTICE_DAYS) -> dict[str,
     practice papers written, each within the window.
     """
     found: dict[str, dict] = {}
-    since = (date.today() - timedelta(days=days)).isoformat()
+    since = (today_local() - timedelta(days=days)).isoformat()
     conn = webapp_conn()
     try:
         rows = conn.execute(
@@ -224,6 +246,19 @@ def practice_by_subject(account_id: int, days: int = PRACTICE_DAYS) -> dict[str,
     return found
 
 
+def _scope_and_sources(account_id: int, subject: str | None, since: str, until: str) -> tuple:
+    scope = exam_scope(account_id, subject, since, until)
+    # Liegt das Material für diesen Stoff vor? Fehlt etwas, führt der
+    # Weg auf die Einkaufsliste des Fachs.
+    try:
+        from .. import sources
+        found = sources.exam_sources(account_id, subject, since, until)
+    except Exception:
+        _LOG.warning("Quellenstand für die Arbeit in %s nicht berechenbar", subject, exc_info=True)
+        found = None
+    return scope, found
+
+
 @router.get("/accounts/{account_id}/exams/all")
 async def exams_all(
     account_id: int,
@@ -239,7 +274,7 @@ async def exams_all(
     from ..erlass import resolve_section
     from ..grades import display_label, options as grade_options
 
-    today_iso = date.today().isoformat()
+    today_iso = today_local().isoformat()
     section, _kl, _src = resolve_section(account_id)
     practice = practice_by_subject(account_id)
 
@@ -257,15 +292,9 @@ async def exams_all(
         if e["date"] >= today_iso:
             e["practice"] = practice.get(_norm(e.get("subject_name") or ""))
             since = scope_start(e.get("subject_name"), e["date"], data["exams"])
-            e["scope"] = exam_scope(account_id, e.get("subject_name"), since, e["date"])
-            # Liegt das Material für diesen Stoff vor? Fehlt etwas, führt der
-            # Weg auf die Einkaufsliste des Fachs.
-            try:
-                from .. import sources
-                e["sources"] = sources.exam_sources(account_id, e.get("subject_name"), since, e["date"])
-            except Exception:
-                _LOG.warning("Quellenstand für die Arbeit in %s nicht berechenbar", e.get("subject_name"), exc_info=True)
-                e["sources"] = None
+            # Stoff und Quellenstand rechnen synchron über Unterricht und
+            # Material: im Threadpool, nicht in der Ereignisschleife.
+            e["scope"], e["sources"] = await asyncio.to_thread(_scope_and_sources, account_id, e.get("subject_name"), since, e["date"])
             # Die Themen der offiziellen Themenliste mit ihrer Stufe. Ein Modellaufruf
             # entsteht nur, wenn sich der Text der Liste geändert hat.
             try:
@@ -356,6 +385,7 @@ def set_archive(
     """Close the school year, or open the archive again."""
     assert_account_access(user, account_id)
     _require_parent(user)
+    _require_edit(user, account_id)
     if body.clear:
         _set_archive_before(account_id, None)
         return {"archive_before": None}
@@ -383,6 +413,7 @@ class SelfViewIn(BaseModel):
 def add_topic(account_id: int, body: TopicIn, user: CurrentUser = Depends(get_current_user)) -> dict:
     """Ein Thema von Hand ergänzen, etwa wenn die Lehrkraft es mündlich genannt hat."""
     assert_account_access(user, account_id)
+    _learning_write(user, account_id)
     topic = lernstand.add_manual(account_id, body.exam_key, body.subject, body.title.strip(), body.detail.strip())
     if not topic:
         raise HTTPException(409, "Dieses Thema steht schon auf der Liste.")
@@ -407,6 +438,7 @@ def set_note(account_id: int, body: NoteIn, user: CurrentUser = Depends(get_curr
     """Hinweise der Eltern zu einer Arbeit, etwa worüber in der Sprechprüfung gesprochen wird (D193)."""
     assert_account_access(user, account_id)
     _require_parent(user)
+    _learning_write(user, account_id, parent=True)
     if body.excluded_refs is not None:
         exam_meta.set_excluded_refs(account_id, body.exam_key, [k[:80] for k in body.excluded_refs])
     if body.pinned_materials is not None:
@@ -419,6 +451,7 @@ def set_verdict(account_id: int, sim_id: int, body: VerdictIn, user: CurrentUser
     """Eltern kalibrieren die Bewertung einer Sprechprobe: zu streng, passt, zu mild (D194)."""
     assert_account_access(user, account_id)
     _require_parent(user)
+    _learning_write(user, account_id, parent=True)
     from .. import oral_exam
     if not oral_exam.set_verdict(account_id, sim_id, body.verdict):
         raise HTTPException(404, "Sprechprobe nicht gefunden.")
@@ -429,6 +462,7 @@ def set_verdict(account_id: int, sim_id: int, body: VerdictIn, user: CurrentUser
 def delete_topic(account_id: int, topic_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
     assert_account_access(user, account_id)
     _require_parent(user)
+    _learning_write(user, account_id, parent=True)
     with closing(webapp_conn()) as conn, conn:
         gone = conn.execute("DELETE FROM exam_topics WHERE id=? AND account_id=?", (topic_id, account_id)).rowcount
     if not gone:
@@ -440,6 +474,7 @@ def delete_topic(account_id: int, topic_id: int, user: CurrentUser = Depends(get
 def set_self_view(account_id: int, topic_id: int, body: SelfViewIn, user: CurrentUser = Depends(get_current_user)) -> dict:
     """Das Gefühl des Kindes zu einem Thema: sortiert, beweist nichts."""
     assert_account_access(user, account_id)
+    _learning_write(user, account_id)
     with closing(webapp_conn()) as conn, conn:
         changed = conn.execute("UPDATE exam_topics SET self_view=?,updated_at=? WHERE id=? AND account_id=?",
                                (body.value, _now(), topic_id, account_id)).rowcount
@@ -480,6 +515,8 @@ def set_progress(
 ) -> dict:
     # Any linked user (kid for self-assessment, parent for grade) may set it.
     assert_account_access(user, account_id)
+    # Das Kind schätzt sich ein und trägt, wie auf der Seite angeboten, seine Note ein.
+    _learning_write(user, account_id)
     now = _now()
     conn = webapp_conn()
     try:
@@ -590,6 +627,7 @@ def set_exam_calendar(
 ) -> dict:
     assert_account_access(user, account_id)
     _require_parent(user)
+    _require_edit(user, account_id)
     kws = ",".join(k.strip() for k in (body.exclude_keywords or DEFAULT_EXCLUDE_KEYWORDS) if k.strip())
     conn = webapp_conn()
     try:
@@ -622,6 +660,7 @@ def set_override(
 ) -> dict:
     assert_account_access(user, account_id)
     _require_parent(user)
+    _require_edit(user, account_id)
     conn = webapp_conn()
     try:
         if body.decision == "reset":
@@ -694,6 +733,7 @@ def add_manual_exam(
 ) -> dict:
     assert_account_access(user, account_id)
     _require_parent(user)
+    _require_edit(user, account_id)
     # Only for what the exam plan does not carry; otherwise the same date would
     # be maintained in two places and drift apart.
     clash = _plan_entry(account_id, body.exam_date, body.subject_name)
@@ -724,6 +764,7 @@ def delete_manual_exam(
 ) -> dict:
     assert_account_access(user, account_id)
     _require_parent(user)
+    _require_edit(user, account_id)
     conn = webapp_conn()
     try:
         conn.execute(
@@ -745,6 +786,7 @@ def update_manual_exam(
     """Termin verschieben / Felder anpassen. Nur Eltern/Admin."""
     assert_account_access(user, account_id)
     _require_parent(user)
+    _require_edit(user, account_id)
     fields: list[tuple[str, str | int | None]] = []
     if body.exam_date is not None:
         clash = _plan_entry(account_id, body.exam_date, body.subject_name)

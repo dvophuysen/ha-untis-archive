@@ -1414,3 +1414,31 @@ _MIGRATIONS.append(("opt_core_001_session_token_hash",
 # Zeit des letzten PIN-Fehlversuchs: Nach 24 Stunden ohne Fehlversuch beginnt
 # die Zählung neu, statt dauerhaft bei der 24-Stunden-Sperre zu bleiben.
 _MIGRATIONS.append(("opt_core_002_pin_failed_at", "ALTER TABLE users ADD COLUMN pin_failed_at TEXT"))
+
+# „War nur ein Test“ nimmt auch die Antworten je Thema aus dem Lernstand (K11):
+# Sie wandern samt ID hierher und kommen mit „zählt doch“ zurück. So sehen alle
+# Leser von topic_answers (Lernstand, Raster, Plan, Kompass) sie nicht mehr,
+# ohne dass jeder einen eigenen Filter braucht.
+_MIGRATIONS.append(("opt_learn_001_topic_answers_void", """
+CREATE TABLE IF NOT EXISTS topic_answers_void (
+ id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL,
+ topic_id INTEGER NOT NULL REFERENCES exam_topics(id) ON DELETE CASCADE,
+ session_id INTEGER NOT NULL, message_id INTEGER, task_kind TEXT NOT NULL DEFAULT '',
+ result TEXT NOT NULL, help_used INTEGER NOT NULL DEFAULT 0, seconds INTEGER, edits INTEGER,
+ re_explained INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
+ afb INTEGER, task_form TEXT, points REAL, max_points REAL, source TEXT, paper_format TEXT,
+ attempt_id INTEGER, voided_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_topic_answers_void_session ON topic_answers_void(account_id, session_id);
+CREATE INDEX IF NOT EXISTS idx_topic_answers_session ON topic_answers(account_id, session_id);
+"""))
+
+# Buchseiten, die der Abruf nicht liefern konnte (A11): Der Chat versucht sie
+# sechs Stunden lang nicht erneut, statt bei jedem Zug den Browser zu starten.
+_MIGRATIONS.append(("opt_learn_002_textbook_misses", """
+CREATE TABLE IF NOT EXISTS digital_textbook_misses (
+ account_id INTEGER NOT NULL, book_id INTEGER NOT NULL, page INTEGER NOT NULL,
+ reason TEXT, until TEXT NOT NULL,
+ PRIMARY KEY(account_id, book_id, page)
+);
+"""))

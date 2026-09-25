@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..courses import hidden_keys, lesson_is_hidden, visible_subject_ids
 from ..db import history_conn, webapp_conn
+# Der Tag in Berlin, nicht im Container (UTC): kurz vor Mitternacht sonst schon morgen.
+from ..learning import today_local
 from ..queries import _fmt_hhmm
 from ..subject_names import key as subject_key, label
 from .. import lernstand
@@ -33,7 +35,7 @@ def list_subjects(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     assert_account_access(user, account_id)
-    today_iso = date.today().isoformat()
+    today_iso = today_local().isoformat()
     conn = history_conn()
     try:
         # Only count lessons up to today so the list reflects what actually
@@ -105,8 +107,8 @@ def subject_detail(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     assert_account_access(user, account_id)
-    today_iso = date.today().isoformat()
-    horizon = (date.today() - timedelta(days=120)).isoformat()
+    today_iso = today_local().isoformat()
+    horizon = (today_local() - timedelta(days=120)).isoformat()
     conn = history_conn()
     try:
         info = conn.execute(

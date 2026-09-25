@@ -338,6 +338,41 @@ def transcript(c, session_id: int) -> tuple[list[dict], dict]:
     return talk, measures
 
 
+# Anweisung und Kontext der Bewertung müssen unter der Grenze von ai_gateway
+# (48 000 Byte) bleiben; eine lange Gesamtprobe lief bisher in 413 (A9).
+ASSESS_BUDGET = 44000
+KEEP_HEAD = 6
+
+
+def fit_talk(ctx: dict, instruction: str, budget: int = ASSESS_BUDGET) -> bool:
+    """Kürzt das Gespräch einer langen Probe, bis es passt: erst die Sätze des
+    Prüfers, dann die Mitte. Anfang und Ende bleiben wörtlich, die Antworten
+    des Kindes am längsten; die Messwerte zählen weiter das ganze Gespräch.
+    Gibt zurück, ob gekürzt wurde."""
+    fixed = len(instruction.encode())
+
+    def size() -> int:
+        return fixed + len(json.dumps(ctx, ensure_ascii=False).encode())
+    if size() <= budget:
+        return False
+    talk = ctx.get("gespraech") or []
+    for t in talk:
+        if len(t.get("pruefer") or "") > 300:
+            t["pruefer"] = t["pruefer"][:300] + " …"
+    head, tail = talk[:KEEP_HEAD], talk[KEEP_HEAD:]
+    left_out = 0
+    while size() > budget and len(tail) > KEEP_HEAD:
+        tail.pop(0)
+        left_out += 1
+        ctx["gespraech"] = head + [{"ausgelassen": f"{left_out} Beiträge aus der Mitte des Gesprächs"}] + tail
+    for t in ctx.get("gespraech") or []:
+        if size() <= budget:
+            break
+        if len(t.get("kind") or "") > 600:
+            t["kind"] = t["kind"][:600] + " …"
+    return True
+
+
 async def assess(account_id: int, session: dict, source: dict, grade) -> dict:
     """Die Bewertung am Ende einer Sprechprobe, gespeichert als Probe der Arbeit."""
     from . import ai_gateway as ai
@@ -362,6 +397,7 @@ async def assess(account_id: int, session: dict, source: dict, grade) -> dict:
                             summary="Das war noch zu kurz für eine Bewertung. Beim nächsten Mal ein paar Fragen mehr, dann sage ich dir, was schon gut klingt.",
                             reliable=False)
     else:
+        fit_talk(ctx, ASSESS_INSTRUCTION + json.dumps(Assessment.model_json_schema()))
         raw, _, _ = await ai.complete(account_id, "mentor", ASSESS_INSTRUCTION + json.dumps(Assessment.model_json_schema()), ctx,
                                       images or None, max_output=3000, session_id=session["id"], effort="medium")
         result = Assessment.model_validate_json(raw)

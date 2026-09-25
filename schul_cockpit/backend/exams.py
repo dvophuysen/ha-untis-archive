@@ -17,6 +17,8 @@ import unicodedata
 from datetime import date, datetime, timedelta
 
 from .db import history_conn, webapp_conn
+# Der Tag in Berlin, nicht im Container (UTC): kurz vor Mitternacht sonst schon morgen.
+from .learning import today_local
 from .supervisor_client import SupervisorError, get_supervisor
 
 # Default keywords whose presence means "this calendar entry is not a
@@ -250,7 +252,7 @@ async def resolve_exams(
     """Return resolved exams in [today - past_days, today + days_ahead].
     With diagnostic=True, also include hidden (excluded/dismissed/
     unmatched/ambiguous) calendar entries so the user can curate them."""
-    today = date.today()
+    today = today_local()
     today_iso = today.isoformat()
     start = today - timedelta(days=past_days)
     start_iso = start.isoformat()
