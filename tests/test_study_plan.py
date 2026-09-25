@@ -300,3 +300,16 @@ def test_frozen_plan_is_recomputed_only_on_the_introduction_day(world, monkeypat
     assert [s["key"] for s in sp.ensure(1, intro)] == ["neu"], "am Einführungstag neu gerechnet"
     assert [s["key"] for s in sp.ensure(1, intro)] == ["neu"]
     assert [s["key"] for s in sp.ensure(1, MON)] == ["alt"], "sonst bleibt der Tag, wie er war"
+
+
+def test_open_paper_is_offered_again_even_when_only_reading(world):
+    """D191: Eine heute angelegte Übungsarbeit hängt am Papier-Schritt, damit sie
+    sich wieder öffnen lässt, auch beim Mitlesen."""
+    exam("ma", "Mathematik", MON + timedelta(days=9), ["Terme"])
+    with closing(db.webapp_conn()) as c, c:
+        eid = c.execute("INSERT INTO mentor_exams(account_id,title,subject,scope_json,tasks_json,minutes,created_at,status,exam_key,paper_format) "
+                        "VALUES(1,'Ü','Mathematik','{}','[]',30,'t','published','ma','einstieg')").lastrowid
+        aid = c.execute("INSERT INTO mentor_exam_attempts(account_id,exam_id,user_id,snapshot,started_at,status,is_test) "
+                        "VALUES(1,?,2,'{}',?,'active',0)", (eid, at(MON, 15).isoformat())).lastrowid
+    view = sp.view(1, MON, store=False)
+    assert view["read_only"] and view["steps"][0]["format"] == "einstieg" and view["steps"][0]["attempt_id"] == aid

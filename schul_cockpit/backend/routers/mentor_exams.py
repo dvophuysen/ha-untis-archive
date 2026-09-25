@@ -151,11 +151,11 @@ async def generate(account_id:int,body:Generate,user:CurrentUser=Depends(get_cur
 
 
 @router.get('/{eid}/print',response_class=HTMLResponse)
-def print_exam(account_id:int,eid:int,user:CurrentUser=Depends(get_current_user)):
+def print_exam(account_id:int,eid:int,space:str='lines',user:CurrentUser=Depends(get_current_user)):
     access(user,account_id)
     with closing(webapp_conn()) as c:r=exam_row(c,account_id,eid,bool(user.is_admin or user.role=='parent'))
     from ..exam_print import sheet
-    return HTMLResponse(sheet(r,json.loads(r['tasks_json'])),headers={'Cache-Control':'private, no-store'})
+    return HTMLResponse(sheet(r,json.loads(r['tasks_json']),space='none' if space=='none' else 'lines'),headers={'Cache-Control':'private, no-store'})
 
 
 @router.post('/{eid}/self-check')

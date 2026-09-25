@@ -1,3 +1,9 @@
+## 1.25.5
+
+- Drucken klappt jetzt direkt in der App, auch auf dem iPhone mit Bildschirmzeit: Das Blatt öffnet sich in der App und lässt sich drucken oder teilen, ohne neue Anmeldung.
+- Eine schon begonnene Übungsarbeit öffnet sich im Lernplan mit „Weiter“; Eltern können sie beim Mitlesen öffnen und das Blatt drucken, ohne neu anzufangen.
+- Übungsblätter sparen Papier: Schreibplatz passend zu den Punkten statt großer Leerflächen, schmalere Ränder; wahlweise „Nur Aufgaben · im Heft lösen“.
+
 ## 1.25.4
 
 - Lernen: Der Vokabelbereich steht wieder da, direkt nach „Heute Pflicht“, mit dem Pensum je Sprache (heute x von y Wörtern) und dem Weg in den Vokabeltrainer.

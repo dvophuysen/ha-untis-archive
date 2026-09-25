@@ -265,14 +265,14 @@ def get_paper(account_id: int, aid: int, user: CurrentUser = Depends(get_current
 
 
 @router.get("/attempts/{aid}/print", response_class=HTMLResponse)
-def print_paper(account_id: int, aid: int, user: CurrentUser = Depends(get_current_user)):
+def print_paper(account_id: int, aid: int, space: str = "lines", user: CurrentUser = Depends(get_current_user)):
     access(user, account_id)
     with closing(webapp_conn()) as c:
         r = attempt_row(c, account_id, aid, user, read=True)
     snap = json.loads(r["snapshot"])
     from ..exam_print import sheet
     exam = {"id": r["exam_id"], "title": snap["title"], "subject": snap["subject"], "minutes": snap["minutes"]}
-    return HTMLResponse(sheet(exam, snap["tasks"], code=f"Ü{r['id']}"), headers={"Cache-Control": "private, no-store"})
+    return HTMLResponse(sheet(exam, snap["tasks"], code=f"Ü{r['id']}", space="none" if space == "none" else "lines"), headers={"Cache-Control": "private, no-store"})
 
 
 @router.post("/attempts/{aid}/pages")

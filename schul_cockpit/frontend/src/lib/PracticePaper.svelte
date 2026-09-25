@@ -2,11 +2,13 @@
   // Eine Übungsarbeit (D178): drucken, auf Papier lösen, Seiten fotografieren,
   // in einem Schritt auswerten. Wer lieber tippt, tippt; beides geht zusammen.
   import { api } from './api.js';
+  import PrintSheet from './PrintSheet.svelte';
+  import { view } from './viewMode.svelte.js';
 
   let { accountId, attemptId, onclose = () => {}, backLabel = 'Zurück zum Raster' } = $props();
   const base = $derived(`/api/accounts/${accountId}/practice/attempts/${attemptId}`);
   let a = $state(null), error = $state(''), busy = $state(''), typing = $state(false), answers = $state({});
-  let fileInput = $state(null);
+  let fileInput = $state(null), printing = $state(false);
   const ROMAN = { 1: 'I', 2: 'II', 3: 'III' };
   const num = (x) => Number(x).toLocaleString('de-DE');
   const store = () => `practice-answers-${attemptId}`;
@@ -81,11 +83,15 @@
         </article>
       {/each}
       <button class="primary" onclick={onclose}>Zum Raster</button>
-    {:else if a.read_only}
-      <p class="notice">Diese Arbeit ist noch nicht ausgewertet.</p>
+    {:else if a.read_only || view.mode === 'mirror'}
+      <p class="notice">Nur ansehen: Die Arbeit ist noch nicht ausgewertet. Drucken geht trotzdem.</p>
+      <button class="btn" onclick={() => (printing = true)}>🖨️ Blatt drucken</button>
+      {#each a.exam.tasks as t, i}
+        <article class="task"><div class="t-head"><strong>Aufgabe {i + 1}</strong><span class="dim">{t.points} Punkte</span></div><p class="preserve">{t.prompt}</p></article>
+      {/each}
     {:else}
       <ol class="steps">
-        <li><strong>Drucken</strong> <a class="btn" href={printUrl} target="_blank" rel="noreferrer">Blatt öffnen und drucken</a></li>
+        <li><strong>Drucken</strong> <button class="btn" onclick={() => (printing = true)}>🖨️ Blatt drucken</button></li>
         <li><strong>Lösen</strong> <span class="dim">auf Papier, etwa {a.exam.minutes} Minuten, ohne Buch und ohne Hilfe. Nur so zählt es.</span></li>
         <li><strong>Seiten fotografieren</strong> <span class="dim">alle beschriebenen Seiten, gerade von oben, hell. Höchstens sechs.</span>
           <input type="file" accept="image/*" multiple style="display:none" bind:this={fileInput} onchange={upload} />
@@ -113,6 +119,7 @@
     {#if busy}<p role="status">{busy}</p>{/if}
     {#if error}<p class="error-box" role="alert">{error}</p>{/if}
   {/if}
+  {#if printing && a}<PrintSheet url={printUrl.slice(1)} title={a.exam.title} spaceChoice onclose={() => (printing = false)} />{/if}
 </section>
 
 <style>

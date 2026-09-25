@@ -14,7 +14,7 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  const words=Array.from({length:10},(_,i)=>({nr:i+1,prompt:`Wort ${i+1}`,...(graded?{expected:`word${i+1}`,verdict:i<6?'richtig':i<9?'falsch':'unklar',read:`w${i+1}`,note:''}:{})}));
  const paper=()=>({id:7,code:'V7',subject:'ENGLISCH',unit:'Unit 3',unit_label:'Unit 3',direction:'into',language:'Englisch',status:graded?'graded':'active',counts:true,pages,
   words:words.map(w=>graded?{...w,expected:`word${w.nr}`,verdict:w.nr<=6?'richtig':w.nr<=9?'falsch':'unklar',read:`w${w.nr}`,note:''}:w),overall:graded?'Gut gemacht.':'',result:graded?{richtig:6,falsch:3,unklar:1}:null,read_only:false});
- await page.route('**/api/**',async route=>{const req=route.request(),url=new URL(req.url()),u=url.pathname;let body={};
+ await page.route('**/api/**',async route=>{if(route.request().url().includes('/print'))return route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><html><head><title>x</title></head><body><div class="tools">t</div><h2>Aufgabe 1</h2></body></html>'});const req=route.request(),url=new URL(req.url()),u=url.pathname;let body={};
   if(u==='/api/me')body={accounts:[{id:1,name:'Beispielkind'}],role:'child',is_admin:false};
   else if(u==='/api/accounts/1/vocab/pensum')body={day:'2026-10-05',items:[{subject:'ENGLISCH',unit:'Unit 3',unit_label:'Unit 3',target:25,practiced:graded?21:12,done:false,href:'#/vokabeln/ENGLISCH?unit=Unit%203',exam_key:'k1',why:'Der Vokabeltest ist am Freitag. 25 Wörter sitzen noch nicht.'}]};
   else if(u.endsWith('/learning/vocab/ENGLISCH/units'))body={subject:'ENGLISCH',language:{name:'Englisch',code:'en',into:true},units:[unit],reading:0,overview:{started_units:1,total_units:1,progress:unit.progress,writing_progress:unit.writing_progress},speech:false,hesitation_seconds:12};
@@ -36,7 +36,7 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  await page.getByRole('button',{name:'Blatt erstellen'}).click();
  await page.getByRole('heading',{name:'Vokabeltest · Unit 3'}).waitFor();
  assert.deepEqual(created,{subject:'ENGLISCH',unit:'Unit 3',section:'',count:20});
- assert.match(await page.getByRole('link',{name:'Blatt öffnen und drucken'}).getAttribute('href'),/^\.\/api\/accounts\/1\/vocab\/papers\/7\/print$/);
+ /* D191: Drucken innerhalb der App, kein neuer Tab */await page.getByRole('button',{name:/Blatt drucken/}).click();const frame=page.locator('iframe[title="Vokabeltest"]');await frame.waitFor();assert.match(await frame.getAttribute('srcdoc'),/Aufgabe 1/);assert.match(await frame.getAttribute('srcdoc'),/\.tools\{display:none/);assert.equal(await page.locator('a[target="_blank"]').count(),0);await page.getByRole('button',{name:'Schließen'}).click();
  assert.equal(await page.getByRole('button',{name:'Auswerten'}).isDisabled(),true);
  await page.locator('input[type=file]').setInputFiles({name:'seite.jpg',mimeType:'image/jpeg',buffer:Buffer.from([255,216,255,217])});
  await page.getByRole('img',{name:'Seite 1'}).waitFor();

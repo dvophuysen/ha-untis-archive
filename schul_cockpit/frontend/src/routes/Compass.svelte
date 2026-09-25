@@ -57,6 +57,7 @@
   // Ist heute für diesen Schritt schon eine erstellt und noch offen, geht sie wieder auf.
   async function startStep(s) {
     if (s.kind !== 'paper') { go(s.href); return; }
+    if (s.attempt_id) { paperId = s.attempt_id; await tick(); window.scrollTo?.(0, 0); return; }
     if (stepBusy) return;
     stepBusy = s.key; error = '';
     try {
@@ -145,6 +146,7 @@
             <span class="check" class:checked={s.done} aria-hidden="true">{s.done ? '✓' : ''}</span>
             <span class="body"><strong>{s.title}</strong><small>{s.why}</small></span>
             {#if s.done}<span class="state">erledigt</span>
+            {:else if s.attempt_id}<button class="primary go" onclick={() => startStep(s)}>{canGo ? 'Weiter' : 'Öffnen'}</button>
             {:else if canGo}<button class="primary go" disabled={!!stepBusy} onclick={() => startStep(s)}>{stepBusy === s.key ? 'Wird erstellt …' : 'Los'}</button>{/if}
           </div>
         {:else}<p class="all-clear">✓ Heute ist nichts zum Lernen Pflicht.</p>{/each}

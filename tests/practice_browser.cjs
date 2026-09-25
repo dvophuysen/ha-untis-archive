@@ -19,7 +19,7 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  const attempt=()=>({id:41,status:graded?'graded':'active',label:'Kurztest',format:'kurz',pages,read_only:false,answers:{},
   exam:{title:'Kurztest Wertetabellen',minutes:20,tasks:[task(1,2),task(2,2),task(3,3)]},
   feedback:graded?{'0':{points:3,rationale:'Alles richtig.',next_step:'Weiter mit III.',uncertain:false,transcription:'x = 3'},'1':{points:1.5,rationale:'Rechnung fehlt.',next_step:'Rechenweg aufschreiben.',uncertain:false},'2':{points:0,rationale:'Nicht lesbar.',next_step:'Deutlicher schreiben.',uncertain:true},overall:{text:'Guter Anfang.'}}:{}});
- await page.route('**/api/**',async route=>{const req=route.request(),url=new URL(req.url()),u=url.pathname;let body={};let status=200;
+ await page.route('**/api/**',async route=>{if(route.request().url().includes('/print'))return route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><html><head><title>x</title></head><body><div class="tools">t</div><h2>Aufgabe 1</h2></body></html>'});const req=route.request(),url=new URL(req.url()),u=url.pathname;let body={};let status=200;
   if(u==='/api/me')body={accounts:[{id:1,name:'Beispielkind'}],role:'child',is_admin:false};
   else if(u.endsWith('/exams/all'))body={upcoming:[{exam_key:'k1',date:'2026-09-28',subject_name:'Mathematik',title:'Mathematik',topics:topics.map(t=>({...t,stale:0,places:[],self_view:null})),stages:{neu:3},sources:null,scope:null}],past:[],archived_count:0};
   else if(u==='/api/accounts/1/practice'&&req.method()==='GET'){assert.equal(url.searchParams.get('exam_key'),'k1');body={topics,ready:1,total:3,goal_afb:2,afb_names:{'1':'Wiedergeben','2':'Anwenden','3':'Übertragen'},formats,papers:created?[{id:5,attempt_id:41,label:'Kurztest',created_at:'2026-09-25T15:00:00',status:graded?'graded':'active',points:graded?4.5:null,points_max:9,tasks:3}]:[]};}
@@ -43,7 +43,7 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  await page.getByRole('button',{name:'Übungsarbeit erstellen'}).click();
  await page.getByRole('heading',{name:'Kurztest Wertetabellen'}).waitFor();
  assert.deepEqual(created,{exam_key:'k1',format:'kurz',topic_ids:[12],level:3});
- assert.match(await page.getByRole('link',{name:'Blatt öffnen und drucken'}).getAttribute('href'),/^\.\/api\/accounts\/1\/practice\/attempts\/41\/print$/);
+ /* D191: Drucken innerhalb der App, kein neuer Tab */await page.getByRole('button',{name:/Blatt drucken/}).click();const frame=page.locator('iframe[title="Kurztest Wertetabellen"]');await frame.waitFor();assert.match(await frame.getAttribute('srcdoc'),/Aufgabe 1/);assert.match(await frame.getAttribute('srcdoc'),/\.tools\{display:none/);assert.equal(await page.locator('a[target="_blank"]').count(),0);await page.getByRole('button',{name:'Schließen'}).click();
  assert.equal(await page.getByRole('button',{name:'Abgeben und auswerten'}).isDisabled(),true);
  await page.locator('input[type=file]').setInputFiles({name:'seite.jpg',mimeType:'image/jpeg',buffer:Buffer.from([255,216,255,217])});
  await page.getByRole('img',{name:'Seite 1'}).waitFor();

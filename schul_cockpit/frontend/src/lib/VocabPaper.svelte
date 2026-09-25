@@ -3,11 +3,12 @@
   // fotografieren, in einem Schritt auswerten. Richtig und falsch zählen im
   // Trainer, unklar Gelesenes zählt nicht.
   import { api } from './api.js';
+  import PrintSheet from './PrintSheet.svelte';
 
   let { accountId, paperId, onclose = () => {} } = $props();
   const base = $derived(`/api/accounts/${accountId}/vocab/papers/${paperId}`);
   let p = $state(null), error = $state(''), busy = $state('');
-  let fileInput = $state(null);
+  let fileInput = $state(null), printing = $state(false);
 
   async function load() {
     try { p = await api.get(base); } catch (e) { error = e.message; }
@@ -70,7 +71,7 @@
       <p class="notice">Dieses Blatt ist noch nicht ausgewertet.</p>
     {:else}
       <ol class="steps">
-        <li><strong>Drucken</strong> <a class="btn" href={printUrl} target="_blank" rel="noreferrer">Blatt öffnen und drucken</a></li>
+        <li><strong>Drucken</strong> <button class="btn" onclick={() => (printing = true)}>🖨️ Blatt drucken</button></li>
         <li><strong>Ausfüllen</strong> <span class="dim">ohne Buch und ohne Hilfe. Nur so zählt es.</span></li>
         <li><strong>Fotografieren</strong> <span class="dim">alle Seiten, gerade von oben, hell. Höchstens vier.</span>
           <input type="file" accept="image/*" multiple style="display:none" bind:this={fileInput} onchange={upload} />
@@ -88,6 +89,8 @@
     {#if error}<p class="error-box" role="alert">{error}</p>{/if}
   {/if}
 </section>
+
+{#if printing}<PrintSheet url={printUrl.slice(1)} title="Vokabeltest" onclose={() => (printing = false)} />{/if}
 
 <style>
   .vpaper{display:grid;gap:var(--sp-2)}

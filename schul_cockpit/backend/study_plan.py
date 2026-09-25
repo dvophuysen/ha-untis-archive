@@ -400,7 +400,26 @@ def open_count(account_id: int, day: date, until: date | None = None) -> int:
 # ------------------------------------------------------------------ Ansicht
 
 PUBLIC = ("key", "kind", "title", "why", "subject", "exam_key", "exam_date", "format", "topic_id", "level", "href",
-          "done", "tight")
+          "done", "tight", "attempt_id")
+
+
+def _attach_papers(account_id: int, steps: list[dict], day: date) -> None:
+    """Die heute schon angelegte, noch offene Übungsarbeit je Papier-Schritt, damit
+    sie sich wieder öffnen lässt, auch beim Mitlesen (D191). Je Arbeit der Reihe
+    nach, neueste zuletzt."""
+    keys = {s["exam_key"] for s in steps if s.get("kind") == "paper" and s.get("exam_key")}
+    if not keys:
+        return
+    with closing(webapp_conn()) as c:
+        pool = {}
+        for key in keys:
+            pool[key] = [r[0] for r in c.execute(
+                "SELECT a.id FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id "
+                "WHERE a.account_id=? AND e.exam_key=? AND a.is_test=0 AND a.status!='graded' "
+                "AND substr(a.started_at,1,10)>=? ORDER BY a.id", (account_id, key, day.isoformat()))]
+    for s in steps:
+        if s.get("kind") == "paper" and not s.get("done") and pool.get(s.get("exam_key")):
+            s["attempt_id"] = pool[s["exam_key"]].pop(0)
 
 
 def view(account_id: int, day: date, *, store: bool) -> dict:
@@ -412,6 +431,10 @@ def view(account_id: int, day: date, *, store: bool) -> dict:
     if steps is None:
         steps = compute(account_id, day)
     checked = mark_done(account_id, steps, day)
+    try:
+        _attach_papers(account_id, checked, day)
+    except Exception:
+        LOG.debug("Offene Übungsarbeiten nicht lesbar", exc_info=True)
     try:
         free = day not in rewards.school_days(account_id, day, day)
     except Exception:

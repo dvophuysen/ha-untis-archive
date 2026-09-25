@@ -3,12 +3,13 @@
   import {formatShortDate} from './format.js';
   import {api} from './api.js';
   import PracticePaper from './PracticePaper.svelte';
+  import PrintSheet from './PrintSheet.svelte';
   import {view} from './viewMode.svelte.js';
   let {accountId,subjects=[],canManage=false,demo=false,initialSubject='',initialTopic='',onBusy=()=>{}}= $props();
   const base=$derived(`/api/accounts/${accountId}/learning/mentor/exams`);
   let data=$state(null),error=$state(''),busy=$state(false),draft=$state(null),attempt=$state(null);
   let subject=$state(''),scope=$state(''),confirmed=$state(false),minutes=$state(45),index=$state(0),answers=$state({}),reviewed=$state(false);
-  let editingDraft=$state(false),paper=$state(null);
+  let editingDraft=$state(false),paper=$state(null),printing=$state(null);
   let period=$state('school_year'),fromDate=$state(''),topicPlan=$state(null),topicChoices=$state([]),selfCheck=$state(null);
   const chosenScope=$derived([...topicChoices.filter(g=>g.selected).map(g=>g.title.trim()),...scope.split('\n').map(x=>x.trim()).filter(Boolean)]);
   function clearTopics(){topicPlan=null;topicChoices=[];}
@@ -60,7 +61,7 @@
   <h2>{demo?'Demo-Übungsklausuren':'Für eine Arbeit üben'}</h2>{#if canManage&&!demo}<p class="notice">Hier stehen echte Arbeiten und Kinderantworten. Neue Entwürfe und Freigaben werden im echten Lernbereich gespeichert.</p>{/if}<p>Wähle Fach und Themen selbst. Du brauchst keinen Termin im Kalender.</p>
   {#each data?.exams||[] as exam}<section class="card"><h3>{exam.title}</h3><p>{exam.subject} · {exam.minutes} Minuten · {exam.status==='published'?(exam.scope.child_created&&!exam.scope.parent_reviewed?'KI-Übung · noch nicht von Eltern geprüft':'Freigegeben'):'Entwurf · für das Kind noch nicht sichtbar'}</p><p>{exam.scope.topics.join(' · ')}</p>
     {#if exam.status==='published'&&(!canManage||demo||view.mode==='child')}<button disabled={busy} onclick={()=>act(async()=>open(await api.post(`${base}/${exam.id}/start`)))}>Online / Foto bearbeiten</button>{/if}
-    <a class="print-link" href={`./${base.slice(1)}/${exam.id}/print`} target="_blank" rel="noreferrer">Aufgaben drucken</a>
+    <button class="print-link" onclick={()=>printing={url:`${base}/${exam.id}/print`,title:exam.title}}>🖨️ Aufgaben drucken</button>
     {#if !canManage||demo}<button disabled={busy} onclick={()=>act(async()=>{selfCheck=await api.post(`${base}/${exam.id}/self-check`);})}>Selbstkontrolle ohne Punkte</button>{/if}
     {#if canManage}<button disabled={busy} onclick={()=>act(async()=>{draft=await api.get(`${base}/${exam.id}/review`);reviewed=false;editingDraft=false;})}>Aufgaben ansehen und freigeben</button>{/if}
   </section>{:else}<p>Noch keine Übungsklausur vorbereitet.</p>{/each}
@@ -83,6 +84,7 @@
     <button disabled={busy||!subject||!chosenScope.length||chosenScope.length>8||minutes<chosenScope.length*3}>{canManage?'Entwurf erstellen':'Übungstest erstellen und starten'}</button>{#if minutes<chosenScope.length*3}<p class="notice">Bitte mehr Zeit wählen: mindestens drei Minuten je Themenbereich.</p>{/if}<p>{canManage?'Prüfe den Entwurf und gib ihn danach für das Kind frei.':'KI-Aufgaben können Fehler enthalten. Die Lösungen bleiben bis zur Abgabe verborgen.'} Die Erstellung kann etwa eine Minute dauern.</p>
   </form></section>
 {/if}
+{#if printing}<PrintSheet url={printing.url} title={printing.title} spaceChoice onclose={()=>printing=null}/>{/if}
 <style>
   .print-link{display:inline-block;padding:.7rem;min-height:44px;box-sizing:border-box;color:var(--accent,#247552)}.topic{border-top:1px solid var(--border,#ccc);padding-top:.5rem}input:not([type="checkbox"]){width:100%;box-sizing:border-box;font:inherit;font-size:16px;padding:.65rem;border-radius:8px;border:1px solid var(--border,#ccc);background:var(--bg-card,#fff);color:inherit}
   .card{padding:1rem;background:var(--bg-card,#fff);border:1px solid var(--border,#d8e2dc);border-radius:16px;margin:1rem 0}.preserve{white-space:pre-wrap;overflow-wrap:anywhere}nav,.actions{display:flex;gap:.5rem;flex-wrap:wrap}button,select{min-height:44px;padding:.6rem .9rem;cursor:pointer}button{border-radius:12px;border:1px solid var(--border,#ccc);background:var(--bg-card,#fff);color:inherit}.chosen{background:var(--accent,#247552);color:var(--accent-fg,#fff)}label{display:block;margin:.8rem 0}textarea,select{display:block;width:100%;box-sizing:border-box;font:inherit;font-size:16px;margin-top:.4rem;padding:.7rem;border-radius:10px;border:1px solid var(--border,#ccc);background:var(--bg-card,#fff);color:inherit}.check{display:flex;gap:.5rem;align-items:center}.muted{font-size:.85rem;opacity:.8}.notice{padding:1rem;background:var(--warm-soft);color:var(--fg)}details{margin:1rem 0}summary{cursor:pointer;min-height:44px}button:disabled{opacity:.5}

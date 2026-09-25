@@ -154,6 +154,7 @@
   // Ein Papier-Schritt startet die Übungsarbeit direkt (D178). Ist heute für
   // diesen Schritt schon eine erstellt und noch offen, geht sie wieder auf.
   async function startStep(s) {
+    if (s.kind === 'paper' && s.attempt_id) { paperId = s.attempt_id; await tick(); jump('s-lernen'); return; }
     if (s.kind !== 'paper') { if (s.href) location.hash = s.href; return; }
     if (stepBusy) return;
     stepBusy = s.key; stepError = '';
@@ -324,7 +325,7 @@
             <div class="learn-step" class:done={s.done}>
               <span class="learn-check" class:checked={s.done} aria-hidden="true">{s.done ? '✓' : ''}</span>
               <span class="learn-body"><strong>{s.title}</strong><small>{s.why}</small></span>
-              {#if s.done}<span class="learn-state">erledigt</span>{:else if !study?.read_only}<button class="primary learn-go" disabled={!!stepBusy} onclick={() => startStep(s)}>{stepBusy === s.key ? 'Wird erstellt …' : 'Los'}</button>{/if}
+              {#if s.done}<span class="learn-state">erledigt</span>{:else if s.attempt_id}<button class="primary learn-go" onclick={() => startStep(s)}>{study?.read_only ? 'Öffnen' : 'Weiter'}</button>{:else if !study?.read_only}<button class="primary learn-go" disabled={!!stepBusy} onclick={() => startStep(s)}>{stepBusy === s.key ? 'Wird erstellt …' : 'Los'}</button>{/if}
             </div>
           {:else}<p class="all-clear">✓ Heute ist nichts zum Lernen Pflicht.</p>{/each}
         </div>
