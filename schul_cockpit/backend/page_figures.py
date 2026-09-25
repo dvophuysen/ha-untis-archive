@@ -17,9 +17,10 @@ import logging
 from contextlib import closing
 from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationError
+from fastapi import HTTPException
+from pydantic import BaseModel, Field
 
-from .db import webapp_conn
+from .db import tx, webapp_conn
 from .learning import now_iso
 
 LOG = logging.getLogger("schul_cockpit.page_figures")
@@ -29,6 +30,17 @@ PICTURE_KINDS = ("foto", "zeichnung", "comic", "karte")  # taugen für eine Bild
 PAGE_KINDS = ("book_page", "worksheet", "workbook", "exam_notice", "other")
 PER_CYCLE = 12
 MIN_SIDE = 0.06  # kleinere Kästen sind Symbole, keine Abbildung
+# Ein gescheiterter, womöglich bezahlter Aufruf wird wiederholt, aber nicht
+# alle zehn Minuten: nach dem n-ten Fehlversuch frühestens n·6 Stunden später,
+# nach MAX_ATTEMPTS nie mehr. Bis 1.31.2 nahm jeder Lauf dieselbe Seite neu.
+MAX_ATTEMPTS = 3
+RETRY_HOURS = 6
+# Rahmen, Anfangsbestätigung, fehlende Einrichtung: nichts ist gelaufen, der
+# Lauf hört auf und versucht es später mit derselben Seite.
+STOP_STATUS = (409, 429, 503)
+# So viele Fehlversuche nacheinander beenden den Lauf (etwa ein Ausfall beim
+# Anbieter), damit er nicht die Versuche aller Seiten auf einmal aufbraucht.
+STOP_AFTER_FAILURES = 2
 
 
 class Found(BaseModel):
@@ -66,7 +78,8 @@ def _page_label(row) -> str:
 
 
 async def index(account_id: int, material_id: int) -> int:
-    """Eine Seite ansehen und ihre Abbildungen ablegen. Gibt die Anzahl zurück."""
+    """Eine Seite ansehen und ihre Abbildungen ablegen. Gibt die Anzahl zurück,
+    -1 nach einem Fehlversuch."""
     from . import ai_gateway as ai
     from .materials import image_for_reading
     photo = image_for_reading(account_id, material_id)
@@ -84,11 +97,17 @@ async def index(account_id: int, material_id: int) -> int:
         raw, _, _ = await ai.complete(account_id, "background", INSTRUCTION + json.dumps(Scan.model_json_schema()),
                                       {"fach": row["subject_name"], "seite": _page_label(row)}, images, max_output=2500)
         scan = Scan.model_validate_json(raw)
-    except (ValidationError, ValueError) as e:
-        _mark(account_id, material_id, 0, f"unlesbar: {str(e)[:80]}")
-        return 0
+    except HTTPException as e:
+        if e.status_code in STOP_STATUS:
+            raise
+        # Etwa 502: Die Antwort kam unvollständig, bezahlt ist sie trotzdem.
+        _fail(account_id, material_id, f"KI-Fehler {e.status_code}")
+        return -1
+    except Exception as e:
+        _fail(account_id, material_id, f"unlesbar: {type(e).__name__}: {str(e)[:60]}")
+        return -1
     kept = [(f, b) for f in scan.figures if (b := _valid_box(f.box))]
-    with closing(webapp_conn()) as c, c:
+    with closing(webapp_conn()) as c, tx(c):
         c.execute("DELETE FROM material_figures WHERE material_id=? AND account_id=?", (material_id, account_id))
         for i, (f, box) in enumerate(kept):
             c.execute("INSERT INTO material_figures(account_id,material_id,idx,kind,box_json,caption,description,created_at) "
@@ -99,30 +118,63 @@ async def index(account_id: int, material_id: int) -> int:
 
 
 def _mark(account_id: int, material_id: int, count: int, error: str | None) -> None:
-    with closing(webapp_conn()) as c, c:
-        c.execute("INSERT INTO material_figure_scans(material_id,account_id,scanned_at,count,error) VALUES(?,?,?,?,?) "
-                  "ON CONFLICT(material_id) DO UPDATE SET scanned_at=excluded.scanned_at,count=excluded.count,error=excluded.error",
+    with closing(webapp_conn()) as c:
+        c.execute("INSERT INTO material_figure_scans(material_id,account_id,scanned_at,count,error,attempts) VALUES(?,?,?,?,?,0) "
+                  "ON CONFLICT(material_id) DO UPDATE SET scanned_at=excluded.scanned_at,count=excluded.count,"
+                  "error=excluded.error,attempts=0",
                   (material_id, account_id, now_iso(), count, error))
 
 
+def _fail(account_id: int, material_id: int, error: str) -> None:
+    """Einen Fehlversuch festhalten; pending() nimmt die Seite erst nach der Pause wieder."""
+    with closing(webapp_conn()) as c:
+        c.execute("INSERT INTO material_figure_scans(material_id,account_id,scanned_at,count,error,attempts) VALUES(?,?,?,0,?,1) "
+                  "ON CONFLICT(material_id) DO UPDATE SET scanned_at=excluded.scanned_at,count=0,"
+                  "error=excluded.error,attempts=material_figure_scans.attempts+1",
+                  (material_id, account_id, now_iso(), error[:120]))
+
+
 def pending(limit: int = PER_CYCLE) -> list[tuple[int, int]]:
-    """Bildseiten ohne Verzeichnis, neueste zuerst; Fächer mit naher Arbeit vorn wäre schön, jüngste reicht."""
+    """Bildseiten ohne Verzeichnis, neueste zuerst; Fächer mit naher Arbeit vorn wäre schön, jüngste reicht.
+
+    Dahinter Seiten nach einem Fehlversuch, sobald ihre Pause um ist. Ein
+    Eintrag mit Fehler, aber ohne gezählten Versuch („kein Bild“ oder bis
+    1.31.2 geschrieben), gilt als erledigt."""
     marks = ",".join("?" * len(PAGE_KINDS))
     with closing(webapp_conn()) as c:
         return [(r[0], r[1]) for r in c.execute(
             f"SELECT m.account_id,m.id FROM materials m LEFT JOIN material_figure_scans s ON s.material_id=m.id "
-            f"WHERE s.material_id IS NULL AND m.hidden=0 AND m.mime_type LIKE 'image/%' AND m.kind IN ({marks}) "
-            f"ORDER BY m.id DESC LIMIT ?", (*PAGE_KINDS, limit))]
+            f"WHERE (s.material_id IS NULL OR (s.attempts>0 AND s.attempts<? "
+            f"AND julianday(s.scanned_at)+s.attempts*?/24.0<=julianday(?))) "
+            f"AND m.hidden=0 AND m.mime_type LIKE 'image/%' AND m.kind IN ({marks}) "
+            f"ORDER BY s.material_id IS NOT NULL, m.id DESC LIMIT ?",
+            (MAX_ATTEMPTS, RETRY_HOURS, now_iso(), *PAGE_KINDS, limit))]
 
 
 async def cycle(limit: int = PER_CYCLE) -> int:
-    done = 0
+    done = failures = 0
     for account_id, material_id in pending(limit):
         try:
-            done += await index(account_id, material_id) >= 0
-        except Exception:
-            LOG.info("Abbildungen von Material %s verschoben", material_id, exc_info=True)
-            break  # etwa Rahmen aufgebraucht: später weiter
+            found = await index(account_id, material_id)
+        except HTTPException as e:
+            if e.status_code in STOP_STATUS:
+                LOG.info("Abbildungen von Material %s verschoben (%s)", material_id, e.status_code)
+                break  # etwa Rahmen oder Einrichtung: später weiter
+            _fail(account_id, material_id, f"Fehler {e.status_code}")
+            found = -1
+        except Exception as e:
+            # Vor dem Aufruf (Bild, Datenbank): als Versuch zählen, sonst steht
+            # dieselbe Seite jede Runde wieder vorn.
+            LOG.info("Abbildungen von Material %s nicht möglich", material_id, exc_info=True)
+            _fail(account_id, material_id, type(e).__name__)
+            found = -1
+        if found < 0:
+            failures += 1
+            if failures >= STOP_AFTER_FAILURES:
+                break
+            continue
+        failures = 0
+        done += 1
     return done
 
 

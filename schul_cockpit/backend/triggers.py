@@ -85,18 +85,26 @@ def watch_untis() -> list[int]:
 
 
 def failed_materials(limit: int = RETRY_LIMIT) -> list[tuple[int, int]]:
-    """Gescheiterte Auswertungen, die lange genug liegen und noch Versuche haben."""
+    """Gescheiterte Auswertungen, die lange genug liegen und noch Versuche haben.
+
+    Die Versuche zählt das Material selbst (material_analysis.may_retry), über
+    Neustarts hinweg; _RETRIES begrenzt nur zusätzlich je Programmlauf."""
+    from .material_analysis import MAX_ATTEMPTS, may_retry
     cutoff = (datetime.fromisoformat(now_iso()) - RETRY_AFTER).isoformat()
     with closing(webapp_conn()) as conn:
         rows = conn.execute(
-            "SELECT m.account_id,m.id,m.analysis_error FROM materials m "
+            "SELECT m.account_id,m.id,m.analysis_error,m.analysis_state,m.analysis_attempts,m.analysis_failed_at "
+            "FROM materials m "
             "JOIN learning_profiles p ON p.account_id=m.account_id AND p.active=1 AND p.ai_enabled=1 "
             # Zeitpunkte, nicht Zeichenketten: updated_at in UTC, die Grenze in Berliner Zeit.
             "WHERE m.hidden=0 AND m.analysis_state='failed' AND julianday(m.updated_at)<julianday(?) "
+            "AND COALESCE(m.analysis_attempts,0)<? "
             "ORDER BY m.updated_at LIMIT ?",
-            (cutoff, limit * 3)).fetchall()
+            (cutoff, MAX_ATTEMPTS, limit * 3)).fetchall()
     out = []
     for r in rows:
+        if not may_retry(r):
+            continue
         # Ein erschöpfter KI-Rahmen (429) ist kein Fehler der Seite: so oft wieder
         # versuchen, bis Rahmen frei ist; die Anfrage kostet vorher nichts.
         budget = str(r[2] or "").strip() == "429"

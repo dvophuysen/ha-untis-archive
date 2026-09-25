@@ -431,7 +431,20 @@ def download(account_id: int, material_id: int, user: CurrentUser = Depends(get_
         raise HTTPException(404, "Keine Datei hinterlegt.")
     return Response(row["file_bytes"], media_type=row["mime_type"],
                     headers={"Cache-Control": "private, no-store",
-                             "Content-Disposition": f'inline; filename="{row["filename"] or "material"}"'})
+                             "Content-Disposition": inline_disposition(row["filename"] or "material")})
+
+
+def inline_disposition(filename: str) -> str:
+    """Der Dateiname für den Kopf: ASCII-Ersatz plus RFC 5987 für den echten.
+
+    Header sind Latin-1; „Übung ✓.jpg“ ließ die Auslieferung bis 1.31.2 mit
+    500 scheitern. Anführungszeichen und Zeilenumbrüche fallen aus dem Ersatz."""
+    import unicodedata
+    from urllib.parse import quote
+    name = " ".join(str(filename).replace("\r", " ").replace("\n", " ").split()) or "material"
+    plain = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    plain = "".join(ch if 32 <= ord(ch) < 127 and ch not in '"\\' else "_" for ch in plain).strip() or "material"
+    return f'inline; filename="{plain}"; filename*=UTF-8\'\'{quote(name, safe="")}'
 
 
 @router.patch("/{material_id}")
@@ -555,6 +568,12 @@ async def reanalyze(account_id: int, material_id: int, background: BackgroundTas
     found = store.detail(account_id, material_id)
     if not found:
         raise HTTPException(404, "Material nicht gefunden.")
+    # Ein Handstart zählt von vorn, auch nach fünf Fehlversuchen.
+    analysis.reset_attempts(account_id, material_id)
+    if analysis.is_reading(material_id):
+        # Läuft schon eine Lesung, schreibt sie das Ergebnis; eine zweite
+        # würde dieselbe Seite noch einmal bezahlen.
+        return {"queued": False, "running": True}
     background.add_task(_run_analysis, account_id, material_id)
     return {"queued": True}
 

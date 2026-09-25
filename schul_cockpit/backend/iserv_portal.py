@@ -432,15 +432,26 @@ async def plugin_events(portal_url: str, username: str, password: str, url: str,
 
 
 def parse_plugin(data, start: date, end: date) -> list[dict]:
-    """Plugin entries as calendar events."""
+    """Plugin entries as calendar events.
+
+    An entry in an unexpected shape is skipped, not fatal: one broken date
+    must not cost the whole exam plan."""
     events: list[dict] = []
     for entry in data if isinstance(data, list) else []:
-        first, first_time = _split(entry.get("start"))
-        last, last_time = _split(entry.get("end") or entry.get("start"))
+        if not isinstance(entry, dict):
+            continue
+        try:
+            first, first_time = _split(entry.get("start"))
+            last, last_time = _split(entry.get("end") or entry.get("start"))
+        except (ValueError, TypeError):
+            _LOGGER.warning("Plugin-Eintrag mit unlesbarem Datum übersprungen")
+            continue
         if not first:
             continue
         all_day = bool(entry.get("allDay"))
         fields = entry.get("displayFields") or []
+        if not isinstance(fields, list):
+            fields = []
         note = " · ".join(
             f"{f.get('label')}: {f.get('text')}" for f in fields
             if isinstance(f, dict) and f.get("text"))

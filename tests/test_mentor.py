@@ -278,11 +278,18 @@ def test_photo_scope_and_unreadable_upload(setup):
     child(state,3);assert client.get(path(2)+f'/mentor/photos/{aid}').status_code==404
 
 
-def test_reported_usage_above_reservation_disables_new_calls(setup):
+def test_reported_usage_above_reservation_is_booked_and_reported_not_locked(setup):
+    """Bis 1.31.2 sperrte eine Abrechnung über der Reservierung alle KI-Aufrufe
+    aller Kinder bis zur Elternbestätigung. Nach D89 wird sie voll gebucht und
+    gemeldet; weitere Aufrufe laufen."""
     key=ai.reserve(1,'mentor',None,100,256)
     ai.settle(key,{'usage':{'input_tokens':10000,'output_tokens':1000}})
-    assert not ai.status()['opening_confirmed']
-    with pytest.raises(Exception):ai.reserve(1,'mentor',None,100,256)
+    status=ai.status()
+    assert status['opening_confirmed'] and 'reservierung' in status['over_budget']
+    with closing(db.webapp_conn()) as c:
+        row=c.execute('SELECT charged_micro,reserved_micro FROM mentor_ai_calls WHERE id=?',(key,)).fetchone()
+    assert row['charged_micro']>row['reserved_micro'], 'voll gebucht, nicht auf die Reservierung gekappt'
+    assert ai.reserve(1,'mentor',None,100,256)
 
 
 def test_time_and_turn_limits_ask_instead_of_closing(setup):

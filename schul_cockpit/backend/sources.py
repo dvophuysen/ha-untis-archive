@@ -18,7 +18,6 @@ abgeglichen und gerechnet.
 
 from __future__ import annotations
 
-import json
 import re
 from contextlib import closing
 from datetime import timedelta
@@ -26,6 +25,7 @@ from datetime import timedelta
 from .courses import hidden_keys, lesson_is_hidden
 from .db import history_conn, webapp_conn
 from .learning import now_iso, today_local
+from .materials import printed_list
 from .mentor_context import rows, school_start
 from .queries import _subject_short_from_payload
 from .subject_names import key as subject_key, label as subject_label
@@ -373,11 +373,7 @@ def _scanned_pages(account_id: int) -> dict[str, dict[tuple[str, int], int]]:
             label = (row["source_label"] or "").strip() or {"workbook": "Arbeitsheft", "worksheet": "Arbeitsblatt"}.get(row["kind"], "")
             if row["source_page"]:
                 # Eine fotografierte Doppelseite belegt beide gedruckten Seiten.
-                printed = []
-                try:
-                    printed = [int(p) for p in json.loads(row["printed_pages"] or "[]")]
-                except (ValueError, TypeError):
-                    pass
+                printed = printed_list(row["printed_pages"])
                 for page in [row["source_page"]] + [p for p in printed if abs(p - row["source_page"]) <= 1]:
                     pages.setdefault((label, page), row["id"])
                 continue
@@ -419,11 +415,7 @@ def _book_pages(account_id: int) -> dict[str, dict[int, dict]]:
         have.setdefault(subject, {}).setdefault(row["source_page"], row)
     for row in rows:
         subject = (row["subject_name"] or "").strip().casefold()
-        try:
-            printed = [int(x) for x in json.loads(row["printed_pages"] or "[]")]
-        except (ValueError, TypeError):
-            printed = []
-        for page in printed:
+        for page in printed_list(row["printed_pages"]):
             vorhanden = have[subject].get(page)
             if vorhanden is None or (vorhanden.get("page_check") != "ok" and row.get("page_check") == "ok"):
                 have[subject][page] = row
@@ -637,12 +629,7 @@ def task_candidates(account_id: int, task_id: int, limit: int = 12) -> list[dict
     for row in rows:
         if row["id"] in linked:
             continue
-        pages = set()
-        for value in (row["source_page"], *(str(row["printed_pages"] or "").split(","))):
-            try:
-                pages.add(int(str(value).strip()))
-            except (TypeError, ValueError):
-                continue
+        pages = {row["source_page"]} - {None} | set(printed_list(row["printed_pages"]))
         label = (row["source_label"] or "").strip()
         hit = next((w for w in wanted if pages & set(w["pages"]) and serves(label, w["label"])), None)
         day = (row["document_date"] or row["created_at"] or "")[:10]
@@ -704,12 +691,7 @@ def solution_for_task(account_id: int, task_id: int) -> dict | None:
     for row in rows:
         if not (row["pupil_entries"] or row["handwritten"] or row["kind"] == "own_work"):
             continue
-        pages = set()
-        for value in (row["source_page"], *(str(row["printed_pages"] or "").split(","))):
-            try:
-                pages.add(int(str(value).strip()))
-            except (TypeError, ValueError):
-                continue
+        pages = {row["source_page"]} - {None} | set(printed_list(row["printed_pages"]))
         label = (row["source_label"] or "").strip()
         hit = next((w for w in wanted if pages & set(w["pages"]) and serves(label, w["label"])), None)
         day = (row["document_date"] or row["created_at"] or "")[:10]

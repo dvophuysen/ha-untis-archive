@@ -6,6 +6,7 @@ still open. Fields a human corrected are never overwritten.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 import json
@@ -20,7 +21,7 @@ from pydantic import BeforeValidator, Field, ValidationError
 
 from . import ai_gateway as ai
 from . import materials as store
-from .db import history_conn, webapp_conn
+from .db import history_conn, tx, webapp_conn
 from .learning import InputModel
 from .subject_names import SubjectCatalog, key as subject_key
 
@@ -344,6 +345,8 @@ def _apply(conn, account_id: int, row, insight: Insight, tier_used: str | None =
         values["doubts"] = json.dumps(doubts, ensure_ascii=False) if doubts else ""
     values.update(
         analysis_state="ready",
+        analysis_attempts=0,
+        analysis_failed_at=None,
         analysis_model=ai.model_name(tier_used or ai.tier_for(_purpose(row))),
         analysis_version=ANALYSIS_VERSION,
         analyzed_at=store.now_iso(),
@@ -365,10 +368,87 @@ def _apply(conn, account_id: int, row, insight: Insight, tier_used: str | None =
                          "VALUES(?,'topic',?,'ai',?)", (row["id"], topic["id"], store.now_iso()))
 
 
+# Fehlversuche einer Lesung (D89 gilt weiter: nichts sperrt, aber eine
+# dauerhaft unlesbare Seite wird nicht Nacht für Nacht bezahlt). Nach dem n-ten
+# Fehlversuch wartet die automatische Wiederholung RETRY_PAUSE[n-1], nach
+# MAX_ATTEMPTS gar nicht mehr; „Neu auswerten“ geht immer und setzt zurück.
+MAX_ATTEMPTS = 5
+RETRY_PAUSE = (timedelta(minutes=15), timedelta(hours=6), timedelta(days=1), timedelta(days=3))
+# Fehler, bei denen kein Modell gelaufen ist: Rahmen, Anfangsbestätigung,
+# fehlende Einrichtung. Sie zählen nicht als Versuch.
+FREE_ERRORS = {"409", "429", "503"}
+
+
 def _defer(material_id: int, reason: str) -> None:
+    counted = int(reason.strip() not in FREE_ERRORS)
+    stamp = store.now_iso()
     with closing(webapp_conn()) as conn:
-        conn.execute("UPDATE materials SET analysis_state='failed',analysis_error=?,updated_at=? WHERE id=?",
-                     (reason[:80], store.now_iso(), material_id))
+        conn.execute("UPDATE materials SET analysis_state='failed',analysis_error=?,updated_at=?,"
+                     "analysis_attempts=COALESCE(analysis_attempts,0)+?,analysis_failed_at=? WHERE id=?",
+                     (reason[:80], stamp, counted, stamp, material_id))
+
+
+def may_retry(row, now: datetime | None = None) -> bool:
+    """Ob eine gescheiterte Lesung von selbst neu versucht werden darf."""
+    keys = row.keys()
+    if "analysis_state" in keys and row["analysis_state"] != "failed":
+        return True
+    attempts = (row["analysis_attempts"] if "analysis_attempts" in keys else 0) or 0
+    if attempts >= MAX_ATTEMPTS:
+        return False
+    failed_at = row["analysis_failed_at"] if "analysis_failed_at" in keys else None
+    if not attempts or not failed_at:
+        return True
+    try:
+        failed = datetime.fromisoformat(failed_at)
+    except ValueError:
+        return True
+    if failed.tzinfo is None:
+        failed = failed.replace(tzinfo=timezone.utc)
+    return (now or datetime.now(timezone.utc)) >= failed + RETRY_PAUSE[min(attempts, len(RETRY_PAUSE)) - 1]
+
+
+def reset_attempts(account_id: int, material_id: int) -> None:
+    """Ein Handstart zählt von vorn."""
+    with closing(webapp_conn()) as conn:
+        conn.execute("UPDATE materials SET analysis_attempts=0,analysis_failed_at=NULL WHERE id=? AND account_id=?",
+                     (material_id, account_id))
+
+
+# Eine Lesung zugleich je Material: Nachtlauf, Sammellauf, Wiederholung, Upload
+# und „Neu auswerten“ griffen bis 1.31.2 unabhängig zu und bezahlten dieselbe
+# Seite doppelt. Ein Anspruch verfällt nach CLAIM_MINUTES, falls ein Lauf
+# abgestürzt ist; zwei Lesungen mit je bis zu fünf Minuten passen hinein.
+CLAIM_MINUTES = 30
+
+
+def _utc_stamp(moment: datetime) -> str:
+    return moment.astimezone(timezone.utc).isoformat(timespec="microseconds")
+
+
+def _claim(material_id: int) -> str | None:
+    now = datetime.now(timezone.utc)
+    token = _utc_stamp(now)
+    stale = _utc_stamp(now - timedelta(minutes=CLAIM_MINUTES))
+    with closing(webapp_conn()) as conn:
+        got = conn.execute("UPDATE materials SET analysis_claimed_at=? WHERE id=? "
+                           "AND (analysis_claimed_at IS NULL OR analysis_claimed_at<?)",
+                           (token, material_id, stale)).rowcount
+    return token if got else None
+
+
+def _release(material_id: int, token: str) -> None:
+    with closing(webapp_conn()) as conn:
+        conn.execute("UPDATE materials SET analysis_claimed_at=NULL WHERE id=? AND analysis_claimed_at=?",
+                     (material_id, token))
+
+
+def is_reading(material_id: int) -> bool:
+    """Ob gerade eine Lesung dieses Materials läuft."""
+    stale = _utc_stamp(datetime.now(timezone.utc) - timedelta(minutes=CLAIM_MINUTES))
+    with closing(webapp_conn()) as conn:
+        return conn.execute("SELECT 1 FROM materials WHERE id=? AND analysis_claimed_at>=?",
+                            (material_id, stale)).fetchone() is not None
 
 
 def _purpose(row) -> str:
@@ -386,7 +466,9 @@ async def extract(account_id: int, row, tier: str | None = None, effort: str | N
     an derselben Seite messen (Eichung, D54)."""
     with closing(webapp_conn()) as conn:
         context = _context(conn, account_id, row)
-    images, text = _parts(row)
+    # PDF-Seiten rendert pdftoppm bis zu zwei Minuten lang: nicht in der
+    # Ereignisschleife, sonst steht die App für alle anderen still.
+    images, text = await asyncio.to_thread(_parts, row)
     if not images and not text:
         raise ValueError("kein lesbarer Inhalt")
     if text:
@@ -456,11 +538,7 @@ async def compare(account_id: int, material_id: int, tier: str, effort: str | No
     with closing(webapp_conn()) as conn:
         call = conn.execute("SELECT charged_micro,reserved_micro,status FROM mentor_ai_calls WHERE id=?", (key,)).fetchone()
     printed = [int(p) for p in insight.printed_pages if 0 < int(p) < 2000]
-    stored_pages = []
-    try:
-        stored_pages = [int(p) for p in json.loads(row["printed_pages"] or "[]")]
-    except (ValueError, TypeError):
-        pass
+    stored_pages = store.printed_list(row["printed_pages"])
     if not stored_pages and row["source_page"]:
         stored_pages = [row["source_page"]]
     keys = row.keys()
@@ -535,20 +613,30 @@ def escalation(row, insight) -> tuple[str, str] | None:
     return None
 
 
+def first_tier(row) -> str:
+    """Die Stufe der ersten Lesung: „klein“, sobald dort ein Modell steht. Ist
+    „klein“ leer, liest die Stufe, die der Zweck sonst hätte; bis 1.31.2 lehnte
+    dann jede Lesung mit 503 ab."""
+    if ai.model_name(FIRST_TIER):
+        return FIRST_TIER
+    return ai.tier_for(_purpose(row))
+
+
 async def read_material(account_id: int, row) -> tuple[Insight, str]:
     """Die Seite lesen und die Lesung liefern, die gespeichert werden soll,
     zusammen mit der Stufe, die sie erzeugt hat."""
-    insight, _ = await extract(account_id, row, tier=FIRST_TIER)
+    first = first_tier(row)
+    insight, _ = await extract(account_id, row, tier=first)
     step = escalation(row, insight)
     if not step:
-        return insight, FIRST_TIER
+        return insight, first
     tier, effort = step
-    if effort == FIRST_EFFORT and _same_deployment(tier, FIRST_TIER):
+    if effort == FIRST_EFFORT and _same_deployment(tier, first):
         # Liegen beide Stufen auf derselben Bereitstellung (etwa weil die
         # erste Foundry ausfällt), wäre die zweite Lesung derselbe Aufruf noch
         # einmal: doppelte Kosten, kein Zugewinn. Mit tieferem Nachdenken
         # (Wertetabellen) bleibt sie sinnvoll.
-        return insight, FIRST_TIER
+        return insight, first
     try:
         careful, _ = await extract(account_id, row, tier=tier, effort=effort)
     except Exception as exc:
@@ -557,34 +645,45 @@ async def read_material(account_id: int, row) -> tuple[Insight, str]:
         # „nicht gelesen", und mit ihr alles, was daran hängt (D137).
         _LOGGER.warning("Zweite Lesung von Material %s nicht möglich (%s), erste Lesung gilt",
                         row["id"], getattr(exc, "detail", exc))
-        return insight, FIRST_TIER
+        return insight, first
     return careful, tier
 
 
 async def analyze(account_id: int, material_id: int) -> bool:
     """One material. Returns True when fields were written."""
     with closing(webapp_conn()) as conn:
-        row = conn.execute("SELECT * FROM materials WHERE id=? AND account_id=?",
-                           (material_id, account_id)).fetchone()
+        if not conn.execute("SELECT 1 FROM materials WHERE id=? AND account_id=?",
+                            (material_id, account_id)).fetchone():
+            return False
+    token = _claim(material_id)
+    if not token:
+        # Eine andere Lesung derselben Seite läuft; sie schreibt das Ergebnis.
+        _LOGGER.info("Material %s wird schon gelesen", material_id)
+        return False
+    try:
+        with closing(webapp_conn()) as conn:
+            row = conn.execute("SELECT * FROM materials WHERE id=? AND account_id=?",
+                               (material_id, account_id)).fetchone()
         if not row:
             return False
-    try:
-        insight, tier_used = await read_material(account_id, row)
-    except ValidationError:
-        _defer(material_id, "Antwort nicht auswertbar")
-        return False
-    except ValueError as exc:
-        _defer(material_id, str(exc)[:80])
-        return False
-    except Exception as exc:
-        # Never log prompts, material content or provider bodies.
-        _defer(material_id, str(getattr(exc, "status_code", type(exc).__name__)))
-        return False
-    with closing(webapp_conn()) as conn, conn:
-        conn.execute("BEGIN IMMEDIATE")
-        current = conn.execute("SELECT * FROM materials WHERE id=?", (material_id,)).fetchone()
-        if current:
-            _apply(conn, account_id, current, insight, tier_used)
+        try:
+            insight, tier_used = await read_material(account_id, row)
+        except ValidationError:
+            _defer(material_id, "Antwort nicht auswertbar")
+            return False
+        except ValueError as exc:
+            _defer(material_id, str(exc)[:80])
+            return False
+        except Exception as exc:
+            # Never log prompts, material content or provider bodies.
+            _defer(material_id, str(getattr(exc, "status_code", type(exc).__name__)))
+            return False
+        with closing(webapp_conn()) as conn, tx(conn):
+            current = conn.execute("SELECT * FROM materials WHERE id=?", (material_id,)).fetchone()
+            if current:
+                _apply(conn, account_id, current, insight, tier_used)
+    finally:
+        _release(material_id, token)
     await after_analysis(account_id, material_id)
     return True
 
@@ -653,6 +752,16 @@ def _stronger(current: str, stored: str) -> bool:
     return new is not None and new[1] > old[1]
 
 
+def _reading_models() -> set[str]:
+    """Die Modelle, mit denen eine Lesung heute gespeichert wird. Ohne „klein“
+    liest die Stufe des Zwecks zuerst (first_tier); die gehört dann dazu, sonst
+    gälte jede so gelesene Seite als schwächer gelesen und wäre jede Nacht fällig."""
+    models = {ai.model_name(FIRST_TIER) or "", ai.model_name(CAREFUL_TIER) or ""}
+    if not ai.model_name(FIRST_TIER):
+        models |= {ai.model_name(ai.tier_for(purpose)) or "" for purpose in (ai.SOURCES, "background")}
+    return models
+
+
 def due(limit: int = 20) -> list[tuple[int, int]]:
     """What the night run picks up: never analysed, failed, outdated version, a
     stronger model than the stored reading, and — at most every two weeks —
@@ -661,18 +770,22 @@ def due(limit: int = 20) -> list[tuple[int, int]]:
     # Seite mal das günstige, mal das gründliche Modell. Nur eine davon zu
     # prüfen hieße, die halbe Sammlung dauerhaft für fällig zu halten und jede
     # Nacht neu zu lesen.
-    models = {ai.model_name(FIRST_TIER) or "", ai.model_name(CAREFUL_TIER) or ""}
+    models = _reading_models()
     retry_before = (datetime.now(timezone.utc) - timedelta(days=RETRY_UNLINKED_DAYS)).isoformat()
     with closing(webapp_conn()) as conn:
         rows = conn.execute(
             "SELECT m.account_id,m.id,m.analysis_state,m.analysis_version,m.origin,m.analysis_model,m.analyzed_at,"
+            "m.analysis_attempts,m.analysis_failed_at,"
             " (m.subject_name IS NULL OR m.subject_name='') AS no_subject,"
             " NOT EXISTS (SELECT 1 FROM material_links l WHERE l.material_id=m.id AND l.kind='topic') AS no_topic "
             "FROM materials m "
             "JOIN learning_profiles p ON p.account_id=m.account_id AND p.active=1 AND p.ai_enabled=1 "
             "WHERE m.hidden=0 ORDER BY m.analysis_state='pending' DESC, m.id DESC").fetchall()
     picked = []
+    now = datetime.now(timezone.utc)
     for r in rows:
+        if not may_retry(r, now):
+            continue
         stored = r["analysis_model"] or ""
         if (r["analysis_state"] in ("pending", "failed")
                 or (r["analysis_version"] < ANALYSIS_VERSION and (r["origin"] or "") != "book_fetch")
