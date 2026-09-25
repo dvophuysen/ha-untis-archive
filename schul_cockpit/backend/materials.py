@@ -213,10 +213,12 @@ def create(account_id: int, user_id: int | None, content: bytes, filename: str, 
     page_count = 0
     text = ""
     print_ = {"phash": None, "sharpness": None}
+    original = None
     if mime == "application/pdf":
         page_count = pdf_pages(content)
         text = pdf_text(content)
     else:
+        original = content
         content, mime, captured, print_ = prepare_image(content)
     stamp = now_iso()
     with closing(webapp_conn()) as conn, conn:
@@ -239,6 +241,10 @@ def create(account_id: int, user_id: int | None, content: bytes, filename: str, 
                 conn.execute(
                     "INSERT OR IGNORE INTO material_links(material_id,kind,target_id,origin,created_at) "
                     "VALUES(?,?,?,'mensch',?)", (material_id, kind, int(target), stamp))
+    if original is not None:
+        # Die Auswertung bekommt das Original, die Anzeige die Kopie (D169).
+        from . import originals
+        originals.keep("material", account_id, material_id, original)
     return material_id
 
 
@@ -316,9 +322,9 @@ def _settled(d: dict, page_type: str = "") -> bool:
     sich nicht in Zahlen. Ob „Um“ oder „Zum“, „ihrem“ oder „ihrer“ im Fließtext:
     Das ändert am Lernen nichts, niemand muss dafür gegenlesen oder neu
     fotografieren. Bei Zahlen (Seiten, Brüche, Jahreszahlen) bleibt es ein
-    Zweifel, ebenso in Listen und Tabellen: Auf einer Vokabelliste ist das
-    einzelne Wort der Stoff."""
-    if page_type == "table":
+    Zweifel, ebenso in Listen und Tabellen (auf einer Vokabelliste ist das
+    einzelne Wort der Stoff), in Abbildungen und Formeln (D169)."""
+    if page_type in ("table", "figure", "formula"):
         return False
     alt = (d.get("alternative") or "").strip()
     if not alt or "[…]" in alt or "..." in alt:
@@ -651,8 +657,12 @@ def unlink(account_id: int, material_id: int, kind: str, target_id: int) -> bool
 def remove(account_id: int, material_id: int) -> bool:
     with closing(webapp_conn()) as conn, conn:
         conn.execute("DELETE FROM material_links WHERE material_id=?", (material_id,))
-        return bool(conn.execute("DELETE FROM materials WHERE id=? AND account_id=?",
+        gone = bool(conn.execute("DELETE FROM materials WHERE id=? AND account_id=?",
                                  (material_id, account_id)).rowcount)
+    if gone:
+        from . import originals
+        originals.drop("material", account_id, material_id)
+    return gone
 
 
 def file_of(account_id: int, material_id: int):
@@ -660,6 +670,16 @@ def file_of(account_id: int, material_id: int):
         return conn.execute(
             "SELECT filename,mime_type,file_bytes FROM materials WHERE id=? AND account_id=?",
             (material_id, account_id)).fetchone()
+
+
+def image_for_reading(account_id: int, material_id: int) -> bytes | None:
+    """Das Bild, das die Auswertung sieht: das Original, sonst die Kopie. Nur
+    für Fotos; ein PDF geht seinen eigenen Weg."""
+    row = file_of(account_id, material_id)
+    if not row or not row["file_bytes"] or not (row["mime_type"] or "").startswith("image/"):
+        return None
+    from . import originals
+    return originals.best("material", account_id, material_id, row["file_bytes"])
 
 
 def for_context(account_id: int, *, subject: str | None = None, task_id: int | None = None,

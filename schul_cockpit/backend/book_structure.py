@@ -101,6 +101,12 @@ def _image_parts(shots: list[bytes], limit: int = 4, join: bool = True) -> list[
     parts = []
     step = 2 if join else 1
     for i in range(0, min(len(shots), limit), step):
+        if not join:
+            # Ein Foto eines Papierverzeichnisses: das Original als Seite, das
+            # Gateway bereitet es in voller Auflösung auf (D169).
+            parts.append({"type": "image_url", "page": True, "image_url": {
+                "url": "data:image/jpeg;base64," + base64.b64encode(shots[i]).decode(), "detail": "high"}})
+            continue
         blob = _join([_shrink(shot) for shot in shots[i:i + step]])
         parts.append({"type": "image_url", "image_url": {
             "url": "data:image/jpeg;base64," + base64.b64encode(blob).decode(), "detail": "high"}})
@@ -451,6 +457,7 @@ async def read_paper_toc(account_id: int, subject: str, part_label: str) -> dict
             (account_id, subject, part_label)).fetchall()
     if not rows:
         return {"state": "none", "title": title, "chapters": 0}
+    from . import originals
     shots: list[bytes] = []
     for row in rows:
         if not row["file_bytes"]:
@@ -458,7 +465,7 @@ async def read_paper_toc(account_id: int, subject: str, part_label: str) -> dict
         if row["mime_type"] == "application/pdf":
             shots.extend(store.pdf_page_images(row["file_bytes"], 1, 6))
         else:
-            shots.append(row["file_bytes"])
+            shots.append(originals.best("material", account_id, row["id"], row["file_bytes"]))
     stamp = now_iso()
     if not digital_title:
         with closing(webapp_conn()) as conn, conn:

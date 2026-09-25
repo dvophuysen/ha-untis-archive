@@ -259,7 +259,12 @@ def model_payload(url: str, model: str, instruction: str, context: dict, images:
             if part["type"] == "text":
                 converted.append({"type": "input_text", "text": part["text"]})
             else:
-                converted.append({"type": "input_image", "image_url": part["image_url"]["url"]})
+                image = {"type": "input_image", "image_url": part["image_url"]["url"]}
+                # Die Auflösungsstufe mitgeben: „high“ für Ausschnitte, „auto“ für
+                # das Original an neuere Modelle (D169).
+                if part["image_url"].get("detail"):
+                    image["detail"] = part["image_url"]["detail"]
+                converted.append(image)
         return {
             "model": model,
             "instructions": instruction,

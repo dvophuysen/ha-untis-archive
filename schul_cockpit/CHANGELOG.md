@@ -1,3 +1,11 @@
+## 1.15.0
+
+- Bilder in bestmöglicher Qualität: Die App behält ab jetzt das Originalfoto (bis 6000 Pixel, ohne Metadaten wie den Aufnahmeort) neben der verkleinerten Anzeige-Kopie. Die Auswertung bekommt das Original.
+- Je nach Modell: gpt-5-mini verkleinert jedes Bild stark und bekommt deshalb einen Überblick über die ganze Seite und dazu Ausschnitte in voller Auflösung, damit Handschrift, Brüche und feine Details ankommen und Graphen oder Skizzen trotzdem im Zusammenhang bleiben. Neuere Modelle bekommen das Original als ein Bild in voller Auflösung.
+- Das gilt für Materialien, für Fotos im Mentor und in der Kontrolle, für Übungsklausuren und für fotografierte Inhaltsverzeichnisse.
+- Werte in Abbildungen (Graphen, Maße in Figuren, Schaltpläne, Noten) meldet die Auswertung als Zweifel, wenn sie unsicher ist; in Abbildungen, Formeln und Tabellen bleibt jeder solche Zweifel beim Gegenlesen.
+- Bisherige Fotos gibt es nur als Kopie; sie profitieren von den Ausschnitten, nicht vom Original. Kosten je Seite mit gpt-5-mini steigen um etwa einen Fünftel- bis Drittel-Cent.
+
 ## 1.14.5
 
 - Fotos werden schärfer gelesen: Eine Heftseite geht jetzt in bis zu drei überlappenden Streifen zur Auswertung, jeder in voller Auflösung. Bisher verkleinerte der Anbieter die ganze Seite auf rund 60 %, und kleine Brüche am unteren Rand galten als „unscharf“, obwohl das Foto scharf war. Kosten je Seite steigen um Bruchteile eines Cents.

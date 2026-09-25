@@ -57,7 +57,7 @@ BACKGROUND = {'discovery', 'background'}
 SOURCES = 'sources'
 MENTOR_CHAT = 'mentor'
 # Bilder je Aufruf; alles andere zwei.
-MAX_IMAGES = {SOURCES: 6, MENTOR_CHAT: 6, 'background': 3}
+MAX_IMAGES = {SOURCES: 6, MENTOR_CHAT: 6}
 # Der erste Zug einer Einheit: eigener Zweck, damit sein Modell geeicht werden kann.
 OPENING = 'opening'
 # Vokabellisten in Wörter zerlegen: Formatarbeit auf gedrucktem, sauberem Text,
@@ -338,6 +338,115 @@ def retry_wait(response):
     return 5.0
 
 
+# --- Seitenbilder in bestmöglicher Auflösung (D169) --------------------------
+# Ein Bild mit "page": True ist eine Seite, auf der jedes Detail zählt:
+# Handschrift, Brüche, Graphen, Schaltskizzen, Noten. Wie es am besten ankommt,
+# hängt vom Modell ab (OpenAI-Dokumentation „Images and vision“):
+# - Die Kachel-Modelle (gpt-5, gpt-5-mini, gpt-5.1, gpt-4o) verkleinern jedes
+#   Bild, bis die kurze Seite 768 Pixel misst. Eine ganze Heftseite kam so mit
+#   rund 60 % an. Sie bekommen einen Überblick über die ganze Seite und dazu
+#   Ausschnitte, jeder so klein, dass er unverkleinert ankommt.
+# - Die neueren Modelle (ab gpt-5.4, gpt-5.6, gpt-6) nehmen mit „auto“ die volle
+#   Auflösung bis 6000 Pixel. Sie bekommen das Original als ein Bild; ein Graph
+#   bleibt so im Ganzen.
+TILE_SHORT = 760
+TILE_LONG = 2048
+TILE_OVERLAP = 60
+TILE_TARGET = (2400, 2000, 1600)
+MAX_PAGE_IMAGES = 14   # Azure nimmt bis 50 Bilder je Aufruf; mit Abstand darunter
+WHOLE_PIXELS = 10_000_000
+WHOLE_SIDE = 6000
+
+
+def vision_style(model: str | None) -> str:
+    """„whole“ für Modelle, die ein Bild in voller Auflösung nehmen, sonst „tile“."""
+    import re
+    return "whole" if re.match(r"gpt-(?:5\.(?:[4-9]|\d\d)|[6-9])", (model or "").lower()) else "tile"
+
+
+def _jpeg(img) -> str:
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=90)
+    return "data:image/jpeg;base64," + base64.b64encode(out.getvalue()).decode()
+
+
+def _grid(width: int, height: int) -> list[tuple[int, int, int, int]]:
+    """Überlappende Ausschnitte, jeder höchstens TILE_LONG breit und TILE_SHORT
+    hoch, von oben nach unten und links vor rechts."""
+    def cuts(size: int, span: int) -> list[tuple[int, int]]:
+        if size <= span:
+            return [(0, size)]
+        count = math.ceil((size - TILE_OVERLAP) / (span - TILE_OVERLAP))
+        step = (size - TILE_OVERLAP) / count
+        return [(int(i * step), size if i == count - 1 else int(i * step + step + TILE_OVERLAP)) for i in range(count)]
+    return [(left, top, right, bottom) for top, bottom in cuts(height, TILE_SHORT) for left, right in cuts(width, TILE_LONG)]
+
+
+def _tile_page(img, target: int) -> list:
+    page = img.copy()
+    page.thumbnail((target, target))
+    # Kommt die Seite ohnehin unverkleinert an, braucht sie keine Ausschnitte.
+    if min(page.size) <= 768 and max(page.size) <= TILE_LONG:
+        return [page]
+    boxes = _grid(*page.size)
+    if len(boxes) == 1:
+        return [page]
+    overview = img.copy()
+    overview.thumbnail((TILE_LONG, TILE_LONG))
+    return [overview] + [page.crop(box) for box in boxes]
+
+
+def page_images(pages: list, model: str | None) -> tuple[list[dict], list[int]]:
+    """Seitenbilder für das Modell aufbereiten. Gibt die Bildteile zurück und je
+    Seite die Zahl der Bilder (für den Hinweis an das Modell)."""
+    if vision_style(model) == "whole":
+        parts, counts = [], []
+        for img in pages:
+            whole = img.copy()
+            whole.thumbnail((WHOLE_SIDE, WHOLE_SIDE))
+            if whole.width * whole.height > WHOLE_PIXELS:
+                scale = math.sqrt(WHOLE_PIXELS / (whole.width * whole.height))
+                whole = whole.resize((int(whole.width * scale), int(whole.height * scale)))
+            parts.append({"type": "image_url", "image_url": {"url": _jpeg(whole), "detail": "auto"}})
+            counts.append(1)
+        return parts, counts
+    for target in TILE_TARGET:
+        sets = [_tile_page(img, target) for img in pages]
+        if sum(len(x) for x in sets) <= MAX_PAGE_IMAGES:
+            break
+    else:
+        sets = [[_tile_page(img, TILE_LONG)[0]] for img in pages]
+    parts = [{"type": "image_url", "image_url": {"url": _jpeg(piece), "detail": "high"}} for group in sets for piece in group]
+    return parts, [len(group) for group in sets]
+
+
+def image_bound(width: int, height: int, style: str) -> int:
+    """Obergrenze der Bild-Token für die Vorab-Buchung, statt pauschal 32.768."""
+    if style == "whole":
+        return 20_000
+    scale = min(1.0, 2048 / max(width, height))
+    w, h = width * scale, height * scale
+    if min(w, h) > 768:
+        scale = 768 / min(w, h)
+        w, h = w * scale, h * scale
+    return 85 + 170 * math.ceil(w / 512) * math.ceil(h / 512)
+
+
+def layout_note(counts: list[int], offset: int = 0) -> str:
+    """Sagt dem Modell, welche Bilder zu welcher Seite gehören."""
+    notes, index = [], offset + 1
+    for page, count in enumerate(counts, 1):
+        if count == 1:
+            notes.append(f"Bild {index}: Seite {page} ganz")
+        else:
+            notes.append(f"Bild {index}: Seite {page} im Überblick; Bilder {index + 1} bis {index + count - 1}: "
+                         f"Ausschnitte derselben Seite in voller Auflösung, zeilenweise von oben nach unten und links vor "
+                         f"rechts, mit Überlappung")
+        index += count
+    return ("; ".join(notes) + ". Lies Zahlen, Handschrift und Feinheiten aus den Ausschnitten, den Aufbau und "
+            "Abbildungen im Zusammenhang aus dem Überblick. Gib jede Stelle nur einmal wieder.") if any(c > 1 for c in counts) else ""
+
+
 async def complete(account_id, purpose, instruction, context, images=None, max_output=4096, session_id=None, tier=None, effort=None,
                    tail_keys=()):
     # Reasoning-Tiefe: bisher fest low; für die Eichung je Aufruf wählbar (D77).
@@ -364,6 +473,21 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
     # gewählte Heftseiten mit, dazu die Buchseiten der Aufgabe.
     most=MAX_IMAGES.get(purpose,2)
     if len(images)>most: raise HTTPException(413,f'Bitte höchstens {most} Bilder auf einmal verwenden.')
+    style=vision_style(config['model'])
+    bounds=[];pending_pages=[];counts=[]
+
+    def flush_pages():
+        # Aufeinanderfolgende Seitenbilder gemeinsam: Die Zahl der Ausschnitte
+        # richtet sich nach allen Seiten eines Aufrufs (D169).
+        if not pending_pages:return
+        parts,sizes=page_images(pending_pages,config['model'])
+        counts.append((len(normalized),sizes))
+        for part in parts:
+            from PIL import Image
+            img=Image.open(io.BytesIO(base64.b64decode(part['image_url']['url'].split(',',1)[1])))
+            bounds.append(image_bound(img.width,img.height,style if part['image_url']['detail']=='auto' else 'tile'))
+        normalized.extend(parts);pending_pages.clear()
+
     for part in images:
         try:
             from PIL import Image,ImageOps
@@ -371,19 +495,27 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
             if not uri.startswith(('data:image/jpeg;base64,','data:image/png;base64,','data:image/webp;base64,')):raise ValueError()
             blob=base64.b64decode(uri.split(',',1)[1],validate=True)
             img=Image.open(io.BytesIO(blob))
-            if img.width*img.height>25_000_000:raise ValueError()
-            img=ImageOps.exif_transpose(img).convert('RGB');img.thumbnail((1600,1600))
+            if img.width*img.height>(50_000_000 if part.get('page') else 25_000_000):raise ValueError()
+            img=ImageOps.exif_transpose(img).convert('RGB')
+            if part.get('page'):
+                pending_pages.append(img);continue
+            flush_pages()
+            img.thumbnail((1600,1600))
             out=io.BytesIO();img.save(out,format='JPEG',quality=85)
             normalized.append({'type':'image_url','image_url':{'url':'data:image/jpeg;base64,'+base64.b64encode(out.getvalue()).decode(),'detail':'high'}})
+            bounds.append(32768)
         except (ValueError,KeyError,OSError):raise HTTPException(422,'Das Bild ist nicht lesbar oder zu groß.') from None
+    flush_pages()
     images=normalized
-    if len(images)>most: raise HTTPException(413,f'Bitte höchstens {most} Bilder auf einmal verwenden.')
+    notes=[layout_note(sizes,offset) for offset,sizes in counts]
+    if any(notes):
+        context={**context,'bildaufbau':' '.join(n for n in notes if n)}
     # Each UTF-8 byte is a conservative text-token upper bound. Vision inputs
     # must be locally constrained; 32k tokens/image also leaves ample patch margin.
     raw=json.dumps(context,ensure_ascii=False)
     text_bytes=len((instruction+raw).encode())
     if text_bytes>48000: raise HTTPException(413,'Zu viel Material für einen Schritt. Bitte einen kleineren Abschnitt wählen.')
-    upper_input=text_bytes+1024+32768*len(images)
+    upper_input=text_bytes+1024+sum(bounds)
     # In den Aufruf geht der Bereitstellungsname, nicht der Modellname.
     # tail_keys: was sich von Zug zu Zug ändert (Verlauf, neue Nachricht),
     # steht hinter den Bildern. Azure rechnet einen gleichbleibenden Anfang

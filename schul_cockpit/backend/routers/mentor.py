@@ -837,12 +837,13 @@ async def photo(account_id:int,sid:int,file:UploadFile=File(...),user:CurrentUse
     with closing(webapp_conn()) as c:s=get_session(c,account_id,sid)
     if s['is_test'] and not is_parent(user):raise HTTPException(404,'Lerneinheit nicht gefunden.')
     if s['status']!='active':raise HTTPException(409,'Diese Einheit ist abgeschlossen.')
-    blob=await file.read(5*1024*1024+1)
-    if len(blob)>5*1024*1024:raise HTTPException(413,'Bitte ein kleineres Bild verwenden.')
+    blob=await file.read(20*1024*1024+1)
+    if len(blob)>20*1024*1024:raise HTTPException(413,'Bitte ein kleineres Bild verwenden.')
+    original=blob
     try:
         from PIL import Image,ImageOps,UnidentifiedImageError
         img=Image.open(io.BytesIO(blob))
-        if img.width*img.height>25_000_000:raise ValueError()
+        if img.width*img.height>50_000_000:raise ValueError()
         img.load()
         img=ImageOps.exif_transpose(img).convert('RGB');img.thumbnail((1600,1600))
         out=io.BytesIO();img.save(out,format='JPEG',quality=85);blob=out.getvalue()
@@ -854,6 +855,9 @@ async def photo(account_id:int,sid:int,file:UploadFile=File(...),user:CurrentUse
         if total+len(blob)>100*1024*1024:raise HTTPException(413,'Der Materialspeicher ist voll. Bitte gemeinsam mit deinen Eltern aufräumen.')
         c.execute('INSERT OR IGNORE INTO mentor_attachments(account_id,session_id,mime_type,file_bytes,sha256,created_at) VALUES(?,?,?,?,?,?)',(account_id,sid,'image/jpeg',blob,digest,now_iso()))
         aid=c.execute('SELECT id FROM mentor_attachments WHERE session_id=? AND sha256=?',(sid,digest)).fetchone()[0]
+    # Die Kontrolle liest Kinderhandschrift: Sie bekommt das Original (D169).
+    from .. import originals
+    originals.keep('attachment',account_id,aid,original)
     return {'id':aid}
 
 
@@ -1329,7 +1333,10 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
                 image=c.execute('SELECT * FROM mentor_attachments WHERE id=? AND session_id=? AND account_id=?',(body.attachment_id,sid,account_id)).fetchone()
             if not image:raise HTTPException(404,'Dieses Bild gehört nicht zu der Einheit.')
             if image['transcript']:transcript=image['transcript']
-            else:images=[{'type':'image_url','image_url':{'url':'data:image/jpeg;base64,'+base64.b64encode(image['file_bytes']).decode(),'detail':'high'}}]
+            else:
+                from .. import originals
+                photo=originals.best('attachment',account_id,image['id'],image['file_bytes'])
+                images=[{'type':'image_url','page':True,'image_url':{'url':'data:image/jpeg;base64,'+base64.b64encode(photo).decode(),'detail':'high'}}]
         kind=body.kind
         if kind=='answer' and text.endswith('?'):kind='message'
         if body.option is None and text.casefold() in {'kp','keine ahnung','weiß nicht','weiss nicht','hä','?'}:kind='hint'
@@ -1371,10 +1378,10 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
         # die das Kind wirklich geschrieben hat, nicht ihre Abschrift (D123).
         chosen=(ctx.get('source') or {}).get('solution') or {}
         if check and chosen.get('confirmed'):
-            from ..materials import file_of
-            shot=file_of(account_id,chosen['material_id'])
-            if shot and shot['file_bytes'] and (shot['mime_type'] or '') in ('image/jpeg','image/png','image/webp'):
-                images.append({'type':'image_url','image_url':{'url':f"data:{shot['mime_type']};base64,"+base64.b64encode(shot['file_bytes']).decode(),'detail':'high'}})
+            from ..materials import image_for_reading
+            photo=image_for_reading(account_id,chosen['material_id'])
+            if photo:
+                images.append({'type':'image_url','page':True,'image_url':{'url':'data:image/jpeg;base64,'+base64.b64encode(photo).decode(),'detail':'high'}})
         elif homework_help and quiz_running:
             ctx['textbook']={'status':'im_bestand','hinweis':'Die Seite wurde bereits gelesen; der Bestand steht in abfrage.bestand.'}
         # Die selbst gewählten Seiten: Text immer, Bild soweit Platz ist. Die
@@ -1382,16 +1389,16 @@ async def turn(account_id:int,sid:int,body:TurnIn,user:CurrentUser=Depends(get_c
         # die Hilfe sieht eine Seite einmal, danach reicht ihr Text.
         chosen_pages=ctx.get('eingebunden') or []
         if chosen_pages and (homework_help or check):
-            from ..materials import file_of
+            from ..materials import image_for_reading
             already=chosen.get('material_id') if check and chosen.get('confirmed') else None
             room=ai.MAX_IMAGES[ai.MENTOR_CHAT]
             for item in chosen_pages:
                 item['als_bild']=False
                 if item['id']==already:item['als_bild']=True;continue
                 if len(images)>=room or not (check or item['id'] in fresh_pages or item.get('noch_nicht_gelesen')):continue
-                shot=file_of(account_id,item['id'])
-                if shot and shot['file_bytes'] and (shot['mime_type'] or '') in IMAGE_TYPES:
-                    images.append({'type':'image_url','image_url':{'url':f"data:{shot['mime_type']};base64,"+base64.b64encode(shot['file_bytes']).decode(),'detail':'high'}})
+                photo=image_for_reading(account_id,item['id'])
+                if photo:
+                    images.append({'type':'image_url','page':True,'image_url':{'url':'data:image/jpeg;base64,'+base64.b64encode(photo).decode(),'detail':'high'}})
                     item['als_bild']=True
         # Ein Arbeitsblatt bekommt der Mentor nur über den ausdrücklichen Bezug
         # der Hausaufgabe. Fehlt er, sagt er das und bittet um ein Foto, statt
@@ -1555,7 +1562,10 @@ def delete_session(account_id:int,sid:int,body:DeleteSessionIn,user:CurrentUser=
         c.execute('DELETE FROM learning_plan_blocks WHERE account_id=? AND session_id=?',(account_id,sid))
         # Costs remain accounted for after removal of a learning attempt.
         c.execute('UPDATE mentor_ai_calls SET session_id=NULL WHERE account_id=? AND session_id=?',(account_id,sid))
+        attachments=[r[0] for r in c.execute('SELECT id FROM mentor_attachments WHERE account_id=? AND session_id=?',(account_id,sid))]
         c.execute('DELETE FROM mentor_sessions WHERE account_id=? AND id=?',(account_id,sid))
+        from .. import originals
+        for attachment in attachments:originals.drop('attachment',account_id,attachment)
         for skill in skills:
             # Keep a shared skill whenever another conversation or evidence uses it.
             referenced=c.execute('SELECT 1 FROM mentor_sessions WHERE skill_id=? UNION ALL SELECT 1 FROM mentor_evidence WHERE skill_id=? LIMIT 1',(skill,skill)).fetchone()
