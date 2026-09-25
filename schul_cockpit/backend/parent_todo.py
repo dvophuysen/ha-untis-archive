@@ -86,10 +86,19 @@ def exam_items(account_id: int, exams: list[dict], entries: list[dict], today: d
         missing = src.get("missing_items") or []
         if src.get("missing"):
             where = " · ".join(f"{m['label']} {m['pages_label']}" for m in missing[:2])
-            out.append(item(f"missing:{key}", "missing_material", f"Material für {name} fotografieren",
-                            f"{_plural(src['missing'], 'Seite fehlt', 'Seiten fehlen')} für die {when}"
-                            + (f": {where}." if where else "."),
-                            action("Scannen", "scannen", acc=account_id, art="book_page", fach=subject)))
+            first = missing[0] if missing else None
+            origin = ((first or {}).get("from") or [None])[0]
+            said = f" Aus: {origin['label']}" + (f": „{sources._short(origin['quote'], 80)}“" if origin.get("quote") else "") if origin else ""
+            plain = f"{_plural(src['missing'], 'Seite fehlt', 'Seiten fehlen')} für die {when}" + (f": {where}." if where else ".")
+            it = item(f"missing:{key}", "missing_material", f"Material für {name} fotografieren", plain + said,
+                      action("Scannen", "scannen", acc=account_id, art="book_page", fach=subject))
+            # Woher der Hinweis kommt und wie er sich streichen lässt (D196). Die
+            # Oberfläche zeigt die Herkunft als eigene Zeile, der Satz ohne sie.
+            it["reason_plain"] = plain
+            it["source"] = {"label": origin["label"], "quote": origin.get("quote") or "", "href": origin.get("href")} if origin else None
+            it["dismiss"] = {"subject": subject, "label": first["label"], "pages": first["pages"] or [0],
+                             "what": f"{first['label']} {first['pages_label']}"} if first else None
+            out.append(it)
         if src.get("notice") and src.get("notice_verified") is False:
             out.append(item(f"notice:{key}", "notice_check", f"Themenzettel {name} gegenlesen",
                             f"Eine Seitenzahl auf dem Zettel zur {when} kennt der Unterricht nicht.",

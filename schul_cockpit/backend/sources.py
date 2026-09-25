@@ -28,7 +28,7 @@ from .db import history_conn, webapp_conn
 from .learning import now_iso, today_local
 from .mentor_context import rows, school_start
 from .queries import _subject_short_from_payload
-from .subject_names import key as subject_key
+from .subject_names import key as subject_key, label as subject_label
 
 import logging
 
@@ -320,6 +320,11 @@ def sync_links(account_id: int) -> dict:
     with closing(webapp_conn()) as conn, conn:
         for entry in found:
             for cite in citations(entry["text"], entry["subject"]):
+                if entry["kind"] == "exam_notice" and cite["kind"] == "worksheet" and cite["pages"] == [0]:
+                    # Ein Blatt ohne Seite auf dem Themenzettel ist der Zettel
+                    # selbst, kein fehlendes Material (D196). Ein Elternbrief zur
+                    # Sprechprüfung ergab sonst „Arbeitsblatt ohne Seitenangabe“.
+                    continue
                 for page in cite["pages"]:
                     conn.execute(
                         "INSERT INTO source_links(account_id,entry_kind,entry_id,entry_date,subject_name,part_label,"
@@ -768,6 +773,96 @@ def _claims(account_id: int) -> dict[tuple, int]:
             "JOIN materials m ON m.id=c.material_id AND m.hidden=0 WHERE c.account_id=?", (account_id,))}
 
 
+# --- „Nicht nötig“ (D196) ------------------------------------------------------
+# Ein Elternteil streicht eine fehlende Stelle, und sie kommt nicht wieder: weder
+# als fehlend noch in den Summen. Eine Buchseite ist eine Buchseite, auf Dauer.
+# Ein Blatt ohne Seite (Seite 0) gilt bis zum Tag der Streichung; ein später
+# genanntes Blatt ist ein neues Blatt.
+
+def dismiss(account_id: int, subject: str, label: str, pages: list[int], user_id: int | None, until: str | None = None) -> None:
+    stamp = now_iso()
+    until = until or today_local().isoformat()
+    with closing(webapp_conn()) as conn, conn:
+        for page in sorted(set(pages)):
+            conn.execute(
+                "INSERT INTO source_dismissed(account_id,subject_key,part_label,page,until,dismissed_at,user_id) VALUES(?,?,?,?,?,?,?) "
+                "ON CONFLICT(account_id,subject_key,part_label,page) DO UPDATE SET until=MAX(until,excluded.until),"
+                "dismissed_at=excluded.dismissed_at,user_id=excluded.user_id",
+                (account_id, subject.strip().casefold(), label, page, until, stamp, user_id))
+
+
+def undismiss(account_id: int, subject: str, label: str, pages: list[int]) -> int:
+    with closing(webapp_conn()) as conn, conn:
+        return sum(conn.execute("DELETE FROM source_dismissed WHERE account_id=? AND subject_key=? AND part_label=? AND page=?",
+                                (account_id, subject.strip().casefold(), label, page)).rowcount for page in set(pages))
+
+
+def _dismissed(account_id: int) -> dict[tuple, str]:
+    with closing(webapp_conn()) as conn:
+        return {(r["subject_key"], r["part_label"], r["page"]): r["until"] or "" for r in conn.execute(
+            "SELECT subject_key,part_label,page,until FROM source_dismissed WHERE account_id=?", (account_id,))}
+
+
+def is_dismissed(dismissed: dict[tuple, str], link: dict) -> bool:
+    until = dismissed.get(((link.get("subject_name") or "").strip().casefold(), link.get("part_label"), link.get("page")))
+    if until is None:
+        return False
+    return bool(link.get("page")) or (link.get("entry_date") or "") <= until
+
+
+# --- Woher eine fehlende Stelle kommt (D196) -----------------------------------
+
+def _short(text: str | None, limit: int = 120) -> str:
+    text = " ".join((text or "").split())
+    return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
+
+
+def _ddmm(iso: str | None) -> str:
+    iso = (iso or "")[:10]
+    return f"{iso[8:10]}.{iso[5:7]}." if len(iso) == 10 else ""
+
+
+def mention_sources(links: list[dict], subject: str, limit: int = 3) -> list[dict]:
+    """Die Nennungen hinter einer Stelle: ausdrückliche vor der Kapitelregel,
+    die neueste zuerst, je Eintrag einmal."""
+    ordered = sorted(sorted(links, key=lambda l: l.get("entry_date") or "", reverse=True),
+                     key=lambda l: l.get("entry_kind") == "chapter")
+    picked, seen = [], set()
+    for link in ordered:
+        mark = (link.get("entry_kind"), link.get("entry_id"))
+        if mark in seen:
+            continue
+        seen.add(mark)
+        picked.append(link)
+        if len(picked) == limit:
+            break
+    notices = [l["entry_id"] for l in picked if l.get("entry_kind") == "exam_notice"]
+    titles: dict[int, str] = {}
+    if notices:
+        with closing(webapp_conn()) as conn:
+            titles = {r[0]: r[1] for r in conn.execute(
+                f"SELECT id,title FROM materials WHERE id IN ({','.join('?' * len(notices))})", tuple(notices))}
+    name = subject_label(subject)
+    out = []
+    for link in picked:
+        kind, day = link.get("entry_kind"), _ddmm(link.get("entry_date"))
+        if kind == "homework":
+            label = f"Hausaufgabe {name} vom {day}"
+        elif kind == "lesson":
+            label = f"Stunde {name} vom {day}"
+        elif kind == "exam_notice":
+            label = f"{(titles.get(link['entry_id']) or '').strip() or 'Themenzettel'} (abgelegt {day})"
+        else:
+            label = f"Kapitel aus dem Unterricht (ab {day})"
+        # Nur der Zettel und ein Foto haben ein eigenes Ziel; Stunden und
+        # Hausaufgaben lassen sich bisher nicht direkt aufrufen.
+        material = link["entry_id"] if kind == "exam_notice" else link.get("material_id")
+        out.append({"entry_kind": kind, "entry_id": link.get("entry_id"), "date": (link.get("entry_date") or "")[:10],
+                    "quote": _short(link.get("quote")), "label": label,
+                    "href": f"#/materialien?material={material}" if material else None})
+    return out
+
+
 def subject_habits(links: list[dict]) -> dict[str, str]:
     """Welchen Buchteil eine Lehrkraft nennt, wenn sie einen nennt.
 
@@ -874,6 +969,8 @@ def ledger(account_id: int) -> dict:
         stored = {r["source_book"]: r["n"] for r in conn.execute(
             "SELECT source_book, COUNT(*) AS n FROM materials WHERE account_id=? AND origin='book_fetch' AND hidden=0 "
             "GROUP BY source_book", (account_id,))}
+    dismissed = _dismissed(account_id)
+    links = [l for l in links if not is_dismissed(dismissed, l)]
     by_subject: dict[str, dict] = {}
     for link in links:
         bucket = by_subject.setdefault(link["subject_name"], {
@@ -1050,6 +1147,8 @@ def photo_requests(account_id: int, exams: list[dict], day: str, days_ahead: int
             "SELECT subject_name,part_label,part_kind,page,quote,entry_date,detail FROM source_links "
             "WHERE account_id=? AND status='paper' AND entry_kind IN ('lesson','homework','exam_notice') ORDER BY entry_date DESC",
             (account_id,))]
+    dismissed = _dismissed(account_id)
+    links = [l for l in links if not is_dismissed(dismissed, l)]
     groups: dict[tuple, dict] = {}
     for link in links:
         hit = soon.get(link["subject_name"].casefold())
@@ -1315,10 +1414,13 @@ def exam_sources(account_id: int, subject: str, since: str, until: str) -> dict 
     ensure_synced(account_id)
     with closing(webapp_conn()) as conn:
         links = [dict(r) for r in conn.execute(
-            "SELECT part_label,part_kind,page,status,detail,material_id,entry_kind FROM source_links "
-            "WHERE account_id=? AND lower(subject_name)=lower(?) AND entry_date>=? AND entry_date<=?",
+            "SELECT subject_name,part_label,part_kind,page,status,detail,material_id,entry_kind,entry_id,entry_date,quote "
+            "FROM source_links WHERE account_id=? AND lower(subject_name)=lower(?) AND entry_date>=? AND entry_date<=?",
             (account_id, subject, since, until))]
         analysis = _analysis_states(conn, [l["material_id"] for l in links if l["material_id"]])
+    # Von den Eltern als „nicht nötig“ gestrichen: zählt weder als fehlend noch mit (D196).
+    dismissed = _dismissed(account_id)
+    links = [l for l in links if not is_dismissed(dismissed, l)]
     if not links:
         notices = [n for n in exam_notices(account_id) if n["subject_name"] and n["subject_name"].casefold() == subject.casefold()
                    and since <= n["date"] <= until]
@@ -1361,7 +1463,9 @@ def exam_sources(account_id: int, subject: str, since: str, until: str) -> dict 
             gaps.setdefault(label, []).append(page)
         elif state == "pending" and (label, page) in why:
             pending_items.append(why[(label, page)])
-    missing_items = [{"label": label, "pages": sorted(pages), "pages_label": page_list(pages)}
+    # Woher die Lücke kommt: die Nennungen dahinter, damit niemand rätselt (D196).
+    missing_items = [{"label": label, "pages": sorted(pages), "pages_label": page_list(pages),
+                      "from": mention_sources([l for l in links if l["part_label"] == label and l["page"] in pages], subject)}
                      for label, pages in sorted(gaps.items(), key=lambda kv: -len(kv[1]))]
     chapters = []
     from .book_structure import overview, paper_books

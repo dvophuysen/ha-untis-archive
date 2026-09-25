@@ -300,6 +300,43 @@ def figure_image(account_id: int, figure_id: int, user: CurrentUser = Depends(ge
         raise HTTPException(404, "Abbildung nicht gefunden.")
     return Response(data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
 
+class DismissIn(InputModel):
+    subject: str = Field(min_length=1, max_length=120)
+    label: str = Field(min_length=1, max_length=40)
+    page: int | None = Field(default=None, ge=0, le=1999)
+    # Mehrere Seiten einer Stelle („Arbeitsheft S. 12–14“) auf einmal.
+    pages: list[int] | None = Field(default=None, max_length=60)
+    # Bei einem Blatt ohne Seite: bis zu welchem Eintragsdatum die Streichung gilt.
+    until: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _dismiss_pages(body: DismissIn) -> list[int]:
+    pages = list(body.pages or []) + ([body.page] if body.page is not None else [])
+    if not pages or any(p < 0 or p > 1999 for p in pages):
+        raise HTTPException(422, "Seite fehlt.")
+    return pages
+
+
+@router.post("/sources/dismiss")
+def dismiss_source(account_id: int, body: DismissIn, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """„Nicht nötig“: eine fehlende Stelle streichen, sie kommt nicht wieder (D196).
+    Steht vor /{material_id}; nur in der Elternansicht."""
+    access(user, account_id)
+    if not acts_as_parent(user):
+        raise HTTPException(403, "Nur in der Elternansicht verfügbar")
+    pages = _dismiss_pages(body)
+    sources.dismiss(account_id, body.subject, body.label, pages, user.id, body.until)
+    return {"dismissed": sorted(set(pages))}
+
+
+@router.delete("/sources/dismiss")
+def undismiss_source(account_id: int, body: DismissIn, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Die Streichung zurücknehmen."""
+    access(user, account_id)
+    if not acts_as_parent(user):
+        raise HTTPException(403, "Nur in der Elternansicht verfügbar")
+    return {"restored": sources.undismiss(account_id, body.subject, body.label, _dismiss_pages(body))}
+
 
 class CompareIn(InputModel):
     tier: str = Field(min_length=1, max_length=20)
