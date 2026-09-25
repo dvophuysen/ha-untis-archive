@@ -144,7 +144,8 @@ def make_combined_zip() -> Path:
 
 
 def validate_db_file(path: Path) -> tuple[bool, str]:
-    """Check the uploaded file is a SQLite DB with our expected tables."""
+    """Check the uploaded file is a SQLite DB with our expected tables and
+    passes SQLite's integrity check."""
     try:
         conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     except sqlite3.Error as exc:
@@ -154,73 +155,70 @@ def validate_db_file(path: Path) -> tuple[bool, str]:
             "SELECT name FROM sqlite_master WHERE type='table'"
         ).fetchall()
         tables = {r[0] for r in rows}
+        missing = EXPECTED_WEBAPP_TABLES - tables
+        if missing:
+            return False, f"Backup passt nicht (fehlende Tabellen: {sorted(missing)})"
+        check = conn.execute("PRAGMA integrity_check").fetchone()
+        if not check or check[0] != "ok":
+            return False, f"Backup ist beschädigt: {check[0] if check else 'keine Antwort'}"
     except sqlite3.DatabaseError as exc:
         return False, f"Datei ist keine SQLite-Datenbank: {exc}"
     finally:
         conn.close()
-    missing = EXPECTED_WEBAPP_TABLES - tables
-    if missing:
-        return False, f"Backup passt nicht (fehlende Tabellen: {sorted(missing)})"
     return True, "ok"
 
 
-def _extract_webapp_db(uploaded: Path) -> Path:
-    """Accept either a combined .zip (use its webapp.db) or a raw .db."""
-    if zipfile.is_zipfile(uploaded):
-        with zipfile.ZipFile(uploaded) as zf:
-            names = zf.namelist()
-            if "webapp.db" not in names:
-                raise ValueError("ZIP enthält keine webapp.db")
-            fd, tmp = tempfile.mkstemp(prefix="sc-restore-web-", suffix=".db")
-            os.close(fd)
-            with zf.open("webapp.db") as src, open(tmp, "wb") as dst:
-                while chunk := src.read(1 << 20):
-                    dst.write(chunk)
-            return Path(tmp)
-    return uploaded
-
-
-def restore_from_file(uploaded: Path) -> dict:
-    """Replace the live webapp.db from the uploaded file (raw .db or the
-    webapp.db inside a combined .zip). Keeps a .bak of the old one. history.db
-    is NOT restored here (config is read-only + the integration owns it live)."""
-    webapp_src = _extract_webapp_db(uploaded)
-    had_history = zipfile.is_zipfile(uploaded) and "history.db" in zipfile.ZipFile(uploaded).namelist()
-
-    ok, msg = validate_db_file(webapp_src)
-    if not ok:
-        raise ValueError(msg)
-
+def pending_path() -> Path:
+    """Hier wartet ein geprüftes Backup auf den nächsten Start."""
     db_path = SETTINGS.webapp_db_path
-    data_dir = db_path.parent
-    ts = time.strftime("%Y%m%d-%H%M%S")
+    return db_path.with_name(db_path.name + ".restore-pending")
 
-    # Checkpoint + close any WAL side files so the swap is clean.
+
+def _copy_into(src_file, target: Path) -> None:
+    """Datei neben die Datenbank schreiben und atomar umbenennen. Ein
+    ``os.replace`` aus /tmp scheitert, wenn /data ein anderes Dateisystem ist."""
+    part = target.with_name(target.name + ".part")
     try:
-        c = sqlite3.connect(db_path)
-        c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        c.close()
-    except sqlite3.Error:
-        pass
+        with open(part, "wb") as dst:
+            while chunk := src_file.read(1 << 20):
+                dst.write(chunk)
+            dst.flush()
+            os.fsync(dst.fileno())
+        os.replace(part, target)
+    finally:
+        part.unlink(missing_ok=True)
 
-    bak = data_dir / f"webapp.db.bak-{ts}"
-    if db_path.exists():
-        os.replace(db_path, bak)
-    # Remove stale WAL/SHM of the old DB if present.
-    for suffix in ("-wal", "-shm"):
-        side = Path(str(db_path) + suffix)
-        if side.exists():
-            try:
-                side.unlink()
-            except OSError:
-                pass
 
-    # Move the validated webapp.db into place.
-    os.replace(webapp_src, db_path)
-
-    _prune_baks(data_dir)
+def stage_restore(uploaded: Path) -> dict:
+    """Prüft ein hochgeladenes Backup (rohe .db oder die webapp.db im
+    kombinierten .zip) und legt es als ``webapp.db.restore-pending`` ab.
+    Getauscht wird beim nächsten Start, bevor die Datenbank geöffnet ist
+    (apply_pending_restore). Bis 1.31 wurde die Datei im laufenden Betrieb
+    ersetzt, während offene Verbindungen weiter die alte Datei beschrieben.
+    history.db is NOT restored here (the integration owns it live)."""
+    pending = pending_path()
+    candidate = pending.with_name(pending.name + ".check")
+    try:
+        had_history = False
+        if zipfile.is_zipfile(uploaded):
+            with zipfile.ZipFile(uploaded) as zf:
+                names = zf.namelist()
+                if "webapp.db" not in names:
+                    raise ValueError("ZIP enthält keine webapp.db")
+                had_history = "history.db" in names
+                with zf.open("webapp.db") as src:
+                    _copy_into(src, candidate)
+        else:
+            with open(uploaded, "rb") as src:
+                _copy_into(src, candidate)
+        ok, msg = validate_db_file(candidate)
+        if not ok:
+            raise ValueError(msg)
+        os.replace(candidate, pending)
+    finally:
+        candidate.unlink(missing_ok=True)
     return {
-        "backup_kept_as": bak.name,
+        "pending": pending.name,
         "history_db_in_archive": had_history,
         "history_restore_hint": (
             "Das Archiv enthielt auch history.db. Diese wird hier NICHT "
@@ -228,6 +226,51 @@ def restore_from_file(uploaded: Path) -> dict:
             if had_history else None
         ),
     }
+
+
+def apply_pending_restore() -> str | None:
+    """Beim Start, vor dem ersten Öffnen: ein abgelegtes Backup einsetzen.
+    Der bisherige Stand bleibt als ``webapp.db.bak-…`` (über die Backup-API,
+    also samt WAL). Scheitert etwas, gilt der bisherige Stand weiter; ein
+    unbrauchbares Backup wird beiseitegelegt, damit nicht jeder Start es neu
+    versucht. Gibt den Namen der Sicherungskopie zurück."""
+    pending = pending_path()
+    if not pending.exists():
+        return None
+    db_path = SETTINGS.webapp_db_path
+    data_dir = db_path.parent
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    try:
+        ok, msg = validate_db_file(pending)
+        if not ok:
+            LOG.error("Abgelegtes Backup nicht eingespielt: %s", msg)
+            os.replace(pending, pending.with_name(f"{pending.name}.rejected-{ts}"))
+            return None
+        bak = data_dir / f"webapp.db.bak-{ts}"
+        if db_path.exists():
+            src = sqlite3.connect(db_path)
+            try:
+                dst = sqlite3.connect(bak)
+                try:
+                    src.backup(dst)
+                finally:
+                    dst.close()
+                try:
+                    src.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                except sqlite3.Error:
+                    pass
+            finally:
+                src.close()
+        # Alte WAL-/SHM-Dateien dürfen nie auf die neue Datei angewandt werden.
+        for suffix in ("-wal", "-shm"):
+            Path(str(db_path) + suffix).unlink(missing_ok=True)
+        os.replace(pending, db_path)
+        _prune_baks(data_dir)
+        LOG.warning("Backup eingespielt; der vorherige Stand liegt als %s", bak.name)
+        return bak.name
+    except Exception:
+        LOG.exception("Backup nicht eingespielt; es gilt der bisherige Stand")
+        return None
 
 
 def _prune_baks(data_dir: Path) -> None:

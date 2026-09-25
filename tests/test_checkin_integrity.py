@@ -26,7 +26,7 @@ def install(env):
     with sqlite3.connect(db.SETTINGS.history_db_path) as c:
         c.execute('CREATE TABLE lessons(id INTEGER PRIMARY KEY, account_id INTEGER, untis_period_id INTEGER, subject_untis_id INTEGER, date TEXT, start_time INTEGER, end_time INTEGER, was_absent INTEGER, code TEXT, subject_name TEXT)')
         c.executemany('INSERT INTO lessons VALUES(?, ?, ?, 7, ?, 800, 900, 0, NULL, ?)',
-                      [(i, 1 if i < 6 else 2, 100+i, date.today().isoformat(), 'Testfach') for i in range(1, 7)])
+                      [(i, 1 if i < 6 else 2, 100+i, today_local().isoformat(), 'Testfach') for i in range(1, 7)])
     return client, state, patch
 
 
@@ -62,7 +62,7 @@ def test_comprehension_ignores_comments_and_supervision_but_gaps_do_not(env):
     post(client, 4, rating=3)
     assert dashboard._comprehension_for_subjects(1, {7}) == {7: {'hard': 1, 'total': 2}}
     assert dashboard._comprehension_for_subjects(2, {7}) == {7: {'hard': 0, 'total': 0}}
-    assert _gap(1, date.today()) == {'unrated_lessons': 2, 'total_lessons': 5}
+    assert _gap(1, today_local()) == {'unrated_lessons': 2, 'total_lessons': 5}
     patch.setattr(today, 'lessons_for_date', lambda c, a, d: [dict(id=i, is_cancelled=False, was_absent=False) for i in range(1,6)] if d == today_local().isoformat() else [])
     patch.setattr(today, 'upcoming_exams', lambda *a, **kw: [])
     patch.setattr(today, 'hidden_keys', lambda a: set())
@@ -124,8 +124,8 @@ def test_hidden_courses_do_not_count_as_open_feedback(env):
     # Dashboard, ohne im Stundenplan zu erscheinen.
     client, _, _ = install(env)
     from backend.courses import course_key
-    assert _gap(1, date.today())['total_lessons'] == 5
+    assert _gap(1, today_local())['total_lessons'] == 5
     with closing(db.webapp_conn()) as c:
         c.execute("INSERT INTO hidden_courses(account_id,course_key,created_at) VALUES(1,?,'now')",
                   (course_key(7, None, 'Testfach', None),))
-    assert _gap(1, date.today()) == {'unrated_lessons': 0, 'total_lessons': 0}
+    assert _gap(1, today_local()) == {'unrated_lessons': 0, 'total_lessons': 0}

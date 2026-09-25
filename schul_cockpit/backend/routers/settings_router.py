@@ -59,7 +59,8 @@ def get_settings(
     auto_budget = True if row is None else bool(row["auto_budget"])
     section_override = row["school_section_override"] if row else None
     section, klasse_name, section_source = resolve_section(account_id, section_override)
-    today = _date.today()
+    from ..learning import today_local
+    today = today_local()
     afternoon = has_afternoon_school(account_id, today)
 
     erlass = {

@@ -13,10 +13,11 @@ import logging
 import time
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from .. import family_board, lernstand, usage_report
 from ..auth import CurrentUser, get_current_user, linked_account_ids
+from ..view_mode import acts_as_parent
 from ..learning import today_local
 from ..db import history_conn, webapp_conn
 from ..exams import account_subjects, resolve_exams
@@ -137,6 +138,10 @@ def _comprehension_for_subjects(
 
 @router.get("/dashboard")
 async def dashboard(user: CurrentUser = Depends(get_current_user)) -> dict:
+    # Die Familienkarte mit „Beobachten“ ist nur für Eltern (Nutzerentscheidung).
+    # Das Frontend ruft sie nur in der Elternansicht und im Testmodus auf.
+    if not acts_as_parent(user):
+        raise HTTPException(status_code=403, detail="Nur für Eltern.")
     today = today_local()
     today_iso = today.isoformat()
     account_ids = sorted(linked_account_ids(user.id))

@@ -880,7 +880,91 @@ def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
     return any(r[1] == column for r in rows)
 
 
+def split_statements(sql: str) -> list[str]:
+    """Ein Skript in einzelne Anweisungen. Getrennt wird nur an einem
+    Semikolon, nach dem ``sqlite3.complete_statement`` die Anweisung für
+    vollständig hält: Semikolons in Zeichenketten, Kommentaren und
+    Trigger-Rümpfen trennen nicht. Reine Kommentare fallen weg."""
+    out: list[str] = []
+    buf = ""
+    for piece in sql.split(";"):
+        buf += piece + ";"
+        if sqlite3.complete_statement(buf):
+            if _lead(buf):
+                out.append(buf.strip())
+            buf = ""
+    if _lead(buf.rstrip(";")):
+        out.append(buf.rstrip(";").strip())
+    return out
+
+
+def _lead(stmt: str) -> str:
+    """Die Anweisung ohne führende Kommentare, groß geschrieben."""
+    s = stmt
+    while True:
+        s = s.lstrip()
+        if s.startswith("--"):
+            nl = s.find("\n")
+            s = "" if nl < 0 else s[nl + 1:]
+        elif s.startswith("/*"):
+            end = s.find("*/")
+            s = "" if end < 0 else s[end + 2:]
+        else:
+            break
+    s = s.strip().rstrip(";").strip()
+    return s.upper()
+
+
+_TX_CONTROL = ("BEGIN", "COMMIT", "END", "ROLLBACK")
+# Diese Anweisungen wirken in einer Transaktion nicht oder scheitern dort
+# (PRAGMA foreign_keys ist darin wirkungslos, journal_mode und VACUUM
+# verweigern). Eine Migration mit ihnen läuft ohne umschließende Transaktion.
+_NO_TX = ("PRAGMA", "VACUUM")
+
+
+def _skippable(lead: str, exc: sqlite3.OperationalError) -> bool:
+    """Nur die eine Anweisung überspringen, deren Ergebnis schon da ist:
+    eine vorhandene Spalte bei ALTER TABLE … ADD, ein vorhandenes Objekt bei
+    CREATE. Alles andere ist ein echter Fehler."""
+    msg = str(exc).lower()
+    if lead.startswith("ALTER TABLE") and " ADD" in lead and "duplicate column name" in msg:
+        return True
+    if lead.startswith("CREATE") and "already exists" in msg:
+        return True
+    return False
+
+
+def _run_migration(conn: sqlite3.Connection, sql: str) -> None:
+    for stmt in split_statements(sql):
+        lead = _lead(stmt)
+        if lead.startswith(_TX_CONTROL) and conn.in_transaction:
+            continue  # die Migration bringt eigene Klammern mit, es gilt die äußere
+        try:
+            conn.execute(stmt)
+        except sqlite3.OperationalError as exc:
+            if not _skippable(lead, exc):
+                raise
+
+
+def _sha256_hex(value):
+    import hashlib
+    if value is None:
+        return None
+    return hashlib.sha256(str(value).encode("utf-8")).hexdigest()
+
+
 def _apply_migrations(conn: sqlite3.Connection) -> None:
+    """Jede noch offene Migration läuft in einer eigenen Transaktion samt
+    Marker: Scheitert sie, bleibt nichts halb stehen und sie läuft beim
+    nächsten Start neu. SQLite-DDL ist transaktional.
+
+    Bis 1.31 lief jede Migration per executescript ohne Transaktion, und ein
+    „duplicate column“ oder „already exists“ brach das Skript an dieser Stelle
+    ab, setzte aber den Marker: Der Rest blieb für immer ungelaufen. Jetzt
+    wird nur genau die Anweisung übersprungen, deren Ergebnis schon vorhanden
+    ist. Bereits markierte Migrationen laufen wie bisher nie wieder."""
+    # Für Migrationen, die Werte in Python umrechnen (Sitzungs-Token hashen).
+    conn.create_function("sc_sha256", 1, _sha256_hex, deterministic=True)
     applied = {
         r[0]
         for r in conn.execute(
@@ -891,19 +975,19 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
         marker = f"migration:{key}"
         if marker in applied:
             continue
-        # ALTER TABLE ADD COLUMN raises if the column already exists (e.g. on
-        # databases where the migration was applied by another process). Skip
-        # silently in that case.
+        if any(_lead(s).startswith(_NO_TX) for s in split_statements(sql)):
+            _run_migration(conn, sql)
+            conn.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES (?, '1')", (marker,))
+            continue
+        conn.execute("BEGIN IMMEDIATE")
         try:
-            conn.executescript(sql)
-        except sqlite3.OperationalError as exc:
-            msg = str(exc).lower()
-            if "duplicate column name" not in msg and "already exists" not in msg:
-                raise
-        conn.execute(
-            "INSERT OR IGNORE INTO schema_meta (key, value) VALUES (?, '1')",
-            (marker,),
-        )
+            _run_migration(conn, sql)
+            conn.execute("INSERT OR IGNORE INTO schema_meta (key, value) VALUES (?, '1')", (marker,))
+            conn.execute("COMMIT")
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
 
 # Der Moment nach dem Unterricht (VERANTWORTUNG.md Stufe 2, D69): eine
 # Nachfrage kurz nach der letzten Stunde, Antwort ist Foto oder „nichts Neues“.
@@ -1321,3 +1405,12 @@ _MIGRATIONS.append(("opt_day_tasks_ha_description_fill",
 # Neustart abgebrochen hat, hing sonst für immer auf „grading“.
 _MIGRATIONS.append(("opt_day_vocab_papers_grading_started",
                     "ALTER TABLE vocab_papers ADD COLUMN grading_started_at TEXT"))
+
+# Sitzungen nur noch als sha256(token): Eine Sicherung enthält keine
+# übernehmbare Anmeldung. Bestehende Zeilen werden an Ort und Stelle
+# umgerechnet, damit niemand abgemeldet wird; 64 Zeichen sind schon ein Hash.
+_MIGRATIONS.append(("opt_core_001_session_token_hash",
+                    "UPDATE sessions SET token = sc_sha256(token) WHERE length(token) != 64"))
+# Zeit des letzten PIN-Fehlversuchs: Nach 24 Stunden ohne Fehlversuch beginnt
+# die Zählung neu, statt dauerhaft bei der 24-Stunden-Sperre zu bleiben.
+_MIGRATIONS.append(("opt_core_002_pin_failed_at", "ALTER TABLE users ADD COLUMN pin_failed_at TEXT"))
