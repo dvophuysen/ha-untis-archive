@@ -46,6 +46,7 @@ from .routers import (
     reminders as reminders_router,
     rewards as rewards_router,
     profile as profile_router,
+    practice as practice_router,
     search,
     settings_router,
     setup,
@@ -240,6 +241,7 @@ app.include_router(backup_router.router, prefix=API)
 app.include_router(dashboard_router.router, prefix=API)
 app.include_router(rewards_router.router, prefix=API)
 app.include_router(profile_router.router, prefix=API)
+app.include_router(practice_router.router, prefix=API)
 # Kiosk-Routen leben außerhalb von /api, weil sie ganze HTML-Seiten
 # liefern (Login-Form, Dashboard) und vom SPA-Catchall unterschieden
 # werden müssen.

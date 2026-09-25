@@ -119,3 +119,29 @@ def test_first_school_year_medals_are_easier(world):
     assert rewards.school_year(date(2026, 9, 28)) == "2026/27"
     assert rewards.school_year(date(2027, 7, 30)) == "2026/27"
     assert rewards.school_year(date(2027, 8, 1)) == "2027/28"
+
+
+def test_friday_counts_fully_until_sunday_evening_then_only_rescued(world):
+    fri = START + timedelta(days=4)
+    sat, sun, mon = fri + timedelta(days=1), fri + timedelta(days=2), fri + timedelta(days=3)
+    school(world, fri, 1); school(world, mon, 2)
+    rewards.note(1, "feedback", 1, KID, at(fri, 14))   # Freitag angefangen, Tasche fehlt
+    rewards.evaluate(1, at(fri, 18))
+    assert kinds() == {}
+    finish(fri, 1, mon)
+    rewards.note(1, "bag", "mon", KID, at(sun, 19))   # am Sonntag fertig gemacht
+    assert kinds() == {fri.isoformat(): "full"}, "bis Sonntag erledigt zählt voll"
+    s = rewards.summary(1, at(sun, 20))
+    assert s["streak"]["current"] == 1
+
+
+def test_after_the_weekend_friday_is_only_rescued(world):
+    fri = START + timedelta(days=4)
+    sat, mon = fri + timedelta(days=1), fri + timedelta(days=3)
+    school(world, fri, 1); school(world, mon, 2)
+    rewards.note(1, "feedback", 1, KID, at(fri, 14))
+    rewards.evaluate(1, at(sat, 10))
+    assert kinds() == {}
+    finish(fri, 1, mon)
+    rewards.evaluate(1, at(mon, 7, 20))
+    assert kinds() == {fri.isoformat(): "rescued"}

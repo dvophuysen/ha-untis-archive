@@ -6,6 +6,8 @@
   import { formatShortDate, daysBetween, isoToday } from '../lib/format.js';
   import { appState } from '../lib/store.svelte.js';
   import { subjectStyle } from '../lib/subjectStyle.js';
+  import PracticeRaster from '../lib/PracticeRaster.svelte';
+  import { view } from '../lib/viewMode.svelte.js';
 
   let { accountId } = $props();
   const today = isoToday();
@@ -358,6 +360,10 @@
                   <div class="topic"><div class="topic-head"><span class="topic-title">{s.title}{#if s.field}<small class="dim"> · {s.field}</small>{/if}</span><span class="stage {s.shown ? 'sitzt' : 'neu'}">{s.shown ? 'gezeigt' : 'neu'}</span></div></div>
                 {/each}
               </div>
+            {/if}
+
+            {#if topics.some((t) => !t.vocab)}
+              <PracticeRaster {accountId} examKey={e.exam_key} parent={canManage && view.mode !== 'child'} />
             {/if}
 
             <form class="add-topic" onsubmit={(ev) => { ev.preventDefault(); addTopic(e); }}>

@@ -1,3 +1,10 @@
+## 1.22.0
+
+- Übungsarbeiten zu jeder anstehenden Arbeit (unter „Arbeiten & Tests“, Arbeit aufklappen): Einstiegstest, Kurztest, Mix oder Probearbeit. Die App erstellt die Arbeit sofort, ohne Freigabe der Eltern. Drucken, von Hand lösen, alle Seiten fotografieren, abgeben: Die Auswertung vergibt Punkte je Aufgabe nach den Punktkriterien, mit Begründung und nächstem Schritt. Tippen am Gerät geht auch.
+- Neues Raster je Arbeit: jedes Thema in drei Anforderungsbereichen (Wiedergeben, Anwenden, Übertragen), mit offen, unsicher, fast, sicher und bestätigt. Vorbereitet ist ein Thema, wenn Wiedergeben und Anwenden sicher sitzen. Aufgaben im Gespräch mit dem Lernbegleiter zählen genauso.
+- Niveau stufenweise oder gleich höher: Sitzt ein höherer Bereich, gilt der darunter als mit gezeigt.
+- Serie: Der letzte Schultag vor dem Wochenende zählt voll, wenn bis Sonntagabend alles erledigt ist. Erst am Montagmorgen ist es ein Retten.
+
 ## 1.21.0
 
 - Gestalten auf der Seite „Ich“: zwölf Farben, Profilbild (Initialen oder ein Symbol), hell, dunkel oder wie das Gerät, normale oder kompakte Ansicht, und ob es beim Geschafft-Moment Konfetti gibt, nur den Ring oder gar nichts. Die Einstellung gehört dem Kind und gilt auf jedem Gerät, auch am Elterngerät im Kindmodus.

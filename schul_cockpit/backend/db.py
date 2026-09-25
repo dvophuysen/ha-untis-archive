@@ -1111,3 +1111,16 @@ CREATE TABLE IF NOT EXISTS profile_prefs (
  account_id INTEGER PRIMARY KEY, color TEXT, avatar TEXT, theme TEXT, density TEXT, joy TEXT, updated_at TEXT NOT NULL
 );
 """))
+
+# Übungsarbeiten zu einer Arbeit (D178): Punkte je Aufgabe, Herkunft und Format
+# stehen an der Antwort, damit Papier und Gespräch in dasselbe Raster zählen.
+_MIGRATIONS.append(("practice_001", """
+ALTER TABLE topic_answers ADD COLUMN points REAL;
+ALTER TABLE topic_answers ADD COLUMN max_points REAL;
+ALTER TABLE topic_answers ADD COLUMN source TEXT;
+ALTER TABLE topic_answers ADD COLUMN paper_format TEXT;
+ALTER TABLE topic_answers ADD COLUMN attempt_id INTEGER;
+ALTER TABLE mentor_exams ADD COLUMN exam_key TEXT;
+ALTER TABLE mentor_exams ADD COLUMN paper_format TEXT;
+CREATE INDEX IF NOT EXISTS idx_mentor_exams_key ON mentor_exams(account_id, exam_key);
+"""))

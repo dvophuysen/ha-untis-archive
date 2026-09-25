@@ -241,6 +241,15 @@ def evaluate(account_id: int, now: datetime | None = None) -> None:
         if prev.isoformat() in done:
             return
         nxt = _next_school_day(account_id, prev)
+        # Wochenende und Ferien (D178): Der letzte Schultag davor zählt voll, wenn
+        # bis zum Abend vor dem nächsten Schultag alles erledigt ist. Erst danach,
+        # am Morgen vor der ersten Stunde, ist es ein Retten.
+        if nxt and (nxt - prev).days > 1 and prev < today < nxt:
+            free = [prev + timedelta(days=i) for i in range((today - prev).days + 1)]
+            if _has_activity(c, account_id, *free) and day_state(account_id, prev, now)["clear"]:
+                c.execute("INSERT OR IGNORE INTO reward_days(account_id,school_day,kind,done_at,bonus) VALUES(?,?,?,?,0)",
+                          (account_id, prev.isoformat(), "full", now.isoformat()))
+            return
         first = _first_start(account_id, nxt) if nxt else None
         if not first or now >= first:
             return

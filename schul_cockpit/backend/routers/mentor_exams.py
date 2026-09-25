@@ -90,9 +90,9 @@ def listing(account_id:int,demo:bool=False,user:CurrentUser=Depends(get_current_
     access(user,account_id);parent=user.is_admin or user.role=='parent'
     if demo:access(user,account_id,parent=True)
     with closing(webapp_conn()) as c:
-        rows=[dict(r) for r in c.execute('SELECT id,title,subject,scope_json,minutes,status,created_at FROM mentor_exams WHERE account_id=? AND is_demo=? '+('' if parent else "AND status='published' ")+'ORDER BY id DESC LIMIT 50',(account_id,int(demo)))]
+        rows=[dict(r) for r in c.execute('SELECT id,title,subject,scope_json,minutes,status,created_at FROM mentor_exams WHERE account_id=? AND is_demo=? AND exam_key IS NULL '+('' if parent else "AND status='published' ")+'ORDER BY id DESC LIMIT 50',(account_id,int(demo)))]
         for r in rows:r['scope']=json.loads(r.pop('scope_json'))
-        attempts=[dict(r) for r in c.execute('SELECT a.id,a.exam_id,a.status,a.started_at,a.is_test FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id WHERE a.account_id=? AND e.is_demo=? AND '+('a.user_id=?' if demo or not parent else 'a.is_test=0')+' ORDER BY a.id DESC LIMIT 30', (account_id,int(demo),user.id) if demo or not parent else (account_id,0))]
+        attempts=[dict(r) for r in c.execute('SELECT a.id,a.exam_id,a.status,a.started_at,a.is_test FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id WHERE a.account_id=? AND e.is_demo=? AND e.exam_key IS NULL AND '+('a.user_id=?' if demo or not parent else 'a.is_test=0')+' ORDER BY a.id DESC LIMIT 30', (account_id,int(demo),user.id) if demo or not parent else (account_id,0))]
     return {'exams':rows,'attempts':attempts}
 
 
