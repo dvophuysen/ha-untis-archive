@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
 import threading
 from pathlib import Path
 
@@ -848,6 +849,30 @@ def webapp_conn() -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.pool_key = key
     return conn
+
+
+@contextmanager
+def tx(conn: sqlite3.Connection):
+    """Echte Transaktion auf einer Autocommit-Verbindung.
+
+    ``with conn:`` bündelt bei ``isolation_level=None`` nichts: ``commit()``
+    und ``rollback()`` sind dort wirkungslos, jede Anweisung steht sofort.
+    Wer mehrere Schreibzugriffe als Einheit braucht, nimmt diesen Block. Läuft
+    schon eine Transaktion, schließt er sich ihr an und überlässt ihr das Ende.
+    """
+    if conn.in_transaction:
+        yield conn
+        return
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        yield conn
+    except BaseException:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
+    else:
+        if conn.in_transaction:
+            conn.execute("COMMIT")
 
 
 def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
