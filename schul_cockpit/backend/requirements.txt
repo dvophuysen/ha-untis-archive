@@ -9,3 +9,4 @@ Pillow>=12,<13
 selenium>=4.27,<5
 pypdf>=6,<7
 icalendar>=6.0,<7
+schemdraw==0.23
