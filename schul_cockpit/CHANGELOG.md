@@ -1,3 +1,10 @@
+## 1.32.0
+
+- Übungsarbeiten zeigen jetzt je Aufgabe, was Punkte gebracht hat, wo und warum Punkte verloren gingen und was dort hätte stehen müssen, dazu die volle Lösung und den nächsten Schritt.
+- Oben steht eine Zusammenfassung: was schon klappt, wo die meisten Punkte liegen geblieben sind und was als Nächstes geübt wird.
+- „Mit dem Mentor üben“ bei jeder Aufgabe öffnet eine Übung genau zu diesem Fehler.
+- Eltern können jede Arbeit selbst prüfen, auf Wunsch mit einem KI-Vorschlag. Das Kind sieht nur die neueste Bewertung.
+
 ## 1.31.2
 
 - Fotos, Seiten und Dateien öffnen jetzt innerhalb der App, mit einem Schließen-Knopf oben. Vorher landete man in der App vom Home-Bildschirm auf einer Seite ohne Weg zurück.

@@ -409,3 +409,69 @@ def test_parents_regrade_a_held_paper_with_its_pages_in_one_step(paper):
         assert c.execute("SELECT COUNT(*) FROM topic_answers WHERE attempt_id=?", (a["id"],)).fetchone()[0] == 0
     mock(patch, [g_pass([4] * 6)])
     assert client.post(f"{BASE}/attempts/{a['id']}/grade", json={}).json()["status"] == "graded", "erneut abgeben geht"
+
+
+def test_feedback_parts_add_up_and_losses_are_summed():
+    """D207: Einzelteile passen zur Punktzahl; die Zusammenfassung bündelt Abzüge nach Grund."""
+    from backend.feedback import balance, for_child
+    e = balance({"points": 3.5, "earned": [{"text": "Ansatz", "points": 3}],
+                 "lost": [{"points": 1, "kind": "rechenweg", "why": "fehlt", "fix": "so"}]}, 4)
+    assert e["earned"][0]["points"] == 3.5 and e["lost"][0]["points"] == 0.5
+    view = for_child({"0": {"points": 0, "lost": [{"points": 4, "kind": "nicht_bearbeitet", "why": "leer", "fix": "x"}]},
+                      "1": {"points": 2, "lost": [{"points": 1, "kind": "rechenweg", "why": "a", "fix": "b"},
+                                                   {"points": 1, "kind": "nicht_bearbeitet", "why": "c", "fix": "d"}]},
+                      "_prior": [{"0": {}}], "check": {"passes": 2}})
+    assert "_prior" not in view
+    assert [(x["kind"], x["points"]) for x in view["losses"]] == [("nicht_bearbeitet", 5), ("rechenweg", 1)]
+
+
+def detail(points, most, why="Rechenweg fehlt."):
+    lost = [{"points": most - points, "kind": "rechenweg", "why": why, "fix": "So: 3x + 5 = 2x + 11."}] if points < most else []
+    return {"points": points, "rationale": "Begründung der Eltern.", "next_step": "Rechenwege aufschreiben.",
+            "earned": [{"text": "Ansatz", "points": points}] if points else [], "lost": lost, "model": "Volle Lösung."}
+
+
+def test_parents_check_any_paper_themselves_with_ai_support(paper):
+    """D207: Eltern prüfen jede ausgewertete Arbeit selbst, mit KI-Vorschlag auf
+    Wunsch; das ersetzt die Bewertung der App im Lernstand, das Kind sieht nur
+    die aktuelle Bewertung mit allen Begründungen."""
+    client, state, patch = paper
+    child(state)
+    mock(patch, [pack(6)])
+    a = client.post(BASE, json={"exam_key": KEY, "format": "einstieg"}).json()
+    client.post(f"{BASE}/attempts/{a['id']}/pages", files={"file": ("p.jpg", image(), "image/jpeg")})
+    rich = g_pass([4, 2, 0, 4, 4, 4])
+    rich["tasks"][1]["lost"] = [{"points": 2, "kind": "rechenfehler", "why": "7 statt 6.", "fix": "11 - 5 = 6."}]
+    rich["focus"] = ["Klammern auflösen üben"]
+    mock(patch, [rich])
+    r = client.post(f"{BASE}/attempts/{a['id']}/grade", json={}).json()
+    assert r["status"] == "graded" and r["feedback"]["1"]["lost"][0]["fix"] == "11 - 5 = 6."
+    assert r["feedback"]["overall"]["focus"] == ["Klammern auflösen üben"]
+    assert r["feedback"]["losses"][0]["kind"] == "rechenfehler"
+    body = {"tasks": {"0": detail(3, 4), "1": detail(0, 4), "2": detail(1, 4), **{str(k): detail(4, 4) for k in (3, 4, 5)}},
+            "overall": {"text": "Gesamt.", "strengths": ["Einfache Gleichungen"], "focus": ["Rechenwege"]}}
+    assert client.post(f"{BASE}/attempts/{a['id']}/manual", json=body).status_code == 403, "Kind prüft nicht selbst"
+    state.user = CurrentUser(1, "p", "Eltern", "parent", False, "ingress")
+    seen = []
+    mock(patch, [g_pass([3, 0, 1, 4, 4, 4])], seen)
+    s = client.post(f"{BASE}/attempts/{a['id']}/manual/suggest", json={"hint": "Aufgabe 1 steht unter Aufgabe 2."}).json()
+    assert len(seen) == 1 and seen[0][1]["eltern_hinweis"] == "Aufgabe 1 steht unter Aufgabe 2."
+    assert seen[0][1]["bisherige_bewertung"][0]["punkte"] == 4
+    assert s["tasks"]["0"]["points"] == 3 and "nr" not in s["tasks"]["0"]
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT feedback_json FROM mentor_exam_attempts WHERE id=?", (a["id"],)).fetchone()[0].count('"points": 4') >= 1, "Vorschlag speichert nichts"
+    bad = {**body, "tasks": {"0": detail(3, 4)}}
+    assert client.post(f"{BASE}/attempts/{a['id']}/manual", json=bad).status_code == 422
+    over = {**body, "tasks": {**body["tasks"], "0": {**detail(3, 4), "points": 4.5}}}
+    assert client.post(f"{BASE}/attempts/{a['id']}/manual", json=over).status_code == 422
+    done = client.post(f"{BASE}/attempts/{a['id']}/manual", json=body).json()
+    assert done["status"] == "graded" and done["feedback"]["check"]["manual"] and done["feedback"]["1"]["checked_by_parent"]
+    assert done["prior"]["1"]["points"] == 2, "Eltern sehen die frühere Bewertung"
+    with closing(db.webapp_conn()) as c:
+        pts = [x[0] for x in c.execute("SELECT points FROM topic_answers WHERE attempt_id=? ORDER BY id", (a["id"],))]
+    assert pts == [3, 0, 1, 4, 4, 4], "der Lernstand folgt der Elternprüfung"
+    assert rp.new_results(1)[0]["points"] == 16, "geändert: für das Kind wieder neu"
+    child(state)
+    kid = client.get(f"{BASE}/attempts/{a['id']}").json()
+    assert "prior" not in kid and "_prior" not in kid["feedback"]
+    assert kid["feedback"]["0"]["lost"][0]["fix"].startswith("So:") and kid["feedback"]["losses"] == [{"kind": "rechenweg", "label": "Rechenweg oder Begründung fehlt", "points": 8}]

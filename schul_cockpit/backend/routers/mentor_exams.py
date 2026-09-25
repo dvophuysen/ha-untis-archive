@@ -84,7 +84,7 @@ def attempt_view(r):
     result={k:v for k,v in r.items() if k not in ('snapshot','answers_json','feedback_json','user_id')}
     pack=json.loads(r['snapshot']);done=r['status'] not in ('active',)
     result['exam']={**pack,'tasks':[{k:v for k,v in t.items() if done or k!='solution'} for t in pack['tasks']]}
-    result['answers']=json.loads(r['answers_json']);result['feedback']=json.loads(r['feedback_json'] or '{}');result['elapsed_seconds']=clock(r)
+    result['answers']=json.loads(r['answers_json']);result['feedback']={k:v for k,v in json.loads(r['feedback_json'] or '{}').items() if not k.startswith('_')};result['elapsed_seconds']=clock(r)
     return result
 
 

@@ -474,3 +474,37 @@ def test_oral_exam_titles():
     from backend.exam_meta import is_oral_title
     assert is_oral_title("Sprechprüfung Englisch Jg.6 (Klausur)") and is_oral_title("Mündliche Prüfung") and is_oral_title("Präsentation Erdkunde")
     assert not is_oral_title("Englisch Klassenarbeit") and not is_oral_title(None)
+
+
+def test_a_task_of_a_graded_paper_is_reworked_with_the_mentor(exam_env):
+    """D207: „Mit dem Mentor üben“ öffnet das Thema der Aufgabe mit Aufgabe,
+    Antwort, jedem Abzug und der richtigen Lösung; keine Kurzprüfung."""
+    client, state, patch, nid, extraction = exam_env
+    tid = lernstand.add_manual(1, "cal:latein-2026-09-21", "Latein", "Vokabeln Lektion 1")["id"]
+    other = lernstand.add_manual(1, "cal:latein-2026-09-21", "Latein", "Ablativ")["id"]
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("UPDATE exam_topics SET stage='sitzt',sat_at='2026-09-06',next_check='2026-09-09' WHERE id=?", (tid,))
+        c.execute("INSERT INTO mentor_exams(id,account_id,title,subject,scope_json,tasks_json,minutes,created_at) VALUES(70,1,'Probe','Latein','{}','[]',30,'2026-09-10')")
+        snap = {"subject": "Latein", "tasks": [{"prompt": "Übersetze: servus", "solution": "der Sklave", "criteria": "2 P", "points": 2, "afb": 1, "topic_id": tid}]}
+        fb = {"0": {"points": 1, "uncertain": False, "rationale": "Artikel fehlt.", "next_step": "Mit Artikel lernen.", "transcription": "Sklave",
+                    "earned": [{"text": "Wort gewusst", "points": 1}], "lost": [{"points": 1, "kind": "wortschatz", "why": "Artikel fehlt.", "fix": "der Sklave"}], "model": "der Sklave"}}
+        c.execute("INSERT INTO mentor_exam_attempts(id,account_id,exam_id,user_id,status,snapshot,feedback_json,started_at) VALUES(80,1,70,2,'graded',?,?,'2026-09-10')",
+                  (json.dumps(snap), json.dumps(fb)))
+    seen = {}
+
+    async def complete(account, purpose, instruction, context, *args, **kw):
+        seen["instruction"], seen["context"] = instruction, context
+        return json.dumps(topic_reply("Nenne", None)), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    assert client.post(B + "/sessions", json={"topic_id": other, "paper_attempt_id": 80, "paper_task": 0}).status_code == 422, "anderes Thema"
+    assert client.post(B + "/sessions", json={"topic_id": tid, "paper_attempt_id": 80, "paper_task": 3}).status_code == 404
+    s = client.post(B + "/sessions", json={"topic_id": tid, "paper_attempt_id": 80, "paper_task": 0}).json()
+    assert not s["topic"]["check"], "Nacharbeiten ist keine Kurzprüfung"
+    assert "Aufgabe 1 aus deiner Übungsarbeit" in s["messages"][-1]["text"] and "1 von 2 Punkten" in s["messages"][-1]["text"]
+    send(client, s, text="Erklär mir, was ich falsch gemacht habe")
+    review = seen["context"]["source"]["review"]
+    assert review["verloren"][0]["fix"] == "der Sklave" and review["antwort_des_kindes"] == "Sklave"
+    assert "source.review" in seen["instruction"]
+    # Noch einmal: dieselbe Einheit, der Auftrag kommt dazu.
+    again = client.post(B + "/sessions", json={"topic_id": tid, "paper_attempt_id": 80, "paper_task": 0}).json()
+    assert again["id"] == s["id"]
