@@ -163,3 +163,28 @@ def test_incomplete_paper_is_not_stored_and_empty_submission_is_refused(paper):
     assert client.post(f"{BASE}/attempts/{a['id']}/grade", json={}).status_code == 422
     assert client.get(BASE, params={"exam_key": "unbekannt"}).json()["total"] == 0
     assert client.post(BASE, json={"exam_key": "unbekannt", "format": "kurz"}).status_code == 404
+
+
+def test_parent_adopts_an_old_exam_as_measurement(paper):
+    client, state, patch = paper
+    with closing(db.webapp_conn()) as c, c:
+        tasks = [{**TASK, "prompt": f"Alt {i}", "points": 5, "minutes": 5, "skill_title": f"Alt-Thema {i}"} for i in range(3)]
+        eid = c.execute("INSERT INTO mentor_exams(account_id,title,subject,scope_json,tasks_json,minutes,status,created_at) "
+                        "VALUES(1,'Alte Klausur','MATHEMATIK',?,?,45,'published','now')",
+                        (json.dumps({"topics": ["x"]}), json.dumps(tasks))).lastrowid
+        ids = [r[0] for r in c.execute("SELECT id FROM exam_topics ORDER BY position")]
+    body = {"exam_id": eid, "exam_key": KEY, "topic_ids": [ids[0], ids[0], ids[2]]}
+    assert client.post(f"{BASE}/adopt", json={**body, "topic_ids": ids[:2]}).status_code == 422
+    r = client.post(f"{BASE}/adopt", json=body)
+    assert r.status_code == 200, r.text
+    a = r.json()
+    assert a["exam"]["tasks"][2]["skill_title"] == "Graphen zeichnen" and a["format"] == "probe"
+    assert client.post(f"{BASE}/adopt", json=body).status_code == 404, "nur einmal"
+    assert client.get("/api/accounts/1/learning/mentor/exams").json()["exams"] == []
+    client.post(f"{BASE}/attempts/{a['id']}/pages", files={"file": ("p.jpg", image(), "image/jpeg")})
+    mock(patch, [{"tasks": [{"nr": i, "points": 5, "rationale": "Passt.", "next_step": "Weiter."} for i in range(1, 4)]}])
+    assert client.post(f"{BASE}/attempts/{a['id']}/grade", json={}).json()["status"] == "graded"
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT COUNT(*) FROM topic_answers WHERE source='paper'").fetchone()[0] == 3
+    child(state)
+    assert client.post(f"{BASE}/adopt", json=body).status_code == 403

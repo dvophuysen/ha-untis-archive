@@ -59,6 +59,14 @@ class PaperGrade(InputModel):
     overall: str = Field(default="", max_length=800)
 
 
+def _writable(c, account_id: int, aid: int, user) -> dict:
+    """Seiten hochladen und auswerten: das Kind bei seiner Arbeit, Eltern auch
+    bei einer Arbeit, die als Messung des Kindes zählt (übernommen, D178)."""
+    if user.is_admin or user.role == "parent":
+        return attempt_row(c, account_id, aid, user, read=True)
+    return attempt_row(c, account_id, aid, user)
+
+
 def _acting_child(user) -> bool:
     from ..rewards import acting_child
     return acting_child(user)
@@ -178,6 +186,41 @@ async def create_paper(account_id: int, body: PaperIn, user: CurrentUser = Depen
     return paper_view(account_id, aid, user)
 
 
+class AdoptIn(InputModel):
+    exam_id: int
+    exam_key: str = Field(min_length=1, max_length=300)
+    topic_ids: list[int] = Field(min_length=1, max_length=pr.MAX_TASKS)
+
+
+@router.post("/adopt")
+def adopt(account_id: int, body: AdoptIn, user: CurrentUser = Depends(get_current_user)):
+    """Eine vorhandene, freigegebene Übungsklausur als Übungsarbeit zu einer
+    Arbeit übernehmen (Eltern): Aufgaben unverändert, je Aufgabe ein Thema.
+    Zählt als Lernstandsmessung des Kindes."""
+    access(user, account_id, write=True, parent=True)
+    info = _exam_info(account_id, body.exam_key)
+    full = {t["id"]: t for t in pr.topics(account_id, body.exam_key)}
+    with closing(webapp_conn()) as c, c:
+        r = c.execute("SELECT * FROM mentor_exams WHERE account_id=? AND id=? AND is_demo=0 AND exam_key IS NULL",
+                      (account_id, body.exam_id)).fetchone()
+        if not r or r["status"] != "published":
+            raise HTTPException(404, "Übungsklausur nicht gefunden.")
+        tasks = json.loads(r["tasks_json"])
+        if len(body.topic_ids) != len(tasks) or any(t not in full for t in body.topic_ids):
+            raise HTTPException(422, "Bitte jeder Aufgabe ein Thema dieser Arbeit zuordnen.")
+        stored = [{**t, "topic_id": tid, "skill_title": full[tid]["title"], "original_skill": t.get("skill_title")}
+                  for t, tid in zip(tasks, body.topic_ids)]
+        scope = {**json.loads(r["scope_json"]), "exam_key": body.exam_key, "adopted_from": r["id"]}
+        c.execute("UPDATE mentor_exams SET exam_key=?,paper_format='probe',tasks_json=?,scope_json=? WHERE id=?",
+                  (body.exam_key, json.dumps(stored, ensure_ascii=False), json.dumps(scope, ensure_ascii=False), r["id"]))
+        snap = {"title": r["title"], "subject": info["subject"], "minutes": r["minutes"], "scope": scope, "tasks": stored,
+                "format": "probe", "exam_key": body.exam_key}
+        aid = c.execute(
+            "INSERT INTO mentor_exam_attempts(account_id,exam_id,user_id,snapshot,active_since,started_at,is_test) VALUES(?,?,?,?,?,?,0)",
+            (account_id, r["id"], user.id, json.dumps(snap, ensure_ascii=False), None, now_iso())).lastrowid
+    return paper_view(account_id, aid, user)
+
+
 def paper_view(account_id: int, aid: int, user) -> dict:
     with closing(webapp_conn()) as c:
         r = attempt_row(c, account_id, aid, user, read=True)
@@ -188,7 +231,7 @@ def paper_view(account_id: int, aid: int, user) -> dict:
     view["format"] = snap.get("format")
     view["label"] = pr.FORMATS.get(snap.get("format") or "", {}).get("label", "Übungsarbeit")
     view["pages"] = pages
-    view["read_only"] = r["user_id"] != user.id
+    view["read_only"] = r["user_id"] != user.id and not ((user.is_admin or user.role == "parent") and not r["is_test"])
     return view
 
 
@@ -230,7 +273,7 @@ async def upload_page(account_id: int, aid: int, file: UploadFile = File(...), u
         raise HTTPException(422, "Das Foto konnte nicht gelesen werden.") from None
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
-        r = attempt_row(c, account_id, aid, user)
+        r = _writable(c, account_id, aid, user)
         if r["status"] != "active":
             raise HTTPException(409, "Die Arbeit ist schon abgegeben.")
         count = c.execute("SELECT COUNT(*) FROM mentor_exam_photos WHERE attempt_id=? AND question_index=-1", (aid,)).fetchone()[0]
@@ -253,7 +296,7 @@ async def upload_page(account_id: int, aid: int, file: UploadFile = File(...), u
 def delete_page(account_id: int, aid: int, pid: int, user: CurrentUser = Depends(get_current_user)):
     access(user, account_id, write=True)
     with closing(webapp_conn()) as c, c:
-        r = attempt_row(c, account_id, aid, user)
+        r = _writable(c, account_id, aid, user)
         if r["status"] != "active":
             raise HTTPException(409, "Die Arbeit ist schon abgegeben.")
         c.execute("DELETE FROM mentor_exam_photos WHERE id=? AND attempt_id=? AND question_index=-1", (pid, aid))
@@ -271,7 +314,7 @@ async def grade_paper(account_id: int, aid: int, body: TypedAnswers, user: Curre
     access(user, account_id, write=True)
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
-        r = attempt_row(c, account_id, aid, user)
+        r = _writable(c, account_id, aid, user)
         if r["status"] == "graded":
             return paper_view(account_id, aid, user)
         if r["status"] == "grading":
@@ -317,7 +360,7 @@ async def grade_paper(account_id: int, aid: int, body: TypedAnswers, user: Curre
         except (ValueError, ValidationError):
             raise HTTPException(502, "Die Auswertung ist nicht verlässlich geworden. Bitte noch einmal auswerten.") from None
         with closing(webapp_conn()) as c, c:
-            r = attempt_row(c, account_id, aid, user)
+            r = _writable(c, account_id, aid, user)
             exposure = c.execute("SELECT created_at FROM mentor_exam_exposures WHERE account_id=? AND exam_id=? AND user_id=?",
                                  (account_id, r["exam_id"], user.id)).fetchone()
             helped = bool(exposure)
@@ -327,7 +370,8 @@ async def grade_paper(account_id: int, aid: int, body: TypedAnswers, user: Curre
                 feedback[str(i)] = {**x.model_dump(exclude={"nr"}), "solution_seen": helped}
             feedback["overall"] = {"text": g.overall} if g.overall else None
             feedback = {k: v for k, v in feedback.items() if v is not None}
-            counts = not r["is_test"] and _acting_child(user)
+            # Ob es zählt, steht seit dem Anlegen fest (is_test); auch ein Elternteil darf die Seiten hochladen.
+            counts = not r["is_test"]
             if counts:
                 from ..lernstand import record_answer, refresh
                 touched = set()

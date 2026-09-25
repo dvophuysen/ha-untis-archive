@@ -1,3 +1,7 @@
+## 1.22.1
+
+- Eine vorhandene Übungsklausur lässt sich einmalig als Übungsarbeit zu einer Arbeit übernehmen (Eltern). Die Aufgaben bleiben, jede bekommt ein Thema der Arbeit; die Auswertung der fotografierten Seiten zählt als Lernstandsmessung des Kindes, auch wenn ein Elternteil die Seiten hochlädt.
+
 ## 1.22.0
 
 - Übungsarbeiten zu jeder anstehenden Arbeit (unter „Arbeiten & Tests“, Arbeit aufklappen): Einstiegstest, Kurztest, Mix oder Probearbeit. Die App erstellt die Arbeit sofort, ohne Freigabe der Eltern. Drucken, von Hand lösen, alle Seiten fotografieren, abgeben: Die Auswertung vergibt Punkte je Aufgabe nach den Punktkriterien, mit Begründung und nächstem Schritt. Tippen am Gerät geht auch.
