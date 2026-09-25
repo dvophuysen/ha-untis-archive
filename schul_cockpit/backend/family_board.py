@@ -294,10 +294,99 @@ def level(acute_rows: list[dict], near: list[dict]) -> dict:
     return {"level": worst, "label": LEVELS[worst], "reasons": [r[1] for r in reasons]}
 
 
+# --- Stundenplan: heute und der nächste Schultag (D170) ----------------------
+# Immer der heutige und der nächste Schultag, gewechselt wird um Mitternacht:
+# Morgens sieht man, was heute ansteht, nachmittags im Rückblick, ob das Kind
+# früher Schluss hatte, und schon den nächsten Tag. Ohne Schule heute die
+# nächsten zwei Schultage. Ein Tag, an dem alles ausfällt, bleibt sichtbar.
+SCHEDULE_DAYS = 2
+SCHEDULE_LOOKAHEAD = 21
+
+
+def _subject(lesson: dict) -> str:
+    return subject_label(lesson.get("subject_name") or lesson.get("subject_short") or "")
+
+
+def _state(lesson: dict) -> str:
+    if lesson.get("is_cancelled"):
+        return "cancelled"
+    if lesson.get("is_subject_substituted") or lesson.get("is_teacher_substituted") or lesson.get("is_irregular"):
+        return "sub"
+    return "normal"
+
+
+def schedule_day(day: str, lessons: list[dict], today: date, now: datetime, exam_subjects: set[str]) -> dict:
+    """Ein Schultag als Leiste: Stunden mit Zustand, Beginn und Ende nach Plan
+    und tatsächlich, und in Worten, was abweicht."""
+    lessons = sorted(lessons, key=lambda l: (l.get("start_time") or 0, l.get("end_time") or 0))
+    held = [l for l in lessons if not l.get("is_cancelled")]
+    is_today = day == today.isoformat()
+    clock = now.hour * 100 + now.minute
+    periods = []
+    for l in lessons:
+        start, end = _clock(l.get("start_time")), _clock(l.get("end_time"))
+        exam = bool(l.get("exam")) or (not l.get("is_cancelled") and _subject(l).casefold() in exam_subjects)
+        periods.append({"short": (l.get("subject_short") or _subject(l)[:3] or "?")[:4], "subject": _subject(l),
+                        "start": l.get("start_hhmm"), "end": l.get("end_hhmm"), "state": _state(l), "exam": exam,
+                        "room_changed": bool(l.get("is_room_substituted")), "room": l.get("room"),
+                        "absent": bool(l.get("was_absent")), "extra": bool(l.get("is_late_addition")),
+                        "now": bool(is_today and start is not None and end is not None and start <= clock < end),
+                        "past": bool(is_today and end is not None and end <= clock)})
+    planned_start = min((_clock(l.get("start_time")) for l in lessons if _clock(l.get("start_time")) is not None), default=None)
+    planned_end = max((_clock(l.get("end_time")) for l in lessons if _clock(l.get("end_time")) is not None), default=None)
+    start = min((_clock(l.get("start_time")) for l in held if _clock(l.get("start_time")) is not None), default=None)
+    end = max((_clock(l.get("end_time")) for l in held if _clock(l.get("end_time")) is not None), default=None)
+    fmt = lambda v: f"{v // 100:02d}:{v % 100:02d}" if v is not None else None
+    notes, groups = [], {}
+    for p in periods:
+        if p["state"] == "cancelled":
+            groups.setdefault(p["subject"], []).append(p)
+    for subject, items in groups.items():
+        notes.append(f"{subject} {items[0]['start']}–{items[-1]['end']} fällt aus" if len(items) > 1
+                     else f"{subject} {items[0]['start']} fällt aus")
+    notes += [f"{p['subject']} {p['start']} Vertretung" for p in periods if p["state"] == "sub"]
+    notes += [f"{p['subject']} in Raum {p['room']}" for p in periods if p["room_changed"] and p["state"] != "cancelled" and p["room"]]
+    notes += [f"{p['subject']} {p['start']} zusätzlich" for p in periods if p["extra"] and p["state"] != "cancelled"]
+    notes += [f"{p['subject']}: Arbeit" for p in periods if p["exam"]][:1]
+    all_out = bool(lessons) and not held
+    early = bool(end and planned_end and end < planned_end)
+    late = bool(start and planned_start and start > planned_start)
+    headline = ("fällt ganz aus" if all_out else
+                " · ".join(filter(None, [f"später Beginn {fmt(start)}" if late else "",
+                                         f"früher Schluss {fmt(end)} statt {fmt(planned_end)}" if early else ""])))
+    return {"date": day, "label": "Heute" if is_today else day_label(day), "is_today": is_today,
+            "start": fmt(start), "end": fmt(end), "planned_start": fmt(planned_start), "planned_end": fmt(planned_end),
+            "early_end": early, "late_start": late, "all_cancelled": all_out, "headline": headline,
+            "deviates": bool(headline or notes), "notes": notes[:4], "periods": periods}
+
+
+def schedule(account_id: int, today: date, now: datetime, upcoming: list[dict] | None = None) -> list[dict]:
+    """Der heutige und der nächste Schultag, ohne Schule heute die nächsten zwei."""
+    hidden = hidden_keys(account_id)
+    exams: dict[str, set[str]] = {}
+    for e in upcoming or []:
+        exams.setdefault(e.get("date") or "", set()).add(subject_label(e.get("subject_name") or "").casefold())
+    days = []
+    with closing(history_conn()) as conn:
+        for offset in range(SCHEDULE_LOOKAHEAD):
+            day = (today + timedelta(days=offset)).isoformat()
+            lessons = [l for l in lessons_for_date(conn, account_id, day) if not lesson_is_hidden(l, hidden)]
+            if lessons:
+                days.append(schedule_day(day, lessons, today, now, exams.get(day, set())))
+            if len(days) >= SCHEDULE_DAYS:
+                break
+    return days
+
+
 def board(account_id: int, tasks: list[dict], upcoming: list[dict], entries: list[dict],
           support: list[dict], today: date, now: datetime, evening_from: str) -> dict:
     evening = now.strftime("%H:%M") >= evening_from
     rows, ok = acute(account_id, tasks, today, now, evening)
     near, later = exam_rows(account_id, upcoming, entries, today)
-    return {"status": level(rows, near), "acute": rows, "ok": ok, "evening": evening,
+    try:
+        days = schedule(account_id, today, now, upcoming)
+    except Exception:
+        _LOG.warning("Stundenplan für Konto %s nicht lesbar", account_id, exc_info=True)
+        days = []
+    return {"status": level(rows, near), "acute": rows, "ok": ok, "evening": evening, "schedule": days,
             "exams": near, "later": later, "watch": watch(account_id, support, today)}

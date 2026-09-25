@@ -206,3 +206,34 @@ def test_the_today_page_skips_a_day_where_everything_is_cancelled(env, monkeypat
     monkeypatch.setattr(today_routes, "hidden_keys", lambda a: set())
     client.app.include_router(today_routes.router, prefix="/api")
     assert client.get("/api/accounts/1/today").json()["next"]["date"] == second
+
+
+def test_the_schedule_shows_today_and_the_next_school_day(env):
+    """Heute bleibt bis Mitternacht stehen, dazu der nächste Schultag; am
+    Wochenende die nächsten zwei (D170)."""
+    lessons([(11, "2026-09-25", 750, 835, None), (12, "2026-09-25", 945, 1030, None),
+             (13, "2026-09-25", 1135, 1220, "cancelled"), (14, "2026-09-25", 1225, 1310, "cancelled"),
+             (15, "2026-09-28", 750, 835, None), (16, "2026-09-29", 750, 835, "cancelled")])
+    friday = date(2026, 9, 25)
+    days = fb.schedule(1, friday, datetime(2026, 9, 25, 14, 0))
+    assert [d["label"] for d in days] == ["Heute", "Mo 28.09."]
+    today = days[0]
+    assert (today["start"], today["end"], today["planned_end"]) == ("07:50", "10:30", "13:10")
+    assert today["early_end"] and today["headline"] == "früher Schluss 10:30 statt 13:10"
+    assert today["notes"] == ["Mathematik 11:35–13:10 fällt aus"]
+    assert all(p["past"] for p in today["periods"]) and [p["state"] for p in today["periods"]][-1] == "cancelled"
+    assert not days[1]["deviates"]
+    # Vormittags läuft die zweite Stunde.
+    running = fb.schedule(1, friday, datetime(2026, 9, 25, 10, 0))[0]
+    assert [p["now"] for p in running["periods"]] == [False, True, False, False]
+    # Samstag: Montag und Dienstag; der Dienstag fällt ganz aus und bleibt sichtbar.
+    weekend = fb.schedule(1, date(2026, 9, 26), datetime(2026, 9, 26, 9, 0))
+    assert [d["date"] for d in weekend] == ["2026-09-28", "2026-09-29"]
+    assert weekend[1]["all_cancelled"] and weekend[1]["headline"] == "fällt ganz aus"
+
+
+def test_an_exam_on_the_calendar_marks_its_lesson(env):
+    lessons([(21, "2026-09-28", 750, 835, None)])
+    day = fb.schedule(1, date(2026, 9, 28), datetime(2026, 9, 28, 7, 0),
+                      [{"date": "2026-09-28", "subject_name": "MATHEMATIK"}])[0]
+    assert day["periods"][0]["exam"] and "Mathematik: Arbeit" in day["notes"]

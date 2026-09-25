@@ -4,7 +4,13 @@ const {chromium}=require('playwright-core');
 const fs=require('fs'),http=require('http'),path=require('path'),assert=require('assert/strict');
 const go=(page,section=null,args=[])=>({page,args,section});
 const stages=(sitzt,wackelt,angefangen,neu)=>({sitzt,wackelt,angefangen,neu});
-const boardA={status:{level:'warn',label:'Nachsteuern',reasons:['Mathematik: noch nichts geübt']},evening:false,
+const per=(short,start,end,extra={})=>({short,subject:short,start,end,state:'normal',exam:false,room_changed:false,absent:false,extra:false,now:false,past:false,...extra});
+const scheduleA=[{date:'2026-09-24',label:'Heute',is_today:true,start:'07:50',end:'11:15',planned_start:'07:50',planned_end:'13:10',early_end:true,late_start:false,all_cancelled:false,
+  headline:'früher Schluss 11:15 statt 13:10',deviates:true,notes:['Englisch 11:35–13:10 fällt aus'],
+  periods:[per('SP','07:50','08:35',{past:true}),per('SP','08:40','09:25',{past:true}),per('DE','09:45','10:30',{now:true}),per('SN','10:30','11:15'),per('EN','11:35','12:20',{state:'cancelled'}),per('EN','12:25','13:10',{state:'cancelled'})]},
+ {date:'2026-09-25',label:'Fr 25.09.',is_today:false,start:'07:50',end:'13:10',planned_start:'07:50',planned_end:'13:10',early_end:false,late_start:false,all_cancelled:false,headline:'',deviates:false,notes:[],
+  periods:[per('MU','07:50','08:35'),per('MU','08:40','09:25'),per('MA','09:45','10:30',{exam:true}),per('MA','10:30','11:15',{exam:true})]}];
+const boardA={schedule:scheduleA,status:{level:'warn',label:'Nachsteuern',reasons:['Mathematik: noch nichts geübt']},evening:false,
   ok:['Aufgaben bis morgen erledigt','Tasche für Fr gepackt','6/6 Stunden bewertet'],acute:[],
   exams:[{exam_key:'cal:m',date:'2026-09-28',day:'Mo 28.09.',days_until:4,subject_name:'MATHEMATIK',kind:'Arbeit',topics:4,practiced:3,stages:stages(1,1,1,1),missing:0,material_ok:true,go:go('klausuren','arbeit-cal:m')},
          {exam_key:'cal:mu',date:'2026-10-05',day:'Mo 05.10.',days_until:11,subject_name:'MUSIK',kind:'Lernkontrolle',topics:1,practiced:0,stages:stages(0,0,0,1),missing:0,material_ok:true,go:go('klausuren','arbeit-cal:mu')}],
@@ -39,6 +45,11 @@ assert.equal(await a.getAttribute('data-status'),'warn');assert.equal(await b.ge
 await a.getByText('Nachsteuern',{exact:true}).waitFor();await b.getByText('Eingreifen',{exact:true}).waitFor();
 await a.getByText('✓ Aufgaben bis morgen erledigt · Tasche für Fr gepackt · 6/6 Stunden bewertet').waitFor();
 assert.equal(await b.locator('.okline').count(),0);
+// Stundenplan: heute und der nächste Schultag, Ausfall durchgestrichen, früher Schluss gelb (D170).
+assert.deepEqual(await a.locator('.plan .lbl > span:first-child').allInnerTexts(),['Heute','Fr 25.09.']);
+await a.getByText('früher Schluss 11:15 statt 13:10').waitFor();await a.getByText('Englisch 11:35–13:10 fällt aus').waitFor();
+assert.equal(await a.locator('.ps i.x').count(),2);assert.equal(await a.locator('.ps i.now').count(),1);assert.equal(await a.locator('.ps i.gap').count(),4);assert.equal(await a.locator('.ps i.empty').count(),2);
+assert.equal(await a.locator('.strip .t.devt').first().innerText(),'11:15');assert.equal(await b.locator('.plan').count(),0);
 // Arbeiten chronologisch, Balken nur mit bekannten Themen, Später in einer Zeile.
 assert.deepEqual(await a.locator('.exam .l1 b').allInnerTexts(),['Mathematik-Arbeit Mo 28.09.','Musik-Lernkontrolle Mo 05.10.']);
 assert.equal(await a.locator('.exam').first().locator('.stack i').count(),4);
@@ -51,6 +62,8 @@ if(process.env.SCHOOL_SCREENSHOT_DIR){await page.setViewportSize({width:390,heig
 assert.deepEqual(errors,[]);
 // Schnellzugriffe: Kind wechseln, Seite und Abschnitt im Hash. Die Zielseiten
 // haben hier keine Daten; geprüft wird nur der Sprung.
+await a.locator('.plan').click();assert.equal(await page.evaluate(()=>location.hash),'#/week');
+await page.goto('http://127.0.0.1:4180/#/overview');await b.waitFor();
 await b.getByText('1 Aufgabe überfällig').click();
 assert.equal(await page.evaluate(()=>location.hash),'#/today?s=aufgaben');
 assert.equal(await page.evaluate(()=>localStorage.getItem('activeAccountId')||''),'2');

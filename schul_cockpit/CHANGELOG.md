@@ -1,3 +1,9 @@
+## 1.16.0
+
+- Startseite: Jede Kinderkarte zeigt wieder den Stundenplan, kompakt als zwei Leisten: der heutige und der nächste Schultag. Gewechselt wird um Mitternacht, nachmittags sieht man also noch, ob das Kind heute früher Schluss hatte. Am Wochenende und in den Ferien stehen die nächsten zwei Schultage da.
+- Jede Stunde ist ein Kästchen mit Fachkürzel: Ausfall durchgestrichen, Vertretung lila, Arbeit pink umrandet, die laufende Stunde markiert, vergangene blass. Beginn und tatsächliches Ende stehen daneben, gelb bei früherem Schluss oder späterem Beginn, dazu in Worten, was ausfällt oder sich ändert. Ein Tag, an dem alles ausfällt, bleibt sichtbar. Beide Tage stehen auf gemeinsamen Zeitfenstern untereinander.
+- Ein Tipp auf die Leisten öffnet die Woche des Kindes.
+
 ## 1.15.0
 
 - Bilder in bestmöglicher Qualität: Die App behält ab jetzt das Originalfoto (bis 6000 Pixel, ohne Metadaten wie den Aufnahmeort) neben der verkleinerten Anzeige-Kopie. Die Auswertung bekommt das Original.

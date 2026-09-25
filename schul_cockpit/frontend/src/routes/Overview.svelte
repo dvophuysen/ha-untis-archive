@@ -44,6 +44,27 @@
     window.location.hash = jumpHash(target);
   }
 
+  // Pausen als Lücke in der Leiste: ab zehn Minuten zwischen zwei Stunden.
+  const minutes = (hhmm) => (hhmm ? Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5)) : null);
+  // Beide Tage auf gemeinsamen Zeitfenstern, damit gleiche Stunden
+  // untereinander stehen; ein freies Fenster bleibt leer.
+  function slotsOf(days) {
+    const byStart = new Map();
+    for (const d of days) for (const p of d.periods) if (p.start && !byStart.has(p.start)) byStart.set(p.start, p.end);
+    return [...byStart.entries()].sort((a, b) => minutes(a[0]) - minutes(b[0])).map(([start, end]) => ({ start, end }));
+  }
+  function withGaps(day, slots) {
+    const out = [];
+    slots.forEach((slot, i) => {
+      const prev = slots[i - 1];
+      if (prev && minutes(slot.start) - minutes(prev.end) >= 10) out.push({ gap: true, key: `g${i}` });
+      const p = day.periods.find((x) => x.start === slot.start);
+      out.push(p ? { ...p, key: `p${i}` } : { empty: true, key: `e${i}` });
+    });
+    return out;
+  }
+  const periodTitle = (p) => `${p.start}–${p.end} ${p.subject}${p.state === 'cancelled' ? ', fällt aus' : p.state === 'sub' ? ', Vertretung' : ''}${p.exam ? ', Arbeit' : ''}${p.absent ? ', gefehlt' : ''}`;
+
   const STAGES = [['sitzt', 'sitzt'], ['wackelt', 'wackelt'], ['angefangen', 'angefangen'], ['neu', 'noch nicht geübt']];
   const inDays = (n) => (n <= 0 ? 'heute' : n === 1 ? 'morgen' : `in ${n} Tagen`);
   const examTitle = (x) => `${subjectStyle(x.subject_name).name}-${x.kind}`;
@@ -70,6 +91,32 @@
         </header>
         {#if b.status.level !== 'good' && b.status.reasons.length}
           <p class="why">{b.status.reasons.slice(0, 3).join(' · ')}</p>
+        {/if}
+
+        <!-- Heute und der nächste Schultag, gewechselt um Mitternacht (D170). -->
+        {#if b.schedule?.length}
+          {@const slots = slotsOf(b.schedule)}
+          <button class="plan" onclick={() => open(kid, { page: 'week' })} aria-label={`Stundenplan von ${kid.name} ansehen`}>
+            {#each b.schedule as d (d.date)}
+              <span class="lbl"><span>{d.label}</span>
+                {#if d.headline}<span class="dev">{d.headline}</span>{:else if d.notes.length}<span class="dev">{d.notes[0]}</span>{:else}<span>wie geplant</span>{/if}</span>
+              <span class="strip">
+                <span class="t" class:devt={d.late_start}>{d.start ?? d.planned_start}</span>
+                <span class="ps">
+                  {#each withGaps(d, slots) as p (p.key)}
+                    {#if p.gap}<i class="gap"></i>
+                    {:else if p.empty}<i class="empty"></i>
+                    {:else}<i class:x={p.state === 'cancelled'} class:sub={p.state === 'sub'} class:arbeit={p.exam}
+                              class:now={p.now} class:past={p.past} class:absent={p.absent} title={periodTitle(p)}>{p.short}</i>{/if}
+                  {/each}
+                </span>
+                <span class="t" class:devt={d.early_end || d.all_cancelled}>{d.all_cancelled ? 'frei' : d.end}</span>
+              </span>
+              {#if (d.headline && d.notes.length) || d.notes.length > 1}
+                <span class="notes">{(d.headline ? d.notes : d.notes.slice(1)).join(' · ')}</span>
+              {/if}
+            {/each}
+          </button>
         {/if}
 
         {#if b.ok.length}
@@ -148,6 +195,24 @@
   }
   .kid-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 0.4rem; }
   .kid-head h2 { margin: 0; font-size: 1.1rem; }
+  .plan { display: block; width: 100%; text-align: left; background: transparent; border: 0; padding: 0 0 6px; color: var(--fg); min-height: 0; }
+  .plan .lbl { display: flex; justify-content: space-between; gap: 8px; font-size: 0.74rem; font-weight: 650; color: var(--fg-muted); margin: 4px 2px 2px; }
+  .plan .lbl .dev, .plan .notes { color: var(--warn-fg); }
+  .plan .notes { display: block; font-size: 0.74rem; margin: -2px 2px 4px; overflow-wrap: anywhere; }
+  .strip { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; }
+  .strip .t { font-size: 0.74rem; color: var(--fg-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .strip .t.devt { color: var(--warn-fg); font-weight: 700; }
+  .ps { display: flex; gap: 3px; flex: 1; min-width: 0; }
+  .ps i { flex: 1; min-width: 0; overflow: hidden; font-style: normal; text-align: center; font-size: 0.72rem; font-weight: 650;
+    padding: 5px 0; border-radius: 6px; background: color-mix(in srgb, var(--fg) 8%, var(--bg-card)); }
+  .ps i.gap { flex: 0.35; background: transparent; }
+  .ps i.empty { background: transparent; }
+  .ps i.x { background: transparent; border: 1px dashed var(--cancelled); color: var(--cancelled); text-decoration: line-through; }
+  .ps i.sub { outline: 2px solid var(--substitution); outline-offset: -2px; color: var(--substitution-fg); }
+  .ps i.arbeit { outline: 2px solid var(--exam); outline-offset: -2px; }
+  .ps i.now { box-shadow: 0 0 0 2px var(--accent) inset; }
+  .ps i.past { opacity: 0.5; }
+  .ps i.absent { text-decoration: underline dotted; }
   .why { margin: -0.2rem 0 0.5rem; font-size: 0.8rem; color: var(--fg-muted); overflow-wrap: anywhere; }
   .stale { margin: 0 0 0.6rem; font-size: 0.82rem; color: var(--warn-fg); }
   .pill { font-size: 0.8rem; font-weight: 650; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
