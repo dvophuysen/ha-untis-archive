@@ -4,9 +4,12 @@
 // warten auf den Schulkalender; gesucht wird deshalb bis zu 15 Sekunden, aber
 // nicht mehr, sobald man selbst scrollt oder tippt.
 
-export function jumpHash({ page, args = [], section = null }) {
+export function jumpHash({ page, args = [], section = null, query = null }) {
   const path = [page, ...args.map((a) => encodeURIComponent(a))].join('/');
-  return `#/${path}${section ? `?s=${encodeURIComponent(section)}` : ''}`;
+  const params = new URLSearchParams(query ?? {});
+  if (section) params.set('s', section);
+  const q = params.toString();
+  return `#/${path}${q ? `?${q}` : ''}`;
 }
 
 export function sectionParam(hash = window.location.hash) {
@@ -27,7 +30,9 @@ export function jumpTo(section, { tries = 150, wait = 100 } = {}) {
   INTERRUPTS.forEach((type) => window.addEventListener(type, stop, { capture: true, passive: true }));
   const step = () => {
     if (done) return;
-    const el = document.querySelector(`[data-section="${CSS.escape(section)}"]`);
+    // Mehrere Abschnitte mit Komma: der erste, den es gibt (vor der Schule
+    // heißt „Lernen“ anders als nachmittags).
+    const el = section.split(',').map((s) => document.querySelector(`[data-section="${CSS.escape(s.trim())}"]`)).find(Boolean);
     if (!el) {
       if (--left > 0) timer = setTimeout(step, wait);
       else stop();

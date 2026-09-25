@@ -114,7 +114,8 @@ def test_retakes_and_feedback_lead_to_the_right_section(env, monkeypatch):
           retakes=[{"title": "Zerlegen", "reason": "unscharf"}])
     rows, _ = fb.acute(1, [], TODAY, MORNING, evening=False)
     by = {r["key"]: r for r in rows}
-    assert by["retake"]["go"]["page"] == "materialien" and by["retake"]["go"]["section"] == "fotos"
+    # Neu fotografieren ist Elternsache und führt nach „Erledigen“, nicht ins Mitlesen (D183).
+    assert by["retake"]["go"] == {"page": "erledigen", "args": [], "section": None, "parent": True}
     # Ältere Stunden ohne Rückmeldung stehen in der Woche, nicht auf „Heute“.
     assert by["feedback"]["tone"] == "warn" and by["feedback"]["go"]["page"] == "week"
 

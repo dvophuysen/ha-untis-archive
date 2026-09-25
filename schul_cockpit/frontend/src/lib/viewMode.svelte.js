@@ -49,3 +49,10 @@ export function expireViewMode() {
 export function viewHeader() {
   return view.mode === 'parent' ? null : view.mode;
 }
+
+/** Ob die Oberfläche Eltern-Werkzeuge zeigt (D183): nur ein Elternteil in der
+ *  eigenen Ansicht oder im Testmodus, nie beim Mitlesen und nie, wenn das Kind
+ *  das Gerät benutzt. Der Server entscheidet genauso (view_mode.acts_as_parent). */
+export function actsAsParent(me) {
+  return !!(me && (me.is_admin || me.role === 'parent')) && view.mode !== 'child' && view.mode !== 'mirror';
+}

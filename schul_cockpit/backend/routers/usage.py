@@ -18,6 +18,7 @@ from .. import app_notify, parent_report, usage_report
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..db import history_conn, webapp_conn
 from ..learning import today_local
+from ..view_mode import acts_as_parent
 from .learning import access
 
 LOG = logging.getLogger("schul_cockpit.usage")
@@ -53,7 +54,8 @@ def ping(body: PingIn, user: CurrentUser = Depends(get_current_user)):
     if user.role == "pending":
         return Response(status_code=204)
     assert_account_access(user, body.account_id)
-    actor = "parent" if (user.is_admin or user.role == "parent") else "child"
+    # Kind am Elterngerät zählt als Nutzung durch das Kind (D175, D183).
+    actor = "parent" if acts_as_parent(user) else "child"
     usage_report.record_ping(body.account_id, actor, body.view, body.seconds, body.open)
     today = today_local().isoformat()
     if _PURGED.get("day") != today:
@@ -95,7 +97,9 @@ class ParentReportIn(BaseModel):
 
 
 def _parent(user: CurrentUser) -> None:
-    if not (user.is_admin or user.role == "parent"):
+    # Mitlesen und Kindmodus gelten als Kind (D183).
+    from ..view_mode import acts_as_parent
+    if not acts_as_parent(user):
         raise HTTPException(403, "Nur für Eltern")
 
 

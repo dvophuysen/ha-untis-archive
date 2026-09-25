@@ -234,7 +234,9 @@ def topic_view(c,s):
 
 
 def is_parent(user):
-    return bool(user.is_admin or user.role=='parent')
+    # Mitlesen und Kindmodus gelten als Kind (D183), auch für die Budgetdaten.
+    from ..view_mode import acts_as_parent
+    return acts_as_parent(user)
 
 
 def author_of(user,session):
@@ -396,6 +398,20 @@ async def dashboard(account_id:int,demo:bool=False,user:CurrentUser=Depends(get_
                 subjects=catalog.choices(s['lessons'],s['tasks']),errors=s['errors'],read_at=s['read_at'],
                 can_manage=parent,can_write=planning['can_write'],today=planning['today'],budget=ai.status() if parent else None,speech=bool(ai.transcribe_url()),
                 exams=planning.get('exams',[]),warnings=planning.get('warnings',[]))
+
+
+@router.get('/admin')
+def admin(account_id:int,user:CurrentUser=Depends(get_current_user)):
+    """Die Einstellungen der Eltern ohne den Lernverlauf: ob Mentor und
+    Hintergrund an sind, der Lernrahmen des Schuljahrs und der KI-Rahmen der
+    Familie. Für die Seite „Einstellen“ (D183), die sonst den ganzen Lernraum
+    laden müsste."""
+    access(user,account_id,parent=True)
+    with closing(webapp_conn()) as c:
+        p=c.execute('SELECT school_year,grade,ai_enabled FROM learning_profiles WHERE account_id=? AND active=1',(account_id,)).fetchone()
+        s=c.execute('SELECT enabled,background_enabled FROM mentor_settings WHERE account_id=?',(account_id,)).fetchone()
+    return dict(enabled=bool(not s or s['enabled']),background=bool(s and s['background_enabled']),
+                profile=dict(p) if p else None,budget=ai.status())
 
 
 @router.put('/settings')

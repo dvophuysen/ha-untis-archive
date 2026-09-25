@@ -4,15 +4,17 @@
   import ActionLabel from '../lib/ActionLabel.svelte';
   import { formatShortDate } from '../lib/format.js';
   import { profile, saveProfile, COLORS, AVATARS, initials } from '../lib/profile.svelte.js';
+  import ReminderSettings from '../lib/ReminderSettings.svelte';
 
-  let { accountId, name = '', canManage = false, canStyle = true } = $props();
+  // Die Bonuszeit stellen Eltern unter „Einstellen“ ein (D183); hier steht sie nur.
+  let { accountId, name = '', canStyle = true } = $props();
   let styleMsg = $state('');
   async function setStyle(change) {
     styleMsg = '';
     try { await saveProfile(accountId, change); } catch (e) { styleMsg = e instanceof ApiError ? e.message : 'Nicht gespeichert.'; }
   }
   const prefs = $derived(profile.accountId === accountId ? profile.prefs : null);
-  let data = $state(null), error = $state(''), bonus = $state(''), saving = $state(false), saved = $state('');
+  let data = $state(null), error = $state('');
   let request = 0;
   async function load() {
     const id = accountId, ticket = ++request;
@@ -20,7 +22,7 @@
     error = '';
     try {
       const r = await api.get(`/api/accounts/${id}/rewards`);
-      if (ticket === request) { data = r; bonus = r.bonus_until; }
+      if (ticket === request) data = r;
     } catch (e) { if (ticket === request) error = e.message || 'Nicht erreichbar.'; }
   }
   $effect(() => { void accountId; data = null; load(); });
@@ -32,14 +34,6 @@
   const nextTotal = $derived(data ? TOTAL_STEPS.find((x) => x > data.total) : null);
   const progress = (b) => (b.next ? Math.round(((b.value - b.prev) / (b.next - b.prev)) * 100) : 100);
 
-  async function saveBonus() {
-    saving = true; saved = '';
-    try {
-      const r = await api.put(`/api/accounts/${accountId}/rewards/settings`, { bonus_until: bonus });
-      bonus = r.bonus_until; saved = 'Gespeichert.';
-    } catch (e) { saved = e instanceof ApiError ? e.message : 'Nicht gespeichert.'; }
-    finally { saving = false; }
-  }
 </script>
 
 <header class="me-head"><h2>Ich</h2>{#if name}<p>{name}</p>{/if}</header>
@@ -97,13 +91,6 @@
   </div>
   <p class="hint">Medaille am Schuljahresende: Bronze ab {data.medals.at(-1)?.limits[0]} %, Silber ab {data.medals.at(-1)?.limits[1]} %, Gold ab {data.medals.at(-1)?.limits[2]} % geschaffter Schultage.</p>
 
-  {#if canManage}
-    <section class="card bonus">
-      <label for="bonus-time">Frühstarter bis (Uhrzeit, gilt für dieses Kind)</label>
-      <div class="row"><input id="bonus-time" type="time" bind:value={bonus} /><button disabled={saving} onclick={saveBonus}>Speichern</button></div>
-      {#if saved}<small role="status">{saved}</small>{/if}
-    </section>
-  {/if}
 {/if}
 
 {#if canStyle && prefs}
@@ -122,6 +109,10 @@
     {#if styleMsg}<p class="error-box" role="alert">{styleMsg}</p>{/if}
   </section>
 {/if}
+
+<!-- Was das Kind zu seinen Einstellungen wissen muss; ändern können es die Eltern (D183). -->
+<h3>Einstellungen</h3>
+<div class="settings" data-section="einstellungen">{#if accountId}{#key accountId}<ReminderSettings {accountId} />{/key}{/if}</div>
 
 <h3>Mehr</h3>
 <div class="more">
@@ -170,7 +161,6 @@
   .disc{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:800;color:#fff;background:var(--bg-card);border:2px dashed var(--border)}
   .medal-card.bronze .disc{background:#b86b3b;border:0}.medal-card.silber .disc{background:#9aa6b2;border:0}.medal-card.gold .disc{background:#d4a017;border:0}
   .medal-card.running .disc{border-color:var(--accent);color:var(--accent)}
-  .bonus label{font-size:var(--fs-sm)}.bonus .row{margin-top:4px}.bonus input{max-width:10rem}
   .style{display:grid;gap:var(--sp-2)}
   .lbl{font-size:var(--fs-xs);color:var(--fg-muted);font-weight:700;margin-top:var(--sp-1)}
   .swatches{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--sp-2)}

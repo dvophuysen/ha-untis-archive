@@ -198,7 +198,7 @@
 
   <!-- 2. Braucht Aufmerksamkeit -->
   {#if needsAttention.length > 0}
-    <div class="section-title">Bitte zuordnen ({needsAttention.length})</div>
+    <div class="section-title" data-section="zuordnen">Bitte zuordnen ({needsAttention.length})</div>
     {#each needsAttention as e (e.source_key)}
       <div class="card compact">
         <div class="row between">

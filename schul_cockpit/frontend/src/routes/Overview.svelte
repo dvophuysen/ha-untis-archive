@@ -5,12 +5,13 @@
   // Startseite der Eltern (D166): je Kind eine Karte. Oben der Status, dann was
   // jetzt offen ist, die Arbeiten chronologisch mit dem Lernstand ihrer Themen,
   // zuletzt was sich über Wochen abzeichnet. Jeder Baustein springt zum Kind in
-  // den passenden Abschnitt. Die Seite „Heute“ des Kindes wird nicht wiederholt.
+  // den passenden Abschnitt, lesend (D175). Was ein Elternteil selbst tun muss,
+  // führt stattdessen nach „Erledigen“ (D183). Die Seite „Heute“ des Kindes
+  // wird nicht wiederholt.
   import ActionLabel from '../lib/ActionLabel.svelte';
   import { subjectStyle } from '../lib/subjectStyle.js';
   import { formatShortDate } from '../lib/format.js';
   import { untrack } from 'svelte';
-  import ParentReportSettings from '../lib/ParentReportSettings.svelte';
   import { api } from '../lib/api.js';
   import { setActiveAccount } from '../lib/store.svelte.js';
   import { setViewMode } from '../lib/viewMode.svelte.js';
@@ -46,8 +47,10 @@
   function open(kid, target) {
     if (!target) return;
     setActiveAccount(kid.account_id);
-    // Von der Familienkarte aus liest man mit (D175); schreiben geht über „Ich“.
-    setViewMode('mirror');
+    // Von der Familienkarte aus liest man mit (D175): Die Kinder handeln selbst,
+    // Eltern kommen nicht in Versuchung abzuhaken. Eltern-Aufgaben (Fotos,
+    // Gegenlesen, Zuordnen) öffnen die Elternansicht mit Schreibrecht (D183).
+    setViewMode(target.parent ? 'parent' : 'mirror');
     window.location.hash = jumpHash(target);
   }
 
@@ -138,7 +141,7 @@
 
         {#if kid.study}
           <!-- Lernen heute (D180): nur zur Information, die App steuert selbst nach. -->
-          <button class="okline study" class:open={kid.study.done < kid.study.total} onclick={() => open(kid, { page: 'today' })}><span>Lernen heute: {kid.study.done} von {kid.study.total}{#each kid.study.tight ?? [] as t} · eng bis {subjectStyle(t.subject).name} am {formatShortDate(t.exam_date)}{/each}</span></button>
+          <button class="okline study" class:open={kid.study.done < kid.study.total} onclick={() => open(kid, { page: 'today', section: 'lernen,lernen-kurz' })}><span>Lernen heute: {kid.study.done} von {kid.study.total}{#each kid.study.tight ?? [] as t} · eng bis {subjectStyle(t.subject).name} am {formatShortDate(t.exam_date)}{/each}</span></button>
         {/if}
         {#if b.ok.length}
           <button class="okline" onclick={() => open(kid, { page: 'today' })}><span>✓ {b.ok.join(' · ')}</span></button>
@@ -191,12 +194,10 @@
           {/each}
         {/if}
 
-        <button class="ghost child-view" onclick={() => open(kid, { page: 'today' })}><ActionLabel label={`Kinderansicht ${kid.name}`} /></button>
       </section>
     {/each}
   </div>
   <StageLegend stages={['sitzt', 'wackelt', 'angefangen', 'neu']} labels={{ neu: 'noch nicht geübt' }} />
-  <ParentReportSettings />
 {/if}
 
 <style>
@@ -290,7 +291,6 @@
   .badge.mute { background: var(--bg-elevated); color: var(--fg-muted); border: 1px solid var(--border); }
   .later { font-size: 0.84rem; padding: 8px 4px 0; margin: 0; border-top: 1px solid var(--border); line-height: 2; }
   .link { background: transparent; border: 0; padding: 0; min-height: 0; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 2px; }
-  .child-view { align-self: flex-end; font-size: 0.85rem; color: var(--accent); min-height: 44px; margin-top: 0.4rem; }
   .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.8rem; color: var(--fg-muted); margin: 0.8rem 2px; }
   .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
 </style>

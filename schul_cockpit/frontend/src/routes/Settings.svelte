@@ -1,5 +1,4 @@
 <script>
-  import ReminderSettings from '../lib/ReminderSettings.svelte';
   import { api } from '../lib/api.js';
   import { appState, loadMe } from '../lib/store.svelte.js';
 
@@ -425,14 +424,14 @@
   };
 </script>
 
+<!-- Unterseite von „Einstellen“ (D183). Die Erinnerungen stehen dort und auf „Ich“. -->
 <div class="row between" style="margin-bottom:0.6rem;">
-  <h2 style="margin:0; font-size:1.1rem;">Einstellungen</h2>
-  <button class="ghost" onclick={() => history.back()}>← zurück</button>
+  <h2 style="margin:0; font-size:1.1rem;">Einstellungen · {activeName}</h2>
+  <button class="ghost" onclick={() => (window.location.hash = '#/einstellen')}>← Einstellen</button>
 </div>
-{#if accountId}{#key accountId}<ReminderSettings {accountId}/>{/key}{/if}
 
 {#if textbookAccess && (['parent', 'admin'].includes(appState.me?.role) || appState.me?.is_admin)}
-  <div class="section-title">🔑 IServ-Zugang · {activeName}</div>
+  <div class="section-title" data-section="iserv">🔑 IServ-Zugang · {activeName}</div>
   <div class="card textbook-card">
     <div class="row between textbook-heading">
       <div>
@@ -529,7 +528,7 @@
       </div>
     {/if}
     {#if calendars}
-      <div class="section-title" style="margin-top:1rem;">🗓️ Schulkalender aus IServ</div>
+      <div class="section-title" style="margin-top:1rem;" data-section="kalender">🗓️ Schulkalender aus IServ</div>
       <p class="dim">Die Schule erzeugt die Kalender jedes Jahr neu und verteilt Klausuren oft auf mehrere. Deshalb wird bei jedem Abgleich neu gesucht; eine einmal gesetzte Rolle bleibt am Kalendernamen hängen.</p>
       <div class="row gap-sm">
         <button disabled={calendarBusy || !textbookAccess.configured} onclick={syncCalendars}>
@@ -640,14 +639,14 @@
 {#if loading || !settings}
   <div class="empty"><span class="spinner"></span></div>
 {:else}
-  <button class="card" style="width:100%; text-align:left; cursor:pointer;" onclick={() => (window.location.hash = '#/courses')}>
+  <button class="card" data-section="kurse" style="width:100%; text-align:left; cursor:pointer;" onclick={() => (window.location.hash = '#/courses')}>
     <div class="row between">
       <div><strong>🎵 Kurse / Wahlfächer</strong><div class="dim">Nicht belegte Kurse ausblenden (z.B. Instrumental, Gesang)</div></div>
       <span>›</span>
     </div>
   </button>
 
-  <div class="section-title">Tagesbudget Lernzeit</div>
+  <div class="section-title" data-section="budget">Tagesbudget Lernzeit</div>
 
   {@const erl = settings.erlass ?? {}}
 
@@ -732,17 +731,23 @@
     {/if}
   </div>
 
+  <!-- Rückgängig machen können alle Eltern, jeweils nur die eigenen Änderungen (D183). -->
+  <div class="section-title" data-section="aenderungen">Eigene Änderungen</div>
+  <button class="card" style="width:100%; text-align:left; cursor:pointer;" onclick={() => (window.location.hash = '#/changes')}>
+    <div class="row between"><div><strong>Rückgängig machen</strong><div class="dim">{appState.me?.open_audit_count ?? 0} Änderungen, die du zurücknehmen kannst</div></div><span>›</span></div>
+  </button>
+
   {#if appState.me?.is_admin}
-  <div class="section-title">Teständerungen an Echtdaten</div>
+  <div class="section-title" data-section="testmodus">Testmodus (Entwickler)</div>
   <div class="banner">
-    Dieser Modus arbeitet mit echten Daten, protokolliert unterstützte Änderungen und pausiert deren HA-Synchronisierung. Er ist keine getrennte Simulation. Für Dummy-Gespräche nutze „Demo ausprobieren“ im Lernmentor.
+    Der Testmodus arbeitet mit echten Daten, protokolliert unterstützte Änderungen und pausiert deren HA-Synchronisierung. Er ist keine getrennte Simulation. Gestartet wird er am Profilknopf; beim Beenden werden die Teständerungen zurückgenommen. Für erfundene Gespräche gibt es „Demo ausprobieren“ im Lernbegleiter.
     Außerdem wird der HA-ToDo-Sync für deine Änderungen pausiert — du kannst also gefahrlos ausprobieren, ohne
     in der HA-ToDo-Liste der Kinder etwas zu verändern.
   </div>
   <div class="card">
     <div class="row between">
       <div>
-        <strong>Teständerungen protokollieren</strong>
+        <strong>Teständerungen protokollieren (Testmodus)</strong>
         <div class="dim">{appState.me?.demo_mode ? 'Aktiv — Änderungen werden geloggt, HA-Sync pausiert.' : 'Aus'}</div>
       </div>
       <button
@@ -754,10 +759,10 @@
     <button
       style="width:100%; margin-top:0.5rem;"
       onclick={() => (window.location.hash = '#/changes')}
-    >Meine Änderungen ansehen ({appState.me?.open_audit_count ?? 0})</button>
+    >Protokoll der Teständerungen ({appState.me?.open_audit_count ?? 0})</button>
   </div>
 
-  <div class="section-title">iPhone-Bildschirmzeit</div>
+  <div class="section-title" data-section="bildschirmzeit">iPhone-Bildschirmzeit</div>
   <div class="banner">
     Auf iPhones mit Bildschirmzeit-Beschränkungen zählt die App als
     Safari-Webseite. So machst du sie nutzbar:
@@ -791,7 +796,7 @@
     </div>
   </div>
 
-  <div class="section-title">Datensicherung</div>
+  <div class="section-title" data-section="sicherung">Datensicherung</div>
   <div class="banner">
     Gesichert wird in Home Assistant (Einstellungen → System → Sicherungen). Enthält das
     automatische HA-Backup dieses Add-on, ist nichts weiter nötig; fehlt eine Sicherung mit

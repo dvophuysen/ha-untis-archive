@@ -1,4 +1,4 @@
-// Startseite der Eltern (D166). Build the frontend first. Requires playwright-core;
+// Startseite der Eltern (D166, D183). Build the frontend first. Requires playwright-core;
 // optionally set SCHOOL_TEST_CHROMIUM. Uses synthetic API fixtures only.
 const {chromium}=require('playwright-core');
 const fs=require('fs'),http=require('http'),path=require('path'),assert=require('assert/strict');
@@ -19,7 +19,7 @@ const boardA={schedule:scheduleA,status:{level:'warn',label:'Nachsteuern',reason
   watch:[{key:'hard-8',tone:'warn',icon:'∿',title:'Mathematik fällt schwer',detail:'4 von 10 bewerteten Stunden der letzten 3 Wochen als schwer bewertet',go:go('subject',null,['8'])}]};
 const boardB={status:{level:'bad',label:'Eingreifen',reasons:['Aufgaben überfällig']},evening:false,ok:[],
   acute:[{key:'overdue',tone:'bad',icon:'⚠️',title:'1 Aufgabe überfällig',detail:'Brüche',go:go('today','aufgaben')},
-         {key:'retake',tone:'warn',icon:'📷',title:'2 Seiten neu fotografieren',detail:'„Zerlegen“ · unscharf',go:go('materialien','fotos')}],
+         {key:'retake',tone:'warn',icon:'📷',title:'2 Seiten neu fotografieren',detail:'„Zerlegen“ · unscharf',go:{page:'erledigen',args:[],section:null,parent:true}}],
   exams:[{exam_key:'cal:s',date:'2026-10-01',day:'Do 01.10.',days_until:7,subject_name:'ENGLISCH',kind:'Sprechprüfung',topics:4,practiced:0,stages:stages(0,0,0,4),missing:5,material_ok:false,go:go('klausuren','arbeit-cal:s')}],
   later:[],watch:[]};
 (async()=>{
@@ -31,17 +31,26 @@ try {
 const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Europe/Berlin',serviceWorkers:'block'});
 page.setDefaultTimeout(6000); const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.log('PAGE ERROR',e.message);});
 await page.clock.install({time:new Date('2026-09-24T14:00:00+02:00')});
+const modes=[];
 await page.route('**/api/**',async route=>{
-const u=new URL(route.request().url()).pathname;let body={};
+const u=new URL(route.request().url()).pathname;let body={};modes.push([u,route.request().headers()['x-view-mode']||'']);
 if(u==='/api/me')body={id:1,role:'parent',accounts:[{id:1,name:'Kind A'},{id:2,name:'Kind B'}]};
-else if(u==='/api/dashboard')body={today:'2026-09-24',kids:[{account_id:1,name:'Kind A',board:boardA},{account_id:2,name:'Kind B',board:boardB}]};
+else if(u==='/api/dashboard')body={today:'2026-09-24',kids:[{account_id:1,name:'Kind A',board:boardA,study:{done:1,total:2,tight:[]}},{account_id:2,name:'Kind B',board:boardB}]};
 else if(u==='/api/parent-report')body={weekday:6,at:'18:00',targets:[],services:[]};
+else if(u==='/api/parent/todo')body={today:'2026-09-24',total:3,blocking:[],household:[],kids:[{account_id:1,name:'Kind A',items:[]},{account_id:2,name:'Kind B',items:[]}]};
 await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
 });
 await page.goto('http://127.0.0.1:4180/#/overview');
 const a=page.getByLabel('Stand von Kind A'),b=page.getByLabel('Stand von Kind B');
 await a.waitFor();
 assert.equal(await a.getAttribute('data-status'),'warn');assert.equal(await b.getAttribute('data-status'),'bad');
+// Eigene Elternhülle (D183): nur Familie, Erledigen, Scannen, Einstellen; oben nur der Profilknopf.
+assert.deepEqual(await page.locator('.bottom-nav button').allInnerTexts().then(t=>t.map(x=>x.replace(/\d+/g,'').trim())),['Familie','Erledigen','Scannen','Einstellen']);
+await page.locator('.nav-badge').filter({hasText:'3'}).waitFor();
+assert.equal(await page.locator('.top-bar select').count(),0,'no child picker on top');
+assert.equal(await page.locator('.top-bar button').count(),1,'only the profile button');
+assert.equal(await page.getByText('Wochenbericht aufs Handy').count(),0,'weekly report moved to Einstellen');
+assert.equal(await page.getByText(/^Kinderansicht /).count(),0,'child view only via profile button');
 await a.getByText('Nachsteuern',{exact:true}).waitFor();await b.getByText('Eingreifen',{exact:true}).waitFor();
 await a.getByText('✓ Aufgaben bis morgen erledigt · Tasche für Fr gepackt · 6/6 Stunden bewertet').waitFor();
 assert.equal(await b.locator('.okline').count(),0);
@@ -62,17 +71,37 @@ if(process.env.SCHOOL_SCREENSHOT_DIR){await page.setViewportSize({width:390,heig
 assert.deepEqual(errors,[]);
 // Schnellzugriffe: Kind wechseln, Seite und Abschnitt im Hash. Die Zielseiten
 // haben hier keine Daten; geprüft wird nur der Sprung.
+const mode=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('viewMode')||'{"mode":"parent"}').mode);
 await a.locator('.plan').click();assert.equal(await page.evaluate(()=>location.hash),'#/week');
+// Familie öffnet lesend (Mitlesen): Band oben, Kinder-Leiste, Zurück zur Familie.
+assert.equal(await mode(),'mirror');await page.getByRole('status').filter({hasText:'nur lesen'}).waitFor();
+assert.deepEqual(await page.locator('.bottom-nav button').allInnerTexts(),['Heute','Woche','Lernen','Ich']);
+await page.getByRole('button',{name:'Zurück zur Familie'}).click();await a.waitFor();
+assert.equal(await page.evaluate(()=>location.hash),'#/overview');assert.equal(await mode(),'parent');
+// Auch die Zurück-Geste führt aus dem Mitlesen zur Elternansicht.
+await a.locator('.plan').click();await page.waitForFunction(()=>location.hash==='#/week');
+await page.goBack();await a.waitFor();assert.equal(await mode(),'parent');
+// Lernen heute springt in den Lernen-Abschnitt von Heute.
+await a.getByText('Lernen heute: 1 von 2').click();
+assert.equal(await page.evaluate(()=>location.hash),'#/today?s=lernen%2Clernen-kurz');assert.equal(await mode(),'mirror');
+await page.goto('http://127.0.0.1:4180/#/overview');await a.waitFor();
 await page.goto('http://127.0.0.1:4180/#/overview');await b.waitFor();
 await b.getByText('1 Aufgabe überfällig').click();
 assert.equal(await page.evaluate(()=>location.hash),'#/today?s=aufgaben');
 assert.equal(await page.evaluate(()=>localStorage.getItem('activeAccountId')||''),'2');
+assert.equal(await mode(),'mirror');
+// Die Anfragen der Kinderseite laufen im Mitlesen.
+assert(modes.some(([u,m])=>u.startsWith('/api/accounts/2/')&&m==='mirror'),'mirror header on child page');
+// Neu fotografieren ist Elternsache: Erledigen in der Elternansicht, nicht Mitlesen (D183).
+await page.goto('http://127.0.0.1:4180/#/overview');await b.waitFor();assert.equal(await mode(),'parent');
+await b.getByText('2 Seiten neu fotografieren').click();
+assert.equal(await page.evaluate(()=>location.hash),'#/erledigen');assert.equal(await mode(),'parent');
 await page.goto('http://127.0.0.1:4180/#/overview');await a.waitFor();
 await a.getByText('Musik-Lernkontrolle Mo 05.10.').click();
 assert.equal(await page.evaluate(()=>location.hash),'#/klausuren?s=arbeit-cal%3Amu');
 await page.goto('http://127.0.0.1:4180/#/overview');await a.waitFor();
 await a.getByText('Mathematik fällt schwer').click();
 assert.equal(await page.evaluate(()=>location.hash),'#/subject/8');
-console.log('PASS: status per child, all-done line, exams in order with bar, later line, jump links with child and section, responsive layout');
+console.log('PASS: parent shell nav with badge, status per child, all-done line, exams in order with bar, later line, read-only jumps with child and section, back to family (button and gesture), parent work to Erledigen, responsive layout');
 }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exit(1)});

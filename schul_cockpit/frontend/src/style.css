@@ -236,6 +236,9 @@ label, .field-label { display: block; font-size: 0.85rem; color: var(--fg-muted)
 .bottom-nav button.active { color: var(--accent); font-weight: 650; }
 .bottom-nav button.active .icon { background: var(--accent-soft); }
 .bottom-nav button .icon { line-height: 1; padding: 4px 16px; border-radius: 14px; display: grid; place-items: center; }
+/* Zähler an „Erledigen“ in der Elternansicht (D183). */
+.bottom-nav button .icon { position: relative; }
+.bottom-nav .nav-badge { position: absolute; top: -4px; right: 4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--r-pill); background: var(--accent); color: var(--accent-fg); font-size: 0.68rem; font-weight: 800; line-height: 18px; text-align: center; }
 .bottom-nav button span:last-child {
   max-width: 100%;
   overflow: hidden;

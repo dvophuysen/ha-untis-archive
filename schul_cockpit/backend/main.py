@@ -28,6 +28,7 @@ from .routers import (
     checkins,
     courses as courses_router,
     dashboard as dashboard_router,
+    parent_todo as parent_todo_router,
     exams,
     health,
     learning,
@@ -242,6 +243,7 @@ app.include_router(packing_router.router, prefix=API)
 app.include_router(courses_router.router, prefix=API)
 app.include_router(backup_router.router, prefix=API)
 app.include_router(dashboard_router.router, prefix=API)
+app.include_router(parent_todo_router.router, prefix=API)
 app.include_router(rewards_router.router, prefix=API)
 app.include_router(profile_router.router, prefix=API)
 app.include_router(practice_router.router, prefix=API)

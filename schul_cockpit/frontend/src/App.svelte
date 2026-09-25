@@ -4,7 +4,9 @@
   import { profile, loadProfile, applyProfile, initials } from './lib/profile.svelte.js';
   import { view, setViewMode, touchViewMode, expireViewMode } from './lib/viewMode.svelte.js';
   import { onMount } from 'svelte';
-  import { appState, loadMe, setActiveAccount, activeAccount } from './lib/store.svelte.js';
+  import { appState, loadMe, activeAccount } from './lib/store.svelte.js';
+  import KidChips from './lib/KidChips.svelte';
+  import { todo, loadTodo } from './lib/parentTodo.svelte.js';
   import Today from './routes/Today.svelte';
   import Ich from './routes/Ich.svelte';
   import Overview from './routes/Overview.svelte';
@@ -26,6 +28,9 @@
     Courses: () => import('./routes/Courses.svelte'),
     MyChanges: () => import('./routes/MyChanges.svelte'),
     ExamSetup: () => import('./routes/ExamSetup.svelte'),
+    Erledigen: () => import('./routes/Erledigen.svelte'),
+    Scannen: () => import('./routes/Scannen.svelte'),
+    Einstellen: () => import('./routes/Einstellen.svelte'),
   };
   import { api } from './lib/api.js';
   import { startUsagePing } from './lib/usagePing.js';
@@ -83,6 +88,21 @@
     window.location.hash = `#/${path}`;
   }
 
+  // Zwei Hüllen (D183). Die Elternansicht hat eigene Seiten und dazu die
+  // Verwaltungsseiten des Kindes mit Schreibrecht; die Kinderseiten (Heute,
+  // Woche, Lernen, Ich …) gibt es dort nicht, die Kinderansicht öffnet der
+  // Profilknopf oder ein Tipp auf der Familienkarte zum Mitlesen.
+  const PARENT_ONLY = new Set(['overview', 'erledigen', 'scannen', 'einstellen', 'settings', 'setup', 'exams', 'courses', 'changes']);
+  const PARENT_ALLOWED = new Set([...PARENT_ONLY, 'materialien', 'klausuren', 'vokabeln', 'learning']);
+  // Seiten, die an einem Kind hängen: dort steht in der Elternansicht die Kindwahl.
+  const PER_KID = new Set(['settings', 'exams', 'courses', 'materialien', 'klausuren', 'vokabeln', 'learning']);
+  function replaceRoute(name) {
+    history.replaceState(null, '', `#/${name}`);
+    route = parseHash();
+  }
+  // Neu geöffnet auf einer Elternseite, aber noch im Mitlesen: zurück zu den Eltern.
+  if (view.mode === 'mirror' && PARENT_ONLY.has(route.name)) setViewMode('parent');
+
   // Schnellzugriff mit Abschnitt (?s=…): nach dem Seitenwechsel dorthin rollen.
   $effect(() => {
     route;
@@ -91,7 +111,12 @@
 
   onMount(() => {
     loadMe();
-    const handler = () => (route = parseHash());
+    const handler = () => {
+      route = parseHash();
+      // Zurück aus dem Mitlesen (auch mit der Zurück-Geste): Landet man wieder
+      // auf einer Elternseite, gilt wieder die Elternansicht.
+      if (view.mode === 'mirror' && PARENT_ONLY.has(route.name)) setViewMode('parent');
+    };
     window.addEventListener('hashchange', handler);
     // Nutzungszeit für den Elternbericht: aktives Kind und aktuelle Ansicht.
     // Mitlesen und Testmodus sind keine Nutzung durch das Kind (D175).
@@ -130,6 +155,27 @@
     }
   });
 
+  // Jede Hülle zeigt nur ihre Seiten. Eine Kinderseite in der Elternansicht
+  // führt zur Familie; eine Elternseite beim Kind (auch Mitlesen und
+  // Kindmodus) zu „Heute“. Der Testmodus des Entwicklers darf beides.
+  $effect(() => {
+    if (!appState.me || appState.loading) return;
+    // Zwischen Moduswechsel und hashchange steht hier noch die alte Seite.
+    if (parseHash().name !== route.name) return;
+    if (parentView) {
+      if (!PARENT_ALLOWED.has(route.name)) replaceRoute('overview');
+    } else if (view.mode !== 'test' && PARENT_ONLY.has(route.name)) {
+      replaceRoute('today');
+    }
+  });
+
+  // Zähler für „Erledigen“: beim Öffnen der Elternansicht und bei jedem Wechsel
+  // auf Familie oder Erledigen, höchstens einmal je Minute.
+  $effect(() => {
+    if (parentView && appState.me && ['overview', 'erledigen', 'scannen'].includes(route.name)) loadTodo();
+  });
+  const todoTotal = $derived(todo.data?.total ?? 0);
+
   const acc = $derived(activeAccount());
   const isParent = $derived(!!(appState.me?.is_admin || appState.me?.role === 'parent'));
   // Eigene Elternansicht nur im Zustand „Ich“; sonst sieht das Gerät aus wie beim Kind.
@@ -151,19 +197,28 @@
   // zu Lernen, Materialien und die Verwaltungsseiten zu den Übersichten.
   const TAB_OF = { vokabeln: 'learning', plan: 'ich', tasks: 'ich', subjects: 'ich', subject: 'ich', more: 'ich',
                    klausuren: 'ich', absences: 'ich', materialien: 'ich', changes: 'ich', courses: 'ich', exams: 'ich' };
-  const activeTab = $derived(TAB_OF[route.name] ?? route.name);
+  // In der Elternansicht gehören die Verwaltungsseiten zu „Einstellen“, was
+  // aus „Erledigen“ geöffnet wird, zu „Erledigen“.
+  const PARENT_TAB_OF = { settings: 'einstellen', setup: 'einstellen', courses: 'einstellen', changes: 'einstellen', exams: 'einstellen',
+                          learning: 'einstellen', vokabeln: 'einstellen', klausuren: 'erledigen', materialien: 'erledigen' };
+  const activeTab = $derived(parentView ? (PARENT_TAB_OF[route.name] ?? route.name) : (TAB_OF[route.name] ?? route.name));
   const navItems = $derived.by(() => {
-    // Navigation (D176): Heute, Woche, Lernen, Ich; Eltern zusätzlich Familie.
-    const items = [
+    // Elternansicht (D183): Familie, Erledigen, Scannen, Einstellen.
+    if (parentView) {
+      return [
+        { name: 'overview', icon: 'familie', label: 'Familie' },
+        { name: 'erledigen', icon: 'erledigen', label: 'Erledigen', badge: todoTotal },
+        { name: 'scannen', icon: 'scannen', label: 'Scannen' },
+        { name: 'einstellen', icon: 'einstellungen', label: 'Einstellen' },
+      ];
+    }
+    // Kinder (D176): Heute, Woche, Lernen, Ich.
+    return [
       { name: 'today', icon: 'heute', label: 'Heute' },
       { name: 'week', icon: 'woche', label: 'Woche' },
       { name: 'learning', icon: 'lernen', label: 'Lernen' },
       { name: 'ich', icon: 'ich', label: 'Ich' },
     ];
-    if (parentView) {
-      items.unshift({ name: 'overview', icon: 'familie', label: 'Familie' });
-    }
-    return items;
   });
 </script>
 
@@ -177,29 +232,16 @@
         {#if acc && !parentView}<span class="avatar" aria-hidden="true">{profile.prefs.avatar || initials(acc.name)}</span>{/if}
         <h1>Schul-Cockpit</h1>
       </div>
-      {#if parentView && appState.me && appState.me.accounts.length > 1}
-        <select
-          class="top-meta"
-          style="border:none; background:transparent; padding:0; min-height: auto; font-size:0.85rem;"
-          value={appState.activeAccountId}
-          onchange={(e) => setActiveAccount(Number(e.currentTarget.value))}
-        >
-          {#each appState.me.accounts as a}
-            <option value={a.id}>{a.name}</option>
-          {/each}
-        </select>
+      <!-- Elternansicht: kein Kinderwähler mehr oben (D183); gewählt wird an der Seite selbst. -->
+      {#if parentView}
+        <span class="top-meta">Familie</span>
       {:else if acc}
         <span class="top-meta">{acc.name}</span>
       {/if}
     </div>
     <div class="row gap-sm">
-      {#if appState.me?.is_admin && parentView}
-        <button class="ghost" onclick={() => navigate('setup')} title="Setup" aria-label="Setup"><Icon name="werkzeug" /></button>
-      {/if}
-      {#if acc && (!isParent || parentView)}
-        <button class="ghost" onclick={() => navigate('settings')} title="Einstellungen" aria-label="Einstellungen"><Icon name="einstellungen" /></button>
-      {/if}
-      {#if appState.me?.auth_source === 'pin'}
+      <!-- Setup und Einstellungen stecken in „Einstellen“; Kinder haben kein Zahnrad (D183). -->
+      {#if appState.me?.auth_source === 'pin' && !parentView}
         <button class="ghost" onclick={logout} title="Abmelden" aria-label="Abmelden"><Icon name="abmelden" /></button>
       {/if}
       {#if isParent}
@@ -210,7 +252,7 @@
   {#if isParent && view.mode !== 'parent'}
     <div class="mode-band {view.mode}" role="status">
       <span>{view.mode === 'mirror' ? `Du siehst die App von ${acc?.name ?? 'deinem Kind'} · nur lesen` : view.mode === 'child' ? `${acc?.name ?? 'Kind'} am Elterngerät` : 'Testmodus · Änderungen werden beim Beenden zurückgenommen'}</span>
-      {#if view.mode === 'mirror'}<button onclick={() => { setViewMode('parent'); navigate('overview'); }}>Zurück zu mir</button>
+      {#if view.mode === 'mirror'}<button onclick={() => { setViewMode('parent'); navigate('overview'); }}>Zurück zur Familie</button>
       {:else}<button onclick={() => (deviceSheet = true)}>{view.mode === 'test' ? 'Beenden' : 'Wechseln'}</button>{/if}
     </div>
   {/if}
@@ -244,7 +286,7 @@
     <div
       style="background: var(--substitution); color: #fff; padding: 0.5rem 1rem; font-size: 0.85rem; display:flex; justify-content:space-between; align-items:center; gap:0.5rem;"
     >
-      <span>🧪 <strong>Teständerungen · Echtdaten</strong> · {appState.me.open_audit_count ?? 0} Änderungen geloggt</span>
+      <span>🧪 <strong>Testmodus-Protokoll · Echtdaten</strong> · {appState.me.open_audit_count ?? 0} Änderungen geloggt</span>
       <button
         class="ghost"
         style="color:#fff; border-color:rgba(255,255,255,0.4); padding:0.2rem 0.6rem; min-height:32px; font-size:0.8rem;"
@@ -254,6 +296,7 @@
   {/if}
 
   <main class="content">
+    {#if parentView && PER_KID.has(route.name) && !appState.loading}<div class="kid-for"><KidChips label="Für welches Kind" /></div>{/if}
     {#if appState.loading}
       <div class="empty"><span class="spinner"></span><br>lade…</div>
     {:else if appState.error}
@@ -265,7 +308,7 @@
         Es sind neue HA-Nutzer da, die noch nicht zugeordnet sind, oder noch keine Verlinkungen existieren.
         <button class="primary" style="margin-top:0.6rem" onclick={() => navigate('setup')}>Jetzt einrichten</button>
       </div>
-    {:else if !acc && !['setup', 'overview'].includes(route.name)}
+    {:else if !acc && !['setup', 'overview', 'einstellen', 'erledigen', 'changes'].includes(route.name)}
       <div class="empty">
         Dein Account ist noch mit keinem Kind verlinkt.
         {#if appState.me.is_admin}
@@ -286,8 +329,14 @@
       <Lazy load={LAZY.MyChanges} />
     {:else if route.name === 'overview'}
       <Overview {navigate} />
+    {:else if route.name === 'erledigen'}
+      <Lazy load={LAZY.Erledigen} />
+    {:else if route.name === 'scannen'}
+      {#key route.name + window.location.hash}<Lazy load={LAZY.Scannen} />{/key}
+    {:else if route.name === 'einstellen'}
+      <Lazy load={LAZY.Einstellen} accountId={appState.activeAccountId} />
     {:else if route.name === 'ich' || route.name === 'more'}
-      <Ich accountId={appState.activeAccountId} name={acc?.name} canManage={parentView} canStyle={view.mode !== 'mirror'} />
+      <Ich accountId={appState.activeAccountId} name={acc?.name} canStyle={view.mode !== 'mirror'} />
     {:else if route.name === 'today'}
       <Today accountId={appState.activeAccountId} />
     {:else if route.name === 'plan' || route.name === 'tasks'}
@@ -323,15 +372,16 @@
     {/if}
   </main>
 
-  {#if acc && !['setup','settings'].includes(route.name)}
-    <nav class="bottom-nav" aria-label="Hauptnavigation">
+  {#if parentView ? !!appState.me : (acc && !['setup','settings'].includes(route.name))}
+    <nav class="bottom-nav" aria-label={parentView ? 'Elternansicht' : 'Hauptnavigation'}>
       {#each navItems as item}
         <button
           class:active={activeTab === item.name}
           aria-current={activeTab === item.name ? 'page' : undefined}
+          aria-label={item.badge ? `${item.label}, ${item.badge} offen` : undefined}
           onclick={() => navigate(item.name)}
         >
-          <span class="icon"><Icon name={item.icon} /></span><span>{item.label}</span>
+          <span class="icon"><Icon name={item.icon} />{#if item.badge}<b class="nav-badge" aria-hidden="true">{item.badge > 99 ? '99+' : item.badge}</b>{/if}</span><span>{item.label}</span>
         </button>
       {/each}
     </nav>

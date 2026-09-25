@@ -15,6 +15,7 @@ from .. import notice_check
 from .. import proofread
 from .. import sources
 from ..auth import CurrentUser, get_current_user
+from ..view_mode import acts_as_parent
 from ..db import webapp_conn
 from ..learning import InputModel
 from .learning import access
@@ -180,7 +181,9 @@ def index(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     access(user, account_id)
-    manage = bool(user.is_admin or user.role == "parent")
+    # Eltern-Werkzeuge nur in der eigenen Elternansicht, nicht beim Mitlesen
+    # oder wenn das Kind das Gerät benutzt (D183).
+    manage = acts_as_parent(user)
     # Eine Zeile mehr als verlangt sagt, ob es weitergeht.
     items = store.listing(account_id, subject=subject, kind=kind, start=start, end=end,
                           query=q, state=state, include_hidden=manage, include_books=books,
@@ -280,7 +283,7 @@ async def collect_sources(account_id: int, user: CurrentUser = Depends(get_curre
     Anstoß (neue Quellen) und als Netz um 14 Uhr und nachts; hier für die
     Kontrolle durch die Eltern."""
     access(user, account_id)
-    if not (user.is_admin or user.role == "parent"):
+    if not acts_as_parent(user):
         raise HTTPException(403, "Nur in der Elternansicht verfügbar")
     from ..source_collector import start_collect
     return start_collect(account_id)

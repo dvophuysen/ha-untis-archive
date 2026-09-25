@@ -44,9 +44,16 @@ _KINDS = [("vergleichsarbeit", "Vergleichsarbeit"), ("sprechprüfung", "Sprechpr
           ("lernkontrolle", "Lernkontrolle"), ("vokabeltest", "Vokabeltest"), ("test", "Test")]
 
 
-def go(page: str, *args, section: str | None = None) -> dict:
-    """Ein Schnellzugriff: Seite des Kindes, Argumente, Abschnitt darauf."""
-    return {"page": page, "args": [str(a) for a in args], "section": section}
+def go(page: str, *args, section: str | None = None, parent: bool = False) -> dict:
+    """Ein Schnellzugriff: Seite des Kindes, Argumente, Abschnitt darauf.
+
+    Ohne ``parent`` öffnet die Startseite die Seite des Kindes zum Mitlesen
+    (D175). Was ein Elternteil selbst tun muss, führt mit ``parent`` in die
+    Elternansicht unter „Erledigen“ (D183): Im Mitlesen scheiterte es sonst."""
+    target = {"page": page, "args": [str(a) for a in args], "section": section}
+    if parent:
+        target["parent"] = True
+    return target
 
 
 def day_label(iso: str) -> str:
@@ -218,7 +225,7 @@ def acute(account_id: int, tasks: list[dict], today: date, now: datetime, evenin
         rows.append({"key": "retake", "tone": "warn", "icon": "📷",
                      "title": f"{_plural(len(retakes), 'Seite', 'Seiten')} neu fotografieren",
                      "detail": " · ".join(_where(r) for r in retakes[:2]) + f" · {_brief(retakes[0]['reason'])}",
-                     "go": go("materialien", section="fotos")})
+                     "go": go("erledigen", parent=True)})
     return rows, ok
 
 

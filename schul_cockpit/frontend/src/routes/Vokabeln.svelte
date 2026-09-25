@@ -10,6 +10,7 @@
   const clock = answerClock();
   import { subjectStyle } from '../lib/subjectStyle.js';
   import { appState } from '../lib/store.svelte.js';
+  import { actsAsParent } from '../lib/viewMode.svelte.js';
   let { accountId, subject = '', initialUnit = '' } = $props();
   const style = $derived(subjectStyle(subject));
   const base = $derived(`/api/accounts/${accountId}/learning/vocab`);
@@ -126,7 +127,8 @@
     index += 1; show();
   }
   // Eltern: Probeläufe wieder auf Null setzen.
-  const canManage = $derived(!!(appState.me && (appState.me.is_admin || appState.me.role === 'parent')));
+  // Eltern-Werkzeuge nicht beim Mitlesen und nicht, wenn das Kind das Gerät benutzt (D183).
+  const canManage = $derived(actsAsParent(appState.me));
   async function showBookWords() {
     busy = true; error = '';
     try { bookWords = (await api.get(`${base}/${encodeURIComponent(subject)}/word-list?unit=${encodeURIComponent(unit)}&section=${encodeURIComponent(section)}`)).words; }
