@@ -6,7 +6,7 @@
   import LearningGoal from '../lib/LearningGoal.svelte';
   import { onMount, tick } from 'svelte';
   import { api, ApiError } from '../lib/api.js';
-  import { isoToday, formatShortDate, daysBetween, stripUntisMetadata } from '../lib/format.js';
+  import { isoToday, formatShortDate, daysBetween, stripUntisMetadata, carryText } from '../lib/format.js';
   import { splitTasks } from '../lib/dayDashboard.js';
   import { dayPhase, mergeLessons, held, lessonOver } from '../lib/dayPhase.js';
   import { subjectStyle } from '../lib/subjectStyle.js';
@@ -89,7 +89,8 @@
   const nextNotes = $derived(nextTask ? stripUntisMetadata(nextTask.notes) : '');
   const left = $derived(openTasks.length + learnOpen + (bag && !bag.packed ? 1 : 0) + (feedbackOpen ? 1 : 0));
   // Ein ehrlicher Satz aus den Zahlen des Lernplans (D188): was noch fehlt und wie viele Lerntage bleiben.
-  const tightText = $derived(study?.outlook ? (study.free_day && study.steps?.length ? `Heute ist eigentlich frei, aber die Zeit reicht sonst nicht. ${study.outlook}` : study.outlook) : '');
+  const tightText = $derived(study?.carry ? [carryText(study.carry), study.carry.open ? (study.outlook || '').replace(/ ?Diese Liste gilt bis Sonntagabend[^.]*\./, '') : ''].filter(Boolean).join(' ')
+    : study?.outlook ? (study.free_day && study.steps?.length ? `Heute ist eigentlich frei, aber die Zeit reicht sonst nicht. ${study.outlook}` : study.outlook) : '');
   const firstGroup = $derived(ph.first ? mergeLessons((data?.lessons ?? []).filter(held))[0] : null);
   const currentGroup = $derived.by(() => {
     const target = ph.current || ph.next;

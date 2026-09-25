@@ -7,7 +7,7 @@
   // Server ab, deshalb fehlen die Knöpfe (can_write).
   import { untrack, tick } from 'svelte';
   import { api, ApiError } from '../lib/api.js';
-  import { formatShortDate } from '../lib/format.js';
+  import { formatShortDate, carryText } from '../lib/format.js';
   import { subjectStyle } from '../lib/subjectStyle.js';
   import ActionLabel from '../lib/ActionLabel.svelte';
   import MentorSession from '../lib/MentorSession.svelte';
@@ -147,6 +147,7 @@
 
     <section class="sec" id="k-pflicht" data-section="pflicht">
       <h3>Heute Pflicht <small>{plan.total ? `${plan.done} von ${plan.total}` : 'heute frei'}</small></h3>
+      {#if plan.carry}<p class="muted carry">{carryText(plan.carry)}</p>{/if}
       {#if plan.outlook}<p class="hint">{plan.outlook}</p>{/if}
       <div class="list">
         {#each plan.steps as s (s.key)}

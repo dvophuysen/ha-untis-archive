@@ -20,7 +20,7 @@ const {chromium}=require('playwright-core');const http=require('http'),fs=requir
    {key:'paper:ma1:kurz',kind:'paper',title:'Kurztest Mathematik: Gleichungen',why:'Im Gespräch geübt, jetzt zeigst du es auf Papier.',subject:'Mathematik',exam_key:'ma1',format:'kurz',topic_id:12,level:null,href:null,done:false},
    {key:'dialog:12',kind:'dialog',title:'Mathematik: Gleichungen',why:'Das Thema sitzt noch nicht sicher.',subject:'Mathematik',exam_key:'ma1',format:null,topic_id:12,level:null,href:'#/learning?topic_id=12',done:false},
    {key:'vocab:Englisch:u3',kind:'vocab',title:'Vokabeln Englisch: Unit 3',why:'Jeden Tag ein paar Wörter.',subject:'Englisch',exam_key:null,format:null,topic_id:null,level:null,href:'#/vokabeln/Englisch?unit=u3',done:true}],
-   engpass:true,tight:[],free_day:false,frozen:!mirror,read_only:mirror,done:1,total:3},
+   engpass:true,tight:[],free_day:false,frozen:!mirror,read_only:mirror,done:1,total:3,carry:{from:'2026-09-25',until:'2026-09-27',open:2}},
   plan_explain:['Jeden Morgen entsteht der Plan neu.','Zwei Schultage vorher durch.','Vokabeln nach Pensum.'],
   exams:[exam,vocabExam],
   strengths:[{kind:'topic',topic_id:11,subject:'Mathematik',title:'Terme und Variablen',text:'sicher seit 24.09.'}],
@@ -61,6 +61,8 @@ const {chromium}=require('playwright-core');const http=require('http'),fs=requir
  await page.getByRole('heading',{name:'Heute Pflicht'}).waitFor().catch(dump);
  // Reihenfolge: Wo stehe ich, Pflicht, Arbeiten, Stärken/Baustellen, Extra, Verlauf, Weitermachen.
  assert.deepEqual(await page.$$eval('[data-section]',els=>els.map(e=>e.dataset.section)),['kompass','pflicht','vokabeln','arbeiten','staerken','extra','verlauf','weiter']);
+ /* D205: am freien Tag die Liste vom Freitag, gültig bis Sonntagabend */
+ await page.getByText('Das ist deine Liste vom Freitag. Sie gilt bis Sonntagabend; neue Aufgaben kommen am freien Tag nicht dazu.').waitFor();
  const kompass=page.locator('#k-kompass');
  assert.match(await kompass.innerText(),/Nächste Arbeit · Mathematik · Mi 30\.09\. · noch 2 Schultage/);
  assert.match(await kompass.innerText(),/1 von 2 Themen sicher/);

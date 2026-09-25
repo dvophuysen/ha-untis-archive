@@ -1,3 +1,7 @@
+## 1.31.1
+
+- Am Wochenende steht die offene Lernliste vom Freitag wieder auf „Heute“ und der Lernseite, bis Sonntagabend. Was am Wochenende erledigt wird, zählt dafür. Neue Aufgaben kommen weiterhin nicht dazu.
+
 ## 1.31.0
 
 - Auch die Übungsklausur der Eltern und der Vokabeltest auf Papier werden jetzt doppelt ausgewertet. Unsicheres zählt nie; bei Bedarf prüfen die Eltern, das Kind sieht bis dahin keine Punkte.

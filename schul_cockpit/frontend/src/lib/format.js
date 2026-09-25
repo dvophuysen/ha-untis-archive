@@ -100,3 +100,15 @@ export function stripUntisMetadata(notes) {
   }
   return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
+
+
+// Freitagsliste an freien Tagen (D205): von welchem Schultag, bis wann sie gilt.
+const WEEKDAY = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+export function carryText(carry) {
+  if (!carry?.from) return '';
+  const from = WEEKDAY[new Date(`${carry.from}T12:00:00`).getDay()];
+  const until = carry.until ? `${WEEKDAY[new Date(`${carry.until}T12:00:00`).getDay()]}abend` : 'zum nächsten Schultag';
+  return carry.open
+    ? `Das ist deine Liste vom ${from}. Sie gilt bis ${until}; neue Aufgaben kommen am freien Tag nicht dazu.`
+    : `Deine Liste vom ${from} ist erledigt. Heute ist frei.`;
+}

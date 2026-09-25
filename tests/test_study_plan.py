@@ -395,3 +395,37 @@ def test_speaking_exam_without_own_topics_uses_the_taught_grammar_only_as_refere
     with closing(db.webapp_conn()) as c:
         assert [tuple(r) for r in c.execute("SELECT title,origin,stale FROM exam_topics WHERE exam_key='en'")] == [("Simple past", "assumed", 1)]
     assert seq("en") == [("oral", "einstieg")]
+
+
+def test_the_friday_list_stays_on_the_weekend_and_weekend_work_counts(world, monkeypatch):
+    """D205: Am freien Tag kein neues Pensum, aber die Liste des letzten Schultags
+    bleibt bis Sonntagabend stehen; was am Wochenende erledigt wird, zählt für sie."""
+    FRI, SUN = MON + timedelta(days=4), MON + timedelta(days=6)
+    ids = exam("ma", "Mathematik", MON + timedelta(days=8), ["Terme"])
+    answer(ids[0], 1, 1, when=at(MON, 10), source="paper")  # gemessen, Terme wackeln
+    friday = sp.ensure(1, FRI)
+    assert friday and friday[0]["kind"] == "dialog"
+    kid = SimpleNamespace(id=2, role="child", is_admin=False)
+    monkeypatch.setattr(sp.rewards, "acting_child", lambda user: True)
+    sat = sp.today(1, kid, at(SAT, 10))
+    assert sat["day"] == FRI.isoformat() and sat["carry"] == {"from": FRI.isoformat(), "until": SUN.isoformat(), "open": len(friday)}
+    assert [s["key"] for s in sat["steps"]] == [s["key"] for s in friday] and sat["free_day"]
+    for k in range(3):
+        answer(ids[0], 1, 3, when=at(SAT, 11, k))
+    sun = sp.today(1, kid, at(SUN, 9))
+    assert sun["steps"][0]["done"], "Samstag zählt für die Freitagsliste"
+    assert sp.open_count(1, FRI, SUN) == sun["total"] - sun["done"]
+    assert "carry" not in sp.today(1, kid, at(MON + timedelta(days=7), 15)), "am Montag gilt der neue Tag"
+
+
+def test_weekend_vocab_counts_for_the_friday_vocab_step(world, monkeypatch):
+    import backend
+    FRI = MON + timedelta(days=4)
+    days = {FRI: set(range(6)), SAT: set(range(6, 12))}
+    mod = types.SimpleNamespace(daily=lambda a, d: [], _unit_words=lambda a, subject, unit: list(range(20)),
+                                practiced=lambda a, d, ids=None: days.get(d, set()))
+    monkeypatch.setitem(sys.modules, "backend.vocab_pensum", mod)
+    monkeypatch.setattr(backend, "vocab_pensum", mod, raising=False)
+    step = {"kind": "vocab", "key": "vocab:Latein:u1", "subject": "Latein", "target": 10}
+    assert not sp._vocab_done_since(1, step, FRI, FRI)
+    assert sp._vocab_done_since(1, step, FRI, SAT)

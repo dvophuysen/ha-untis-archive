@@ -454,6 +454,8 @@ def mark_done(account_id: int, steps: list[dict], day: date, until: date | None 
                     if vocab is None:
                         vocab = {_vocab_key(v): v for v in _vocab(account_id, day)}
                     done = bool((vocab.get(s["key"]) or {}).get("done"))
+                    if not done and until and until > day and s.get("target"):
+                        done = _vocab_done_since(account_id, s, day, until)
             except Exception:
                 LOG.debug("Lernschritt %s nicht prüfbar", s.get("key"), exc_info=True)
             out.append({**s, "done": done})
@@ -502,6 +504,20 @@ def _settle(account_id: int, steps: list[dict]) -> None:
             s.update(waiting=True, why="Kommt nach dem Einstiegstest. Was er schon zeigt, fällt hier weg.")
 
 
+def _vocab_done_since(account_id: int, step: dict, first: date, last: date) -> bool:
+    """Vokabelschritt der Freitagsliste: Geübte Wörter der Einheit vom Plantag bis
+    heute zusammen, so zählt auch das Wochenende (D205)."""
+    from . import vocab_pensum
+    subject, unit = step.get("subject") or "", (step.get("key") or "").split(":", 2)[-1]
+    ids = vocab_pensum._unit_words(account_id, subject, unit) if unit else None
+    seen: set[int] = set()
+    d = first
+    while d <= last:
+        seen |= vocab_pensum.practiced(account_id, d, ids)
+        d += timedelta(days=1)
+    return len(seen) >= int(step["target"])
+
+
 def open_count(account_id: int, day: date, until: date | None = None) -> int:
     """Offene Pflichtschritte des eingefrorenen Plans; ohne Plan keine."""
     steps = stored(account_id, day)
@@ -535,15 +551,16 @@ def _attach_papers(account_id: int, steps: list[dict], day: date) -> None:
             s["attempt_id"] = pool[s["exam_key"]].pop(0)
 
 
-def view(account_id: int, day: date, *, store: bool) -> dict:
+def view(account_id: int, day: date, *, store: bool, until: date | None = None) -> dict:
     """Der Plan für Heute. Berechnet und eingefroren wird nur für das Kind
     (auch am Elterngerät); Eltern sehen den festgehaltenen Plan oder, solange
-    das Kind heute noch nicht da war, eine Vorschau, die nichts festhält."""
+    das Kind heute noch nicht da war, eine Vorschau, die nichts festhält.
+    ``until``: Erledigtes zählt bis zu diesem Tag (die Freitagsliste am Wochenende)."""
     steps = ensure(account_id, day) if store else stored(account_id, day)
     frozen = steps is not None
     if steps is None:
         steps = compute(account_id, day)
-    checked = mark_done(account_id, steps, day)
+    checked = mark_done(account_id, steps, day, until)
     try:
         _attach_papers(account_id, checked, day)
     except Exception:
@@ -564,6 +581,31 @@ def view(account_id: int, day: date, *, store: bool) -> dict:
             "done": sum(1 for s in checked if s["done"]), "total": len(checked)}
 
 
+CARRY_DAYS = 21  # so weit zurück wird der letzte Schultag vor freien Tagen gesucht
+
+
+def carry_day(account_id: int, day: date) -> date | None:
+    """An einem freien Tag (Wochenende, Ferien) der letzte Schultag davor: Seine
+    Liste gilt bis zum Abend vor dem nächsten Schultag (D179, D189, D205)."""
+    school = rewards.school_days(account_id, day - timedelta(days=CARRY_DAYS), day)
+    if day in school:
+        return None
+    before = [d for d in school if d < day]
+    return max(before) if before else None
+
+
 def today(account_id: int, user, now: datetime | None = None) -> dict:
     now = now or rewards.now_local()
-    return view(account_id, now.date(), store=rewards.acting_child(user))
+    day = now.date()
+    store = rewards.acting_child(user)
+    carry = carry_day(account_id, day)
+    if carry is None:
+        return view(account_id, day, store=store)
+    # Freier Tag: kein neues Pensum, aber die Liste des letzten Schultags bleibt
+    # stehen, bis sie erledigt ist; Erledigtes vom Wochenende zählt für sie (D205).
+    out = view(account_id, carry, store=store, until=day)
+    nxt = min((d for d in school_days(account_id, day, day + timedelta(days=CARRY_DAYS)) if d > day), default=None)
+    out["carry"] = {"from": carry.isoformat(), "until": (nxt - timedelta(days=1)).isoformat() if nxt else None,
+                    "open": out["total"] - out["done"]}
+    out["free_day"] = True
+    return out
