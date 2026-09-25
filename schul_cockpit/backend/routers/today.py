@@ -170,7 +170,18 @@ async def photo_requests(account_id: int, day: str) -> list[dict]:
     try:
         from ..exams import resolve_exams
         from ..sources import photo_requests as requests
-        found = (await resolve_exams(account_id, days_ahead=14)).get("exams", [])
+        found = (await resolve_exams(account_id, days_ahead=28)).get("exams", [])
+        # Termine für den Lernplan (D180) merken, auch wenn die Klausurseite
+        # noch nie geöffnet wurde; Fotobitten bleiben bei 14 Tagen.
+        try:
+            from .. import mentor_opening
+            for e in found:
+                if e.get("exam_key") and e.get("date"):
+                    mentor_opening.remember_exam(account_id, e["exam_key"], e["date"])
+        except Exception:
+            pass
+        from datetime import date as _date, timedelta as _td
+        found = [e for e in found if (e.get("date") or "") <= (_date.fromisoformat(day) + _td(days=14)).isoformat()]
         try:
             # „Vorbereitet“ (D173): vor einer Arbeit alle Themen angefangen.
             from .. import rewards
