@@ -352,6 +352,13 @@ def summary(account_id: int, now: datetime | None = None) -> dict:
         for key, name, emoji, what, limits in BADGES:
             value = counts[key]
             level = _level(value, limits)
+            # Fällt die Grundlage weg (eine Auswertung zurückgehalten oder
+            # korrigiert), wird eine gespeicherte Stufe zurückgenommen (D203).
+            gone = [lv for (k, lv) in stored if k == key and lv > level]
+            if gone:
+                c.execute(f"DELETE FROM reward_badges WHERE account_id=? AND badge=? AND level IN ({','.join('?' * len(gone))})",
+                          (account_id, key, *gone))
+                LOG.info("Abzeichen %s Stufe %s für Konto %s zurückgenommen", key, gone, account_id)
             for lv in range(1, level + 1):
                 if (key, lv) not in stored:
                     c.execute("INSERT OR IGNORE INTO reward_badges(account_id,badge,level,reached_at) VALUES(?,?,?,?)",

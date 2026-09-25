@@ -206,3 +206,15 @@ def test_extra_mile_only_beyond_the_pensum_and_only_for_the_child(world, monkeyp
     assert reward_extras.note_extra_practice(1, 6, None, KID, START + timedelta(days=5))
     with closing(db.webapp_conn()) as c:
         assert c.execute("SELECT COUNT(*) FROM reward_events WHERE kind='extra'").fetchone()[0] == 2
+
+
+def test_a_badge_whose_basis_is_gone_is_taken_back(world):
+    """D203: Ein gespeichertes Abzeichen ohne Grundlage (etwa eine zurückgehaltene
+    Auswertung) wird beim nächsten Berechnen zurückgenommen."""
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO reward_badges(account_id,badge,level,reached_at) VALUES(1,'probearbeit',1,'2026-09-25T15:00:00+02:00')")
+    s = rewards.summary(1, at(START, 18))
+    assert next(b for b in s["badges"] if b["key"] == "probearbeit")["level"] == 0
+    assert all(r["badge"] != "probearbeit" for r in s["reached_today"])
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT COUNT(*) FROM reward_badges WHERE badge='probearbeit'").fetchone()[0] == 0

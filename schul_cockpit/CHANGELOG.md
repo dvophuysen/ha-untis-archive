@@ -1,3 +1,7 @@
+## 1.29.2
+
+- Ein Abzeichen wird zurückgenommen, wenn seine Grundlage wegfällt, etwa weil eine Auswertung zur Prüfung zurückgehalten wurde.
+
 ## 1.29.1
 
 - Die Prüfaufgabe nennt jetzt genau, wie oft eine Arbeit ausgewertet wurde; bei früheren Arbeiten war es nur einmal.
