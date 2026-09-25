@@ -43,14 +43,14 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  await learn.getByRole('button',{name:'Los',exact:true}).click();await page.getByRole('button',{name:'← Zurück zu Heute'}).waitFor();assert.equal(practicePosts,0,'open paper reopened');
  await page.getByRole('button',{name:'← Zurück zu Heute'}).click();await learn.getByRole('button',{name:'Los',exact:true}).waitFor();
  await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.getByRole('alert').filter({hasText:'Nicht gespeichert'}).waitFor();assert.equal(rating,null);
- failRating=false;await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.locator('#s-stunden button[aria-label="Verstanden"][aria-pressed="true"]').waitFor();assert.equal(rating,3);
+ failRating=false;await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.locator('#s-stunden .fold-head[aria-expanded="false"]').waitFor();assert.equal(rating,3);/* D187: erledigt klappt zu, antippen klappt auf */await page.locator('#s-stunden .fold-head').click();await page.locator('#s-stunden button[aria-label="Verstanden"][aria-pressed="true"]').waitFor();
  await page.locator('#s-aufgaben').getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Test failure',{exact:true}).waitFor();assert.equal(done,false);
- failTask=false;await page.locator('#s-aufgaben').getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('✓ Keine Aufgabe offen.').waitFor();assert.equal(done,true);
+ failTask=false;await page.locator('#s-aufgaben').getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.locator('#s-aufgaben .fold-head[aria-expanded="false"]').waitFor();await page.locator('#s-aufgaben .fold-head').click();await page.getByText('✓ Keine Aufgabe offen.').waitFor();assert.equal(done,true);
  await page.getByRole('button',{name:'Material für Sport',exact:true}).click();await page.getByRole('alert').filter({hasText:'Packen nicht gespeichert'}).waitFor();
  assert.equal(await page.locator('.bag-item[aria-pressed="true"]').count(),0);
  failPack=false;await page.getByRole('button',{name:'Material für Sport',exact:true}).click();await page.locator('.bag-item[aria-pressed="true"]').waitFor();
  studyDone=true;await page.reload();await page.locator('.bag-item[aria-pressed="true"]').waitFor();
- await page.locator('#s-lernen .learn-state').filter({hasText:'erledigt'}).waitFor();assert.equal(await page.locator('#s-lernen').getByRole('button',{name:'Los'}).count(),0);
+ await page.locator('#s-lernen .fold-head[aria-expanded="false"]').waitFor();assert.equal(await page.locator('#s-aufgaben .fold-head[aria-expanded="true"]').count(),1,'von Hand aufgeklappt bleibt offen');await page.locator('#s-lernen .fold-head').click();await page.locator('#s-lernen .learn-state').filter({hasText:'erledigt'}).waitFor();assert.equal(await page.locator('#s-lernen').getByRole('button',{name:'Los'}).count(),0);
  assert.equal(await page.locator('.bag-item[aria-pressed="true"]').count(),1);
  await page.getByRole('button',{name:'Material für Mathematik',exact:true}).click();await page.getByText('Geschafft. Freizeit!').waitFor();assert(await page.getByText(/Lernen erledigt/).count()>0,'done card names learning');
  await page.locator('.fold summary').click();

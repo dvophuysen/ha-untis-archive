@@ -249,3 +249,27 @@ def test_test_mode_blocks_paper_writes_but_not_the_pensum():
     assert view_mode.TEST_BLOCKED.match("/api/accounts/1/vocab/papers")
     assert view_mode.TEST_BLOCKED.match("/api/accounts/1/learning/vocab/attempts")
     assert not view_mode.TEST_BLOCKED.match("/api/accounts/1/vocabulary")
+
+
+def task(title, notes, due):
+    with closing(db.webapp_conn()) as c, c:
+        return c.execute("INSERT INTO tasks(account_id,title,notes,status,due_date,source,created_at,updated_at) "
+                         "VALUES(1,?,?,'open',?,'ha_todo','t','t')", (title, notes, due.isoformat())).lastrowid
+
+
+def test_a_vocab_test_announced_in_homework_becomes_the_pensum(env, free):
+    """D187: „Vokabeln Unit 3 lernen (Überprüfung … am TT.MM.JJJJ)“ reicht als Testtermin."""
+    words(60)
+    tid = task("Englisch", "Vocabulary Unit 3 lernen (Überprüfung der Vokabeln am 16.10.2026)\nFällig bis: Fr 16.10.",
+               MON + timedelta(days=11))
+    items = vp.daily(1, MON)
+    assert len(items) == 1 and items[0]["exam_key"] == f"task:{tid}" and items[0]["unit"] == "Unit 3"
+    assert items[0]["days_left"] == 9 and items[0]["why"].startswith("Der Vokabeltest ist")
+    assert vp.missing_units(1, MON) == []
+    # Erledigt oder ohne Lektion: kein Test; Lektion unbekannt: „fehlt“.
+    task("Englisch", "Vokabeln Unit 4 lernen (Überprüfung am 16.10.2026)", MON + timedelta(days=11))
+    task("Englisch", "Text lesen", MON + timedelta(days=2))
+    assert [m["unit_ref"] for m in vp.missing_units(1, MON)] == ["Unit 4"]
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("UPDATE tasks SET status='done' WHERE id=?", (tid,))
+    assert all(i["exam_key"] is None for i in vp.daily(1, MON))

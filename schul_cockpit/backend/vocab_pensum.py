@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 from collections import Counter
 from contextlib import closing
 from datetime import date, timedelta
@@ -75,6 +76,70 @@ def _upcoming(account_id: int, day: date) -> list[dict]:
             out.append({"exam_key": key, "date": date.fromisoformat(when[:10]), "topics": vocab_topics,
                         "only_vocab": len(vocab_topics) == len(mine)})
     return out
+
+
+# Vokabeltests stehen oft nur in der Hausaufgabe: „Vokabeln Lektion 2 lernen
+# (Überprüfung der Vokabeln von Lektion 2 am 02.10.2026)“ (D187).
+HOMEWORK_VOCAB = re.compile(r"vokabel|wortschatz|lernwörter|lernwoerter|vocabulary|vocab|vocabulario|words", re.I)
+HOMEWORK_UNIT = re.compile(r"\b(unidad|unit|lektion|lecci[oó]n|le[cç]on|m[oó]dulo|kapitel|chapter|module)\s*0*(\d{1,2})\b", re.I)
+HOMEWORK_DATE = re.compile(r"\bam\s+(\d{1,2})\.(\d{1,2})\.(\d{4})")
+
+
+def _unit_number(label: str) -> tuple[str, int] | None:
+    from .vocab import UNIT_KEY
+    m = UNIT_KEY.match((label or "").strip())
+    return (m.group(1).casefold()[:3], int(m.group(2))) if m else None
+
+
+def _homework_tests(account_id: int, day: date) -> list[dict]:
+    """Offene Hausaufgaben, die einen Vokabeltest zu einer Lektion ankündigen.
+    Termin: das Datum „am TT.MM.JJJJ“ im Text, sonst der Fälligkeitstag."""
+    from . import vocab
+    from .subject_names import SubjectCatalog
+    until = day + timedelta(days=HORIZON)
+    with closing(webapp_conn()) as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT id,title,notes,subject_name,subject_untis_id,due_date FROM tasks WHERE account_id=? "
+            "AND status NOT IN ('done','skipped') AND due_date IS NOT NULL AND due_date>? AND due_date<=?",
+            (account_id, day.isoformat(), until.isoformat()))]
+    if not rows:
+        return []
+    catalog = SubjectCatalog(account_id)
+    out = []
+    for row in rows:
+        text = f"{row.get('title') or ''} {row.get('notes') or ''}"
+        unit_ref = HOMEWORK_UNIT.search(text)
+        if not HOMEWORK_VOCAB.search(text) or not unit_ref:
+            continue
+        subject = (catalog.task(row).get("subject_name") or row.get("subject_name")
+                   or ((row.get("title") or "").split() or [""])[0])
+        if not subject or not vocab.language_of(subject):
+            continue
+        when = date.fromisoformat(row["due_date"][:10])
+        m = HOMEWORK_DATE.search(text)
+        if m:
+            try:
+                when = date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+            except ValueError:
+                pass
+        if not day < when <= until:
+            continue
+        want = (unit_ref.group(1).casefold()[:3], int(unit_ref.group(2)))
+        found = next(((u["unit"], u.get("label") or u["unit"]) for u in vocab.units(account_id, subject)
+                      if u.get("words") and _unit_number(u.get("label") or u["unit"]) == want), None)
+        out.append({"exam_key": f"task:{row['id']}", "date": when, "only_vocab": True, "subject": subject,
+                    "unit": found, "unit_ref": f"{unit_ref.group(1).capitalize()} {want[1]}", "task_id": row["id"]})
+    return sorted(out, key=lambda e: e["date"])
+
+
+def missing_units(account_id: int, day: date) -> list[dict]:
+    """Angekündigte Vokabeltests, deren Lektion noch nicht im Trainer steht."""
+    try:
+        return [{"subject": e["subject"], "unit_ref": e["unit_ref"], "date": e["date"].isoformat(), "task_id": e["task_id"]}
+                for e in _homework_tests(account_id, day) if not e["unit"]]
+    except Exception:
+        LOG.warning("Vokabeltests aus Hausaufgaben nicht lesbar", exc_info=True)
+        return []
 
 
 def trainer_unit(account_id: int, subject: str, places: list[dict]) -> tuple[str, str] | None:
@@ -245,7 +310,28 @@ def daily(account_id: int, day: date) -> list[dict]:
     Grundpensum) und why; dazu unit_label, practiced und die Rechengrößen."""
     out: list[dict] = []
     seen: set[tuple[str, str]] = set()
-    for exam in _upcoming(account_id, day):
+    try:
+        homework = [e for e in _homework_tests(account_id, day) if e["unit"]]
+    except Exception:
+        LOG.warning("Vokabeltests aus Hausaufgaben nicht lesbar", exc_info=True)
+        homework = []
+    # Arbeiten mit Vokabelthema und angekündigte Tests aus Hausaufgaben, der nächste zuerst.
+    for exam in sorted(_upcoming(account_id, day) + homework, key=lambda e: e["date"]):
+        if "topics" not in exam:
+            subject, (unit, label) = exam["subject"], exam["unit"]
+            if (subject.casefold(), unit) in seen:
+                continue
+            try:
+                entry = _test_entry(account_id, day, exam, subject, unit, label)
+            except Exception:
+                LOG.warning("Vokabelpensum für %s nicht berechenbar", label, exc_info=True)
+                continue
+            if entry:
+                seen.add((subject.casefold(), unit))
+                out.append(entry)
+            if len(out) >= MAX_ENTRIES:
+                return out
+            continue
         for topic in exam["topics"]:
             try:
                 found = trainer_unit(account_id, topic["subject"], json.loads(topic["places_json"] or "[]"))

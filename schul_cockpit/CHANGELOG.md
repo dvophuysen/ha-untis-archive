@@ -1,3 +1,8 @@
+## 1.24.1
+
+- Heute wird kürzer, je mehr erledigt ist: Aufgaben, Lernen, Tasche und Feedback klappen sich zu, sobald sie geschafft sind. Eine Zeile bleibt stehen, ein Tipp klappt wieder auf; was man von Hand aufklappt, bleibt bis zum Abend offen. „Aufgabe eintragen“ bleibt immer sichtbar.
+- Vokabeltests, die nur in einer Hausaufgabe stehen („Vokabeln Lektion 2 lernen, Überprüfung am 02.10.“), zählen jetzt als Testtermin: Das Vokabelpensum verteilt die Wörter der Lektion bis dahin.
+
 ## 1.24.0
 
 - Eltern haben eine eigene Ansicht: Familie, Erledigen, Scannen und Einstellen. Die Kinderansicht öffnet der Profilknopf oben rechts.

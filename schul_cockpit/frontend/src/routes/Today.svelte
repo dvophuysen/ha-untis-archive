@@ -176,7 +176,25 @@
     } catch (e) { stepError = e instanceof ApiError ? e.message : 'Die Übungsarbeit konnte nicht geöffnet werden.'; }
     finally { stepBusy = ''; }
   }
-  function jump(id) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  // Erledigte Bereiche klappen sich zu (D187); von Hand Aufgeklapptes bleibt bis zum Abend offen.
+  function readOpened() {
+    try { const v = JSON.parse(localStorage.getItem('today-open') || '{}'); return v.day === isoToday() ? (v.keys || {}) : {}; }
+    catch { return {}; }
+  }
+  let opened = $state(readOpened());
+  function setOpen(key, value) {
+    opened = { ...opened, [key]: value };
+    try { localStorage.setItem('today-open', JSON.stringify({ day: isoToday(), keys: opened })); } catch { /* nur Komfort */ }
+  }
+  const finished = $derived({
+    's-aufgaben': !openTasks.length, 's-lernen': !learnOpen && !paperId,
+    's-tasche': !!bag?.packed, 's-stunden': !feedbackOpen,
+  });
+  const folded = (key) => !!finished[key] && !opened[key];
+  async function jump(id) {
+    if (folded(id)) { setOpen(id, true); await tick(); }
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   const ringStyle = (d, n) => `background:conic-gradient(var(--accent) ${n ? Math.round(d / n * 100) : 0}%, var(--bg-elevated) 0)`;
 </script>
 
@@ -291,16 +309,19 @@
 
   {#if afterSchool && nextSchoolDay}
     <section class="sec" id="s-aufgaben" data-section="aufgaben">
-      <h3>Aufgaben bis {dayWord(nextSchoolDay)} <small>{ringTasks.length - openTasks.length} von {ringTasks.length}</small></h3>
+      {#if finished['s-aufgaben']}<button class="fold-head" onclick={() => setOpen('s-aufgaben', folded('s-aufgaben'))} aria-expanded={!folded('s-aufgaben')}><span>✓ Aufgaben bis {dayWord(nextSchoolDay)}</span><small>{ringTasks.length - openTasks.length} von {ringTasks.length} {folded('s-aufgaben') ? '▸' : '▾'}</small></button>{:else}<h3>Aufgaben bis {dayWord(nextSchoolDay)} <small>{ringTasks.length - openTasks.length} von {ringTasks.length}</small></h3>{/if}
       <QuickAdd {accountId} {day} lessons={data.lessons} defaultSubject={subjectNow} nextBySubject={data.next_by_subject ?? {}} {nextSchoolDay} onsaved={saved} />
+      {#if !folded('s-aufgaben')}
       <div class="list">
         {#each work.due as task (task.id)}<TaskRow {accountId} {task} onchange={() => saved()} onopen={t => editing = t} />
         {:else}<p class="all-clear">✓ Keine Aufgabe offen.</p>{/each}
       </div>
+      {/if}
     </section>
     <section class="sec" id="s-lernen" data-section="lernen">
-      <h3>Lernen <small>{learnSteps.length ? `${learnSteps.length - learnOpen} von ${learnSteps.length}` : 'heute frei'}</small></h3>
-      {#if paperId}
+      {#if finished['s-lernen']}<button class="fold-head" onclick={() => setOpen('s-lernen', folded('s-lernen'))} aria-expanded={!folded('s-lernen')}><span>✓ Lernen</span><small>{learnSteps.length ? `${learnSteps.length - learnOpen} von ${learnSteps.length}` : 'heute frei'} {folded('s-lernen') ? '▸' : '▾'}</small></button>{:else}<h3>Lernen <small>{learnSteps.length ? `${learnSteps.length - learnOpen} von ${learnSteps.length}` : 'heute frei'}</small></h3>{/if}
+      {#if folded('s-lernen')}
+      {:else if paperId}
         <PracticePaper {accountId} attemptId={paperId} backLabel="Zurück zu Heute" onclose={() => { paperId = null; load(); }} />
       {:else}
         {#if tightText}<p class="learn-hint">{tightText}</p>{/if}
@@ -317,13 +338,13 @@
       {/if}
     </section>
     <section class="sec" id="s-tasche" data-section="tasche">
-      <h3>Tasche für {WEEKDAYS[new Date(nextSchoolDay + 'T12:00:00').getDay()]} <small>antippen, wenn drin</small></h3>
-      <PackingChecklist {accountId} schoolDay={nextSchoolDay} variant="grid" onstatus={(s) => (bag = s)} />
+      {#if finished['s-tasche']}<button class="fold-head" onclick={() => setOpen('s-tasche', folded('s-tasche'))} aria-expanded={!folded('s-tasche')}><span>✓ Tasche für {WEEKDAYS[new Date(nextSchoolDay + 'T12:00:00').getDay()]}</span><small>{bag?.packed ? 'alles drin' : 'antippen, wenn drin'} {folded('s-tasche') ? '▸' : '▾'}</small></button>{:else}<h3>Tasche für {WEEKDAYS[new Date(nextSchoolDay + 'T12:00:00').getDay()]} <small>{bag?.packed ? 'alles drin' : 'antippen, wenn drin'}</small></h3>{/if}
+      <div class:hidden-fold={folded('s-tasche')}><PackingChecklist {accountId} schoolDay={nextSchoolDay} variant="grid" onstatus={(s) => (bag = s)} /></div>
     </section>
     {#if endedLessons.length || (data.lessons ?? []).length}
       <section class="sec" id="s-stunden" data-section="rueckmelden">
-        <h3>Stunden von heute <small>{endedLessons.length - feedbackOpen} von {endedLessons.length}</small></h3>
-        <DaySchedule {accountId} lessons={data.lessons} {now} live={false} onsaved={() => saved('Rückmeldung gespeichert.')} />
+        {#if finished['s-stunden']}<button class="fold-head" onclick={() => setOpen('s-stunden', folded('s-stunden'))} aria-expanded={!folded('s-stunden')}><span>✓ Stunden von heute</span><small>{endedLessons.length - feedbackOpen} von {endedLessons.length} {folded('s-stunden') ? '▸' : '▾'}</small></button>{:else}<h3>Stunden von heute <small>{endedLessons.length - feedbackOpen} von {endedLessons.length}</small></h3>{/if}
+        {#if !folded('s-stunden')}<DaySchedule {accountId} lessons={data.lessons} {now} live={false} onsaved={() => saved('Rückmeldung gespeichert.')} />{/if}
       </section>
     {/if}
     {#if data.retakes?.length || data.photo_requests?.length}
@@ -409,6 +430,10 @@
   .ring-btn.full .ring span{background:var(--accent);color:var(--accent-fg);font-weight:800}
   .ring-btn b{font-size:var(--fs-xs)}.ring-btn small{font-size:.72rem;color:var(--fg-muted)}
   .sec{margin-top:var(--sp-4)}
+  .fold-head{width:100%;display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);min-height:44px;padding:var(--sp-2) var(--sp-3);background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-md);color:var(--fg);font-weight:700;font-size:var(--fs-md);text-align:left;margin-bottom:var(--sp-2)}
+  .fold-head span{color:var(--good-fg, var(--fg))}
+  .fold-head small{font-weight:600;color:var(--fg-muted);font-size:var(--fs-xs);white-space:nowrap}
+  .hidden-fold{display:none}
   .sec h3,.fold h3{font-size:var(--fs-md);margin:0 0 var(--sp-2);display:flex;justify-content:space-between;align-items:baseline;gap:var(--sp-2)}
   .sec h3 small,.fold summary small{font-weight:600;color:var(--fg-muted);font-size:var(--fs-xs)}
   .list{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-md);padding:0 var(--sp-3)}
