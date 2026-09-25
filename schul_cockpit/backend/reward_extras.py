@@ -10,6 +10,7 @@ später nicht mehr bekannt ist. Extra zählt nur zusätzlich, nie statt Pflicht.
 from __future__ import annotations
 
 import logging
+import sqlite3
 from contextlib import closing
 from datetime import date, timedelta
 
@@ -33,11 +34,12 @@ def _extra(account_id: int, ref: str, day: date) -> None:
                   (account_id, "extra", ref, day.isoformat(), now_local().isoformat()))
 
 
-def note_extra_vocab(account_id: int, user, day: date | None = None) -> bool:
+def note_extra_vocab(account_id: int, user, day: date | None = None, *, acting: bool | None = None) -> bool:
     """Vokabeln über das Pensum hinaus: Ist das Tagespensum erledigt und hat das
-    Kind heute mindestens zehn Wörter mehr geübt, zählt der Tag einmal."""
+    Kind heute mindestens zehn Wörter mehr geübt, zählt der Tag einmal.
+    ``acting`` wie bei rewards.note (Hintergrundlauf)."""
     from . import rewards, vocab_pensum
-    if not rewards.acting_child(user):
+    if not (rewards.acting_child(user) if acting is None else acting):
         return False
     day = day or _today()
     try:
@@ -139,8 +141,12 @@ def ready_exams(c, account_id: int, answers: list[dict], start: date, today: dat
     try:
         dates = c.execute("SELECT exam_key,exam_date FROM exam_dates WHERE account_id=? AND exam_date>=? AND exam_date<=?",
                           (account_id, start.isoformat(), today.isoformat())).fetchall()
-    except Exception:
-        return 0
+    except sqlite3.OperationalError as exc:
+        # Ohne Termintabelle gibt es nichts zu zählen; jeder andere Lesefehler
+        # ist „unbekannt“ und darf keine Stufe zurücknehmen (counts).
+        if "no such table" in str(exc).lower():
+            return 0
+        raise
     count = 0
     for key, when in dates:
         topics = [dict(r) for r in c.execute(
@@ -155,8 +161,10 @@ def ready_exams(c, account_id: int, answers: list[dict], start: date, today: dat
 
 
 def counts(account_id: int, start: date, today: date) -> dict:
-    """Werte der vier Abzeichen für rewards.summary."""
-    out = {"probearbeit": 0, "aufsteiger": 0, "zielniveau": 0, "extrameile": 0}
+    """Werte der vier Abzeichen für rewards.summary. Ist die Quelle nicht
+    lesbar, steht None („unbekannt“) statt 0: Eine 0 nahm bis 1.31 erreichte
+    Stufen zurück, und beim nächsten Lesen wurden sie ein zweites Mal gefeiert."""
+    out: dict[str, int | None] = {"probearbeit": None, "aufsteiger": None, "zielniveau": None, "extrameile": None}
     try:
         with closing(webapp_conn()) as c:
             answers = _answers(c, account_id)

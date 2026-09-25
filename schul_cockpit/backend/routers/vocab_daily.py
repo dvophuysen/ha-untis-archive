@@ -13,11 +13,11 @@ import io
 import json
 import random
 from contextlib import closing
-from datetime import date
+from datetime import date, datetime, timedelta
 from html import escape
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Response, UploadFile
 from fastapi.responses import HTMLResponse
 from pydantic import Field, ValidationError
 
@@ -223,7 +223,7 @@ async def upload_page(account_id: int, pid: int, file: UploadFile = File(...), u
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
         r = _row(c, account_id, pid, user)
-        if r["status"] != "active":
+        if _status(r) != "active":
             raise HTTPException(409, "Das Blatt ist schon ausgewertet.")
         if c.execute("SELECT COUNT(*) FROM vocab_paper_pages WHERE paper_id=?", (pid,)).fetchone()[0] >= MAX_PAGES:
             raise HTTPException(413, f"Bitte höchstens {MAX_PAGES} Seiten je Blatt.")
@@ -248,10 +248,33 @@ def delete_page(account_id: int, pid: int, page_id: int, user: CurrentUser = Dep
     access(user, account_id, write=True)
     with closing(webapp_conn()) as c, c:
         r = _row(c, account_id, pid, user)
-        if r["status"] != "active":
+        if _status(r) != "active":
             raise HTTPException(409, "Das Blatt ist schon ausgewertet.")
         c.execute("DELETE FROM vocab_paper_pages WHERE id=? AND paper_id=?", (page_id, pid))
     return view(account_id, pid, user)
+
+
+# Eine Auswertung, die so lange „grading“ steht, gilt als abgebrochen (Neustart
+# mitten in der Auswertung): Das Blatt lässt sich wieder auswerten.
+GRADING_STALE = timedelta(minutes=10)
+
+
+def _grading_live(r) -> bool:
+    """Läuft die Auswertung dieses Blatts wirklich noch?"""
+    if r["status"] != "grading":
+        return False
+    started = r["grading_started_at"] if "grading_started_at" in r.keys() else None
+    if not started:
+        return False  # vor opt_day begonnen: nach jedem Neustart abgelaufen
+    try:
+        return datetime.now(datetime.fromisoformat(started).tzinfo) - datetime.fromisoformat(started) < GRADING_STALE
+    except (TypeError, ValueError):
+        return False
+
+
+def _status(r) -> str:
+    """Der Stand des Blatts; eine abgebrochene Auswertung zählt als offen."""
+    return "active" if r["status"] == "grading" and not _grading_live(r) else r["status"]
 
 
 def _ai_enabled(account_id: int) -> bool:
@@ -305,7 +328,8 @@ def _count(c, account_id: int, r: dict, items: list[dict], words: dict, user_id)
 
 
 @router.post("/papers/{pid}/grade")
-async def grade_paper(account_id: int, pid: int, user: CurrentUser = Depends(get_current_user)):
+async def grade_paper(account_id: int, pid: int, background: BackgroundTasks,
+                      user: CurrentUser = Depends(get_current_user)):
     """Alle Seiten zweimal unabhängig auswerten, bei Abweichung ein drittes Mal:
     jedes Wort richtig, falsch oder unklar. Es zählt nur, worin zwei Durchgänge
     übereinstimmen; bleiben zu viele Wörter offen, prüfen die Eltern (D202)."""
@@ -317,12 +341,16 @@ async def grade_paper(account_id: int, pid: int, user: CurrentUser = Depends(get
         r = _row(c, account_id, pid, user)
         if r["status"] in ("graded", "review"):
             return view(account_id, pid, user)
-        if r["status"] == "grading":
+        if _grading_live(r):
             raise HTTPException(409, "Das Blatt wird gerade ausgewertet. Bitte gleich neu laden.")
         pages = [x[0] for x in c.execute("SELECT file_bytes FROM vocab_paper_pages WHERE paper_id=? ORDER BY id", (pid,))]
         if not pages:
             raise HTTPException(422, "Bitte zuerst die Seiten fotografieren.")
-        c.execute("UPDATE vocab_papers SET status='grading' WHERE id=?", (pid,))
+        # Der Beginn ist zugleich die Marke dieser Auswertung: Nur wer sie
+        # hält, schließt ab oder setzt zurück (eine abgelaufene, die doch noch
+        # fertig wird, zählt nicht doppelt).
+        token = now_iso()
+        c.execute("UPDATE vocab_papers SET status='grading', grading_started_at=? WHERE id=?", (token, pid))
     try:
         import base64
         items = json.loads(r["items_json"])
@@ -361,21 +389,27 @@ async def grade_paper(account_id: int, pid: int, user: CurrentUser = Depends(get
                   "check": {"passes": len(passes), "unsure": open_nrs, "held": held}}
         counted: list[int] = []
         with closing(webapp_conn()) as c, c:
+            # Zählen und Abschließen als eine Einheit, und nur, solange diese
+            # Auswertung das Blatt hält: sonst zählten zwei Läufe doppelt.
+            c.execute("BEGIN IMMEDIATE")
             r = _row(c, account_id, pid, user)
+            if r["status"] != "grading" or r["grading_started_at"] != token:
+                raise HTTPException(409, "Das Blatt wurde inzwischen anders ausgewertet. Bitte neu laden.")
             # Zurückgehalten zählt nichts im Trainer, bis die Eltern die offenen Wörter geprüft haben.
             if r["counts"] and not held:
                 counted = _count(c, account_id, r, items, words, user.id)
-            c.execute("UPDATE vocab_papers SET status=?,result_json=?,graded_at=? WHERE id=?",
+            c.execute("UPDATE vocab_papers SET status=?,result_json=?,graded_at=? WHERE id=? AND status='grading'",
                       ("review" if held else "graded", json.dumps(result, ensure_ascii=False), now_iso(), pid))
         # Die Mühe des Kindes zählt für die Belohnung auch, wenn die App schlecht lesen konnte;
         # für den Lernstand zählt ein zurückgehaltenes Blatt erst nach der Prüfung.
         done = counted or ([it["word_id"] for it in items if words[str(it["nr"])]["verdict"] != "unklar"] if held else [])
         if done:
-            _reward(account_id, pid, done, user)
+            _reward(account_id, pid, done, user, background)
         return view(account_id, pid, user)
     finally:
         with closing(webapp_conn()) as c, c:
-            c.execute("UPDATE vocab_papers SET status='active' WHERE id=? AND status='grading'", (pid,))
+            c.execute("UPDATE vocab_papers SET status='active' WHERE id=? AND status='grading' AND grading_started_at=?",
+                      (pid, token))
 
 
 class ReviewIn(InputModel):
@@ -429,8 +463,9 @@ def review_items(account_id: int) -> list[dict]:
     return out
 
 
-def _reward(account_id: int, pid: int, word_ids: list[int], user) -> None:
-    """Jedes gewertete Wort zählt für den Wortschatz wie im Trainer (D173)."""
+def _reward(account_id: int, pid: int, word_ids: list[int], user, background: BackgroundTasks | None = None) -> None:
+    """Jedes gewertete Wort zählt für den Wortschatz wie im Trainer (D173).
+    Mit ``background`` läuft die Prüfung des Tages nach der Antwort."""
     from .. import rewards, reward_extras
     if not rewards.acting_child(user):
         return
@@ -442,5 +477,8 @@ def _reward(account_id: int, pid: int, word_ids: list[int], user) -> None:
                           (account_id, "vocab", f"{wid}:paper{pid}", day, now_iso()))
     except Exception:
         pass
+    if background is not None:
+        rewards.note_later(background, account_id, "vocab", f"{word_ids[-1]}:paper{pid}", user, extra_vocab=True)
+        return
     rewards.note(account_id, "vocab", f"{word_ids[-1]}:paper{pid}", user)
     reward_extras.note_extra_vocab(account_id, user)

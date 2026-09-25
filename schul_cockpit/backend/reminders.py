@@ -17,11 +17,13 @@ ZONE = ZoneInfo('Europe/Berlin')
 DEFAULT_MORNING = '06:45'
 
 
-def snapshot(account, now, morning=False):
+def snapshot(account, now, morning=False, photos=True):
     """Do not infer physical omissions or generate material requirements.
 
     Abends zählt die Tasche und die Aufgaben für morgen, morgens vor dem
-    Aufbruch die für heute: die Tasche von gestern Abend."""
+    Aufbruch die für heute: die Tasche von gestern Abend. ``photos=False``
+    lässt die Heftseiten aus (0), etwa für den Tagesabschluss, der sie nicht
+    zählt; ihr Lesen fragt den Arbeitenkalender ab."""
     target = now.date() if morning else now.date() + timedelta(days=1)
     items, fingerprint, schedule = packing_plan(account, target)
     _, _, today_schedule = packing_plan(account, now.date())
@@ -37,7 +39,7 @@ def snapshot(account, now, morning=False):
                 and not lesson.get('was_absent') and lesson.get('id') not in ratings):
             feedback += 1
     return dict(homework=homework, material=len(items)-bag['confirmed_count'], feedback=feedback,
-                photos=photo_count(account, now))
+                photos=photo_count(account, now) if photos else 0)
 
 
 # Der Tagesstand wird jede Minute gelesen; die Arbeiten der nächsten zwei Wochen
@@ -151,12 +153,61 @@ def morning_fallback(setting, now):
     return sent
 
 
-def run_once(now=None):
-    fixed_clock = now
-    now = (now or datetime.now(ZONE)).astimezone(ZONE)
+# Ein Konto ohne Einstellungszeile: alle Mitteilungen aus, nur der Tagesstand
+# wird mitgeschrieben.
+_ALL_OFF = dict(enabled=0, remind_at=None, morning_enabled=0, morning_at=None,
+                afternoon_enabled=0, afternoon_delay=20)
+
+
+def _settings():
+    """Jedes Konto mit seinen Schaltern. Bis 1.31 liefen nur Konten mit
+    eingeschalteter Abend-Erinnerung; Tagesabschluss, Morgen- und
+    Nachmittagsmitteilung fielen für alle anderen still aus."""
     with closing(webapp_conn()) as c:
-        settings = [dict(r) for r in c.execute('SELECT * FROM reminder_settings WHERE enabled=1')]
-    for setting in settings:
+        found = {r['account_id']: dict(r) for r in c.execute('SELECT * FROM reminder_settings')}
+    try:
+        from .parent_report import accounts
+        for account, _name in accounts():
+            found.setdefault(account, dict(_ALL_OFF, account_id=account))
+    except Exception:
+        LOG.debug('Kontenliste nicht lesbar, nur Konten mit Einstellungen', exc_info=True)
+    return [found[k] for k in sorted(found)]
+
+
+# Geschafft-Prüfung ohne Handlung des Kindes (Eltern oder HA erledigen den
+# letzten Punkt): alle fünf Minuten je Konto, nicht jede Minute.
+REWARD_EVERY = timedelta(minutes=5)
+_REWARD_CHECKED: dict[int, datetime] = {}
+
+
+def check_rewards(account, now):
+    """Den Tag prüfen, wenn niemand die App öffnet. Vergibt nichts, was die
+    Prüfung bei einer Handlung des Kindes nicht auch vergäbe: Ohne eigene
+    Handlung des Kindes an dem Tag zählt kein Tag (rewards.evaluate). Der
+    Zeitpunkt für „Frühstarter“ ist der der Prüfung, also nie früher als der
+    Moment, in dem wirklich alles erledigt war."""
+    last = _REWARD_CHECKED.get(account)
+    if last is not None and timedelta(0) <= now - last < REWARD_EVERY:
+        return False
+    _REWARD_CHECKED[account] = now
+    today = now.date()
+    with closing(webapp_conn()) as c:
+        # Heute schon geschafft, oder in zwei Wochen keine Handlung: nichts zu tun.
+        if c.execute('SELECT 1 FROM reward_days WHERE account_id=? AND school_day=?',
+                     (account, today.isoformat())).fetchone():
+            return False
+        if not c.execute('SELECT 1 FROM reward_activity WHERE account_id=? AND day>=? LIMIT 1',
+                         (account, (today - timedelta(days=14)).isoformat())).fetchone():
+            return False
+    from . import request_cache, rewards
+    with request_cache.scope():
+        rewards.evaluate(account, now)
+    return True
+
+
+def run_once(now=None):
+    now = (now or datetime.now(ZONE)).astimezone(ZONE)
+    for setting in _settings():
         account = setting['account_id']
         try:
             morning_fallback(setting, now)
@@ -169,10 +220,18 @@ def run_once(now=None):
         try:
             # Der Abend gilt als erledigt, sobald nichts mehr offen ist — ohne
             # dass jemand etwas bestätigen muss. Deshalb wird jede Runde
-            # nachgesehen, nicht nur zur Erinnerungszeit.
-            day_close.record_if_clear(account, now.date().isoformat(), snapshot(account, now), now)
+            # nachgesehen, nicht nur zur Erinnerungszeit. Die Heftseiten zählen
+            # dafür nicht (day_close.CLOSING_COUNTS) und werden nicht gelesen.
+            day_close.record_if_clear(account, now.date().isoformat(), snapshot(account, now, False, False), now)
         except Exception:
             LOG.warning('Tagesstand nicht lesbar für Konto %s', account, exc_info=True)
+        try:
+            check_rewards(account, now)
+        except Exception:
+            LOG.warning('Belohnung nicht prüfbar für Konto %s', account, exc_info=True)
+        # Die Abend-Erinnerung hängt an ihrem eigenen Schalter.
+        if not setting.get('enabled'):
+            continue
         if not due(setting['remind_at'], now):
             continue
         try:

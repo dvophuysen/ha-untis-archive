@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from ..audit import is_demo, log as audit_log, snapshot_task
@@ -220,6 +220,7 @@ def create_task(
 async def patch_task(
     task_id: int,
     body: TaskPatch,
+    background: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     if body.task_type is not None and body.task_type not in VALID_TYPES:
@@ -237,6 +238,13 @@ async def patch_task(
         if existing is None:
             raise HTTPException(status_code=404, detail="task not found")
         assert_account_access(user, existing["account_id"])
+
+        # „Entfällt“ zählt wie erledigt (Serie, Tagesabschluss); das
+        # entscheiden Eltern, nicht das Kind per Schnittstelle.
+        if body.status == "skipped" and existing["status"] != "skipped":
+            from ..view_mode import acts_as_parent
+            if not acts_as_parent(user):
+                raise HTTPException(status_code=403, detail="Nur Eltern können eine Aufgabe als entfallen markieren.")
 
         before = snapshot_task(conn, task_id)
         is_ha_task = existing["source"] == "ha_todo"
@@ -312,8 +320,9 @@ async def patch_task(
         except Exception:
             pass
     if body.status == "done":
+        # Nach der Antwort: Die Prüfung des Tages hielt sonst die ganze App an.
         from .. import rewards
-        rewards.note(account_id, "task", task_id, user)
+        rewards.note_later(background, account_id, "task", task_id, user)
 
     return {"ok": True}
 
@@ -351,6 +360,9 @@ def delete_task(
         )
     finally:
         conn.close()
+    # Anlegen und wieder Löschen darf „Notiert“ nicht hochzählen.
+    from .. import rewards
+    rewards.forget_note(existing["account_id"], task_id)
     return {"ok": True}
 
 

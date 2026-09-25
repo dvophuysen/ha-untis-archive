@@ -44,16 +44,30 @@ class SupervisorClient:
         """Return all items of a todo list entity (open and completed)."""
         url = f"{self._base}/services/todo/get_items?return_response"
         payload = {"entity_id": entity_id}
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(url, headers=self._headers(), json=payload)
+        # Zeitüberschreitung und Verbindungsfehler sind ein gescheiterter
+        # Abruf wie ein 500er; roh durchgereicht brachen sie den Abgleich
+        # aller Konten ab und den manuellen Abgleich mit 500.
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(url, headers=self._headers(), json=payload)
+        except httpx.HTTPError as exc:
+            raise SupervisorError(f"todo.get_items failed for {entity_id}: {exc!r}") from exc
         if resp.status_code >= 400:
             raise SupervisorError(
                 f"todo.get_items failed for {entity_id}: {resp.status_code} {resp.text}"
             )
-        data = resp.json()
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            raise SupervisorError(f"todo.get_items for {entity_id}: keine JSON-Antwort") from exc
         # HA returns: {"service_response": {entity_id: {"items": [...]}}}
-        svc_resp = data.get("service_response", {}) or {}
-        bucket = svc_resp.get(entity_id, {}) or {}
+        svc_resp = (data.get("service_response") if isinstance(data, dict) else None) or {}
+        bucket = svc_resp.get(entity_id) if isinstance(svc_resp, dict) else None
+        if not isinstance(bucket, dict):
+            # Fehlt die Liste in der Antwort (Entität gerade nicht geladen,
+            # umbenannt), ist das kein „leer“: Der Abgleich würde sonst alle
+            # offenen Aufgaben als in HA gelöscht wegräumen.
+            raise SupervisorError(f"todo.get_items: {entity_id} fehlt in der Antwort")
         return bucket.get("items", []) or []
 
     async def update_todo_item(
@@ -70,8 +84,11 @@ class SupervisorClient:
             payload["status"] = status
         if rename is not None:
             payload["rename"] = rename
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(url, headers=self._headers(), json=payload)
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(url, headers=self._headers(), json=payload)
+        except httpx.HTTPError as exc:
+            raise SupervisorError(f"todo.update_item failed for {entity_id}: {exc!r}") from exc
         if resp.status_code >= 400:
             raise SupervisorError(
                 f"todo.update_item failed for {entity_id}: {resp.status_code} {resp.text}"
