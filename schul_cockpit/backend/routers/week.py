@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..courses import hidden_keys, lesson_is_hidden
@@ -81,3 +81,32 @@ def week(
         "end": end_date.isoformat(),
         "lessons": lessons,
     }
+
+
+def _iso(value: str | None, name: str) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"{name}: YYYY-MM-DD erwartet")
+
+
+@router.get("/accounts/{account_id}/week/rolling")
+async def week_rolling(
+    account_id: int,
+    from_: str | None = Query(default=None, alias="from", description="erster Tag, YYYY-MM-DD"),
+    before: str | None = Query(default=None, description="die Schultage vor diesem Tag, YYYY-MM-DD"),
+    days: int = Query(default=5, ge=1, le=10),
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Die nächsten Schultage in einem Aufruf (D184): Leisten, Stunden,
+    Abweichungen, Arbeiten mit Lernstand, Hausaufgaben, für Vergangenes der
+    Rückblick. Ohne Parameter ab heute."""
+    assert_account_access(user, account_id)
+    from zoneinfo import ZoneInfo
+    from .. import week_rolling as wr
+    from ..learning import today_local
+    now = datetime.now(ZoneInfo("Europe/Berlin")).replace(tzinfo=None)
+    return await wr.rolling(account_id, today_local(), now, start=_iso(from_, "from"),
+                            before=_iso(before, "before"), count=days)

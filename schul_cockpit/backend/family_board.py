@@ -315,6 +315,25 @@ def _state(lesson: dict) -> str:
     return "normal"
 
 
+def day_changes(periods: list[dict]) -> list[dict]:
+    """Was an einem Tag vom Plan abweicht, in Worten und ungekürzt: Ausfälle
+    (eine Doppelstunde als eine Zeile), Vertretungen, Raumwechsel. Die Leiste
+    der Familienkarte (D170) und die Woche (D184) lesen dieselbe Liste."""
+    out, groups = [], {}
+    for p in periods:
+        if p["state"] == "cancelled":
+            groups.setdefault(p["subject"], []).append(p)
+    for subject, items in groups.items():
+        out.append({"kind": "cancelled", "subject": subject, "start": items[0]["start"],
+                    "text": f"{subject} {items[0]['start']}–{items[-1]['end']} fällt aus" if len(items) > 1
+                    else f"{subject} {items[0]['start']} fällt aus"})
+    out += [{"kind": "sub", "subject": p["subject"], "start": p["start"], "text": f"{p['subject']} {p['start']} Vertretung"}
+            for p in periods if p["state"] == "sub"]
+    out += [{"kind": "room", "subject": p["subject"], "start": p["start"], "text": f"{p['subject']} in Raum {p['room']}"}
+            for p in periods if p["room_changed"] and p["state"] != "cancelled" and p["room"]]
+    return out
+
+
 def schedule_day(day: str, lessons: list[dict], today: date, now: datetime, exam_subjects: set[str]) -> dict:
     """Ein Schultag als Leiste: Stunden mit Zustand, Beginn und Ende nach Plan
     und tatsächlich, und in Worten, was abweicht."""
@@ -337,15 +356,8 @@ def schedule_day(day: str, lessons: list[dict], today: date, now: datetime, exam
     start = min((_clock(l.get("start_time")) for l in held if _clock(l.get("start_time")) is not None), default=None)
     end = max((_clock(l.get("end_time")) for l in held if _clock(l.get("end_time")) is not None), default=None)
     fmt = lambda v: f"{v // 100:02d}:{v % 100:02d}" if v is not None else None
-    notes, groups = [], {}
-    for p in periods:
-        if p["state"] == "cancelled":
-            groups.setdefault(p["subject"], []).append(p)
-    for subject, items in groups.items():
-        notes.append(f"{subject} {items[0]['start']}–{items[-1]['end']} fällt aus" if len(items) > 1
-                     else f"{subject} {items[0]['start']} fällt aus")
-    notes += [f"{p['subject']} {p['start']} Vertretung" for p in periods if p["state"] == "sub"]
-    notes += [f"{p['subject']} in Raum {p['room']}" for p in periods if p["room_changed"] and p["state"] != "cancelled" and p["room"]]
+    changes = day_changes(periods)
+    notes = [c["text"] for c in changes]
     notes += [f"{p['subject']}: Arbeit" for p in periods if p["exam"]][:1]
     all_out = bool(lessons) and not held
     early = bool(end and planned_end and end < planned_end)
@@ -356,7 +368,7 @@ def schedule_day(day: str, lessons: list[dict], today: date, now: datetime, exam
     return {"date": day, "label": "Heute" if is_today else day_label(day), "is_today": is_today,
             "start": fmt(start), "end": fmt(end), "planned_start": fmt(planned_start), "planned_end": fmt(planned_end),
             "early_end": early, "late_start": late, "all_cancelled": all_out, "headline": headline,
-            "deviates": bool(headline or notes), "notes": notes[:4], "periods": periods}
+            "deviates": bool(headline or notes), "notes": notes[:4], "changes": changes, "periods": periods}
 
 
 def schedule(account_id: int, today: date, now: datetime, upcoming: list[dict] | None = None) -> list[dict]:
