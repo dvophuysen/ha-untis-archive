@@ -156,7 +156,7 @@
     </section>
 
     <section class="sec" id="k-arbeiten" data-section="arbeiten">
-      <h3>Deine Arbeiten <small>nächste vier Wochen</small></h3>
+      <h3>Deine Arbeiten <small>nächste sechs Wochen</small></h3>
       <div class="list">
         {#each data.exams as e (e.exam_key)}
           {@const isOpen = openExam === e.exam_key}

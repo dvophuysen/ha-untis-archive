@@ -21,7 +21,7 @@ const {chromium}=require('playwright-core');const http=require('http'),fs=requir
    {key:'dialog:12',kind:'dialog',title:'Mathematik: Gleichungen',why:'Das Thema sitzt noch nicht sicher.',subject:'Mathematik',exam_key:'ma1',format:null,topic_id:12,level:null,href:'#/learning?topic_id=12',done:false},
    {key:'vocab:Englisch:u3',kind:'vocab',title:'Vokabeln Englisch: Unit 3',why:'Jeden Tag ein paar Wörter.',subject:'Englisch',exam_key:null,format:null,topic_id:null,level:null,href:'#/vokabeln/Englisch?unit=u3',done:true}],
    engpass:true,tight:[],free_day:false,frozen:!mirror,read_only:mirror,done:1,total:3},
-  plan_explain:['Jeden Morgen entsteht der Plan neu.','Höchstens zwei Schritte.','Vokabeln nach Pensum.'],
+  plan_explain:['Jeden Morgen entsteht der Plan neu.','Zwei Schultage vorher durch.','Vokabeln nach Pensum.'],
   exams:[exam,vocabExam],
   strengths:[{kind:'topic',topic_id:11,subject:'Mathematik',title:'Terme und Variablen',text:'sicher seit 24.09.'}],
   gaps:[{kind:'topic',topic_id:12,subject:'Mathematik',title:'Gleichungen',why:'Das Thema wackelt noch. Arbeit am 30.09.',href:'#/learning?topic_id=12'},
@@ -66,7 +66,7 @@ const {chromium}=require('playwright-core');const http=require('http'),fs=requir
  assert.equal(await page.locator('#k-pflicht .step.done').count(),1);
  assert.equal(await page.locator('#k-pflicht button',{hasText:'Los'}).count(),2,'Los nur für Offenes');
  // Wie der Plan entsteht: aufklappbar, drei Sätze.
- await page.getByText('Wie der Plan entsteht',{exact:true}).click();await page.getByText('Höchstens zwei Schritte.',{exact:true}).waitFor();
+ await page.getByText('Wie der Plan entsteht',{exact:true}).click();await page.getByText('Zwei Schultage vorher durch.',{exact:true}).waitFor();
  // Weg zur Arbeit aufklappen.
  await page.locator('#k-arbeiten .exam-row').first().click();
  await page.getByRole('heading',{name:'Weg zur Arbeit'}).waitFor();

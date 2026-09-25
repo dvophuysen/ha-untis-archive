@@ -26,7 +26,7 @@ from .subject_names import key as subject_key, label as subject_label
 
 LOG = logging.getLogger("schul_cockpit.learning_compass")
 
-HORIZON = study_plan.HORIZON      # Arbeiten der nächsten 28 Tage
+HORIZON = study_plan.HORIZON      # Arbeiten der nächsten sechs Wochen (D188)
 PAST_DAYS = 120                   # so weit zurück stehen frühere Arbeiten
 MAX_PAST = 6
 STRENGTH_DAYS = 28                # Stärken: was in vier Wochen sicher wurde
@@ -152,6 +152,20 @@ def path_of(r: dict, recent_probe: bool = False) -> tuple[str, list[dict]]:
     at = order.index(now)
     return now, [{"key": k, "label": texts[k][0], "text": texts[k][1],
                   "state": "done" if i < at else "now" if i == at else "todo"} for i, k in enumerate(order)]
+
+
+def plan_verdict(p: dict) -> tuple[str, str]:
+    """Die Einschätzung aus demselben Bedarf wie der Tagesplan (D188): was laut
+    Raster noch fehlt, gegen die Lerntage bis zum Puffer vor der Arbeit."""
+    need, days = p["need"], p["days"]
+    steps = f"noch etwa {need} {'Schritt' if need == 1 else 'Schritte'} in {days} {'Lerntag' if days == 1 else 'Lerntagen'}"
+    if not need:
+        return "auf_kurs", "Auf Kurs: Alles sitzt. Jetzt nur noch wiederholen."
+    if p["weekend"] or p["behind"]:
+        return "eng", f"Eng: {steps}, auch am Wochenende."
+    if need > days:
+        return "knapp", f"Knapp: {steps}. Jeden Tag dranbleiben."
+    return "auf_kurs", f"Auf Kurs: {steps}."
 
 
 def verdict(ready: int, total: int, left: int) -> tuple[str, str]:
@@ -441,6 +455,10 @@ async def build(account_id: int, user, now: datetime | None = None) -> dict:
         topics = _topics(c, account_id, list(future) + list(past))
         stage_of = {t["id"]: t["stage"] for t in topics}
         upcoming = []
+        try:
+            plans = {p["exam_key"]: p for p in study_plan.plans(account_id, day)}
+        except Exception:
+            plans = {}
         for k, d in sorted(future.items(), key=lambda kv: (kv[1], kv[0])):
             mine = [t for t in topics if t["exam_key"] == k]
             cal = calendar.get(k) or {}
@@ -451,7 +469,7 @@ async def build(account_id: int, user, now: datetime | None = None) -> dict:
             raster = [{**row, "stage": stage_of.get(row["id"])} for row in _raster_view(r)]
             left = sum(1 for s in school if day <= s < d)
             now_key, path = path_of(r, _recent_probe(c, account_id, [t["id"] for t in r["topics"]], day))
-            level, sentence = verdict(r["ready"], r["total"], left)
+            level, sentence = plan_verdict(plans[k]) if k in plans else verdict(r["ready"], r["total"], left)
             vocab = _vocab_state(account_id, {"exam_key": k}, mine, pensum)
             title = (cal.get("title") or "").strip()
             kind = "vokabeltest" if vocab and not r["total"] else "arbeit"
@@ -512,9 +530,9 @@ async def build(account_id: int, user, now: datetime | None = None) -> dict:
         "calm": calm,
         "plan": plan,
         "plan_explain": [
-            "Jeden Morgen entsteht der Plan neu: aus deinem Stand je Thema und den Schultagen bis zur Arbeit.",
-            "An Schultagen sind es höchstens zwei Schritte. Das Wochenende bleibt frei, außer es wird eng.",
-            "Vokabeln kommen nach deinem Pensum dazu, jeden Tag ein paar Wörter.",
+            "Jeden Morgen entsteht der Plan neu: aus dem, was je Thema noch fehlt, und den Lerntagen bis zur Arbeit.",
+            "Der Stoff soll zwei Schultage vor der Arbeit durch sein. So bleibt Luft für spontane Tests und viele Hausaufgaben.",
+            "Das Wochenende bleibt frei, solange die Schultage reichen. Vokabeln kommen nach deinem Pensum dazu.",
         ],
         "exams": upcoming,
         "strengths": strengths(progress, skills, day),

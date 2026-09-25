@@ -1,3 +1,11 @@
+## 1.25.0
+
+- Lernen ist jetzt dein Kompass: oben die nächste Arbeit mit Stand („1 von 2 Themen sicher“) und einem ehrlichen Satz, wie viel noch fehlt und wie viele Lerntage bleiben.
+- „Heute Pflicht“ zeigt dieselben Schritte wie Heute, mit Begründung, „Los“ und „Wie der Plan entsteht“. „Deine Arbeiten“ mit Punkten je Thema und aufklappbarem „Weg zur Arbeit“; bei Vokabeltests ohne Lektion steht „Lektion fehlt“.
+- Stärken und Baustellen mit „Angehen“, Extra frei nach Fach und Art, der Verlauf zählt sicher gewordene Themen statt Minuten. Weitermachen mit früheren Arbeiten und dem Archiv. Die Seite lädt deutlich schneller.
+- Der Lernplan hat keinen Deckel mehr: Er rechnet aus dem Raster, was je Arbeit noch fehlt, und verteilt es so, dass der Stoff zwei Schultage vor der Arbeit durch ist. Arbeiten bis sechs Wochen voraus bekommen früh kleine Schritte, damit sich vor einer Arbeit nichts knubbelt. Reichen die Schultage nicht, zählt auch das Wochenende.
+- Der Hinweis über „Lernen“ nennt die echten Zahlen, die nächste Arbeit zuerst.
+
 ## 1.24.1
 
 - Heute wird kürzer, je mehr erledigt ist: Aufgaben, Lernen, Tasche und Feedback klappen sich zu, sobald sie geschafft sind. Eine Zeile bleibt stehen, ein Tipp klappt wieder auf; was man von Hand aufklappt, bleibt bis zum Abend offen. „Aufgabe eintragen“ bleibt immer sichtbar.
