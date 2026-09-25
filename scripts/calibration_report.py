@@ -16,8 +16,8 @@ Datensätze; er rechnet dann kein Raster und behauptet keinen Zusammenhang.
 
     python3 scripts/calibration_report.py
 
-Braucht HA_URL und HA_TOKEN (wie ha_activity.py). Der Leseschlüssel wird nur
-intern verwendet und nie ausgegeben.
+Braucht HA_URL und HA_TOKEN (wie ha_activity.py). Der Leseschlüssel und die
+Ingress-Sitzung gehen über stdin an curl und stehen in keiner Fehlermeldung.
 """
 from __future__ import annotations
 
@@ -30,14 +30,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent / "schul_cockpit"))
+sys.path.insert(0, str(ROOT))
+
+from secret_curl import CurlError, curl  # noqa: E402
 SLUG = "e54108c7_schul_cockpit"
 NEEDED = ("exam_topics", "topic_answers", "exam_dates")
 
 
 def supervisor(endpoint: str, method: str = "get") -> dict:
-    out = subprocess.run(["node", str(ROOT / "ha_supervisor.mjs"), endpoint, method],
-                         capture_output=True, text=True, check=True).stdout
-    return json.loads(out)
+    done = subprocess.run(["node", str(ROOT / "ha_supervisor.mjs"), endpoint, method],
+                          capture_output=True, text=True)
+    if done.returncode != 0:
+        raise RuntimeError(f"Supervisor {endpoint}: {done.stderr.strip() or done.returncode}")
+    return json.loads(done.stdout)
 
 
 class Reader:
@@ -50,8 +55,8 @@ class Reader:
         self.base = os.environ["HA_URL"] + info["ingress_url"] + "api/integration/learning"
 
     def get(self, path: str) -> dict:
-        raw = subprocess.run(["curl", "-sS", "-b", f"ingress_session={self.session}", "-H", f"X-Learning-Read-Key: {self.key}",
-                              f"{self.base}{path}"], capture_output=True, text=True, check=True).stdout
+        raw = curl(f"{self.base}{path}",
+                   {"Cookie": f"ingress_session={self.session}", "X-Learning-Read-Key": self.key})
         try:
             return json.loads(raw)
         except ValueError:
@@ -94,6 +99,15 @@ def main() -> int:
     if not os.environ.get("HA_URL") or not os.environ.get("HA_TOKEN"):
         print("HA_URL und HA_TOKEN fehlen.")
         return 2
+    try:
+        return report()
+    except (CurlError, RuntimeError, ValueError, KeyError) as err:
+        # Ohne Traceback: darin stünden sonst Schlüssel oder Sitzung.
+        print(f"Bericht nicht möglich: {type(err).__name__}: {err}", file=sys.stderr)
+        return 2
+
+
+def report() -> int:
     reader = Reader()
     if not reader.key or not reader.accounts:
         print("Lesezugang nicht eingerichtet (learning_read_token / learning_read_accounts).")

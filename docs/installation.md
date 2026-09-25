@@ -1,7 +1,7 @@
 # Installation
 
-Voraussetzung: Home Assistant OS / Container / Supervised, Version 2024.6
-oder neuer.
+Voraussetzung: Home Assistant OS / Container / Supervised, Version 2024.11
+oder neuer (wie in `hacs.json`).
 
 ## Via HACS (empfohlen)
 
@@ -33,7 +33,7 @@ Integration unter Geräte & Dienste hinzufügen.
 | Server | `beispiel-gymnasium.webuntis.com` |
 | Schulname | `beispiel-gymnasium` (loginName mit Bindestrichen, NICHT der Anzeigename) |
 | Benutzer / Passwort | Zugangsdaten des Kindes |
-| Schüler-ID | leer lassen — Auto-Discovery über `personId` aus der Session |
+| Schüler-ID | leer lassen — Auto-Discovery über `personId` aus der Session. Gesetzt gilt sie als Schüler-Element (Typ 5) für Stundenplan, Lehrstoff und Fehlzeiten |
 
 Wenn die Login-Validierung fehlschlägt, zeigt das Formular die Untis-
 Original-Fehlermeldung an (z. B. „invalid schoolname" → bitte den
@@ -47,19 +47,35 @@ LoginName statt des Anzeigenamens eintragen).
 - SQLite-DB unter `/config/untis_archive/history.db`. Wird Teil der
   normalen HA-Backups.
 - Stündlicher Pull danach. Wenn `getLatestImportTime` unverändert ist,
-  wird der teure Stundenplan-Pass übersprungen.
+  wird der teure Stundenplan-Pass übersprungen. Lehrstoff für Stunden der
+  letzten fünf Tage, der noch fehlt, wird trotzdem bei jedem Pull
+  nachgefragt (höchstens 40 Stunden je Pull), weil ein Klassenbucheintrag
+  den Zeitstempel nicht ändert.
+- Die Datenbank ist auf HA-Sicherungen vorbereitet: Vor jeder Sicherung
+  wird das WAL in `history.db` geschrieben.
 
-## Sensoren
+## Sensoren und Kalender
 
-Nach erfolgreichem Setup tauchen pro Kind diese Sensoren auf:
+Nach erfolgreichem Setup tauchen pro Kind sieben Sensoren und zwei Kalender
+auf. HA bildet die Entity-ID beim ersten Einrichten aus dem Anzeigenamen;
+so heißen sie bei einer neuen Einrichtung:
 
 - `sensor.untis_archive_<name>_lehrstoff_heute`
-- `sensor.untis_archive_<name>_hausaufgaben_offen`
-- `sensor.untis_archive_<name>_versaeumter_stoff`
+- `sensor.untis_archive_<name>_hausaufgaben_offen` (offene Aufgaben, die
+  höchstens 14 Tage überfällig sind)
+- `sensor.untis_archive_<name>_versaumter_stoff`
 - `sensor.untis_archive_<name>_fehlzeiten_schuljahr`
-- `sensor.untis_archive_<name>_stundenplan_aenderungen`
+- `sensor.untis_archive_<name>_stundenplan_anderungen_7_tage`
+- `sensor.untis_archive_<name>_fach_verlauf`
+- `sensor.untis_archive_<name>_krankheitsperioden`
+- `calendar.untis_archive_<name>_stundenplan` — jede Stunde als Termin
+- `calendar.untis_archive_<name>_ereignisse` — Fehlzeiten und Klassenarbeiten
 
-Plus eine Calendar-Entity mit allen Stunden.
+Früher eingerichtete Installationen behalten ihre IDs (z.B.
+`..._versaeumter_stoff`); maßgeblich ist, was unter Einstellungen →
+Geräte & Dienste → UNTIS Archive steht. Die Entitäten lesen aus der
+lokalen Datenbank und bleiben verfügbar, auch wenn WebUntis gerade nicht
+erreichbar ist.
 
 ## Services
 

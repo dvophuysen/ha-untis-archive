@@ -54,16 +54,19 @@ def fetch(slug: str, lines: int) -> str:
 
 
 def fetch_curl(slug: str, lines: int) -> str:
-    import subprocess
-    cmd = ["curl", "-sS", "-m", "60", "-H", f"Authorization: Bearer {TOKEN}",
-           "-H", f"Range: entries=:-{lines}:", "-w", "\n%{http_code}",
-           f"{BASE}/api/hassio/addons/{slug}/logs"]
-    done = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
-    if done.returncode != 0:
-        raise urllib.error.URLError(done.stderr.strip() or f"curl {done.returncode}")
-    body, _, code = done.stdout.rpartition("\n")
+    # Der Token geht über stdin an curl, nicht in argv (Prozessliste,
+    # Fehlermeldungen).
+    from secret_curl import CurlError, curl
+    url = f"{BASE}/api/hassio/addons/{slug}/logs"
+    try:
+        out = curl(url, {"Authorization": f"Bearer {TOKEN}",
+                         "Range": f"entries=:-{lines}:"},
+                   args=["-w", "\n%{http_code}"], timeout=60)
+    except CurlError as err:
+        raise urllib.error.URLError(str(err)) from None
+    body, _, code = out.rpartition("\n")
     if not code.isdigit() or int(code) >= 400:
-        raise urllib.error.HTTPError(cmd[-1], int(code) if code.isdigit() else 599, "curl", None, None)
+        raise urllib.error.HTTPError(url, int(code) if code.isdigit() else 599, "curl", None, None)
     return body
 
 

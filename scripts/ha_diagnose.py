@@ -28,11 +28,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 import sys
 import urllib.error
 import urllib.request
 from datetime import date
+
+from secret_curl import curl
 
 BASE = (os.environ.get("HA_URL") or "").rstrip("/")
 TOKEN = os.environ.get("HA_TOKEN") or ""
@@ -70,15 +71,15 @@ def _call_urllib(path: str, payload: dict | None = None) -> object:
 
 
 def _call_curl(path: str, payload: dict | None = None) -> object:
-    cmd = ["curl", "-sS", "-m", "30", "-H", f"Authorization: Bearer {TOKEN}",
-           "-H", "Content-Type: application/json"]
+    # Der Token geht über stdin an curl, nicht in argv (Prozessliste,
+    # Fehlermeldungen).
+    args: list[str] = []
     if payload is not None:
-        cmd += ["-X", "POST", "-d", json.dumps(payload)]
-    cmd.append(BASE + path)
-    done = subprocess.run(cmd, capture_output=True, text=True)
-    if done.returncode != 0:
-        raise OSError(f"curl: {done.stderr.strip() or done.returncode}")
-    return _decode(done.stdout)
+        args += ["-X", "POST", "-d", json.dumps(payload)]
+    out = curl(BASE + path,
+               {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"},
+               args=args, timeout=30)
+    return _decode(out)
 
 
 def _decode(raw: str) -> object:
@@ -157,7 +158,7 @@ def main() -> int:
         print(f"\n{entity}: {len(items)} Einträge")
         for it in items:
             todo_items.append(it)
-            print(f"  - {it.get('status'):>12}  {it.get('summary')!r} "
+            print(f"  - {str(it.get('status')):>12}  {it.get('summary')!r} "
                   f"fällig {it.get('due', '—')} uid={it.get('uid')}")
             if it.get("description"):
                 print(f"                 notes: {it['description']!r}")

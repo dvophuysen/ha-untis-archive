@@ -54,8 +54,16 @@ def _slug(name: str) -> str:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = UntisCoordinator(hass, entry)
-    await coordinator.async_setup()
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_setup()
+        await coordinator.async_config_entry_first_refresh()
+    except Exception:
+        # Schlägt der erste Abruf fehl (Netz, Wartung, Neuanmeldung), geht
+        # die Datenbankverbindung selbst zu; HA versucht die Einrichtung
+        # später mit einem neuen Coordinator erneut. Der Fehler bleibt
+        # derselbe, damit ConfigEntryNotReady/ConfigEntryAuthFailed wirken.
+        await coordinator.async_shutdown()
+        raise
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {"coordinator": coordinator}
@@ -68,11 +76,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not unload_ok:
+        # Plattformen noch geladen: Coordinator und Datenbank weiter nötig.
+        return False
     bucket = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
     if bucket:
         coordinator: UntisCoordinator = bucket["coordinator"]
         await coordinator.async_shutdown()
-    return unload_ok
+    return True
 
 
 def _find_coordinator_by_title(hass: HomeAssistant, title: str) -> UntisCoordinator | None:
@@ -105,7 +116,6 @@ def _register_services(hass: HomeAssistant) -> None:
         )
 
         out_root = Path(hass.config.path(DB_SUBDIR, DOCS_SUBDIR, _slug(title)))
-        out_root.mkdir(parents=True, exist_ok=True)
 
         grouped: dict[str, list[dict[str, Any]]] = {}
         for row in rows:
@@ -115,6 +125,8 @@ def _register_services(hass: HomeAssistant) -> None:
             grouped.setdefault(subj, []).append(row)
 
         def _write() -> None:
+            # Anlegen im Executor: mkdir blockiert die Ereignisschleife.
+            out_root.mkdir(parents=True, exist_ok=True)
             for subj, items in grouped.items():
                 items_sorted = sorted(
                     items,
@@ -162,8 +174,11 @@ def _register_services(hass: HomeAssistant) -> None:
                 is_supervision=is_supervision,
             )
         )
-        # Trigger a refresh so sensors update.
-        await coordinator.async_request_refresh()
+        # Die Entitäten lesen ihre Werte aus der Datenbank neu, sobald der
+        # Coordinator sie benachrichtigt. Ein kompletter WebUntis-Abruf ist
+        # dafür nicht nötig (bis 0.5.4 löste jede Korrektur einen aus).
+        for other in hass.data.get(DOMAIN, {}).values():
+            other["coordinator"].async_update_listeners()
 
     async def refresh(call: ServiceCall) -> None:
         title = call.data.get("account")

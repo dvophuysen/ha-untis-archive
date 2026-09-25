@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import date, timedelta
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -12,9 +13,11 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .api import UntisApiError, UntisAuthError, UntisClient
 from .const import (
+    ABSENCE_MAX_DELETIONS_PER_PULL,
     ABSENCE_WINDOW_DAYS_BACK,
     ABSENCE_WINDOW_DAYS_FORWARD,
     CONF_PASSWORD,
@@ -28,18 +31,29 @@ from .const import (
     HOMEWORK_WINDOW_DAYS_BACK,
     HOMEWORK_WINDOW_DAYS_FORWARD,
     INVALID_CREDENTIALS,
+    STUDENT_ELEMENT_TYPE,
+    TOPIC_BACKFILL_DAYS,
+    TOPIC_BACKFILL_MAX_PER_PULL,
     UPDATE_INTERVAL_HOURS,
     WINDOW_DAYS_BACK,
     WINDOW_DAYS_FORWARD,
 )
 from .storage import (
     UntisStorage,
+    absence_ids_in_payload,
     collect_absences,
     collect_homework,
     normalize_period,
+    to_iso_date,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _count(results: list[Any], *actions: str) -> list[int]:
+    """Anzahl je Ergebnis (``"inserted"`` usw.) in einer Batch-Antwort."""
+    names = [getattr(r, "action", r) for r in results]
+    return [sum(1 for n in names if n == a) for a in actions]
 
 
 class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -66,6 +80,12 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return self._storage
 
     @property
+    def storage_ready(self) -> bool:
+        """Datenbank offen und Konto angelegt: Die Entitäten können lesen,
+        auch wenn der letzte WebUntis-Abruf fehlschlug."""
+        return self._storage is not None and self._account_id is not None
+
+    @property
     def account_id(self) -> int:
         if self._account_id is None:
             raise RuntimeError("account not registered yet")
@@ -89,19 +109,28 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def async_shutdown(self) -> None:
-        if self._storage is not None:
-            await self.hass.async_add_executor_job(self._storage.close)
-            self._storage = None
+        # Geplante Abrufe und den Debouncer der Basisklasse beenden, bevor
+        # die Verbindung zugeht; sonst lief ein Abruf gegen eine
+        # geschlossene Datenbank.
+        await super().async_shutdown()
+        storage, self._storage = self._storage, None
+        if storage is not None:
+            await self.hass.async_add_executor_job(storage.close)
 
     async def _async_update_data(self) -> dict[str, Any]:
         data = self._entry.data
-        today = date.today()
+        # Datum in der Zeitzone von HA, nicht der des Containers (UTC):
+        # sonst lag „heute“ zwischen 0 und 2 Uhr noch auf gestern.
+        today = dt_util.now().date()
+        today_iso = today.isoformat()
         start = today - timedelta(days=WINDOW_DAYS_BACK)
         end = today + timedelta(days=WINDOW_DAYS_FORWARD)
         absence_start = today - timedelta(days=ABSENCE_WINDOW_DAYS_BACK)
         absence_end = today + timedelta(days=ABSENCE_WINDOW_DAYS_FORWARD)
         homework_start = today - timedelta(days=HOMEWORK_WINDOW_DAYS_BACK)
         homework_end = today + timedelta(days=HOMEWORK_WINDOW_DAYS_FORWARD)
+        storage = self.storage
+        account_id = self.account_id
 
         client = UntisClient(
             data[CONF_SERVER],
@@ -122,8 +151,17 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     ) from err
                 raise UpdateFailed(f"WebUntis-Login fehlgeschlagen: {err}") from err
 
-            elem_id = data.get(CONF_STUDENT_ID) or session.person_id
-            elem_type = session.person_type
+            # Mit gesetzter Schüler-ID gilt sie für Stundenplan, Lehrstoff und
+            # Fehlzeiten, als Element vom Typ Schüler. Bis 0.5.4 blieb der Typ
+            # der des angemeldeten Kontos und die Fehlzeiten kamen immer für
+            # das angemeldete Konto.
+            student_override = data.get(CONF_STUDENT_ID)
+            if student_override:
+                elem_id = int(student_override)
+                elem_type = STUDENT_ELEMENT_TYPE
+            else:
+                elem_id = session.person_id
+                elem_type = session.person_type
 
             # Polling optimisation: skip the (expensive) timetable +
             # period/info pass when the server reports the same import
@@ -135,7 +173,7 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.debug("getLatestImportTime failed: %s", err)
                 latest_import = None
             previous_import = await self.hass.async_add_executor_job(
-                self.storage.get_latest_import_time, self.account_id
+                storage.get_latest_import_time, account_id
             )
             timetable_dirty = (
                 latest_import is None
@@ -157,31 +195,64 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     latest_import,
                 )
 
-            inserted = updated = unchanged = 0
-            periods_needing_topic: list[dict[str, Any]] = []
+            lessons: list[dict[str, Any]] = []
+            returned_ids: set[int] = set()
+            ids_complete = True
             for raw in raw_timetable:
                 try:
-                    lesson = normalize_period(raw)
-                except (KeyError, TypeError, ValueError) as err:
+                    returned_ids.add(int(raw["id"]))
+                except (KeyError, TypeError, ValueError):
+                    ids_complete = False
+                try:
+                    lessons.append(normalize_period(raw))
+                except (KeyError, TypeError, ValueError, AttributeError) as err:
                     _LOGGER.debug("Skip malformed period %r: %s", raw, err)
-                    continue
-                result = await self.hass.async_add_executor_job(
-                    self.storage.upsert_lesson, self.account_id, lesson
+            results = await self.hass.async_add_executor_job(
+                partial(storage.upsert_lessons, account_id, lessons, today=today_iso)
+            )
+            inserted, updated, unchanged = _count(results, "inserted", "updated", "unchanged")
+
+            # Geisterstunden: nur für Tage, an denen WebUntis in diesem Abruf
+            # mindestens eine Stunde geliefert hat, und nur, wenn jede
+            # gelieferte Stunde eine lesbare ID hatte.
+            removed = restored = 0
+            covered_days = {
+                lesson["date"]
+                for lesson in lessons
+                if start.isoformat() <= lesson["date"] <= end.isoformat()
+            }
+            if returned_ids and covered_days and ids_complete:
+                removed, restored = await self.hass.async_add_executor_job(
+                    storage.mark_removed_lessons, account_id, returned_ids, covered_days
                 )
-                if result.action == "inserted":
-                    inserted += 1
-                elif result.action == "updated":
-                    updated += 1
-                else:
-                    unchanged += 1
-                # Fetch period/info only when we don't yet have lstext from
-                # the timetable response (Untis often only returns it via
-                # the dedicated endpoint).
-                if not lesson.get("lstext") and lesson.get("code") != "cancelled":
-                    periods_needing_topic.append(lesson)
+
+            # period/info for every lesson of this timetable pass without
+            # lstext from the timetable response (Untis often only returns
+            # it via the dedicated endpoint). Lehrstoff can still change
+            # after it was entered, so a changed timetable asks for all.
+            periods_needing_topic: list[dict[str, Any]] = [
+                lesson
+                for lesson in lessons
+                if not lesson.get("lstext") and lesson.get("code") != "cancelled"
+            ]
+            # Plus: Stunden der letzten Tage bis heute, für die noch kein
+            # Lehrstoff gespeichert ist — bei jedem Abruf, weil ein
+            # Klassenbucheintrag getLatestImportTime nicht ändert.
+            missing = await self.hass.async_add_executor_job(
+                storage.lessons_missing_lstext,
+                account_id,
+                (today - timedelta(days=TOPIC_BACKFILL_DAYS)).isoformat(),
+                today_iso,
+            )
+            queued = {lesson["untis_period_id"] for lesson in periods_needing_topic}
+            backfill = [
+                row for row in missing if row["untis_period_id"] not in queued
+            ][:TOPIC_BACKFILL_MAX_PER_PULL]
+            periods_needing_topic.extend(backfill)
 
             topic_fetched = 0
             topic_failed = 0
+            topic_updates: list[dict[str, Any]] = []
             for lesson in periods_needing_topic:
                 try:
                     info = await client.get_period_info(
@@ -203,9 +274,9 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 lstext = _extract_lstext(info)
                 # Archive the full period/info payload even when empty —
                 # it contains exam, attachments, lessonInfo etc. Only
-                # touch lstext / supervision_guess when we actually got
-                # a Lehrstoff body back, so no-op fetches don't show up
-                # as spurious change events.
+                # touch lstext when we actually got a Lehrstoff body back,
+                # so no-op fetches don't show up as spurious change events.
+                # is_supervision_guess leitet storage aus Code und Lehrstoff ab.
                 update: dict[str, Any] = {
                     "untis_period_id": lesson["untis_period_id"],
                     "date": lesson["date"],
@@ -215,64 +286,47 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 }
                 if lstext:
                     update["lstext"] = lstext
-                    update["is_supervision_guess"] = bool(
-                        lesson["code"] == "irregular" and not lstext
-                    )
                     topic_fetched += 1
+                topic_updates.append(update)
+            if topic_updates:
                 await self.hass.async_add_executor_job(
-                    self.storage.upsert_lesson, self.account_id, update
+                    partial(storage.upsert_lessons, account_id, topic_updates, today=today_iso)
                 )
 
-            hw_inserted = hw_updated = hw_unchanged = 0
             try:
                 raw_homework = await client.get_homework(homework_start, homework_end)
             except UntisApiError as err:
                 _LOGGER.warning("Hausaufgaben-Abruf fehlgeschlagen: %s", err)
                 raw_homework = {}
+            hw_items = list(collect_homework(raw_homework))
+            hw_results = await self.hass.async_add_executor_job(
+                storage.upsert_homeworks, account_id, hw_items
+            )
+            hw_inserted, hw_updated, hw_unchanged = _count(
+                hw_results, "inserted", "updated", "unchanged"
+            )
 
-            for hw in collect_homework(raw_homework):
-                try:
-                    result_str = await self.hass.async_add_executor_job(
-                        self.storage.upsert_homework, self.account_id, hw
-                    )
-                except Exception:  # noqa: BLE001
-                    _LOGGER.debug("homework upsert failed for %r", hw, exc_info=True)
-                    continue
-                if result_str == "inserted":
-                    hw_inserted += 1
-                elif result_str == "updated":
-                    hw_updated += 1
-                else:
-                    hw_unchanged += 1
-
-            abs_inserted = abs_updated = 0
+            absences_ok = False
             try:
-                raw_absences = await client.get_absences(absence_start, absence_end)
+                raw_absences = await client.get_absences(
+                    absence_start, absence_end, student_id=elem_id
+                )
+                absences_ok = True
             except UntisApiError as err:
                 _LOGGER.warning("Fehlzeiten-Abruf fehlgeschlagen: %s", err)
                 raw_absences = {}
-
-            for absence in collect_absences(raw_absences):
-                try:
-                    res = await self.hass.async_add_executor_job(
-                        self.storage.upsert_absence, self.account_id, absence
-                    )
-                except Exception:  # noqa: BLE001
-                    _LOGGER.debug("absence upsert failed for %r", absence, exc_info=True)
-                    continue
-                if res == "inserted":
-                    abs_inserted += 1
-                elif res == "updated":
-                    abs_updated += 1
-
-            # Re-derive was_absent for every lesson in the pulled window so
-            # newly arrived absences immediately propagate to the sensors.
-            flagged_absent = await self.hass.async_add_executor_job(
-                self.storage.recompute_attendance,
-                self.account_id,
-                start.isoformat(),
-                end.isoformat(),
+            abs_items = list(collect_absences(raw_absences))
+            abs_results = await self.hass.async_add_executor_job(
+                storage.upsert_absences, account_id, abs_items
             )
+            abs_inserted, abs_updated, abs_unchanged = _count(
+                abs_results, "inserted", "updated", "unchanged"
+            )
+            changed_absence_ids = [
+                item["untis_absence_id"]
+                for item, res in zip(abs_items, abs_results)
+                if res in ("inserted", "updated")
+            ]
 
             # Master / Stammdaten — refreshed once per pull cycle and
             # accumulated across the entire school career. Mid-year
@@ -281,20 +335,55 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # einen Snapshot in master_snapshots; die Enrollment-Tabelle
             # bildet die (Schuljahr × Klasse)-Historie pro Kind ab.
             schoolyear_id: int | None = None
+            schoolyear_start: str | None = None
             try:
                 schoolyear = await client.get_current_schoolyear()
                 await self.hass.async_add_executor_job(
-                    self.storage.upsert_schoolyear, self.account_id, schoolyear
+                    storage.upsert_schoolyear, account_id, schoolyear
                 )
                 if isinstance(schoolyear, dict) and schoolyear.get("id"):
                     schoolyear_id = int(schoolyear["id"])
+                    schoolyear_start = to_iso_date(schoolyear.get("startDate"))
             except UntisApiError as err:
                 _LOGGER.warning("Schuljahr-Abruf fehlgeschlagen: %s", err)
+            except (TypeError, ValueError) as err:
+                _LOGGER.warning("Schuljahr unlesbar: %s", err)
+
+            # Von der Schule gelöschte Fehlzeiten: nur nach erfolgreichem
+            # Abruf mit Einträgen, nur im laufenden Schuljahr (ob der
+            # Endpunkt ältere liefert, ist offen) und nur wenige je Abruf.
+            deleted_span: tuple[str, str] | None = None
+            returned_absence_ids = absence_ids_in_payload(raw_absences) if absences_ok else None
+            if returned_absence_ids and schoolyear_start:
+                deleted_span = await self.hass.async_add_executor_job(
+                    partial(
+                        storage.delete_absences_not_in,
+                        account_id,
+                        returned_absence_ids,
+                        max(absence_start.isoformat(), schoolyear_start),
+                        absence_end.isoformat(),
+                        max_delete=ABSENCE_MAX_DELETIONS_PER_PULL,
+                    )
+                )
+
+            # Re-derive was_absent for every lesson in the pulled window
+            # plus the span of every new, changed or removed absence, so a
+            # late-arriving absence also marks lessons outside the window.
+            lo, hi = start.isoformat(), end.isoformat()
+            changed_span = await self.hass.async_add_executor_job(
+                storage.absence_span, account_id, changed_absence_ids
+            )
+            for span in (changed_span, deleted_span):
+                if span:
+                    lo, hi = min(lo, span[0]), max(hi, span[1])
+            flagged_absent = await self.hass.async_add_executor_job(
+                storage.recompute_attendance, account_id, lo, hi
+            )
 
             try:
                 teachers = await client.get_teachers()
                 await self.hass.async_add_executor_job(
-                    self.storage.upsert_teachers, self.account_id, teachers
+                    storage.upsert_teachers, account_id, teachers
                 )
             except UntisApiError as err:
                 _LOGGER.warning("Lehrer-Master-Abruf fehlgeschlagen: %s", err)
@@ -302,8 +391,8 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 klassen = await client.get_klassen()
                 await self.hass.async_add_executor_job(
-                    self.storage.upsert_own_klasse,
-                    self.account_id,
+                    storage.upsert_own_klasse,
+                    account_id,
                     klassen,
                     session.klasse_id,
                 )
@@ -313,57 +402,79 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 holidays = await client.get_holidays()
                 await self.hass.async_add_executor_job(
-                    self.storage.upsert_holidays, self.account_id, holidays
+                    storage.upsert_holidays, account_id, holidays
                 )
             except UntisApiError as err:
                 _LOGGER.warning("Ferien-Abruf fehlgeschlagen: %s", err)
 
             await self.hass.async_add_executor_job(
-                self.storage.record_enrollment,
-                self.account_id,
+                storage.record_enrollment,
+                account_id,
                 schoolyear_id,
                 session.klasse_id,
             )
 
-            if latest_import is not None:
+            # Den Zeitstempel nur übernehmen, wenn jeder Lehrstoff-Abruf
+            # durchkam; sonst holt der nächste Abruf den Pass nach.
+            if latest_import is not None and topic_failed == 0:
                 await self.hass.async_add_executor_job(
-                    self.storage.set_latest_import_time,
-                    self.account_id,
+                    storage.set_latest_import_time,
+                    account_id,
                     latest_import,
                 )
 
             # Mark this account as having completed a full pull so the
             # next cycle can flag retroactive additions.
             await self.hass.async_add_executor_job(
-                self.storage.mark_pull_complete, self.account_id
+                storage.mark_pull_complete, account_id
             )
 
             _LOGGER.info(
-                "Pull %s: lessons %d/%d/%d (new/upd/same), topics %d (fail %d), "
-                "homework %d/%d/%d, absences %d/%d, attendance flagged=%d",
+                "Pull %s: lessons %d/%d/%d (new/upd/same), removed %d, restored %d, "
+                "topics %d (fail %d, backfill %d), homework %d/%d/%d, "
+                "absences %d/%d/%d, attendance flagged=%d",
                 self._entry.title,
                 inserted,
                 updated,
                 unchanged,
+                removed,
+                restored,
                 topic_fetched,
                 topic_failed,
+                len(backfill),
                 hw_inserted,
                 hw_updated,
                 hw_unchanged,
                 abs_inserted,
                 abs_updated,
+                abs_unchanged,
                 flagged_absent,
             )
 
             return {
-                "lessons": {"inserted": inserted, "updated": updated, "unchanged": unchanged},
-                "topics": {"fetched": topic_fetched, "failed": topic_failed},
+                "lessons": {
+                    "inserted": inserted,
+                    "updated": updated,
+                    "unchanged": unchanged,
+                    "removed": removed,
+                    "restored": restored,
+                },
+                "topics": {
+                    "fetched": topic_fetched,
+                    "failed": topic_failed,
+                    "backfill": len(backfill),
+                },
                 "homework": {
                     "inserted": hw_inserted,
                     "updated": hw_updated,
                     "unchanged": hw_unchanged,
                 },
-                "absences": {"inserted": abs_inserted, "updated": abs_updated},
+                "absences": {
+                    "inserted": abs_inserted,
+                    "updated": abs_updated,
+                    "unchanged": abs_unchanged,
+                    "deleted": deleted_span is not None,
+                },
                 "attendance": {"flagged_absent": flagged_absent},
             }
         finally:

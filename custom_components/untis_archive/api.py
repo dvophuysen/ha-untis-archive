@@ -337,18 +337,21 @@ class UntisClient:
         result = await self._rpc("getLatestImportTime", {})
         return int(result) if isinstance(result, (int, float)) else None
 
-    async def get_absences(self, start: date, end: date) -> dict[str, Any]:
-        """Fetch absences for the logged-in student.
+    async def get_absences(
+        self, start: date, end: date, *, student_id: int | None = None
+    ) -> dict[str, Any]:
+        """Fetch absences for the logged-in student (or ``student_id``).
 
         Endpoint: ``/WebUntis/api/classreg/absences/students``. Accepts the
         whole school year, so this is the one place we can backfill from.
-        Requires YYYYMMDD integer dates and the student id from the session.
+        Requires YYYYMMDD integer dates and the student id from the session
+        unless an explicit one is given.
         """
         s = self.session
         params = {
             "startDate": _date_to_untis(start),
             "endDate": _date_to_untis(end),
-            "studentId": s.person_id,
+            "studentId": student_id if student_id is not None else s.person_id,
             "excuseStatusId": -1,
             "includeTodaysAbsence": "true",
         }

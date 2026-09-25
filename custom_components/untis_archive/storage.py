@@ -17,7 +17,7 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
@@ -129,6 +129,10 @@ CREATE TABLE IF NOT EXISTS lessons (
     period_info_json TEXT,
     first_seen_at TEXT NOT NULL,
     last_updated_at TEXT NOT NULL,
+    -- Gesetzt, wenn WebUntis die Stunde für einen Tag, den es geliefert
+    -- hat, nicht mehr führt (Geisterstunde). Die Zeile bleibt erhalten;
+    -- Leser blenden sie aus. Kommt sie zurück, wird das Feld wieder NULL.
+    removed_at TEXT,
     UNIQUE(account_id, untis_period_id),
     FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );
@@ -198,6 +202,19 @@ CREATE TABLE IF NOT EXISTS absences (
 );
 CREATE INDEX IF NOT EXISTS idx_absences_account_date
     ON absences(account_id, start_date, end_date);
+
+-- Fehlzeiten, die WebUntis nicht mehr liefert (von der Schule gelöscht),
+-- werden aus ``absences`` entfernt, damit ``was_absent`` stimmt. Die
+-- gelöschte Zeile bleibt hier vollständig erhalten; keine Historie geht
+-- verloren.
+CREATE TABLE IF NOT EXISTS absence_deletions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL,
+    untis_absence_id INTEGER NOT NULL,
+    deleted_at TEXT NOT NULL,
+    row_json TEXT NOT NULL,
+    FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
 
 -- ------------------------------------------------------------------
 -- Master / Stammdaten tables. Column names mirror the WebUntis JSON
@@ -411,6 +428,10 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     )
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    # Mit WAL ist NORMAL sicher gegen Beschädigung; nur die letzte
+    # Transaktion vor einem Stromausfall kann fehlen. FULL synct bei
+    # jedem Commit und kostete je Zeile einen fsync.
+    conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA foreign_keys=ON")
     # 30 s — generous enough that a slow external reader doesn't blow
     # up the coordinator, short enough that a deadlock surfaces.
@@ -462,6 +483,7 @@ class UntisStorage:
                 ("rooms_json", "TEXT"),
                 ("payload_json", "TEXT"),
                 ("period_info_json", "TEXT"),
+                ("removed_at", "TEXT"),
             ],
             "lesson_snapshots": [
                 ("change_types_json", "TEXT"),
@@ -509,10 +531,41 @@ class UntisStorage:
                     )
 
     def close(self) -> None:
-        try:
-            self._conn.close()
-        except Exception:  # noqa: BLE001
-            pass
+        # Unter derselben Sperre wie Lesen und Schreiben: Ein Schließen,
+        # während ein anderer Executor-Thread noch auf der Verbindung liest,
+        # ließ den Python-Prozess (und damit HA) mit einem Speicherzugriffs-
+        # fehler abstürzen. Danach wirft jeder Zugriff nur ProgrammingError.
+        with self._write_lock:
+            try:
+                self._conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+    # ---- HA-Sicherung ---------------------------------------------------
+
+    def prepare_backup(self) -> tuple[int, int, int]:
+        """Vor einer HA-Sicherung: WAL in die Datenbank schreiben und leeren,
+        danach keine automatischen Checkpoints mehr.
+
+        Im WAL-Modus ändert nur ein Checkpoint die Datei ``history.db``.
+        Ohne Checkpoint landen Schreibvorgänge während der Sicherung nur im
+        ``-wal``; die gesicherte ``history.db`` bleibt in sich stimmig. Ein
+        halb kopiertes ``-wal`` verwirft SQLite beim Öffnen anhand der
+        Prüfsummen. Die Schreibsperre wird dafür nicht über die ganze
+        Sicherung gehalten: Sie würde Sensoren und Abrufe in den
+        Executor-Threads von HA blockieren.
+
+        Rückgabe wie ``PRAGMA wal_checkpoint``: (busy, log, checkpointed).
+        """
+        with self._write_lock:
+            row = self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+            self._conn.execute("PRAGMA wal_autocheckpoint=0")
+        return tuple(row) if row else (0, 0, 0)  # type: ignore[return-value]
+
+    def finish_backup(self) -> None:
+        """Nach der Sicherung: automatische Checkpoints wieder an."""
+        with self._write_lock:
+            self._conn.execute("PRAGMA wal_autocheckpoint=1000")
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Cursor]:
@@ -858,172 +911,280 @@ class UntisStorage:
             return 1 if v else 0
         return v
 
-    def upsert_lesson(self, account_id: int, lesson: dict[str, Any]) -> LessonUpsertResult:
-        now = _now()
+    def _already_pulled(self, cur: sqlite3.Cursor, account_id: int) -> bool:
+        cur.execute(
+            "SELECT last_pull_completed_at FROM accounts WHERE id=?",
+            (account_id,),
+        )
+        acc = cur.fetchone()
+        return bool(acc and acc["last_pull_completed_at"])
+
+    def _savepoint_each(
+        self,
+        cur: sqlite3.Cursor,
+        items: Iterable[Any],
+        fn: Any,
+        what: str,
+    ) -> list[Any]:
+        """``fn(item)`` je Eintrag in einem eigenen SAVEPOINT innerhalb der
+        laufenden Transaktion. Ein kaputter Eintrag wird zurückgerollt und
+        protokolliert (Ergebnis ``None``), die übrigen bleiben erhalten —
+        wie früher, als jede Zeile eine eigene Transaktion hatte."""
+        out: list[Any] = []
+        for item in items:
+            cur.execute("SAVEPOINT row")
+            try:
+                out.append(fn(item))
+            except Exception:  # noqa: BLE001
+                cur.execute("ROLLBACK TO row")
+                _LOGGER.warning("%s: Eintrag übersprungen", what, exc_info=True)
+                out.append(None)
+            finally:
+                cur.execute("RELEASE row")
+        return out
+
+    def upsert_lesson(
+        self,
+        account_id: int,
+        lesson: dict[str, Any],
+        *,
+        today: str | None = None,
+    ) -> LessonUpsertResult:
         with self._tx() as cur:
-            cur.execute(
-                """SELECT * FROM lessons
-                   WHERE account_id=? AND untis_period_id=?""",
-                (account_id, lesson["untis_period_id"]),
+            return self._upsert_lesson(
+                cur,
+                account_id,
+                lesson,
+                now=_now(),
+                already_pulled=self._already_pulled(cur, account_id),
+                today=today or date.today().isoformat(),
             )
-            existing = cur.fetchone()
-            # Only write columns the caller explicitly provided. That way
-            # a follow-up pull that only carries period/info (lstext +
-            # period_info_json) doesn't blank out fields the original
-            # timetable pass had populated.
-            cols = tuple(c for c in self._LESSON_WRITE_COLS if c in lesson)
-            values = [self._lesson_value(lesson, c) for c in cols]
 
-            if existing is None:
-                # Detect retroactive additions: only fires after the
-                # account has completed at least one full pull cycle.
-                # During the first backfill, lessons arrive in arbitrary
-                # order — comparing against MAX(date) would falsely flag
-                # the first-inserted row of an old date as 'late'.
-                cur.execute(
-                    "SELECT last_pull_completed_at FROM accounts WHERE id=?",
-                    (account_id,),
-                )
-                acc = cur.fetchone()
-                already_pulled = bool(acc and acc["last_pull_completed_at"])
-                is_late = 0
-                if already_pulled:
-                    cur.execute(
-                        """SELECT 1 FROM lessons
-                           WHERE account_id=? AND date > ? LIMIT 1""",
-                        (account_id, lesson["date"]),
-                    )
-                    is_late = 1 if cur.fetchone() is not None else 0
+    def upsert_lessons(
+        self,
+        account_id: int,
+        lessons: list[dict[str, Any]],
+        *,
+        today: str | None = None,
+    ) -> list[LessonUpsertResult | None]:
+        """Viele Stunden in einer Transaktion (ein Executor-Job je Pass).
+        ``None`` in der Ergebnisliste heißt: dieser Eintrag schlug fehl."""
+        now = _now()
+        day = today or date.today().isoformat()
+        with self._tx() as cur:
+            already_pulled = self._already_pulled(cur, account_id)
+            return self._savepoint_each(
+                cur,
+                lessons,
+                lambda lesson: self._upsert_lesson(
+                    cur,
+                    account_id,
+                    lesson,
+                    now=now,
+                    already_pulled=already_pulled,
+                    today=day,
+                ),
+                "Stunde",
+            )
 
-                all_cols = ("account_id", "untis_period_id", *cols,
-                            "is_late_addition",
-                            "first_seen_at", "last_updated_at")
-                placeholders = ", ".join(["?"] * len(all_cols))
-                cur.execute(
-                    f"INSERT INTO lessons ({', '.join(all_cols)}) "
-                    f"VALUES ({placeholders})",
-                    (account_id, lesson["untis_period_id"], *values,
-                     is_late, now, now),
-                )
-                return LessonUpsertResult("inserted", int(cur.lastrowid), {})
+    def _upsert_lesson(
+        self,
+        cur: sqlite3.Cursor,
+        account_id: int,
+        lesson: dict[str, Any],
+        *,
+        now: str,
+        already_pulled: bool,
+        today: str,
+    ) -> LessonUpsertResult:
+        cur.execute(
+            """SELECT * FROM lessons
+               WHERE account_id=? AND untis_period_id=?""",
+            (account_id, lesson["untis_period_id"]),
+        )
+        existing = cur.fetchone()
 
-            # Diff into two buckets:
-            # - semantic_diff: tracked fields → drives the snapshot/change log
-            # - any_diff: ANY provided column that differs → drives the UPDATE
-            # That way an archival-only update (e.g. period_info_json finally
-            # arriving in pass 2) is persisted without polluting the change
-            # log with synthetic entries.
-            tracked = set(LESSON_TRACKED_FIELDS)
-            semantic_diff: dict[str, tuple[Any, Any]] = {}
-            any_diff = False
-            for field in cols:
-                old = existing[field]
-                new = self._lesson_value(lesson, field)
-                if old != new:
-                    any_diff = True
-                    if field in tracked:
-                        semantic_diff[field] = (old, new)
+        # Aufsichts-Vermutung aus dem Stand, der nach diesem Schreiben
+        # gilt: Code und Lehrstoff aus dem Aufruf, sonst aus der Zeile.
+        # Früher setzte der Stundenplan-Pass sie auf 1 und der
+        # period/info-Pass wieder auf 0, bei jedem Abruf.
+        if "code" in lesson or "lstext" in lesson or "is_supervision_guess" in lesson:
+            code = lesson["code"] if "code" in lesson else (existing["code"] if existing else "")
+            lstext = (
+                lesson["lstext"] if "lstext" in lesson else (existing["lstext"] if existing else "")
+            )
+            lesson = {
+                **lesson,
+                "is_supervision_guess": (code or "") == "irregular"
+                and not (lstext or "").strip(),
+            }
 
-            if not any_diff:
-                return LessonUpsertResult("unchanged", int(existing["id"]), {})
+        # Only write columns the caller explicitly provided. That way
+        # a follow-up pull that only carries period/info (lstext +
+        # period_info_json) doesn't blank out fields the original
+        # timetable pass had populated.
+        cols = tuple(c for c in self._LESSON_WRITE_COLS if c in lesson)
+        values = [self._lesson_value(lesson, c) for c in cols]
 
-            if semantic_diff:
-                change_types = _classify_lesson_changes(
-                    semantic_diff,
-                    existing_first_seen=existing["first_seen_at"],
-                    new_date=lesson["date"],
-                )
-                cur.execute(
-                    """INSERT INTO lesson_snapshots
-                       (lesson_id, captured_at, payload_json, diff_json,
-                        change_types_json)
-                       VALUES (?, ?, ?, ?, ?)""",
-                    (
-                        int(existing["id"]),
-                        now,
-                        json.dumps(
-                            {k: existing[k] for k in existing.keys()},
-                            default=str,
-                        ),
-                        json.dumps(semantic_diff, default=str),
-                        json.dumps(change_types),
+        if existing is None:
+            # Nachträglich eingetragen heißt: Die Stunde liegt vor dem
+            # heutigen Tag und taucht erst jetzt auf. Bis 0.5.4 zählte jede
+            # neue Stunde, nach der schon eine spätere existierte, also jede
+            # Stunde der neu ins Fenster gerückten Tage. Beim ersten Abruf
+            # (Backfill) wird nichts markiert.
+            is_late = 1 if already_pulled and str(lesson["date"]) < today else 0
+
+            all_cols = ("account_id", "untis_period_id", *cols,
+                        "is_late_addition",
+                        "first_seen_at", "last_updated_at")
+            placeholders = ", ".join(["?"] * len(all_cols))
+            cur.execute(
+                f"INSERT INTO lessons ({', '.join(all_cols)}) "
+                f"VALUES ({placeholders})",
+                (account_id, lesson["untis_period_id"], *values,
+                 is_late, now, now),
+            )
+            return LessonUpsertResult("inserted", int(cur.lastrowid), {})
+
+        # Diff into two buckets:
+        # - semantic_diff: tracked fields → drives the snapshot/change log
+        # - any_diff: ANY provided column that differs → drives the UPDATE
+        # That way an archival-only update (e.g. period_info_json finally
+        # arriving in pass 2) is persisted without polluting the change
+        # log with synthetic entries.
+        tracked = set(LESSON_TRACKED_FIELDS)
+        semantic_diff: dict[str, tuple[Any, Any]] = {}
+        any_diff = False
+        for field in cols:
+            old = existing[field]
+            new = self._lesson_value(lesson, field)
+            if old != new:
+                any_diff = True
+                if field in tracked:
+                    semantic_diff[field] = (old, new)
+
+        if not any_diff:
+            return LessonUpsertResult("unchanged", int(existing["id"]), {})
+
+        if semantic_diff:
+            change_types = _classify_lesson_changes(
+                semantic_diff,
+                existing_first_seen=existing["first_seen_at"],
+                new_date=lesson.get("date") or existing["date"],
+            )
+            cur.execute(
+                """INSERT INTO lesson_snapshots
+                   (lesson_id, captured_at, payload_json, diff_json,
+                    change_types_json)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    int(existing["id"]),
+                    now,
+                    json.dumps(
+                        {k: existing[k] for k in existing.keys()},
+                        default=str,
                     ),
-                )
-            set_clause = ", ".join(f"{c}=?" for c in cols)
-            cur.execute(
-                f"UPDATE lessons SET {set_clause}, last_updated_at=? WHERE id=?",
-                (*values, now, int(existing["id"])),
+                    json.dumps(semantic_diff, default=str),
+                    json.dumps(change_types),
+                ),
             )
-            return LessonUpsertResult("updated", int(existing["id"]), semantic_diff)
+        set_clause = ", ".join(f"{c}=?" for c in cols)
+        cur.execute(
+            f"UPDATE lessons SET {set_clause}, last_updated_at=? WHERE id=?",
+            (*values, now, int(existing["id"])),
+        )
+        return LessonUpsertResult("updated", int(existing["id"]), semantic_diff)
+
+    def mark_removed_lessons(
+        self,
+        account_id: int,
+        returned_period_ids: Iterable[int],
+        covered_days: Iterable[str],
+    ) -> tuple[int, int]:
+        """Geisterstunden kennzeichnen, ohne etwas zu löschen.
+
+        ``covered_days`` sind nur die Tage, für die WebUntis in diesem
+        Abruf mindestens eine Stunde geliefert hat. Eine Stunde an einem
+        solchen Tag, deren ``untis_period_id`` nicht zurückkam, bekommt
+        ``removed_at``. Kommt eine gekennzeichnete Stunde wieder, wird
+        die Kennzeichnung gelöscht. Rückgabe: (gekennzeichnet, zurück).
+        """
+        returned = {int(i) for i in returned_period_ids}
+        days = sorted({str(d) for d in covered_days})
+        if not returned or not days:
+            return 0, 0
+        now = _now()
+        removed = restored = 0
+        with self._tx() as cur:
+            for i in range(0, len(days), 200):
+                chunk = days[i : i + 200]
+                marks = ",".join("?" for _ in chunk)
+                cur.execute(
+                    f"""SELECT id, untis_period_id, removed_at FROM lessons
+                        WHERE account_id=? AND date IN ({marks})""",
+                    (account_id, *chunk),
+                )
+                to_mark = [
+                    (now, int(r["id"]))
+                    for r in cur.fetchall()
+                    if int(r["untis_period_id"]) not in returned and not r["removed_at"]
+                ]
+                if to_mark:
+                    cur.executemany("UPDATE lessons SET removed_at=? WHERE id=?", to_mark)
+                    removed += len(to_mark)
+            cur.execute(
+                "SELECT id, untis_period_id FROM lessons "
+                "WHERE account_id=? AND removed_at IS NOT NULL",
+                (account_id,),
+            )
+            back = [
+                (int(r["id"]),)
+                for r in cur.fetchall()
+                if int(r["untis_period_id"]) in returned
+            ]
+            if back:
+                cur.executemany("UPDATE lessons SET removed_at=NULL WHERE id=?", back)
+                restored = len(back)
+        return removed, restored
 
     # ---- homework -------------------------------------------------------
 
     def upsert_homework(self, account_id: int, hw: dict[str, Any]) -> str:
+        with self._tx() as cur:
+            return self._upsert_homework(cur, account_id, hw, _now())
+
+    def upsert_homeworks(
+        self, account_id: int, items: list[dict[str, Any]]
+    ) -> list[str | None]:
         now = _now()
         with self._tx() as cur:
-            cur.execute(
-                """SELECT * FROM homework
-                   WHERE account_id=? AND untis_homework_id=?""",
-                (account_id, hw["untis_homework_id"]),
+            return self._savepoint_each(
+                cur,
+                items,
+                lambda hw: self._upsert_homework(cur, account_id, hw, now),
+                "Hausaufgabe",
             )
-            existing = cur.fetchone()
-            if existing is None:
-                cur.execute(
-                    """INSERT INTO homework
-                       (account_id, untis_homework_id, untis_lesson_id,
-                        subject_untis_id, subject_name, text,
-                        assigned_date, due_date, completed, payload_json,
-                        first_seen_at, last_updated_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        account_id,
-                        hw["untis_homework_id"],
-                        hw.get("untis_lesson_id"),
-                        hw.get("subject_untis_id"),
-                        hw.get("subject_name"),
-                        hw.get("text") or "",
-                        hw.get("assigned_date"),
-                        hw.get("due_date"),
-                        1 if hw.get("completed") else 0,
-                        hw.get("payload_json"),
-                        now,
-                        now,
-                    ),
-                )
-                return "inserted"
 
-            diff: dict[str, tuple[Any, Any]] = {}
-            for field in HOMEWORK_TRACKED_FIELDS:
-                old = existing[field]
-                new = hw.get(field)
-                if field == "completed":
-                    new = 1 if new else 0
-                if field == "text":
-                    new = new or ""
-                if old != new:
-                    diff[field] = (old, new)
-
-            if not diff:
-                return "unchanged"
-
+    def _upsert_homework(
+        self, cur: sqlite3.Cursor, account_id: int, hw: dict[str, Any], now: str
+    ) -> str:
+        cur.execute(
+            """SELECT * FROM homework
+               WHERE account_id=? AND untis_homework_id=?""",
+            (account_id, hw["untis_homework_id"]),
+        )
+        existing = cur.fetchone()
+        if existing is None:
             cur.execute(
-                """INSERT INTO homework_snapshots
-                   (homework_id, captured_at, payload_json, diff_json)
-                   VALUES (?, ?, ?, ?)""",
+                """INSERT INTO homework
+                   (account_id, untis_homework_id, untis_lesson_id,
+                    subject_untis_id, subject_name, text,
+                    assigned_date, due_date, completed, payload_json,
+                    first_seen_at, last_updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    int(existing["id"]),
-                    now,
-                    json.dumps({k: existing[k] for k in existing.keys()}, default=str),
-                    json.dumps(diff, default=str),
-                ),
-            )
-            cur.execute(
-                """UPDATE homework SET
-                       untis_lesson_id=?, subject_untis_id=?, subject_name=?,
-                       text=?, assigned_date=?, due_date=?, completed=?,
-                       payload_json=?, last_updated_at=?
-                   WHERE id=?""",
-                (
+                    account_id,
+                    hw["untis_homework_id"],
                     hw.get("untis_lesson_id"),
                     hw.get("subject_untis_id"),
                     hw.get("subject_name"),
@@ -1033,75 +1194,216 @@ class UntisStorage:
                     1 if hw.get("completed") else 0,
                     hw.get("payload_json"),
                     now,
-                    int(existing["id"]),
+                    now,
                 ),
             )
-            return "updated"
+            return "inserted"
+
+        diff: dict[str, tuple[Any, Any]] = {}
+        for field in HOMEWORK_TRACKED_FIELDS:
+            old = existing[field]
+            new = hw.get(field)
+            if field == "completed":
+                new = 1 if new else 0
+            if field == "text":
+                new = new or ""
+            if old != new:
+                diff[field] = (old, new)
+
+        if not diff:
+            return "unchanged"
+
+        cur.execute(
+            """INSERT INTO homework_snapshots
+               (homework_id, captured_at, payload_json, diff_json)
+               VALUES (?, ?, ?, ?)""",
+            (
+                int(existing["id"]),
+                now,
+                json.dumps({k: existing[k] for k in existing.keys()}, default=str),
+                json.dumps(diff, default=str),
+            ),
+        )
+        cur.execute(
+            """UPDATE homework SET
+                   untis_lesson_id=?, subject_untis_id=?, subject_name=?,
+                   text=?, assigned_date=?, due_date=?, completed=?,
+                   payload_json=?, last_updated_at=?
+               WHERE id=?""",
+            (
+                hw.get("untis_lesson_id"),
+                hw.get("subject_untis_id"),
+                hw.get("subject_name"),
+                hw.get("text") or "",
+                hw.get("assigned_date"),
+                hw.get("due_date"),
+                1 if hw.get("completed") else 0,
+                hw.get("payload_json"),
+                now,
+                int(existing["id"]),
+            ),
+        )
+        return "updated"
 
     # ---- absences -------------------------------------------------------
 
+    # Spalten, die ``upsert_absence`` schreibt und vergleicht.
+    _ABSENCE_COLS: tuple[str, ...] = (
+        "start_date",
+        "end_date",
+        "start_time",
+        "end_time",
+        "reason_id",
+        "reason",
+        "text",
+        "excuse_status",
+        "is_excused",
+        "created_user",
+        "updated_user",
+        "payload_json",
+    )
+
+    def _absence_values(self, absence: dict[str, Any]) -> tuple[Any, ...]:
+        out: list[Any] = []
+        for col in self._ABSENCE_COLS:
+            if col in ("start_date", "end_date", "start_time", "end_time"):
+                out.append(absence[col])
+            elif col == "is_excused":
+                out.append(1 if absence.get(col) else 0)
+            else:
+                out.append(absence.get(col))
+        return tuple(out)
+
     def upsert_absence(self, account_id: int, absence: dict[str, Any]) -> str:
+        """Rückgabe ``inserted``, ``updated`` oder ``unchanged``."""
+        with self._tx() as cur:
+            return self._upsert_absence(cur, account_id, absence, _now())
+
+    def upsert_absences(
+        self, account_id: int, items: list[dict[str, Any]]
+    ) -> list[str | None]:
+        now = _now()
+        with self._tx() as cur:
+            return self._savepoint_each(
+                cur,
+                items,
+                lambda ab: self._upsert_absence(cur, account_id, ab, now),
+                "Fehlzeit",
+            )
+
+    def _upsert_absence(
+        self, cur: sqlite3.Cursor, account_id: int, absence: dict[str, Any], now: str
+    ) -> str:
+        values = self._absence_values(absence)
+        cur.execute(
+            """SELECT * FROM absences
+               WHERE account_id=? AND untis_absence_id=?""",
+            (account_id, absence["untis_absence_id"]),
+        )
+        existing = cur.fetchone()
+        if existing is None:
+            cols = ("account_id", "untis_absence_id", *self._ABSENCE_COLS,
+                    "first_seen_at", "last_updated_at")
+            cur.execute(
+                f"INSERT INTO absences ({', '.join(cols)}) "
+                f"VALUES ({', '.join('?' for _ in cols)})",
+                (account_id, absence["untis_absence_id"], *values, now, now),
+            )
+            return "inserted"
+        if tuple(existing[c] for c in self._ABSENCE_COLS) == values:
+            return "unchanged"
+        set_clause = ", ".join(f"{c}=?" for c in self._ABSENCE_COLS)
+        cur.execute(
+            f"UPDATE absences SET {set_clause}, last_updated_at=? WHERE id=?",
+            (*values, now, int(existing["id"])),
+        )
+        return "updated"
+
+    @_locked
+    def absence_span(
+        self, account_id: int, untis_absence_ids: Iterable[int]
+    ) -> tuple[str, str] | None:
+        """Frühester Beginn und spätestes Ende der genannten Fehlzeiten."""
+        ids = [int(i) for i in untis_absence_ids]
+        lo: str | None = None
+        hi: str | None = None
+        for i in range(0, len(ids), 500):
+            chunk = ids[i : i + 500]
+            row = self._conn.execute(
+                f"""SELECT MIN(start_date) AS lo, MAX(end_date) AS hi
+                    FROM absences WHERE account_id=?
+                    AND untis_absence_id IN ({','.join('?' for _ in chunk)})""",
+                (account_id, *chunk),
+            ).fetchone()
+            if row and row["lo"]:
+                lo = row["lo"] if lo is None else min(lo, row["lo"])
+                hi = row["hi"] if hi is None else max(hi, row["hi"])
+        return (lo, hi) if lo and hi else None
+
+    def delete_absences_not_in(
+        self,
+        account_id: int,
+        returned_ids: Iterable[int],
+        start_day: str,
+        end_day: str,
+        *,
+        max_delete: int = 5,
+    ) -> tuple[str, str] | None:
+        """Fehlzeiten ganz innerhalb [start_day, end_day], die WebUntis nicht
+        mehr geliefert hat, aus ``absences`` entfernen. Jede entfernte Zeile
+        wird vorher vollständig in ``absence_deletions`` abgelegt.
+
+        Nur aufrufen, wenn der Abruf erfolgreich war und Einträge geliefert
+        hat; bei leerer Menge passiert nichts. Rückgabe: Datumsbereich der
+        entfernten Fehlzeiten (für ``recompute_attendance``) oder None.
+        """
+        returned = {int(i) for i in returned_ids}
+        if not returned:
+            return None
         now = _now()
         with self._tx() as cur:
             cur.execute(
-                """SELECT id FROM absences
-                   WHERE account_id=? AND untis_absence_id=?""",
-                (account_id, absence["untis_absence_id"]),
+                """SELECT * FROM absences
+                   WHERE account_id=? AND start_date >= ? AND end_date <= ?""",
+                (account_id, start_day, end_day),
             )
-            existing = cur.fetchone()
-            if existing is None:
+            gone = [r for r in cur.fetchall() if int(r["untis_absence_id"]) not in returned]
+            if not gone:
+                return None
+            if len(gone) > max_delete:
+                # Mehr als eine Handvoll auf einmal: eher eine unvollständige
+                # Antwort als eine Korrektur der Schule. Nichts anfassen.
+                _LOGGER.warning(
+                    "%d Fehlzeiten fehlen in der WebUntis-Antwort (Grenze %d); "
+                    "es wird nichts entfernt",
+                    len(gone),
+                    max_delete,
+                )
+                return None
+            for r in gone:
                 cur.execute(
-                    """INSERT INTO absences
-                       (account_id, untis_absence_id, start_date, end_date,
-                        start_time, end_time, reason_id, reason, text,
-                        excuse_status, is_excused, created_user, updated_user,
-                        payload_json, first_seen_at, last_updated_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    """INSERT INTO absence_deletions
+                       (account_id, untis_absence_id, deleted_at, row_json)
+                       VALUES (?, ?, ?, ?)""",
                     (
                         account_id,
-                        absence["untis_absence_id"],
-                        absence["start_date"],
-                        absence["end_date"],
-                        absence["start_time"],
-                        absence["end_time"],
-                        absence.get("reason_id"),
-                        absence.get("reason"),
-                        absence.get("text"),
-                        absence.get("excuse_status"),
-                        1 if absence.get("is_excused") else 0,
-                        absence.get("created_user"),
-                        absence.get("updated_user"),
-                        absence.get("payload_json"),
+                        int(r["untis_absence_id"]),
                         now,
-                        now,
+                        json.dumps({k: r[k] for k in r.keys()}, default=str),
                     ),
                 )
-                return "inserted"
-            cur.execute(
-                """UPDATE absences SET
-                       start_date=?, end_date=?, start_time=?, end_time=?,
-                       reason_id=?, reason=?, text=?, excuse_status=?,
-                       is_excused=?, created_user=?, updated_user=?,
-                       payload_json=?, last_updated_at=?
-                   WHERE id=?""",
-                (
-                    absence["start_date"],
-                    absence["end_date"],
-                    absence["start_time"],
-                    absence["end_time"],
-                    absence.get("reason_id"),
-                    absence.get("reason"),
-                    absence.get("text"),
-                    absence.get("excuse_status"),
-                    1 if absence.get("is_excused") else 0,
-                    absence.get("created_user"),
-                    absence.get("updated_user"),
-                    absence.get("payload_json"),
-                    now,
-                    int(existing["id"]),
-                ),
+                cur.execute("DELETE FROM absences WHERE id=?", (int(r["id"]),))
+                _LOGGER.info(
+                    "Fehlzeit %s (%s bis %s) liefert WebUntis nicht mehr; "
+                    "entfernt, Kopie in absence_deletions",
+                    r["untis_absence_id"],
+                    r["start_date"],
+                    r["end_date"],
+                )
+            return (
+                min(r["start_date"] for r in gone),
+                max(r["end_date"] for r in gone),
             )
-            return "updated"
 
     def recompute_attendance(
         self, account_id: int, start_day: str, end_day: str
@@ -1155,7 +1457,7 @@ class UntisStorage:
     def lessons_for_day(self, account_id: int, day: str) -> list[dict[str, Any]]:
         cur = self._conn.execute(
             """SELECT * FROM lessons
-               WHERE account_id=? AND date=?
+               WHERE account_id=? AND date=? AND removed_at IS NULL
                ORDER BY start_time""",
             (account_id, day),
         )
@@ -1168,19 +1470,34 @@ class UntisStorage:
         cur = self._conn.execute(
             """SELECT * FROM lessons
                WHERE account_id=? AND date BETWEEN ? AND ?
+                 AND removed_at IS NULL
                ORDER BY date, start_time""",
             (account_id, start_day, end_day),
         )
         return [dict(row) for row in cur.fetchall()]
 
     @_locked
-    def open_homework(self, account_id: int) -> list[dict[str, Any]]:
-        cur = self._conn.execute(
-            """SELECT * FROM homework
-               WHERE account_id=? AND completed=0
-               ORDER BY due_date""",
-            (account_id,),
-        )
+    def open_homework(
+        self, account_id: int, since_day: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Offene Hausaufgaben; mit ``since_day`` nur die, deren Fälligkeit
+        nicht davor liegt (ohne Fälligkeit bleiben sie drin). Ohne Grenze
+        wuchs die Liste mit jeder nie abgehakten Aufgabe weiter."""
+        if since_day is None:
+            cur = self._conn.execute(
+                """SELECT * FROM homework
+                   WHERE account_id=? AND completed=0
+                   ORDER BY due_date""",
+                (account_id,),
+            )
+        else:
+            cur = self._conn.execute(
+                """SELECT * FROM homework
+                   WHERE account_id=? AND completed=0
+                     AND (due_date IS NULL OR due_date = '' OR due_date >= ?)
+                   ORDER BY due_date""",
+                (account_id, since_day),
+            )
         rows = [dict(row) for row in cur.fetchall()]
         self._resolve_homework_subjects(account_id, rows)
         return rows
@@ -1235,6 +1552,7 @@ class UntisStorage:
             """SELECT * FROM lessons
                WHERE account_id=? AND date BETWEEN ? AND ?
                  AND was_absent=1
+                 AND removed_at IS NULL
                  AND (code IS NULL OR code != 'cancelled')
                ORDER BY date, start_time""",
             (account_id, start_day, end_day),
@@ -1268,6 +1586,7 @@ class UntisStorage:
                FROM lesson_snapshots s
                JOIN lessons l ON l.id = s.lesson_id
                WHERE l.account_id=? AND s.captured_at >= ?
+                 AND l.removed_at IS NULL
                ORDER BY s.captured_at DESC""",
             (account_id, since_iso),
         )
@@ -1283,7 +1602,8 @@ class UntisStorage:
                  AND (code IS NULL OR code != 'cancelled')
                  AND (lstext IS NULL OR lstext = '')
                  AND (lstext_manual_override IS NULL OR lstext_manual_override = '')
-               ORDER BY date, start_time""",
+                 AND removed_at IS NULL
+               ORDER BY date DESC, start_time DESC""",
             (account_id, start_day, end_day),
         )
         return [dict(row) for row in cur.fetchall()]
@@ -1430,7 +1750,8 @@ def normalize_homework(raw: dict[str, Any], lessons_lookup: dict[int, dict[str, 
     ``lessons`` dict from the same response keyed by ``lessonId`` so we
     can resolve subject information.
     """
-    lesson_info = lessons_lookup.get(int(raw.get("lessonId", 0))) or {}
+    # lessonId kommt auch als null; int(None) brach früher den ganzen Abruf ab.
+    lesson_info = lessons_lookup.get(int(raw.get("lessonId") or 0)) or {}
     subj = (lesson_info.get("subject") or None) if isinstance(lesson_info, dict) else None
     # Reale Installationen liefern lessons[].subject mal als Dict
     # ({"id":…,"name":…}), mal als nackten String — beides akzeptieren.
@@ -1496,7 +1817,36 @@ def collect_absences(payload: dict[str, Any]) -> Iterable[dict[str, Any]]:
         data = payload if isinstance(payload, dict) else {}
     for entry in data.get("absences") or []:
         if isinstance(entry, dict) and "id" in entry:
-            yield normalize_absence(entry)
+            # Ein kaputter Eintrag (fehlende Datums- oder Zeitfelder) darf
+            # nicht den ganzen Abruf abbrechen; er wird übersprungen.
+            try:
+                yield normalize_absence(entry)
+            except (KeyError, TypeError, ValueError, AttributeError) as err:
+                _LOGGER.warning(
+                    "Fehlzeit %r übersprungen, unvollständig: %s", entry.get("id"), err
+                )
+
+
+def absence_ids_in_payload(payload: Any) -> set[int] | None:
+    """IDs aller Fehlzeiten, die WebUntis geliefert hat, auch die, die
+    ``normalize_absence`` nicht lesen konnte.
+
+    ``None``, wenn die Antwort keine Liste ``absences`` enthält oder ein
+    Eintrag keine lesbare ID hat: Dann ist unklar, was fehlt, und es darf
+    nichts gelöscht werden.
+    """
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if data is None:
+        data = payload if isinstance(payload, dict) else None
+    if not isinstance(data, dict) or not isinstance(data.get("absences"), list):
+        return None
+    ids: set[int] = set()
+    for entry in data["absences"]:
+        try:
+            ids.add(int(entry["id"]))
+        except (KeyError, TypeError, ValueError):
+            return None
+    return ids
 
 
 def collect_homework(payload: dict[str, Any]) -> Iterable[dict[str, Any]]:
@@ -1513,7 +1863,15 @@ def collect_homework(payload: dict[str, Any]) -> Iterable[dict[str, Any]]:
     lessons_lookup: dict[int, dict[str, Any]] = {}
     for ls in raw_lessons:
         if isinstance(ls, dict) and "id" in ls:
-            lessons_lookup[int(ls["id"])] = ls
+            try:
+                lessons_lookup[int(ls["id"])] = ls
+            except (TypeError, ValueError):
+                continue
     for hw in raw_hws:
         if isinstance(hw, dict) and "id" in hw:
-            yield normalize_homework(hw, lessons_lookup)
+            try:
+                yield normalize_homework(hw, lessons_lookup)
+            except (KeyError, TypeError, ValueError, AttributeError) as err:
+                _LOGGER.warning(
+                    "Hausaufgabe %r übersprungen, unvollständig: %s", hw.get("id"), err
+                )
