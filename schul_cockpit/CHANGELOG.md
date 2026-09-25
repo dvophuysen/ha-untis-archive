@@ -1,3 +1,7 @@
+## 1.25.3
+
+- Der Vokabelschritt im Lernplan heißt wieder richtig, zum Beispiel „Vokabeln Latein: Lektion 2 · 16 Wörter“, statt die interne Kennung zu zeigen.
+
 ## 1.25.2
 
 - Am Wochenende kommen keine neuen Lernaufgaben dazu. Der Plan für das Wochenende steht am Freitag nach der Schule fest: Reichen die Schultage nicht, trägt die Freitagsliste den Rest, und sie darf bis Sonntagabend fertig werden. Das Wochenende ist Notpuffer, kein Lerntag.

@@ -99,8 +99,11 @@ def _vocab_key(v: dict) -> str:
 
 
 def _vocab_step(v: dict) -> dict:
-    unit = v.get("unit")
-    return {"key": _vocab_key(v), "kind": "vocab", "title": f"Vokabeln {v.get('subject') or ''}{': ' + unit if unit else ''}".strip(),
+    from .subject_names import label as subject_label
+    unit = v.get("unit_label") or v.get("unit")
+    subject = subject_label(v.get("subject") or "") or v.get("subject") or ""
+    count = f" · {v['target']} Wörter" if v.get("target") else ""
+    return {"key": _vocab_key(v), "kind": "vocab", "title": f"Vokabeln {subject}{': ' + unit if unit else ''}{count}".strip(),
             "why": v.get("why") or "Jeden Tag ein paar Wörter sitzen besser als alle am Abend vorher.",
             "subject": v.get("subject"), "exam_key": v.get("exam_key"), "exam_date": None, "format": None,
             "topic_id": None, "level": None, "href": v.get("href") or "#/vokabeln", "target": v.get("target")}
@@ -297,7 +300,7 @@ def stored(account_id: int, day: date) -> list[dict] | None:
 # genannten Tagen mit neuer Logik neu berechnet: am 25.09.2026 bei der
 # Einführung (Nutzer: „Heute haben wir noch einen Freibrief“). Sonst gilt eine
 # neue Logik ab dem nächsten Morgen; tagsüber wächst nichts dazu (D189).
-PLAN_VERSION = 2
+PLAN_VERSION = 3
 REPLAN_DAYS = ("2026-09-25",)
 
 
