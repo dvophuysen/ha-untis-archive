@@ -5,6 +5,7 @@
   import PrintSheet from './PrintSheet.svelte';
   import { view, actsAsParent } from './viewMode.svelte.js';
   import { appState } from './store.svelte.js';
+  import { showFile } from './fileViewer.svelte.js';
 
   let { accountId, attemptId, onclose = () => {}, backLabel = 'Zurück zum Raster' } = $props();
   const base = $derived(`/api/accounts/${accountId}/practice/attempts/${attemptId}`);
@@ -44,6 +45,13 @@
   }
   // Eltern: ausgewertete Arbeit wieder öffnen, Seiten tauschen, neu auswerten (D201).
   const regrade = () => run('Wird geöffnet …', async () => { a = await api.post(`${base}/regrade`, {}); });
+  // Eltern: mit denselben Seiten sofort neu auswerten, volle Doppelauswertung (D206).
+  const regradeNow = () => {
+    if (graded && !confirm('Die Arbeit mit denselben Seiten neu auswerten? Die bisherige Auswertung wird ersetzt.')) return;
+    return run('Wird neu ausgewertet, das dauert bis zu zwei Minuten …', async () => {
+      try { a = await api.post(`${base}/regrade`, { now: true }); } catch (e) { await load(); throw e; }
+    });
+  };
   const removePage = (pid) => run('Wird entfernt …', async () => { a = await api.delete(`${base}/pages/${pid}`); });
   const grade = () => run('Wird ausgewertet, das dauert bis zu zwei Minuten …', async () => {
     a = await api.post(`${base}/grade`, { answers });
@@ -86,10 +94,10 @@
     {:else if reviewing}
       <div class="notice review-box">
         <strong>Prüfung nötig: {openNrs.length === 1 ? `Aufgabe ${openNrs[0]}` : `Aufgaben ${openNrs.join(', ')}`}</strong>
-        <p>{openNrs.length === 1 ? 'Diese Aufgabe ließ' : 'Diese Aufgaben ließen'} sich {(a.feedback.check?.passes ?? 1) < 2 ? 'bei der früheren Auswertung' : `auch nach ${a.feedback.check.passes} Auswertungen`} nicht sicher lesen. Bis ihr sie prüft, sieht das Kind keine Punkte, und nichts zählt für den Lernstand. Schaut auf den Fotos nach und tragt die Punkte ein, oder fotografiert die Seiten neu.</p>
+        <p>{openNrs.length === 1 ? 'Diese Aufgabe ließ' : 'Diese Aufgaben ließen'} sich {(a.feedback.check?.passes ?? 1) < 2 ? 'bei der früheren Auswertung' : `auch nach ${a.feedback.check.passes} Auswertungen`} nicht sicher lesen. Bis ihr sie prüft, sieht das Kind keine Punkte, und nichts zählt für den Lernstand. Schaut auf den Fotos nach und tragt die Punkte ein, lasst die Arbeit mit denselben Fotos neu auswerten oder fotografiert die Seiten neu.</p>
         {#if a.pages.length}
           <div class="pages review-pages">
-            {#each a.pages as pid, n (pid)}<a href={photoUrl(pid)} target="_blank" rel="noreferrer"><img src={photoUrl(pid)} alt={`Seite ${n + 1}`} loading="lazy" /></a>{/each}
+            {#each a.pages as pid, n (pid)}<button type="button" class="page-open" onclick={() => showFile(photoUrl(pid), `Seite ${n + 1}`)} aria-label={`Seite ${n + 1} groß ansehen`}><img src={photoUrl(pid)} alt={`Seite ${n + 1}`} loading="lazy" /></button>{/each}
           </div>
         {/if}
       </div>
@@ -108,7 +116,8 @@
         </article>
       {/each}
       <button class="primary" disabled={!!busy || !reviewReady} onclick={saveReview}>Punkte übernehmen</button>
-      <button class="ghost" disabled={!!busy} onclick={regrade}>Seiten neu fotografieren und neu auswerten</button>
+      {#if a.pages.length || Object.values(a.answers || {}).some((v) => (v || '').trim())}<button class="btn" disabled={!!busy} onclick={regradeNow}>Mit denselben Fotos neu auswerten</button>{/if}
+      <button class="ghost" disabled={!!busy} onclick={regrade}>Seiten austauschen und neu auswerten</button>
     {:else if graded}
       <div class="result">
         <strong class="big">{num(got)} von {total} Punkten</strong>
@@ -128,8 +137,11 @@
       {/each}
       {#if actsAsParent(appState.me)}
         <div class="regrade">
-          <p class="dim">Schlecht lesbare Fotos? Die Arbeit lässt sich noch einmal öffnen: Seiten austauschen, dann neu auswerten. Die bisherige Auswertung zählt dann nicht mehr.</p>
-          <button class="ghost" disabled={!!busy} onclick={regrade}>Neu auswerten lassen</button>
+          <p class="dim">Zweifel an der Auswertung? Die App wertet mit denselben Fotos neu aus, wieder mehrfach und unabhängig. Bei schlecht lesbaren Fotos erst die Seiten austauschen. Die bisherige Auswertung zählt dann nicht mehr.</p>
+          <span class="regrade-acts">
+            <button class="btn" disabled={!!busy} onclick={regradeNow}>Neu auswerten lassen</button>
+            <button class="ghost" disabled={!!busy} onclick={regrade}>Seiten austauschen</button>
+          </span>
         </div>
       {/if}
       <button class="primary" onclick={onclose}>Zum Raster</button>
@@ -147,7 +159,7 @@
           <input type="file" accept="image/*" multiple style="display:none" bind:this={fileInput} onchange={upload} />
           <div class="pages">
             {#each a.pages as pid, n (pid)}
-              <figure><img src={photoUrl(pid)} alt={`Seite ${n + 1}`} loading="lazy" /><button class="ghost" disabled={!!busy} onclick={() => removePage(pid)} aria-label={`Seite ${n + 1} entfernen`}>✕</button></figure>
+              <figure><button type="button" class="page-open" onclick={() => showFile(photoUrl(pid), `Seite ${n + 1}`)} aria-label={`Seite ${n + 1} groß ansehen`}><img src={photoUrl(pid)} alt={`Seite ${n + 1}`} loading="lazy" /></button><button class="ghost" disabled={!!busy} onclick={() => removePage(pid)} aria-label={`Seite ${n + 1} entfernen`}>✕</button></figure>
             {/each}
             {#if a.pages.length < 6}<button class="add" disabled={!!busy} onclick={() => fileInput?.click()}>📷 Seite hinzufügen</button>{/if}
           </div>
@@ -175,7 +187,9 @@
 <style>
   .review-box, .review-wait { display: grid; gap: 4px; }
   .review-box p, .review-wait p { margin: 0; }
-  .review-pages a img { width: 96px; height: 128px; object-fit: cover; border-radius: var(--r-sm); border: 1px solid var(--border); }
+  .page-open { display: block; padding: 0; border: 0; background: none; cursor: zoom-in; }
+  .regrade-acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+  .review-pages .page-open img { width: 96px; height: 128px; object-fit: cover; border-radius: var(--r-sm); border: 1px solid var(--border); }
   .review-points { display: grid; gap: 2px; max-width: 12rem; }
   .review-points input { font: inherit; min-height: 40px; }
   .regrade { display: grid; gap: 4px; padding: var(--sp-2); border: 1px dashed var(--border); border-radius: var(--r-md); }

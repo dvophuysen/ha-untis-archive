@@ -1,6 +1,8 @@
 <script>
   import Icon from './lib/Icon.svelte';
   import DeviceSheet from './lib/DeviceSheet.svelte';
+  import FileViewer from './lib/FileViewer.svelte';
+  import { showFile, inAppFile } from './lib/fileViewer.svelte.js';
   import { profile, loadProfile, applyProfile, initials } from './lib/profile.svelte.js';
   import { view, setViewMode, touchViewMode, expireViewMode } from './lib/viewMode.svelte.js';
   import { onMount } from 'svelte';
@@ -128,7 +130,20 @@
     const expTimer = setInterval(expire, 60000);
     document.addEventListener('visibilitychange', expire);
     document.addEventListener('pointerdown', touch, { passive: true });
+    // Dateien und Fotos der App öffnen in der eigenen Ansicht statt in einem
+    // neuen Fenster, aus dem die Web-App am iPhone nicht zurückkommt (D206).
+    const openInApp = (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      const a = e.target?.closest?.('a[href]');
+      const href = inAppFile(a);
+      if (!href) return;
+      e.preventDefault();
+      const title = a.getAttribute('aria-label') || a.querySelector('img')?.getAttribute('alt') || a.textContent.trim();
+      showFile(href, title.slice(0, 80));
+    };
+    document.addEventListener('click', openInApp);
     return () => {
+      document.removeEventListener('click', openInApp);
       window.removeEventListener('hashchange', handler);
       stopPing();
       clearInterval(expTimer);
@@ -388,4 +403,5 @@
   {/if}
 </div>
 {/if}
+<FileViewer />
 

@@ -368,3 +368,44 @@ def test_older_unsure_results_are_held_back_once(paper):
     with closing(db.webapp_conn()) as c:
         assert c.execute("SELECT status FROM mentor_exam_attempts WHERE id=?", (a["id"],)).fetchone()[0] == "review"
         assert c.execute("SELECT COUNT(*) FROM topic_answers WHERE attempt_id=?", (a["id"],)).fetchone()[0] == 0
+
+
+def test_parents_regrade_a_held_paper_with_its_pages_in_one_step(paper):
+    """D206: Eine zurückgehaltene oder ausgewertete Arbeit werten Eltern mit den
+    vorhandenen Seiten sofort neu aus, mit voller Doppelauswertung. Scheitert das
+    Auswerten, zählt nichts Altes weiter, und die Arbeit lässt sich erneut abgeben."""
+    client, state, patch = paper
+    child(state)
+    mock(patch, [pack(6)])
+    a = client.post(BASE, json={"exam_key": KEY, "format": "einstieg"}).json()
+    client.post(f"{BASE}/attempts/{a['id']}/pages", files={"file": ("p.jpg", image(), "image/jpeg")})
+    mock(patch, [g_pass([4] * 6)])
+    client.post(f"{BASE}/attempts/{a['id']}/grade", json={})
+    with closing(db.webapp_conn()) as c, c:  # frühere Einzelauswertung, beim Start zurückgehalten
+        fb = json.loads(c.execute("SELECT feedback_json FROM mentor_exam_attempts WHERE id=?", (a["id"],)).fetchone()[0])
+        fb["check"] = {"passes": 1, "open": [3], "held_later": True}
+        fb["2"]["uncertain"] = True
+        c.execute("UPDATE mentor_exam_attempts SET status='review',feedback_json=? WHERE id=?", (json.dumps(fb), a["id"]))
+        c.execute("DELETE FROM topic_answers WHERE attempt_id=?", (a["id"],))
+    assert client.post(f"{BASE}/attempts/{a['id']}/regrade", json={"now": True}).status_code == 403, "Kind wertet nicht selbst neu aus"
+    state.user = CurrentUser(1, "p", "Eltern", "parent", False, "ingress")
+    seen = []
+    mock(patch, [g_pass([4, 4, 3, 4, 4, 2])], seen)
+    r = client.post(f"{BASE}/attempts/{a['id']}/regrade", json={"now": True})
+    assert r.status_code == 200, r.text
+    r = r.json()
+    assert r["status"] == "graded" and r["feedback"]["check"] == {"passes": 2, "open": []} and len(seen) == 2
+    assert r["pages"], "die vorhandenen Seiten bleiben"
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT COUNT(*) FROM topic_answers WHERE attempt_id=?", (a["id"],)).fetchone()[0] == 6
+    assert rp.review_items(1) == [] and rp.new_results(1)[0]["points"] == 21
+    # Ausgewertet: noch einmal, diesmal scheitert das Auswerten.
+    async def broken(*a, **k):
+        return "kein JSON", {}, "fake"
+    patch.setattr(ai, "complete", broken)
+    assert client.post(f"{BASE}/attempts/{a['id']}/regrade", json={"now": True}).status_code == 502
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT status FROM mentor_exam_attempts WHERE id=?", (a["id"],)).fetchone()[0] == "submitted"
+        assert c.execute("SELECT COUNT(*) FROM topic_answers WHERE attempt_id=?", (a["id"],)).fetchone()[0] == 0
+    mock(patch, [g_pass([4] * 6)])
+    assert client.post(f"{BASE}/attempts/{a['id']}/grade", json={}).json()["status"] == "graded", "erneut abgeben geht"

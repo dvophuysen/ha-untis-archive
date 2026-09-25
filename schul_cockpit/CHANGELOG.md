@@ -1,3 +1,8 @@
+## 1.31.2
+
+- Fotos, Seiten und Dateien öffnen jetzt innerhalb der App, mit einem Schließen-Knopf oben. Vorher landete man in der App vom Home-Bildschirm auf einer Seite ohne Weg zurück.
+- Eltern können eine Übungsarbeit mit denselben Fotos neu auswerten lassen, auch wenn sie gerade auf Prüfung wartet. Die App wertet dann wieder mehrfach und unabhängig aus. Seiten austauschen geht weiterhin.
+
 ## 1.31.1
 
 - Am Wochenende steht die offene Lernliste vom Freitag wieder auf „Heute“ und der Lernseite, bis Sonntagabend. Was am Wochenende erledigt wird, zählt dafür. Neue Aufgaben kommen weiterhin nicht dazu.

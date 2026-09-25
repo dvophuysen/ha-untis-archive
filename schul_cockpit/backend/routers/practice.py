@@ -305,11 +305,26 @@ def get_paper(account_id: int, aid: int, user: CurrentUser = Depends(get_current
     return view
 
 
+class RegradeIn(InputModel):
+    # True: gleich mit den vorhandenen Seiten neu auswerten (D206), sonst nur öffnen.
+    now: bool = False
+
+
 @router.post("/attempts/{aid}/regrade")
-def reopen_for_grading(account_id: int, aid: int, user: CurrentUser = Depends(get_current_user)):
+async def reopen_for_grading(account_id: int, aid: int, body: RegradeIn | None = None,
+                             user: CurrentUser = Depends(get_current_user)):
     """Eltern öffnen eine ausgewertete Arbeit noch einmal, etwa weil die Fotos
     schlecht lesbar waren (D201): Die Antworten dieser Auswertung verlassen den
-    Lernstand, Seiten lassen sich tauschen, dann wird neu ausgewertet."""
+    Lernstand, Seiten lassen sich tauschen, dann wird neu ausgewertet. Mit
+    now=True wertet die App die vorhandenen Seiten sofort neu aus, mit der
+    vollen Doppelauswertung (D202, D206)."""
+    reopen(account_id, aid, user)
+    if body and body.now:
+        return await grade_paper(account_id, aid, TypedAnswers(), user)
+    return paper_view(account_id, aid, user)
+
+
+def reopen(account_id: int, aid: int, user) -> None:
     access(user, account_id)
     from ..view_mode import acts_as_parent
     if not acts_as_parent(user):
@@ -325,7 +340,6 @@ def reopen_for_grading(account_id: int, aid: int, user: CurrentUser = Depends(ge
         c.execute("UPDATE mentor_exam_attempts SET status='active',feedback_json=NULL,result_seen_at=NULL,version=version+1 WHERE id=?", (aid,))
         for tid in topics:
             refresh(c, tid)
-    return paper_view(account_id, aid, user)
 
 
 def new_results(account_id: int, days: int = 14) -> list[dict]:
@@ -621,8 +635,9 @@ async def grade_paper(account_id: int, aid: int, body: TypedAnswers, user: Curre
         by_nr = final
         with closing(webapp_conn()) as c, c:
             r = _writable(c, account_id, aid, user)
-            exposure = c.execute("SELECT created_at FROM mentor_exam_exposures WHERE account_id=? AND exam_id=? AND user_id=?",
-                                 (account_id, r["exam_id"], user.id)).fetchone()
+            # Lösung gesehen: wer die Arbeit schreibt oder wer gerade auswertet (Eltern beim Neu-Auswerten, D206).
+            exposure = c.execute("SELECT created_at FROM mentor_exam_exposures WHERE account_id=? AND exam_id=? AND user_id IN (?,?)",
+                                 (account_id, r["exam_id"], user.id, r["user_id"])).fetchone()
             helped = bool(exposure)
             feedback = {}
             for i, t in enumerate(tasks):
