@@ -17,6 +17,7 @@ const {chromium}=require('playwright-core');const http=require('http'),fs=requir
   if(u==='/api/me')body={accounts:[{id:1,name:'Beispielkind'}],role:'child',is_admin:false};
   else if(u.endsWith('/settings'))body={default_daily_budget_minutes:60,budget_overrides:{},auto_budget:false,erlass:{}};
   else if(u.endsWith('/reminders'))body={enabled:false,remind_at:null,devices:0,can_manage:false};
+  else if(u.endsWith('/learning/compass'))body={day:'2026-09-25',can_write:true,can_manage:false,ai_enabled:true,speech:false,next_exam:null,calm:{text:'',vocab:[]},plan:{steps:[],total:0,done:0,read_only:false},plan_explain:[],exams:[],strengths:[],gaps:[],extra:[],history:{weeks:[],max:1,sentence:''},sessions:[],past_exams:[],archived_sessions:[]};
   else if(u.endsWith('/mentor'))body={profile:{ai_enabled:true},can_manage:false,can_write:true,subjects:['Deutsch'],errors:[],sessions:[],progress:[],homework_choices:[],shared_plan:{goals:[],today:{actions:[],planned_minutes:0},week:[],deferred:[]},budget:{opening_confirmed:true,used_eur:0,limit_eur:50,rate_available:true},enabled:true};
   else if(u.endsWith('/sessions')&&req.method()==='POST')body=session();
   else if(u.endsWith('/sessions/7/materials')&&req.method()==='GET'){const wanted=new URL(req.url()).searchParams.get('subject');subjectAsked=wanted;

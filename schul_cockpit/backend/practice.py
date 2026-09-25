@@ -104,15 +104,18 @@ def topics(account_id: int, exam_key: str) -> list[dict]:
     return [public(r) for r in rows if not is_vocab_topic(r)]
 
 
-def raster(account_id: int, exam_key: str) -> dict:
+def raster(account_id: int, exam_key: str, until: str | None = None) -> dict:
+    """Das Raster einer Arbeit. ``until`` (ISO-Tag) zählt nur Antworten bis
+    einschließlich dieses Tages: der Stand zum Zeitpunkt der Arbeit."""
     items = topics(account_id, exam_key)
     ids = [t["id"] for t in items]
     answers: dict[int, list[dict]] = {i: [] for i in ids}
     if ids:
         with closing(webapp_conn()) as c:
             marks = ",".join("?" * len(ids))
-            for r in c.execute(f"SELECT * FROM topic_answers WHERE account_id=? AND topic_id IN ({marks}) "
-                               "ORDER BY created_at,id", (account_id, *ids)):
+            cut = " AND substr(created_at,1,10)<=?" if until else ""
+            for r in c.execute(f"SELECT * FROM topic_answers WHERE account_id=? AND topic_id IN ({marks}){cut} "
+                               "ORDER BY created_at,id", (account_id, *ids, *([until[:10]] if until else []))):
                 answers[r["topic_id"]].append(dict(r))
     rows = []
     for t in items:
