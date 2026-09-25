@@ -98,10 +98,22 @@ def _answers(c, account_id: int) -> list[dict]:
         "WHERE a.account_id=? ORDER BY a.created_at,a.id", (account_id,))]
 
 
-def probe_papers(answers: list[dict], start: date) -> int:
-    """Ausgewertete Probearbeiten, je Arbeitsversuch einmal."""
+def probe_papers(answers: list[dict], start: date, valid: set[int] | None = None) -> int:
+    """Ausgewertete Probearbeiten, je Arbeitsversuch einmal. Mit ``valid`` nur
+    diese Versuche: sicher ausgewertet, vom Kind selbst geschrieben (D203)."""
     return len({a["attempt_id"] for a in answers
-                if a.get("paper_format") == "probe" and a.get("attempt_id") and a["created_at"][:10] >= start.isoformat()})
+                if a.get("paper_format") == "probe" and a.get("attempt_id") and a["created_at"][:10] >= start.isoformat()
+                and (valid is None or a["attempt_id"] in valid)})
+
+
+def honest_attempts(c, account_id: int) -> set[int]:
+    """Versuche, die für ein Abzeichen zählen dürfen (D203): fertig und sicher
+    ausgewertet (nicht zurückgehalten), kein Testlauf, keine von Eltern
+    eingelesene ältere Klausur. Einstufen und Einlesen sind Messung, keine Leistung."""
+    return {r[0] for r in c.execute(
+        "SELECT a.id FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id WHERE a.account_id=? "
+        "AND a.status='graded' AND a.is_test=0 AND COALESCE(json_extract(e.scope_json,'$.adopted_from'),0)=0",
+        (account_id,))}
 
 
 def risen_cells(answers: list[dict], start: date) -> int:
@@ -148,7 +160,7 @@ def counts(account_id: int, start: date, today: date) -> dict:
     try:
         with closing(webapp_conn()) as c:
             answers = _answers(c, account_id)
-            out["probearbeit"] = probe_papers(answers, start)
+            out["probearbeit"] = probe_papers(answers, start, honest_attempts(c, account_id))
             out["aufsteiger"] = risen_cells(answers, start)
             out["zielniveau"] = ready_exams(c, account_id, answers, start, today)
             out["extrameile"] = c.execute("SELECT COUNT(*) FROM reward_events WHERE account_id=? AND kind='extra' AND day>=?",

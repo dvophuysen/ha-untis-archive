@@ -64,6 +64,16 @@
   </section>
 
   <h3>Abzeichen</h3>
+  {#if data.next_up?.length}
+    <!-- Auf dem Weg (D203): was als Nächstes erreichbar ist und was noch fehlt. -->
+    <div class="on-way-list">
+      {#each data.next_up as w (w.badge)}
+        <div class="ow-row"><span aria-hidden="true">{w.emoji}</span>
+          <span><b>{w.name} {w.next_level}</b><small>noch {fmt(w.missing)} · {w.what} ({fmt(w.value)}/{fmt(w.next)})</small></span>
+          <span class="bar"><span style:width={`${Math.round(w.progress * 100)}%`}></span></span></div>
+      {/each}
+    </div>
+  {/if}
   <div class="badges">
     {#each data.badges as b (b.key)}
       <div class="badge-card {b.level ? LEVEL_CLASS[b.level - 1] : 'none'}" title={b.what}>
@@ -122,6 +132,11 @@
 </div>
 
 <style>
+  .on-way-list{display:grid;gap:6px;margin-bottom:var(--sp-2)}
+  .ow-row{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:center;padding:var(--sp-2);border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg-card)}
+  .ow-row>span:first-child{font-size:1.5rem;grid-row:span 2}
+  .ow-row small{display:block;color:var(--fg-muted)}
+  .ow-row .bar{grid-column:2}
   .me-head h2{margin:0;font-size:var(--fs-xl)}.me-head p{margin:2px 0 var(--sp-3);color:var(--fg-muted);font-size:var(--fs-sm)}
   .streak{display:flex;gap:var(--sp-3);align-items:center;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-3)}
   .flame{width:48px;height:48px;border-radius:var(--r-md);background:var(--warm-soft);display:grid;place-items:center;font-size:1.5rem}

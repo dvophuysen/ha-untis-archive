@@ -1,3 +1,9 @@
+## 1.30.0
+
+- Neue Abzeichen werden groß gefeiert: bildschirmfüllend mit Konfetti, sobald das Kind die App öffnet, einmal je Stufe.
+- „Auf dem Weg“ auf „Heute“ und „Ich“ zeigt, welches Abzeichen als Nächstes erreichbar ist und was noch fehlt.
+- Abzeichen gibt es nur für echten, wiederholten Einsatz: Probearbeit und Vorbereitet ab drei, und nur für sicher ausgewertete, selbst geschriebene Arbeiten.
+
 ## 1.29.2
 
 - Ein Abzeichen wird zurückgenommen, wenn seine Grundlage wegfällt, etwa weil eine Auswertung zur Prüfung zurückgehalten wurde.

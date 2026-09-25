@@ -16,8 +16,10 @@
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskDetail from '../lib/TaskDetail.svelte';
   import PracticePaper from '../lib/PracticePaper.svelte';
+  import BadgeCelebration from '../lib/BadgeCelebration.svelte';
   import { profile } from '../lib/profile.svelte.js';
-  import { view } from '../lib/viewMode.svelte.js';
+  import { view, actsAsParent } from '../lib/viewMode.svelte.js';
+  import { appState } from '../lib/store.svelte.js';
 
   let { accountId } = $props();
   let data = $state(null), tasks = $state([]), plan = $state(null);
@@ -124,13 +126,24 @@
   const groupName = (g) => { const s = subjectStyle(g.lessons[0].subject_name || g.lessons[0].subject_short); return `${s.emoji} ${s.name}`; };
   const roomChip = (g) => { const l = g.lessons[0]; return l.is_room_substituted && l.room_orig ? { warn: true, text: `Raum ${l.room} statt ${l.room_orig}` } : l.room ? { warn: false, text: `Raum ${l.room}` } : null; };
 
-  // Serie und neue Abzeichen für die Geschafft-Karte (D173).
+  // Serie und Abzeichen: Geschafft-Karte (D173), große Feier und „Auf dem Weg“ (D203).
   let gains = $state(null);
   $effect(() => {
-    if (!done || !accountId) { gains = null; return; }
+    void done;
+    if (!accountId) { gains = null; return; }
     const id = accountId;
     api.get(`/api/accounts/${id}/rewards`).then((r) => { if (id === accountId && r?.streak) gains = r; }).catch(() => {});
   });
+  // Gefeiert wird nur, wenn das Kind selbst die App benutzt, nie beim Mitlesen.
+  const kidHere = $derived(!actsAsParent(appState.me) && view.mode !== 'mirror');
+  const party = $derived(kidHere ? gains?.celebrate?.[0] ?? null : null);
+  async function partyDone(toBadges) {
+    const item = party;
+    gains = { ...gains, celebrate: gains.celebrate.slice(1) };
+    try { await api.post(`/api/accounts/${accountId}/rewards/celebrated`, { badge: item.badge, level: item.level }); } catch { /* beim nächsten Mal */ }
+    if (toBadges) location.hash = '#/ich';
+  }
+  const onWay = $derived(gains?.next_up?.[0] ?? null);
   // Der Moment „Geschafft“: einmal am Tag, mit kurzer Freude (D173).
   $effect(() => {
     if (!done || !accountId) return;
@@ -261,6 +274,13 @@
     </section>
   {/if}
 
+  {#if onWay && !done}
+    <a class="on-way" href="#/ich" aria-label={`Auf dem Weg zu ${onWay.name} ${onWay.next_level}: noch ${onWay.missing}`}>
+      <span class="ow-emoji" aria-hidden="true">{onWay.emoji}</span>
+      <span class="ow-text"><small>Auf dem Weg zu</small><b>{onWay.name} {onWay.next_level}</b><small>noch {onWay.missing} · {onWay.what}</small></span>
+      <span class="ow-bar" aria-hidden="true"><span style:width={`${Math.round(onWay.progress * 100)}%`}></span></span>
+    </a>
+  {/if}
   <!-- Neu ausgewertete Übungsarbeit (D201): bleibt stehen, bis das Kind sie öffnet. -->
   {#each data?.new_results ?? [] as r (r.attempt_id)}
     <a class="result-note" href={`#/learning?paper=${r.attempt_id}`}>
@@ -386,7 +406,14 @@
 {/if}
 {#if editing}<TaskDetail {accountId} task={editing} onclose={() => editing = null} onsaved={() => saved('Aufgabe gespeichert.')} />{/if}
 
+{#if party}<BadgeCelebration item={party} still={profile.prefs.joy === 'still'} onclose={partyDone} />{/if}
+
 <style>
+  .on-way{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:center;margin:var(--sp-2) 0;padding:var(--sp-2) var(--sp-3);border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg-card);color:var(--fg);text-decoration:none}
+  .ow-emoji{font-size:1.8rem;grid-row:span 2}
+  .ow-text{display:grid;line-height:1.25}.ow-text small{color:var(--fg-muted)}
+  .ow-bar{grid-column:2;height:8px;border-radius:99px;background:var(--border);overflow:hidden}
+  .ow-bar span{display:block;height:100%;background:var(--accent);border-radius:99px}
   .result-note{display:grid;gap:2px;margin:var(--sp-2) 0;padding:var(--sp-2) var(--sp-3);border:1px solid var(--accent);border-radius:var(--r-md);background:var(--bg-card);color:var(--fg);text-decoration:none;min-height:44px}
   .result-note small{color:var(--fg-muted)}
   .day-title{padding:var(--sp-1) 0 var(--sp-2)}

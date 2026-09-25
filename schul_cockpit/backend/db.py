@@ -1210,3 +1210,10 @@ CREATE TABLE IF NOT EXISTS source_dismissed (
 
 # Auswertung einer Übungsarbeit angesehen (D201): „Heute“ meldet neue Auswertungen, bis das Kind sie öffnet.
 _MIGRATIONS.append(("practice_result_seen_001", "ALTER TABLE mentor_exam_attempts ADD COLUMN result_seen_at TEXT"))
+
+# Große Feier je Abzeichenstufe (D203): einmal gezeigt. Schon erreichte Stufen
+# gelten als gefeiert, damit nach dem Update keine Flut an Feiern kommt.
+_MIGRATIONS.append(("reward_badges_002_celebrated", """
+ALTER TABLE reward_badges ADD COLUMN celebrated_at TEXT;
+UPDATE reward_badges SET celebrated_at=reached_at;
+"""))

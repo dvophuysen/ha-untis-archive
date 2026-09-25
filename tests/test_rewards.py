@@ -1,4 +1,5 @@
 """Serie, Retten und Abzeichen (D172, D173)."""
+import json
 from contextlib import closing
 from datetime import date, datetime, timedelta
 from types import SimpleNamespace
@@ -156,6 +157,16 @@ def _answer(tid, afb, points, day, fmt=None, attempt=None, most=4):
                                                   afb, points, most, fmt, attempt, f"{day.isoformat()}T15:00:00+02:00"))
 
 
+def _attempt(aid, status="graded", adopted=False, fmt="probe"):
+    """Ein Versuch einer Übungsarbeit, wie er für Abzeichen geprüft wird (D203)."""
+    scope = json.dumps({"adopted_from": 99} if adopted else {"child_created": True})
+    with closing(db.webapp_conn()) as c, c:
+        eid = c.execute("INSERT INTO mentor_exams(account_id,title,subject,scope_json,tasks_json,minutes,created_at,status,paper_format) "
+                        "VALUES(1,'Ü','Mathematik',?,'[]',30,'t','published',?)", (scope, fmt)).lastrowid
+        c.execute("INSERT INTO mentor_exam_attempts(id,account_id,exam_id,user_id,snapshot,started_at,status,is_test) VALUES(?,1,?,2,'{}','t',?,0)",
+                  (aid, eid, status))
+
+
 def test_twelve_badges_with_learning_counts(world):
     from backend import lernstand
     assert len(rewards.BADGES) == 12 and len({b[0] for b in rewards.BADGES}) == 12
@@ -168,6 +179,7 @@ def test_twelve_badges_with_learning_counts(world):
     d1, d2 = START + timedelta(days=1), START + timedelta(days=2)
     _answer(a, 2, 4, d1, "probe", 7); _answer(b, 1, 4, d1, "probe", 7); _answer(b, 2, 4, d1, "probe", 7)
     _answer(a, 2, 3.5, d2, "kurz", 8); _answer(b, 1, 4, d2, "kurz", 8); _answer(b, 2, 4, d2, "kurz", 8)
+    _attempt(7); _attempt(8, fmt="kurz")
     with closing(db.webapp_conn()) as c, c:
         c.execute("CREATE TABLE IF NOT EXISTS exam_dates(account_id INTEGER NOT NULL, exam_key TEXT NOT NULL, exam_date TEXT NOT NULL, PRIMARY KEY(account_id, exam_key))")
         c.execute("INSERT INTO exam_dates VALUES(1,'cal:ma',?)", ((START + timedelta(days=3)).isoformat(),))
@@ -179,7 +191,35 @@ def test_twelve_badges_with_learning_counts(world):
     assert value["probearbeit"] == 1, "je Arbeitsversuch einmal, nur Probearbeiten"
     assert value["aufsteiger"] == 3, "a/II, b/I, b/II wurden ab dem Start sicher"
     assert value["zielniveau"] == 1 and value["extrameile"] == 2
-    assert {n["key"] for n in s["new_badges"]} >= {"probearbeit", "zielniveau"}
+    assert "zielniveau" in {n["key"] for n in s["new_badges"]}
+    assert "probearbeit" not in {n["key"] for n in s["new_badges"]}, "Bronze erst nach drei Probearbeiten (D203)"
+    assert s["celebrate"][0]["badge"] == "zielniveau" and s["celebrate"][0]["level_name"] == "Bronze"
+    way = {w["badge"]: w for w in s["next_up"]}
+    assert way["probearbeit"]["missing"] == 2 and way["probearbeit"]["next_level"] == "Bronze"
+
+
+def test_only_honest_probe_papers_count_and_each_level_is_celebrated_once(world):
+    """D203: Zurückgehaltene, eingelesene und Test-Arbeiten zählen nicht; die Feier
+    zeigt nur das Kind, und nur einmal."""
+    from backend import lernstand
+    from backend.routers import rewards as rewards_router
+    t = lernstand.add_manual(1, "cal:ma", "Mathematik", "Brüche")["id"]
+    d = START + timedelta(days=1)
+    for aid, status, adopted in ((11, "graded", False), (12, "graded", False), (13, "review", False), (14, "graded", True), (15, "graded", False)):
+        _attempt(aid, status, adopted)
+        _answer(t, 1, 4, d, "probe", aid)
+    s = rewards.summary(1, at(START + timedelta(days=2), 18))
+    assert next(b for b in s["badges"] if b["key"] == "probearbeit")["value"] == 3, "11, 12, 15 zählen; 13 zurückgehalten, 14 eingelesen"
+    party = [p for p in s["celebrate"] if p["badge"] == "probearbeit"]
+    assert party and party[0]["level_name"] == "Bronze" and party[0]["next_level"] == "Silber" and party[0]["next_at"] == 10
+    from backend.auth import CurrentUser
+    parent = CurrentUser(1, "p", "Eltern", "parent", False, "ingress")
+    kid = CurrentUser(2, "k", "Kind", "child", False, "pin")
+    body = rewards_router.CelebratedIn(badge="probearbeit", level=1)
+    assert rewards_router.post_celebrated(1, body, parent) == {"ok": False}
+    assert rewards_router.post_celebrated(1, body, kid) == {"ok": True}
+    s = rewards.summary(1, at(START + timedelta(days=2), 19))
+    assert not [p for p in s["celebrate"] if p["badge"] == "probearbeit"], "einmal gefeiert"
 
 
 def test_extra_mile_only_beyond_the_pensum_and_only_for_the_child(world, monkeypatch):

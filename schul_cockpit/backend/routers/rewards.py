@@ -20,6 +20,20 @@ def get_rewards(account_id: int, user: CurrentUser = Depends(get_current_user)) 
     return rewards.summary(account_id)
 
 
+class CelebratedIn(InputModel):
+    badge: str = Field(min_length=1, max_length=40)
+    level: int = Field(ge=1, le=5)
+
+
+@router.post("/accounts/{account_id}/rewards/celebrated")
+def post_celebrated(account_id: int, body: CelebratedIn, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Das Kind hat die Feier gesehen. Mitlesen und Eltern verbrauchen sie nicht (D203)."""
+    access(user, account_id)
+    if not rewards.acting_child(user):
+        return {"ok": False}
+    return {"ok": rewards.mark_celebrated(account_id, body.badge, body.level)}
+
+
 @router.put("/accounts/{account_id}/rewards/settings")
 def put_settings(account_id: int, body: RewardSettingsIn, user: CurrentUser = Depends(get_current_user)) -> dict:
     # Die Bonuszeit legen die Eltern fest.

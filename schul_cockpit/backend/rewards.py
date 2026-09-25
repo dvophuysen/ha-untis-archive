@@ -37,9 +37,10 @@ BADGES = (
     ("fruehstarter", "Frühstarter", "⚡", "vor der Bonuszeit geschafft", (5, 30, 120, 350, 800)),
     ("ehrlich", "Ehrlich", "💬", "Stunden zurückgemeldet", (50, 300, 1000, 3000, 6000)),
     ("wortschatz", "Wortschatz", "🗣️", "Vokabeln geübt", (100, 1000, 5000, 15000, 40000)),
-    ("vorbereitet", "Vorbereitet", "🎯", "vor einer Arbeit alle Themen angefangen", (1, 5, 15, 40, 80)),
+    # Bronze ist nie eine einzelne Handlung, sondern wiederholter Einsatz (D203).
+    ("vorbereitet", "Vorbereitet", "🎯", "vor einer Arbeit alle Themen angefangen", (3, 10, 25, 50, 100)),
     # Stufe C (D181): gemessen an Übungsarbeiten und Raster, gezählt in reward_extras.
-    ("probearbeit", "Probearbeit", "📄", "Probearbeiten geschrieben und ausgewertet", (1, 5, 15, 40, 80)),
+    ("probearbeit", "Probearbeit", "📄", "Probearbeiten selbst geschrieben und sicher ausgewertet", (3, 10, 25, 50, 100)),
     ("aufsteiger", "Aufsteiger", "📈", "Themen und Bereiche, die erstmals sicher wurden", (5, 25, 100, 250, 500)),
     ("zielniveau", "Zielniveau", "🏁", "vor einer Arbeit alle Themen auf Zielniveau", (1, 3, 10, 25, 50)),
     ("extrameile", "Extrameile", "➕", "freiwillig mehr geübt als das Pensum", (5, 20, 60, 150, 300)),
@@ -371,6 +372,25 @@ def summary(account_id: int, now: datetime | None = None) -> dict:
         reached_today = [dict(r) for r in c.execute(
             "SELECT badge, level, reached_at FROM reward_badges WHERE account_id=? AND reached_at>=?",
             (account_id, datetime.combine(today, time(0), TZ).isoformat()))]
+        # Noch nicht gefeiert (D203): Die App feiert jede neue Stufe einmal groß.
+        meta = {b["key"]: b for b in badges}
+        celebrate = []
+        for r in c.execute("SELECT badge, level, reached_at FROM reward_badges WHERE account_id=? AND celebrated_at IS NULL "
+                           "ORDER BY reached_at, level", (account_id,)):
+            b = meta.get(r["badge"])
+            if b and r["level"] <= b["level"]:
+                limits = b["limits"]
+                celebrate.append({"badge": r["badge"], "level": r["level"], "level_name": LEVELS[r["level"] - 1],
+                                  "name": b["name"], "emoji": b["emoji"], "what": b["what"], "value": b["value"],
+                                  "next_level": LEVELS[r["level"]] if r["level"] < len(limits) else None,
+                                  "next_at": limits[r["level"]] if r["level"] < len(limits) else None})
+    # Auf dem Weg (D203): die Abzeichen, denen das Kind am nächsten ist, mit dem, was noch fehlt.
+    next_up = sorted(
+        ({"badge": b["key"], "name": b["name"], "emoji": b["emoji"], "what": b["what"], "value": b["value"],
+          "next": b["next"], "missing": b["next"] - b["value"], "next_level": LEVELS[b["level"]],
+          "progress": round((b["value"] - b["prev"]) / max(1, b["next"] - b["prev"]), 3)}
+         for b in badges if b["next"] and b["value"] > b["prev"]),
+        key=lambda x: (-x["progress"], x["missing"]))[:3]
 
     special = [
         {"key": "volle_woche", "name": "Volle Woche", "emoji": "🗓️", "count": len(full_weeks)},
@@ -407,6 +427,8 @@ def summary(account_id: int, now: datetime | None = None) -> dict:
         "special": special,
         "medals": _medals(days, state, today, start),
         "new_badges": new,
+        "celebrate": celebrate,
+        "next_up": next_up,
         "reached_today": reached_today,
     }
 
@@ -457,3 +479,10 @@ def _medals(days: list[date], state: dict, today: date, start: date) -> list[dic
                     "medal": MEDALS[level - 1] if level else None, "running": label == current,
                     "limits": [round(x * 100) for x in limits]})
     return out
+
+
+def mark_celebrated(account_id: int, badge: str, level: int) -> bool:
+    """Die große Feier einer Stufe ist gezeigt (D203)."""
+    with closing(webapp_conn()) as c, c:
+        return bool(c.execute("UPDATE reward_badges SET celebrated_at=? WHERE account_id=? AND badge=? AND level=? AND celebrated_at IS NULL",
+                              (now_local().isoformat(), account_id, badge, level)).rowcount)

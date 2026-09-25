@@ -5,7 +5,7 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  const root=path.resolve(__dirname,'../schul_cockpit/frontend/dist');
  const server=http.createServer((req,res)=>{const file=path.join(root,req.url.split('?')[0]==='/'?'index.html':req.url.split('?')[0]);try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');res.end(fs.readFileSync(file));}catch{res.statusCode=404;res.end();}});await new Promise(r=>server.listen(4178,'127.0.0.1',r));
  const browser=await pw.launch({executablePath:process.env.SCHOOL_TEST_CHROMIUM,args:['--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-zygote'],headless:true});
- const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Europe/Berlin',serviceWorkers:'block'});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Europe/Berlin',serviceWorkers:'block'});const celebrated=[];const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.clock.install({time:new Date('2026-09-14T14:00:00+02:00')});
  let onIch=false,rating=null,done=false,failRating=true,failTask=true,failPack=true,studyDone=false,practicePosts=0;
  const bags={};let schoolDate='2026-09-14';
@@ -20,12 +20,22 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  else if(u.endsWith('/tasks')&&req.method()==='GET')body={tasks:[{id:1,title:'Mathematik',notes:'Brüche: Aufgabe 3\nGegeben am: Mo 14.09.\nFällig bis: Di 15.09.\n[MA0915]',due_date:'2026-09-15',status:done?'done':'open',estimated_minutes:10},{id:2,title:'Englisch',notes:'Seite 24 lesen',due_date:'2026-09-18',status:'open'},{id:3,title:'Notiz ohne Termin',status:'open'},{id:4,title:'Geschichte',notes:'Lies den Text und beschreibe die Unterschiede. '.repeat(5),due_date:'2026-09-21',status:'open'}]};
  else if(u.endsWith('/plan'))body={today:{actions:[{key:'math',subject:'Mathematik',title:'Brüche vergleichen',minutes:8,url:'#/learning?focus=math'}]},upcoming_exams:[],errors:[]};
  else if(u.endsWith('/checkin')){if(failRating){status=500;body={detail:'Test failure'};}else{rating=req.postDataJSON().rating;body={rating,note:null};}}
+ else if(u.endsWith('/rewards/celebrated')){celebrated.push(req.postDataJSON());body={ok:true};}
+ else if(u.endsWith('/rewards')&&!onIch)body={streak:{current:3,record:5,next_milestone:5},today:{},total:3,badges:[{key:'probearbeit',name:'Probearbeit',emoji:'📄'}],
+   celebrate:celebrated.length?[]:[{badge:'probearbeit',level:1,level_name:'Bronze',name:'Probearbeit',emoji:'📄',what:'Probearbeiten selbst geschrieben und sicher ausgewertet',value:3,next_level:'Silber',next_at:10}],
+   next_up:[{badge:'aufsteiger',name:'Aufsteiger',emoji:'📈',what:'Themen und Bereiche, die erstmals sicher wurden',value:3,next:5,missing:2,next_level:'Bronze',progress:0.6}]};
  else if(u.endsWith('/rewards')&&onIch)body={streak:{current:3,record:5,next_milestone:5},week:[{day:'2026-09-14',state:'open'}],total:3,start:'2026-09-01',bonus_until:'17:00',badges:[],special:[],medals:[{year:'2026/27',medal:null,pct:50,running:true,limits:[50,65,80]}]};
  else if(u.endsWith('/reminders'))body={enabled:true,remind_at:'18:00',morning_enabled:false,afternoon_enabled:false,can_manage:false,app_targets:[],app_services:[]};
  else if(u==='/api/tasks/1'){if(failTask){status=500;body={detail:'Test failure'};}else{done=req.postDataJSON().status==='done';body={ok:true};}}
  await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
  });
  await page.goto('http://127.0.0.1:4178/#/today');await page.getByRole('heading',{name:/^Aufgaben bis morgen/}).waitFor({timeout:8000}).catch(async e=>{console.log('ERRORS',errors,'BODY',await page.locator('body').innerText());throw e;});
+ /* D203: große Feier einer neuen Stufe, einmal; „Auf dem Weg“ zeigt das nächste Ziel */
+ const party=page.getByRole('dialog',{name:/Probearbeit/});await party.waitFor();
+ assert.match(await party.innerText(),/Neues Abzeichen!/i);assert.match(await party.innerText(),/Als Nächstes: Silber bei 10/);
+ await party.getByRole('button',{name:'Juhu!'}).click();await party.waitFor({state:'detached'});
+ assert.deepEqual(celebrated,[{badge:'probearbeit',level:1}]);
+ await page.getByText('Auf dem Weg zu').first().waitFor();assert.match(await page.locator('a.on-way').innerText(),/Aufsteiger Bronze[\s\S]*noch 2/);
  /* D201: neue Auswertung auf „Heute“, führt direkt zur Arbeit */
  const note=page.locator('a.result-note');assert.equal(await note.count(),1);
  assert.match(await note.innerText(),/Deine Probearbeit ist ausgewertet · Mathematik/);assert.match(await note.innerText(),/6 von 40 Punkten · Ansehen/);
