@@ -49,6 +49,7 @@ from .routers import (
     profile as profile_router,
     practice as practice_router,
     study_plan as study_plan_router,
+    compass as compass_router,
     search,
     settings_router,
     setup,
@@ -209,6 +210,7 @@ API = "/api"
 app.include_router(health.router, prefix=API)
 app.include_router(learning.router, prefix=API)
 app.include_router(mentor.router, prefix=API)
+app.include_router(compass_router.router, prefix=API)
 app.include_router(vocab_router.router, prefix=API)
 app.include_router(vocab_daily_router.router, prefix=API)
 app.include_router(materials_router.router, prefix=API)

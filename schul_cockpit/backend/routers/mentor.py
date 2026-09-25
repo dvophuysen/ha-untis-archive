@@ -339,6 +339,42 @@ async def opened(account_id,sid):
     with closing(webapp_conn()) as c:return view(c,get_session(c,account_id,sid))
 
 
+def session_lists(c,account_id,today=None):
+    """Offene und archivierte Einheiten des Kindes, neueste zuerst (D182).
+    Gemeinsam für den Lernraum der Eltern und den Kompass des Kindes."""
+    sessions=[dict(r) for r in c.execute(
+        "SELECT s.id,s.subject,s.goal,s.status,s.phase,s.summary,s.updated_at,s.is_test,s.is_demo,s.topic_id,s.unarchived_at,"
+        "(SELECT t.due_date FROM tasks t WHERE t.id=json_extract(s.source_json,'$.task_id') AND t.account_id=s.account_id) AS task_due,"
+        "(SELECT t.completed_at FROM tasks t WHERE t.id=json_extract(s.source_json,'$.task_id') AND t.account_id=s.account_id) AS task_completed_at,"
+        "json_extract(s.source_json,'$.mode') AS mode,"
+        "(SELECT t.status FROM tasks t WHERE t.id=json_extract(s.source_json,'$.task_id') AND t.account_id=s.account_id) AS task_status,"
+        "(SELECT t.title FROM tasks t WHERE t.id=json_extract(s.source_json,'$.task_id') AND t.account_id=s.account_id) AS task_title,"
+        "(SELECT t.notes FROM tasks t WHERE t.id=json_extract(s.source_json,'$.task_id') AND t.account_id=s.account_id) AS task_notes,"
+        "(SELECT MAX(m.created_at) FROM mentor_messages m WHERE m.session_id=s.id) AS last_at,"
+        "(SELECT COUNT(*) FROM mentor_messages m WHERE m.session_id=s.id) AS messages "
+        "FROM mentor_sessions s WHERE s.account_id=? AND s.is_test=0 ORDER BY s.updated_at DESC LIMIT 80",(account_id,))]
+    # A help chat is filed away by the tick on its homework, nothing else.
+    # Wiedergefunden wird ein Verlauf über den Wortlaut der Hausaufgabe und
+    # den letzten Gesprächsstand, nicht über das Fach allein.
+    for row in sessions:
+        row['task_done']=bool(row['mode'] in HOMEWORK_MODES and row['task_status']=='done')
+        row['label']=session_label(row['mode'],row['goal'],{'title':row.pop('task_title'),'notes':row.pop('task_notes')} if row['task_status'] is not None else None)
+        row['last_at']=row['last_at'] or row['updated_at']
+    sessions.sort(key=lambda r:r['last_at'],reverse=True)
+    # Archiv nach der Arbeit (D182): Vorbereitung auf vergangene Arbeiten,
+    # abgehakte Hausaufgabenhilfe und lange Liegengebliebenes ausblenden.
+    from .. import learning_archive as la
+    exam_days=la.exam_dates_for_topics(c,account_id,[r['topic_id'] for r in sessions])
+    today=today or today_local();archived=[]
+    for row in sessions:
+        gone,why=la.is_archived(row,exam_days.get(row['topic_id']),today)
+        row['archived']=gone;row['archive_reason']=why
+        for k in ('task_due','task_completed_at','unarchived_at'):row.pop(k,None)
+    archived=[r for r in sessions if r['archived']][:30]
+    sessions=[r for r in sessions if not r['archived']][:30]
+    return sessions,archived
+
+
 @router.get('')
 async def dashboard(account_id:int,demo:bool=False,user:CurrentUser=Depends(get_current_user)):
     access(user,account_id)
@@ -353,36 +389,7 @@ async def dashboard(account_id:int,demo:bool=False,user:CurrentUser=Depends(get_
         return dict(**demo_data.snapshot(),demo=True,candidates=[dict(subject=k,title=v,reason='Erfundenes Beispiel für Klasse 6') for k,v in demo_data.TOPICS.items()],sessions=sessions,legacy_sessions=[],progress=[],subjects=list(demo_data.TOPICS),can_manage=True,can_write=demo_can_write,budget=ai.status(),today={},exams=[],warnings=[])
     s=mc.snapshot(account_id)
     with closing(webapp_conn()) as c:
-        sessions=[dict(r) for r in c.execute(
-            "SELECT s.id,s.subject,s.goal,s.status,s.phase,s.summary,s.updated_at,s.is_test,s.is_demo,s.topic_id,s.unarchived_at,"
-            "(SELECT t.due_date FROM tasks t WHERE t.id=json_extract(s.source_json,'$.task_id') AND t.account_id=s.account_id) AS task_due,"
-            "(SELECT t.completed_at FROM tasks t WHERE t.id=json_extract(s.source_json,'$.task_id') AND t.account_id=s.account_id) AS task_completed_at,"
-            "json_extract(s.source_json,'$.mode') AS mode,"
-            "(SELECT t.status FROM tasks t WHERE t.id=json_extract(s.source_json,'$.task_id') AND t.account_id=s.account_id) AS task_status,"
-            "(SELECT t.title FROM tasks t WHERE t.id=json_extract(s.source_json,'$.task_id') AND t.account_id=s.account_id) AS task_title,"
-            "(SELECT t.notes FROM tasks t WHERE t.id=json_extract(s.source_json,'$.task_id') AND t.account_id=s.account_id) AS task_notes,"
-            "(SELECT MAX(m.created_at) FROM mentor_messages m WHERE m.session_id=s.id) AS last_at,"
-            "(SELECT COUNT(*) FROM mentor_messages m WHERE m.session_id=s.id) AS messages "
-            "FROM mentor_sessions s WHERE s.account_id=? AND s.is_test=0 ORDER BY s.updated_at DESC LIMIT 80",(account_id,))]
-        # A help chat is filed away by the tick on its homework, nothing else.
-        # Wiedergefunden wird ein Verlauf über den Wortlaut der Hausaufgabe und
-        # den letzten Gesprächsstand, nicht über das Fach allein.
-        for row in sessions:
-            row['task_done']=bool(row['mode'] in HOMEWORK_MODES and row['task_status']=='done')
-            row['label']=session_label(row['mode'],row['goal'],{'title':row.pop('task_title'),'notes':row.pop('task_notes')} if row['task_status'] is not None else None)
-            row['last_at']=row['last_at'] or row['updated_at']
-        sessions.sort(key=lambda r:r['last_at'],reverse=True)
-        # Archiv nach der Arbeit (D182): Vorbereitung auf vergangene Arbeiten,
-        # abgehakte Hausaufgabenhilfe und lange Liegengebliebenes ausblenden.
-        from .. import learning_archive as la
-        exam_days=la.exam_dates_for_topics(c,account_id,[r['topic_id'] for r in sessions])
-        today=today_local();archived=[]
-        for row in sessions:
-            gone,why=la.is_archived(row,exam_days.get(row['topic_id']),today)
-            row['archived']=gone;row['archive_reason']=why
-            for k in ('task_due','task_completed_at','unarchived_at'):row.pop(k,None)
-        archived=[r for r in sessions if r['archived']][:30]
-        sessions=[r for r in sessions if not r['archived']][:30]
+        sessions,archived=session_lists(c,account_id)
         legacy=[dict(r) for r in c.execute('SELECT id,subject,goal,status,updated_at,is_test,is_demo FROM mentor_sessions WHERE account_id=? AND is_test=1 AND is_demo=0 ORDER BY updated_at DESC LIMIT 30',(account_id,))] if is_parent(user) else []
         progress=[dict(r) for r in c.execute("SELECT s.id,s.subject,s.title,s.objective,r.due_date,COUNT(e.id) attempts, SUM(CASE WHEN e.result='correct' AND e.help_used=0 THEN 1 ELSE 0 END) independent,COUNT(DISTINCT CASE WHEN e.result='correct' AND e.help_used=0 THEN e.variant_hash END) variants,MIN(CASE WHEN e.result='correct' AND e.help_used=0 THEN e.created_at END) first_success, MAX(CASE WHEN e.result='correct' AND e.help_used=0 THEN e.created_at END) last_success FROM mentor_skills s JOIN mentor_evidence e ON e.skill_id=s.id AND e.account_id=s.account_id AND e.invalidated=0 AND NOT EXISTS (SELECT 1 FROM mentor_sessions ms WHERE ms.id=e.session_id AND ms.is_test=1) AND NOT EXISTS (SELECT 1 FROM mentor_exam_attempts ma WHERE ma.id=e.exam_attempt_id AND ma.is_test=1) LEFT JOIN mentor_reviews r ON r.skill_id=s.id WHERE s.account_id=? GROUP BY s.id ORDER BY s.updated_at DESC LIMIT 100",(account_id,))]
     for r in progress:
