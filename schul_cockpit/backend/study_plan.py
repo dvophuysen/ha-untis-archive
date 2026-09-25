@@ -39,6 +39,7 @@ from urllib.parse import quote, urlencode
 
 from . import practice, rewards
 from .db import webapp_conn
+from .request_cache import memo
 
 LOG = logging.getLogger("schul_cockpit.study_plan")
 
@@ -286,6 +287,7 @@ def school_days(account_id: int, first: date, last: date) -> list[date]:
     return sorted(known | {d for d in rest if d > horizon and d.weekday() < 5})
 
 
+@memo
 def plans(account_id: int, day: date) -> list[dict]:
     """Je anstehender Arbeit: Bedarf, Lerntage und die Schritte von heute."""
     school = school_days(account_id, day, day + timedelta(days=HORIZON))

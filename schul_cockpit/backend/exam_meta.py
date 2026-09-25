@@ -13,6 +13,7 @@ from contextlib import closing
 
 from .db import webapp_conn
 from .learning import now_iso
+from .request_cache import forget, memo
 
 ORAL = re.compile(r"sprechpr(ü|ue)fung|m(ü|ue)ndlich|pr(ä|ae)sentation|speaking|oral exam", re.I)
 NOTE_MAX = 2000
@@ -33,8 +34,10 @@ def remember(account_id: int, exam_key: str, title: str | None) -> None:
                   "ON CONFLICT(account_id,exam_key) DO UPDATE SET title=excluded.title,oral=excluded.oral "
                   "WHERE exam_meta.title IS NOT excluded.title OR exam_meta.oral IS NOT excluded.oral",
                   (account_id, exam_key, title or "", int(is_oral_title(title)), now_iso()))
+    forget()
 
 
+@memo
 def get(account_id: int, exam_key: str) -> dict:
     try:
         with closing(webapp_conn()) as c:
@@ -57,9 +60,11 @@ def set_note(account_id: int, exam_key: str, note: str) -> dict:
         c.execute("INSERT INTO exam_meta(account_id,exam_key,note,note_updated_at,updated_at) VALUES(?,?,?,?,?) "
                   "ON CONFLICT(account_id,exam_key) DO UPDATE SET note=excluded.note,note_updated_at=excluded.note_updated_at",
                   (account_id, exam_key, note, now_iso(), now_iso()))
+    forget()
     return get(account_id, exam_key)
 
 
+@memo
 def excluded_refs(account_id: int, exam_key: str) -> list[str]:
     """Abgewählte Referenzen der Sprechprobe (D194); voreingestellt zählt alles."""
     try:
@@ -75,6 +80,7 @@ def set_excluded_refs(account_id: int, exam_key: str, keys: list[str]) -> None:
         c.execute("INSERT INTO exam_meta(account_id,exam_key,excluded_refs,updated_at) VALUES(?,?,?,?) "
                   "ON CONFLICT(account_id,exam_key) DO UPDATE SET excluded_refs=excluded.excluded_refs",
                   (account_id, exam_key, json.dumps(sorted(set(keys))[:200]), now_iso()))
+    forget()
 
 
 # ------------------------------------------------------------------ Material je Arbeit (D199)

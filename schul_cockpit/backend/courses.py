@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from .db import history_conn, webapp_conn
+from .request_cache import memo
 
 
 def course_key(
@@ -23,6 +24,7 @@ def course_key(
     return f"n:{s}|{t}"
 
 
+@memo
 def hidden_keys(account_id: int) -> set[str]:
     conn = webapp_conn()
     try:

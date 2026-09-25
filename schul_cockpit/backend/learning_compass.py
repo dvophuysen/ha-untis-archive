@@ -20,7 +20,7 @@ from contextlib import closing
 from datetime import date, datetime, timedelta
 from urllib.parse import quote, urlencode
 
-from . import practice, rewards, study_plan
+from . import practice, request_cache, rewards, study_plan
 from .db import webapp_conn
 from .subject_names import key as subject_key, label as subject_label
 
@@ -445,6 +445,13 @@ def _recent_probe(c, account_id: int, ids: list[int], day: date) -> bool:
 
 
 async def build(account_id: int, user, now: datetime | None = None) -> dict:
+    # Raster, Pensum und Stundenplan fragen Plan, Ausblick und Kompass je mehrfach:
+    # einmal je Aufruf rechnen (request_cache).
+    with request_cache.scope():
+        return await _build(account_id, user, now)
+
+
+async def _build(account_id: int, user, now: datetime | None) -> dict:
     now = now or rewards.now_local()
     day = now.date()
     calendar = await _calendar(account_id, day)

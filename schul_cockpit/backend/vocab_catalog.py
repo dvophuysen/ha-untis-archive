@@ -14,6 +14,7 @@ import json
 import uuid
 
 from .db import webapp_conn
+from .request_cache import memo
 from .vocab_sequence import Boundary, Page, compile_book, exact_text
 
 
@@ -169,12 +170,14 @@ def activate(account_id: int, run_id: str, expected_digest: str) -> dict:
             raise
 
 
+@memo
 def active(account_id: int, subject: str) -> list[dict]:
     with closing(webapp_conn()) as c:
         return [dict(r) for r in c.execute("SELECT * FROM vocab_catalog_runs WHERE account_id=? AND subject=? AND status='active' ORDER BY created_at,id",
                                            (account_id, subject.casefold()))]
 
 
+@memo(shallow=True)  # die Wörter liest jeder Aufrufer nur, selected_words kopiert selbst
 def catalog_words(account_id: int, subject: str) -> list[dict]:
     """One card per exact printed word, all memberships and meanings retained."""
     words = {}
@@ -202,6 +205,7 @@ def catalog_words(account_id: int, subject: str) -> list[dict]:
     return list(words.values())
 
 
+@memo
 def units(account_id: int, subject: str) -> list[dict]:
     from .vocab import word_states, STAGES
     words = catalog_words(account_id, subject)

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from pathlib import Path
 
 from .config import SETTINGS
@@ -779,13 +780,52 @@ CREATE TABLE IF NOT EXISTS entry_chapters (
 """))
 
 
+class _Conn(sqlite3.Connection):
+    """Innerhalb eines ``request_cache.scope()`` schließt ``close()`` nicht,
+    sondern legt die Verbindung für den nächsten ``webapp_conn()``/``history_conn()``
+    desselben Aufrufs und Threads zurück; am Ende des Aufrufs werden alle
+    geschlossen. Nie geteilt: Jede Verbindung hat höchstens einen Nutzer. Mit
+    offener Transaktion wird wie bisher geschlossen (und damit zurückgerollt)."""
+
+    pool_key: tuple | None = None
+
+    def close(self) -> None:
+        from .request_cache import idle
+        free = idle()
+        if free is not None and any(c is self for c in free):
+            return  # schon zurückgelegt: zweites close()
+        if free is not None and self.pool_key and self.pool_key[2] == threading.get_ident() and not self.in_transaction:
+            free.append(self)
+            return
+        super().close()
+
+    def discard(self) -> None:
+        super().close()
+
+
+def _reuse(key: tuple) -> sqlite3.Connection | None:
+    from .request_cache import idle
+    free = idle()
+    for i, conn in enumerate(free or []):
+        if conn.pool_key == key:
+            del free[i]
+            conn.row_factory = sqlite3.Row
+            return conn
+    return None
+
+
 def history_conn() -> sqlite3.Connection:
     """Read-only connection to the UNTIS Archive's history.db."""
+    key = ("history", str(SETTINGS.history_db_path), threading.get_ident())
+    conn = _reuse(key)
+    if conn is not None:
+        return conn  # die Anwesenheitssicht liegt schon an
     uri = f"file:{SETTINGS.history_db_path}?mode=ro"
-    conn = sqlite3.connect(uri, uri=True, isolation_level=None)
+    conn = sqlite3.connect(uri, uri=True, isolation_level=None, factory=_Conn)
     conn.row_factory = sqlite3.Row
     from .attendance import install_attendance_view
     install_attendance_view(conn)
+    conn.pool_key = key
     return conn
 
 
@@ -797,11 +837,16 @@ BUSY_TIMEOUT = 30.0
 
 def webapp_conn() -> sqlite3.Connection:
     """Read-write connection to the add-on's webapp.db."""
+    key = ("webapp", str(SETTINGS.webapp_db_path), threading.get_ident())
+    conn = _reuse(key)
+    if conn is not None:
+        return conn
     conn = sqlite3.connect(
-        SETTINGS.webapp_db_path, isolation_level=None, timeout=BUSY_TIMEOUT
+        SETTINGS.webapp_db_path, isolation_level=None, timeout=BUSY_TIMEOUT, factory=_Conn
     )
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.pool_key = key
     return conn
 
 

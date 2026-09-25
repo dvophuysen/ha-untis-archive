@@ -141,6 +141,8 @@ def remember_exam(account_id: int, exam_key: str, exam_date: str) -> None:
             return
         c.execute("INSERT INTO exam_dates(account_id,exam_key,exam_date) VALUES(?,?,?) ON CONFLICT(account_id,exam_key) DO UPDATE SET exam_date=excluded.exam_date",
                   (account_id, exam_key, exam_date))
+    from .request_cache import forget
+    forget()  # Plan und Pensum lesen die Termine
 
 
 async def ensure_exam_date(account_id: int, topic_id: int | None) -> None:
