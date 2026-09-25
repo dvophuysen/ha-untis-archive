@@ -1,3 +1,13 @@
+## 1.24.0
+
+- Eltern haben eine eigene Ansicht: Familie, Erledigen, Scannen und Einstellen. Die Kinderansicht öffnet der Profilknopf oben rechts.
+- Erledigen sammelt, was Eltern tun sollten: fehlendes Material, Fotos neu machen, gegenlesen, Termine zuordnen, Lernrahmen und KI-Rahmen. Je Kind, mit Sprung direkt zur Aktion.
+- Scannen liest jederzeit Buchseiten, Arbeitsblätter, Themenzettel, Vokabellisten und korrigierte Arbeiten ein, auf Wunsch mit Note.
+- Die Familienkarte öffnet die Seite des Kindes zum Mitlesen, direkt an der passenden Stelle. „Zurück zur Familie“ oder die Zurück-Geste führt zurück.
+- Kinder haben kein Zahnrad mehr, die Erinnerung steht unter „Ich“. Benutzt ein Kind das Elterngerät, sieht es keine Eltern-Werkzeuge, und seine Nutzung zählt für das Kind. Rückgängig machen gibt es für alle Eltern, das Tagesbudget stellen nur Eltern ein.
+- Die Woche zeigt die nächsten fünf Schultage ab heute, auch über das Wochenende; blättern mit Pfeilen oder Wischen. Oben steht, was anders ist: früher Schluss, später Beginn, Ausfälle, Vertretungen, Raumwechsel, freie Tage, Arbeiten mit Lernstand und fällige Hausaufgaben.
+- Der Kalender der Woche zeigt je Tag die Leiste der Familienkarte, auf Tipp die Stunden des Tages, wahlweise als Raster. Zurückgeblättert gibt es einen Rückblick und die offenen Rückmeldungen mit den Gesichtern.
+
 ## 1.23.3
 
 - Korrektur: Neue Buchseiten für einen geprüften Vokabelbestand ließen sich nicht einlesen; der Leseauftrag brach mit einem Serverfehler ab. Das betraf auch das Übernehmen weiterer Lektionen.
