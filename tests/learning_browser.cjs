@@ -12,7 +12,7 @@ const {chromium}=require('playwright-core');const http=require('http'),fs=requir
  const raster=[{id:11,title:'Terme und Variablen mit einem sehr langen Titel, der umbrechen muss',state:'sitzt',ready:true,stage:'sitzt',cells:cells('sicher','sicher','offen')},
                {id:12,title:'Gleichungen',state:'wackelt',ready:false,stage:'wackelt',cells:cells('unsicher','offen','offen')}];
  const path_=[['einstieg','Einstiegstest','done'],['luecken','Lücken schließen','now'],['probe','Probearbeit','todo'],['arbeit','Arbeit','todo']].map(([key,label,state])=>({key,label,state,text:'Satz zu '+label}));
- const exam={exam_key:'ma1',subject:'Mathematik',title:'',date:'2026-09-30',day_label:'Mi 30.09.',days:2,school_days_left:2,kind:'arbeit',ready:1,total:2,raster,afb_names:{'1':'Wiedergeben','2':'Anwenden','3':'Übertragen'},stage:'luecken',path:path_,verdict:'eng',verdict_text:'Eng: Jeder Schritt zählt jetzt, auch am Wochenende.',vocab:null,topics_missing:false};
+ const exam={exam_key:'ma1',subject:'Mathematik',title:'',date:'2026-09-30',day_label:'Mi 30.09.',days:2,school_days_left:2,kind:'arbeit',ready:1,total:2,raster,afb_names:{'1':'Wiedergeben','2':'Anwenden','3':'Übertragen'},stage:'luecken',path:path_,verdict:'eng',verdict_text:'Eng: Jeder Schritt zählt jetzt, auch am Wochenende.',vocab:null,topics_missing:false,papers:[{attempt_id:41,label:'Probearbeit',date:'2026-09-25',status:'graded',points:6,points_max:40,unclear:3}]};
  const vocabExam={exam_key:'en1',subject:'Englisch',title:'Vokabeltest',date:'2026-10-05',day_label:'Mo 05.10.',days:7,school_days_left:5,kind:'vokabeltest',ready:0,total:0,raster:[],afb_names:exam.afb_names,stage:'',path:[],verdict:'',verdict_text:'',vocab:{missing:true,unit:'Vokabeln Unit 3',href:null},topics_missing:false};
  let oralState=null;const turns=[];let mirror=false,compassCalls=0,mentorCalls=0,sessionBody=null,practiceBody=null,unarchived=null;
  const compass=()=>({day:'2026-09-28',can_write:!mirror,can_manage:false,ai_enabled:true,speech:false,next_exam:exam,calm:null,
@@ -130,6 +130,14 @@ const {chromium}=require('playwright-core');const http=require('http'),fs=requir
   const small=await page.$$eval('#k-pflicht button, #k-extra button, #k-staerken button, .exam-row',els=>els.filter(e=>e.offsetParent&&e.getBoundingClientRect().height<44).map(e=>e.textContent.trim()));
   assert.deepEqual(small,[],'44px '+width);
   await page.locator('#k-arbeiten .exam-row').first().click();}
+ // D201: Übungsarbeiten je Arbeit auf der Lernseite und Direktsprung ?paper=
+ await page.locator('#k-arbeiten .exam-row').first().click();
+ await page.getByText('Deine Übungsarbeiten').waitFor();await page.getByText('6 von 40 Punkten · 3 unklar gelesen · Ansehen').click();
+ await page.getByText('Kurztest Gleichungen').first().waitFor();
+ await page.getByRole('button',{name:/Zurück zu Lernen/}).first().click();await page.getByRole('heading',{name:'Heute Pflicht'}).waitFor();
+ await page.evaluate(()=>{location.hash='#/learning?paper=41';});await page.getByText('Kurztest Gleichungen').first().waitFor();
+ assert.equal(await page.evaluate(()=>location.hash),'#/learning','Parameter entfernt');
+ await page.getByRole('button',{name:/Zurück zu Lernen/}).first().click();await page.getByRole('heading',{name:'Heute Pflicht'}).waitFor();
  // Sprechprobe (D194): Prüfer im Chat, Senden ohne Aufgaben, Auswertung mit Kriterien und Baustellen.
  await page.setViewportSize({width:390,height:844});
  await page.evaluate(()=>{location.hash='#/learning?oral=en9&topic_id=5';});

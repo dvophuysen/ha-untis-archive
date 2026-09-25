@@ -1207,3 +1207,6 @@ CREATE TABLE IF NOT EXISTS source_dismissed (
  PRIMARY KEY(account_id, subject_key, part_label, page)
 );
 """))
+
+# Auswertung einer Übungsarbeit angesehen (D201): „Heute“ meldet neue Auswertungen, bis das Kind sie öffnet.
+_MIGRATIONS.append(("practice_result_seen_001", "ALTER TABLE mentor_exam_attempts ADD COLUMN result_seen_at TEXT"))

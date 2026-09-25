@@ -126,6 +126,7 @@ async def today(
         "retakes": _retakes(account_id),
         # Lern-Pflichtplan des Tages (D180), damit Heute mit einem Aufruf lädt (D177).
         "study_plan": _study_plan(account_id, user),
+        "new_results": _new_results(account_id),
         # Ob der Tag schon durchgegangen wurde — davon hängt die Abendkarte ab
         # und am nächsten Morgen die zweite Mitteilung.
         "day_close": {
@@ -156,6 +157,15 @@ def _study_plan(account_id: int, user) -> dict | None:
         import logging
         logging.getLogger("schul_cockpit.today").warning("Lernplan für Konto %s nicht lesbar", account_id, exc_info=True)
         return None
+
+
+def _new_results(account_id: int) -> list[dict]:
+    """Neu ausgewertete Übungsarbeiten, noch nicht angesehen (D201)."""
+    try:
+        from .practice import new_results
+        return new_results(account_id)
+    except Exception:
+        return []
 
 
 def _retakes(account_id: int) -> list[dict]:

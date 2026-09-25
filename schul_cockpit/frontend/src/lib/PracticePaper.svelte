@@ -3,7 +3,8 @@
   // in einem Schritt auswerten. Wer lieber tippt, tippt; beides geht zusammen.
   import { api } from './api.js';
   import PrintSheet from './PrintSheet.svelte';
-  import { view } from './viewMode.svelte.js';
+  import { view, actsAsParent } from './viewMode.svelte.js';
+  import { appState } from './store.svelte.js';
 
   let { accountId, attemptId, onclose = () => {}, backLabel = 'Zurück zum Raster' } = $props();
   const base = $derived(`/api/accounts/${accountId}/practice/attempts/${attemptId}`);
@@ -41,6 +42,8 @@
       }
     });
   }
+  // Eltern: ausgewertete Arbeit wieder öffnen, Seiten tauschen, neu auswerten (D201).
+  const regrade = () => run('Wird geöffnet …', async () => { a = await api.post(`${base}/regrade`, {}); });
   const removePage = (pid) => run('Wird entfernt …', async () => { a = await api.delete(`${base}/pages/${pid}`); });
   const grade = () => run('Wird ausgewertet, das dauert bis zu zwei Minuten …', async () => {
     a = await api.post(`${base}/grade`, { answers });
@@ -82,6 +85,12 @@
           <details><summary>Lösung und Punktkriterien</summary><p class="preserve">{t.solution}</p><p class="preserve dim">{t.criteria}</p></details>
         </article>
       {/each}
+      {#if actsAsParent(appState.me)}
+        <div class="regrade">
+          <p class="dim">Schlecht lesbare Fotos? Die Arbeit lässt sich noch einmal öffnen: Seiten austauschen, dann neu auswerten. Die bisherige Auswertung zählt dann nicht mehr.</p>
+          <button class="ghost" disabled={!!busy} onclick={regrade}>Neu auswerten lassen</button>
+        </div>
+      {/if}
       <button class="primary" onclick={onclose}>Zum Raster</button>
     {:else if a.read_only || view.mode === 'mirror'}
       <p class="notice">Nur ansehen: Die Arbeit ist noch nicht ausgewertet. Drucken geht trotzdem.</p>
@@ -123,6 +132,8 @@
 </section>
 
 <style>
+  .regrade { display: grid; gap: 4px; padding: var(--sp-2); border: 1px dashed var(--border); border-radius: var(--r-md); }
+  .regrade p { margin: 0; }
   .fig { display: block; max-width: 100%; max-height: 320px; margin: 0.3rem 0; background: #fff; border-radius: var(--r-sm); }
   .paper-view{display:grid;gap:var(--sp-2);margin-top:var(--sp-3);padding-top:var(--sp-3);border-top:1px solid var(--border)}
   .back{justify-self:start;min-height:40px}

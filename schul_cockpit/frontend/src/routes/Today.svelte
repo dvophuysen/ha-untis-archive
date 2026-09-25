@@ -261,6 +261,14 @@
     </section>
   {/if}
 
+  <!-- Neu ausgewertete Übungsarbeit (D201): bleibt stehen, bis das Kind sie öffnet. -->
+  {#each data?.new_results ?? [] as r (r.attempt_id)}
+    <a class="result-note" href={`#/learning?paper=${r.attempt_id}`}>
+      <span>📝 <strong>Deine {r.label} ist ausgewertet</strong>{r.subject ? ` · ${r.subject}` : ''}</span>
+      <small>{String(r.points).replace('.', ',')} von {r.points_max} Punkten{r.unclear ? ` · ${r.unclear} ${r.unclear === 1 ? 'Aufgabe' : 'Aufgaben'} unklar gelesen` : ''} · Ansehen</small>
+    </a>
+  {/each}
+
   {#if afterSchool && nextSchoolDay}
     <div class="rings">
       <button class="ring-btn" class:full={!openTasks.length} onclick={() => jump('s-aufgaben')}><span class="ring" style={ringStyle(ringTasks.length - openTasks.length, ringTasks.length)}><span>{!openTasks.length ? '✓' : '📚'}</span></span><b>Aufgaben</b><small>{ringTasks.length - openTasks.length} von {ringTasks.length}</small></button>
@@ -379,6 +387,8 @@
 {#if editing}<TaskDetail {accountId} task={editing} onclose={() => editing = null} onsaved={() => saved('Aufgabe gespeichert.')} />{/if}
 
 <style>
+  .result-note{display:grid;gap:2px;margin:var(--sp-2) 0;padding:var(--sp-2) var(--sp-3);border:1px solid var(--accent);border-radius:var(--r-md);background:var(--bg-card);color:var(--fg);text-decoration:none;min-height:44px}
+  .result-note small{color:var(--fg-muted)}
   .day-title{padding:var(--sp-1) 0 var(--sp-2)}
   .day-title h2{margin:0;font-size:var(--fs-xl);letter-spacing:-.01em}
   .day-title p{margin:2px 0 0;color:var(--fg-muted);font-size:var(--fs-sm)}

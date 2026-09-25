@@ -5,7 +5,9 @@ from __future__ import annotations
 import base64
 import io
 import json
+import logging
 from contextlib import closing
+from datetime import date, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -20,6 +22,8 @@ from ..db import webapp_conn
 from ..learning import InputModel, now_iso
 from .learning import access
 from .mentor_exams import ExamTask, attempt_row, attempt_view
+
+_LOG = logging.getLogger("schul_cockpit.practice")
 
 router = APIRouter(prefix="/accounts/{account_id}/practice", tags=["practice"])
 
@@ -123,6 +127,7 @@ def _papers(account_id: int, exam_key: str, user) -> list[dict]:
         r["tasks"] = len(tasks)
         r["points_max"] = sum(t["points"] for t in tasks)
         r["points"] = sum(f.get("points", 0) for f in fb.values() if not f.get("uncertain")) if fb else None
+        r["unclear"] = sum(1 for k, f in fb.items() if k != "overall" and isinstance(f, dict) and f.get("uncertain"))
         r["label"] = pr.FORMATS.get(r["paper_format"] or "", {}).get("label", "Übungsarbeit")
         out.append(r)
     return out
@@ -284,7 +289,61 @@ def paper_view(account_id: int, aid: int, user) -> dict:
 @router.get("/attempts/{aid}")
 def get_paper(account_id: int, aid: int, user: CurrentUser = Depends(get_current_user)):
     access(user, account_id)
+    view = paper_view(account_id, aid, user)
+    # Öffnet das Kind eine ausgewertete Arbeit, gilt die Auswertung als gesehen (D201).
+    if view.get("status") == "graded":
+        from ..rewards import acting_child
+        if acting_child(user):
+            try:
+                with closing(webapp_conn()) as c, c:
+                    c.execute("UPDATE mentor_exam_attempts SET result_seen_at=? WHERE id=? AND account_id=? AND result_seen_at IS NULL",
+                              (now_iso(), aid, account_id))
+            except Exception:
+                _LOG.debug("Auswertung %s nicht als gesehen markiert", aid, exc_info=True)
+    return view
+
+
+@router.post("/attempts/{aid}/regrade")
+def reopen_for_grading(account_id: int, aid: int, user: CurrentUser = Depends(get_current_user)):
+    """Eltern öffnen eine ausgewertete Arbeit noch einmal, etwa weil die Fotos
+    schlecht lesbar waren (D201): Die Antworten dieser Auswertung verlassen den
+    Lernstand, Seiten lassen sich tauschen, dann wird neu ausgewertet."""
+    access(user, account_id)
+    from ..view_mode import acts_as_parent
+    if not acts_as_parent(user):
+        raise HTTPException(403, "Nur in der Elternansicht verfügbar")
+    from ..lernstand import refresh
+    with closing(webapp_conn()) as c, c:
+        c.execute("BEGIN IMMEDIATE")
+        r = _writable(c, account_id, aid, user)
+        if r["status"] != "graded":
+            raise HTTPException(409, "Die Arbeit ist noch nicht ausgewertet.")
+        topics = [x[0] for x in c.execute("SELECT DISTINCT topic_id FROM topic_answers WHERE account_id=? AND attempt_id=?", (account_id, aid))]
+        c.execute("DELETE FROM topic_answers WHERE account_id=? AND attempt_id=?", (account_id, aid))
+        c.execute("UPDATE mentor_exam_attempts SET status='active',feedback_json=NULL,result_seen_at=NULL,version=version+1 WHERE id=?", (aid,))
+        for tid in topics:
+            refresh(c, tid)
     return paper_view(account_id, aid, user)
+
+
+def new_results(account_id: int, days: int = 14) -> list[dict]:
+    """Ausgewertete Übungsarbeiten, die das Kind noch nicht geöffnet hat (D201)."""
+    since = (date.today() - timedelta(days=days)).isoformat()
+    with closing(webapp_conn()) as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT a.id,a.snapshot,a.feedback_json,a.submitted_at,e.paper_format,e.subject FROM mentor_exam_attempts a "
+            "JOIN mentor_exams e ON e.id=a.exam_id WHERE a.account_id=? AND a.status='graded' AND a.is_test=0 "
+            "AND a.result_seen_at IS NULL AND substr(COALESCE(a.submitted_at,a.started_at),1,10)>=? ORDER BY a.id DESC LIMIT 5",
+            (account_id, since))]
+    out = []
+    for r in rows:
+        tasks = json.loads(r["snapshot"] or "{}").get("tasks", [])
+        fb = json.loads(r["feedback_json"] or "{}")
+        out.append({"attempt_id": r["id"], "label": pr.FORMATS.get(r["paper_format"] or "", {}).get("label", "Übungsarbeit"),
+                    "subject": r["subject"], "points_max": sum(t["points"] for t in tasks),
+                    "points": sum(f.get("points", 0) for k, f in fb.items() if k != "overall" and isinstance(f, dict) and not f.get("uncertain")),
+                    "unclear": sum(1 for k, f in fb.items() if k != "overall" and isinstance(f, dict) and f.get("uncertain"))})
+    return out
 
 
 @router.get("/attempts/{aid}/print", response_class=HTMLResponse)

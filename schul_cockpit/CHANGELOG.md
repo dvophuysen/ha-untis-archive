@@ -1,3 +1,9 @@
+## 1.28.2
+
+- Ausgewertete Übungsarbeiten stehen auf der Lernseite direkt bei der Arbeit, mit Punkten und einem Tipp zur Auswertung.
+- „Heute“ zeigt einen Hinweis, sobald eine Übungsarbeit ausgewertet ist, bis sie angesehen wurde.
+- Eltern können eine ausgewertete Übungsarbeit neu auswerten lassen, zum Beispiel mit besseren Fotos.
+
 ## 1.28.1
 
 - Seltene Fehler beim Laden („database is locked“) behoben: Die App schreibt bei Seitenaufrufen nur noch, wenn sich wirklich etwas geändert hat, und doppelt angetippte Seiten werden nicht mehrfach geladen.

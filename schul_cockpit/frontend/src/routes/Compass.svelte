@@ -33,6 +33,14 @@
   async function follow(h) {
     if (!data) await load();
     const q = queryOf(h);
+    // Direkt zu einer ausgewerteten Übungsarbeit, etwa vom Hinweis auf „Heute“ (D201).
+    if (q.get('paper')) {
+      running = null; examsView = null;
+      paperId = Number(q.get('paper'));
+      clearQuery();
+      window.scrollTo?.(0, 0);
+      return;
+    }
     if (opensSession(q)) {
       paperId = null; examsView = null;
       running = await openFromQuery(api, base, q);
@@ -190,6 +198,17 @@
             </button>
             {#if isOpen}
               <div class="way">
+                {#if e.papers?.length}
+                  <h4>Deine Übungsarbeiten</h4>
+                  <div class="papers">
+                    {#each e.papers as p (p.attempt_id)}
+                      <button class="paper-row" onclick={() => { paperId = p.attempt_id; window.scrollTo?.(0, 0); }}>
+                        <span><strong>{p.label}</strong> · {p.date ? formatShortDate(p.date) : ''}</span>
+                        <span class="dim">{p.status === 'graded' ? `${String(p.points).replace('.', ',')} von ${p.points_max} Punkten${p.unclear ? ` · ${p.unclear} unklar gelesen` : ''} · Ansehen` : p.status === 'grading' ? 'wird ausgewertet' : 'offen · Weiter'}</span>
+                      </button>
+                    {/each}
+                  </div>
+                {/if}
                 {#if e.path.length}
                   <h4>Weg zur Arbeit</h4>
                   <ol class="path">
@@ -305,6 +324,8 @@
 {:else if !error}<p role="status" class="loading">Lernen wird geladen …</p>{/if}
 
 <style>
+  .papers { display: grid; gap: 4px; margin-bottom: var(--sp-2); }
+  .paper-row { display: flex; justify-content: space-between; gap: 6px; flex-wrap: wrap; text-align: left; min-height: 44px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--bg-card); color: var(--fg); }
   .compass { max-width: 720px; margin: 0 auto; padding-bottom: var(--sp-5); display: grid; gap: var(--sp-4); min-width: 0; }
   .page-title { margin: 0; font-size: var(--fs-xl); }
   .note, .hint { margin: 0; padding: var(--sp-2) var(--sp-3); background: var(--warm-soft); border-radius: var(--r-md); font-size: var(--fs-sm); }

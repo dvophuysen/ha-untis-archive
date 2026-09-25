@@ -261,3 +261,37 @@ def test_paper_task_may_bring_a_drawn_figure(paper):
     assert a["exam"]["tasks"][0]["figur_src"].startswith("data:image/svg+xml;base64,")
     sheet = client.get(f"{BASE}/attempts/{a['id']}/print").text
     assert sheet.count('<img class="fig" src="data:image/svg+xml;base64,') == 1
+
+
+def test_new_result_is_announced_until_the_child_opens_it_and_parents_can_reopen(paper):
+    """D201: „Heute“ meldet eine neue Auswertung, bis das Kind sie öffnet; die
+    Lernseite zeigt die Übungsarbeiten je Arbeit; Eltern öffnen eine Auswertung
+    wieder, wenn die Fotos schlecht lesbar waren."""
+    client, state, patch = paper
+    child(state)
+    mock(patch, [pack(6)])
+    a = client.post(BASE, json={"exam_key": KEY, "format": "einstieg"}).json()
+    client.post(f"{BASE}/attempts/{a['id']}/pages", files={"file": ("p.jpg", image(), "image/jpeg")})
+    grades = [{"nr": i, "points": 4, "rationale": "Passt.", "next_step": "Weiter."} for i in range(1, 7)]
+    grades[2]["uncertain"] = True
+    mock(patch, [{"tasks": grades, "overall": "Gut."}])
+    assert client.post(f"{BASE}/attempts/{a['id']}/grade", json={}).json()["status"] == "graded"
+    news = rp.new_results(1)
+    assert [(n["attempt_id"], n["points"], n["points_max"], n["unclear"]) for n in news] == [(a["id"], 20, 24, 1)]
+    from backend.learning_compass import _papers_of
+    from types import SimpleNamespace
+    papers = _papers_of(1, KEY, SimpleNamespace(id=2))
+    assert papers[0]["attempt_id"] == a["id"] and papers[0]["status"] == "graded" and papers[0]["unclear"] == 1
+    client.get(f"{BASE}/attempts/{a['id']}")
+    assert rp.new_results(1) == [], "vom Kind geöffnet: nicht mehr neu"
+    # Kind darf nicht neu öffnen, Eltern schon.
+    assert client.post(f"{BASE}/attempts/{a['id']}/regrade").status_code == 403
+    state.user = CurrentUser(1, "p", "Eltern", "parent", False, "ingress")
+    r = client.post(f"{BASE}/attempts/{a['id']}/regrade")
+    assert r.status_code == 200 and r.json()["status"] == "active"
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT COUNT(*) FROM topic_answers WHERE attempt_id=?", (a["id"],)).fetchone()[0] == 0
+    mock(patch, [{"tasks": [{**g, "uncertain": False} for g in grades], "overall": "Besser lesbar."}])
+    again = client.post(f"{BASE}/attempts/{a['id']}/grade", json={}).json()
+    assert again["status"] == "graded" and again["feedback"]["overall"]["text"] == "Besser lesbar."
+    assert rp.new_results(1)[0]["points"] == 24, "neu ausgewertet: wieder als neu gemeldet"

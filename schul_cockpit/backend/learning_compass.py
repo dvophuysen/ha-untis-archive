@@ -424,6 +424,19 @@ def _vocab_state(account_id: int, exam: dict, topics: list[dict], pensum: list[d
 
 # ------------------------------------------------------------------ Zusammenbauen
 
+def _papers_of(account_id: int, exam_key: str, user) -> list[dict]:
+    """Die Übungsarbeiten zu einer Arbeit, ausgewertete zuerst, mit Punkten (D201)."""
+    try:
+        from .routers.practice import _papers
+        rows = [p for p in _papers(account_id, exam_key, user) if p.get("attempt_id")]
+    except Exception:
+        LOG.debug("Übungsarbeiten zu %s nicht lesbar", exam_key, exc_info=True)
+        return []
+    rows.sort(key=lambda p: (p["status"] != "graded", -(p["attempt_id"] or 0)))
+    return [{"attempt_id": p["attempt_id"], "label": p["label"], "date": (p["created_at"] or "")[:10], "status": p["status"],
+             "points": p["points"], "points_max": p["points_max"], "unclear": p.get("unclear", 0)} for p in rows[:4]]
+
+
 def _recent_probe(c, account_id: int, ids: list[int], day: date) -> bool:
     try:
         return study_plan._recent_probe(c, account_id, ids, day)
@@ -478,7 +491,7 @@ async def build(account_id: int, user, now: datetime | None = None) -> dict:
                              "ready": r["ready"], "total": r["total"], "raster": raster,
                              "afb_names": {str(a): n for a, n in AFB_NAMES.items()},
                              "stage": now_key, "path": path, "verdict": level, "verdict_text": sentence,
-                             "vocab": vocab, "topics_missing": not mine})
+                             "vocab": vocab, "topics_missing": not mine, "papers": _papers_of(account_id, k, user)})
         earlier = []
         for k, d in sorted(past.items(), key=lambda kv: (kv[1], kv[0]), reverse=True):
             mine = [t for t in topics if t["exam_key"] == k]
