@@ -38,7 +38,7 @@
     ]);
     if (ticket !== request || id !== accountId) return;
     const [day, work, learning] = results;
-    if (day.status === 'fulfilled') { data = { ...day.value, lessons: day.value.lessons.map(l => ({ ...l, date: l.date || day.value.date })) }; }
+    if (day.status === 'fulfilled') { data = { ...day.value, lessons: (day.value.lessons ?? []).map(l => ({ ...l, date: l.date || day.value.date })) }; }
     else error = 'Dein Stundenplan konnte nicht aktualisiert werden.';
     if (work.status === 'fulfilled') tasks = work.value.tasks;
     else error += ' Deine Aufgaben konnten nicht aktualisiert werden.';
@@ -86,14 +86,8 @@
   const nextTask = $derived(openTasks[0] ?? null);
   const nextNotes = $derived(nextTask ? stripUntisMetadata(nextTask.notes) : '');
   const left = $derived(openTasks.length + learnOpen + (bag && !bag.packed ? 1 : 0) + (feedbackOpen ? 1 : 0));
-  const tightText = $derived.by(() => {
-    const t = study?.tight?.[0];
-    if (!t) return '';
-    const name = subjectStyle(t.subject || '').name;
-    return study.free_day
-      ? `Heute ist eigentlich frei. Bis zur Arbeit in ${name} am ${formatShortDate(t.exam_date)} ist aber nicht mehr viel Zeit, darum ein kleiner Schritt.`
-      : `Die Arbeit in ${name} am ${formatShortDate(t.exam_date)} kommt bald. Ein Schritt am Tag reicht.`;
-  });
+  // Ein ehrlicher Satz aus den Zahlen des Lernplans (D188): was noch fehlt und wie viele Lerntage bleiben.
+  const tightText = $derived(study?.outlook ? (study.free_day && study.steps?.length ? `Heute ist eigentlich frei, aber die Zeit reicht sonst nicht. ${study.outlook}` : study.outlook) : '');
   const firstGroup = $derived(ph.first ? mergeLessons((data?.lessons ?? []).filter(held))[0] : null);
   const currentGroup = $derived.by(() => {
     const target = ph.current || ph.next;

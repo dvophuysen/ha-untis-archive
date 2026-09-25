@@ -1,6 +1,6 @@
-"""Lern-Pflichtplan des Tages (D180): Phasen je Arbeit, Dringlichkeit, höchstens
-zwei Schritte, Wochenende frei außer eng, Einfrieren, Erledigt, Grundpensum und
-„Geschafft“ mit Lernen."""
+"""Lern-Pflichtplan des Tages (D180, D188): Bedarf je Arbeit aus dem Raster, ohne
+Deckel verteilt bis zum Puffer vor der Arbeit, Wochenende nur wenn nötig,
+Einfrieren, Erledigt, Grundpensum und „Geschafft“ mit Lernen."""
 import sys
 import types
 from contextlib import closing
@@ -80,59 +80,63 @@ def keys(steps):
     return [(s["kind"], s.get("format"), s.get("exam_key")) for s in steps]
 
 
-def test_phase_per_exam(world):
+def seq(key="ma"):
+    return [(x["kind"], x["format"]) for p in sp.plans(1, MON) if p["exam_key"] == key for x in p["sequence"]]
+
+
+def test_sequence_per_exam_from_the_raster(world):
     ids = exam("ma", "Mathematik", MON + timedelta(days=9), ["Terme", "Gleichungen", "Vokabeln Unit 1"])
-    step = sp.compute(1, MON)
-    assert keys(step) == [("paper", "einstieg", "ma")], "alles offen: Einstiegstest; Vokabelthema zählt nicht"
+    assert seq() == [("paper", "einstieg"), ("dialog", None), ("paper", "kurz"), ("dialog", None), ("paper", "kurz"),
+                     ("paper", "probe")], "alles offen; Vokabelthema zählt nicht"
     answer(ids[0], 1, 1, source="paper")  # Einstieg gemacht, Terme wackeln
     ready(ids[1])
-    s = sp.compute(1, MON)[0]
-    assert s["kind"] == "dialog" and s["topic_id"] == ids[0] and s["href"] == f"#/learning?topic_id={ids[0]}"
-    answer(ids[0], 1, 2, source=None)  # zuletzt im Gespräch geübt → jetzt Kurztest
-    s = sp.compute(1, MON)[0]
-    assert (s["kind"], s["format"], s["topic_id"], s["level"]) == ("paper", "kurz", ids[0], None)
+    assert seq() == [("dialog", None), ("paper", "kurz"), ("paper", "probe")]
+    answer(ids[0], 1, 2, source=None)  # zuletzt im Gespräch geübt → gleich der Nachweis
+    assert seq() == [("paper", "kurz"), ("paper", "probe")]
     ready(ids[0])
-    assert keys(sp.compute(1, MON)) == [("paper", "probe", "ma")], "alles sicher: Probearbeit"
+    assert seq() == [("paper", "probe")], "alles sicher: Probearbeit"
     answer(ids[0], 1, 4, when=at(MON - timedelta(days=1), 10), fmt="probe")
-    assert sp.compute(1, MON) == [], "Probearbeit vor kurzem: keine zweite"
+    assert seq() == [] and sp.compute(1, MON) == [], "Probearbeit vor kurzem: keine zweite"
 
 
-def test_last_school_day_is_mix_unless_confirmed(world):
-    ids = exam("en", "Englisch", MON + timedelta(days=1), ["Tenses"])
-    ready(ids[0])
-    assert keys(sp.compute(1, MON)) == [("paper", "mix", "en")]
-    ready(ids[0], fmt="probe")
-    assert sp.compute(1, MON) == [], "alles bestätigt: kein Abschluss nötig"
+def test_behind_in_the_buffer_everything_today(world):
+    exam("en", "Englisch", MON + timedelta(days=1), ["Tenses"])
+    steps = sp.compute(1, MON)
+    assert [s["format"] for s in steps] == ["einstieg", None, "kurz", "probe"] and all(s["tight"] for s in steps)
 
 
-def test_urgency_orders_and_school_day_takes_two(world):
+def test_no_cap_nearest_exam_first(world):
     far = exam("ge", "Geschichte", MON + timedelta(days=20), ["A", "B"])
     near = exam("bi", "Biologie", MON + timedelta(days=4), ["A", "B"])
     mid = exam("ph", "Physik", MON + timedelta(days=8), ["A", "B"])
     ready(far[0]); ready(mid[0])
     steps = sp.compute(1, MON)
-    assert [s["exam_key"] for s in steps] == ["bi", "ph"], "höchstens zwei, die dringlichsten zuerst"
-    assert steps[0]["urgency"] == pytest.approx(1 / 4, abs=1e-3) and steps[1]["urgency"] == pytest.approx(0.5 / 6, abs=1e-3)
+    got = [s["exam_key"] for s in steps]
+    # Biologie: 6 Schritte in 2 Lerntagen vor dem Puffer → heute 3; Physik: 3 in 4 → heute 1.
+    assert got[:4] == ["bi", "bi", "bi", "ph"], got
+    plans = {p["exam_key"]: p for p in sp.plans(1, MON)}
+    assert plans["bi"]["need"] == 6 and plans["bi"]["days"] == 2 and plans["ge"]["need"] == 3
+    assert "Biologie am 02.10.: noch etwa 6 Schritte in 2 Lerntagen" in sp.outlook(1, MON)
 
 
-def test_weekend_free_unless_tight_and_vocab_extra(world, monkeypatch):
+def test_weekend_free_unless_the_school_days_do_not_suffice(world, monkeypatch):
     exam("ma", "Mathematik", SAT + timedelta(days=9), ["A", "B"])
-    assert sp.compute(1, SAT) == [], "Wochenende: keine Pflicht"
-    exam("fr", "Französisch", SAT + timedelta(days=3), ["A", "B", "C"])  # Dienstag, zwei Schultage, drei offene Themen
+    assert sp.compute(1, SAT) == [], "Wochenende frei: 6 Schritte in 3 Schultagen reichen"
+    exam("fr", "Französisch", SAT + timedelta(days=3), ["A", "B", "C"])  # Dienstag: 8 Schritte, ein Schultag
     steps = sp.compute(1, SAT)
-    assert keys(steps) == [("paper", "einstieg", "fr")] and steps[0]["tight"]
+    assert [s["exam_key"] for s in steps] == ["fr"] * 3 and steps[0]["format"] == "einstieg" and steps[0]["tight"]
     view = sp.view(1, SAT, store=False)
     assert view["engpass"] and view["free_day"] and view["tight"] == [{"subject": "Französisch", "exam_date": "2026-10-06"}]
+    assert view["outlook"].startswith("Es wird eng. Französisch am 06.10.")
     # Ferien wie Wochenende.
     world["free"].update(MON + timedelta(days=i) for i in range(5))
-    assert keys(sp.compute(1, MON)) == [("paper", "einstieg", "fr")], "in den Ferien nur, was eng ist"
+    assert {s["exam_key"] for s in sp.compute(1, MON)} == {"fr"}, "in den Ferien nur, was sonst nicht reicht"
     world["free"].clear()
-    # Vokabeltest steht an: zusätzlich Pflicht, zählt nicht gegen die zwei.
-    exam("de", "Deutsch", MON + timedelta(days=5), ["A"])
+    # Vokabeltest steht an: zusätzlich Pflicht.
     vocab(monkeypatch, [{"subject": "Englisch", "unit": "Unit 2", "target": 20, "done": False, "href": "#/vokabeln",
                          "exam_key": "voc", "why": "Test am Freitag."}])
-    steps = sp.compute(1, MON)
-    assert [s["kind"] for s in steps] == ["paper", "paper", "vocab"]
+    assert sp.compute(1, MON)[-1]["kind"] == "vocab"
+    assert sp.compute(1, SAT)[-1]["kind"] == "vocab", "am Wochenende entscheidet das Pensum selbst"
 
 
 def test_basic_daily_step_fallbacks(world, monkeypatch):
@@ -149,18 +153,18 @@ def test_basic_daily_step_fallbacks(world, monkeypatch):
 
 
 def test_plan_freezes_per_day_and_parent_only_reads(world):
-    ids = exam("ma", "Mathematik", MON + timedelta(days=9), ["Terme"])
+    ids = exam("ma", "Mathematik", MON + timedelta(days=4), ["Terme"])
     assert sp.view(1, MON, store=False)["frozen"] is False
     assert sp.stored(1, MON) is None, "Eltern halten nichts fest"
     first = sp.ensure(1, MON)
-    assert keys(first) == [("paper", "einstieg", "ma")]
+    assert keys(first) == [("paper", "einstieg", "ma"), ("dialog", None, "ma")]
     ready(ids[0])
     assert keys(sp.ensure(1, MON)) == keys(first), "innerhalb des Tages bleibt der Plan"
     assert keys(sp.ensure(1, MON + timedelta(days=1))) == [("paper", "probe", "ma")], "am nächsten Tag neu gerechnet"
 
 
 def test_done_detection(world):
-    ids = exam("ma", "Mathematik", MON + timedelta(days=9), ["Terme", "Gleichungen"])
+    ids = exam("ma", "Mathematik", MON + timedelta(days=4), ["Terme", "Gleichungen"])
     answer(ids[0], 1, 1, source="paper", when=at(MON - timedelta(days=2), 10))
     ready(ids[1], when=at(MON - timedelta(days=2), 10))
     step = sp.ensure(1, MON)[0]
@@ -170,22 +174,24 @@ def test_done_detection(world):
     answer(ids[1], 1, 4, when=at(MON, 15, 6))  # anderes Thema: freiwillig, zählt nicht
     assert not sp.mark_done(1, [step], MON)[0]["done"]
     answer(ids[0], 1, 3, when=at(MON, 15, 10))
-    assert sp.mark_done(1, [step], MON)[0]["done"] and sp.open_count(1, MON) == 0
+    assert sp.mark_done(1, [step], MON)[0]["done"] and sp.open_count(1, MON) == 1, "der Kurztest bleibt offen"
     # Papier: eine heute ausgewertete Arbeit dieser Arbeit, gleich welches Format.
-    paper = {"kind": "paper", "exam_key": "ma", "format": "kurz", "key": "paper:ma:kurz"}
+    paper = {"kind": "paper", "exam_key": "ma", "format": "kurz", "key": "paper:ma:kurz:"}
     with closing(db.webapp_conn()) as c, c:
         eid = c.execute("INSERT INTO mentor_exams(account_id,title,subject,scope_json,tasks_json,minutes,created_at,status,exam_key,paper_format) "
                         "VALUES(1,'Ü','Mathematik','{}','[]',20,'t','published','ma','mix')").lastrowid
         aid = c.execute("INSERT INTO mentor_exam_attempts(account_id,exam_id,user_id,snapshot,started_at,status,is_test,submitted_at) "
                         "VALUES(1,?,2,'{}','t','graded',0,?)", (eid, at(MON, 16).isoformat())).lastrowid
     assert sp.mark_done(1, [paper], MON)[0]["done"]
+    two = sp.mark_done(1, [paper, {**paper, "key": "paper:ma:probe:", "format": "probe"}], MON)
+    assert [x["done"] for x in two] == [True, False], "je Papier-Schritt eine ausgewertete Arbeit"
     assert not sp.mark_done(1, [paper], MON + timedelta(days=1))[0]["done"], "gestern ist nicht heute"
     with closing(db.webapp_conn()) as c, c:
         c.execute("UPDATE mentor_exam_attempts SET is_test=1 WHERE id=?", (aid,))
     assert not sp.mark_done(1, [paper], MON)[0]["done"], "Elternarbeit zählt nicht"
 
 
-def test_geschafft_needs_learning(world):
+def test_geschafft_needs_learning(world, monkeypatch):
     tue = MON + timedelta(days=1)
     with closing(db.webapp_conn()) as c, c:
         c.execute("INSERT INTO reward_config(id,start_day) VALUES(1,?)", (MON.isoformat(),))
@@ -193,6 +199,9 @@ def test_geschafft_needs_learning(world):
                   (int(MON.strftime("%Y%m%d")),))
     ids = exam("ma", "Mathematik", MON + timedelta(days=9), ["Terme"])
     answer(ids[0], 1, 1, source="paper", when=at(MON - timedelta(days=2), 10))
+    one = {"key": f"dialog:{ids[0]}", "kind": "dialog", "topic_id": ids[0], "subject": "Mathematik", "exam_key": "ma",
+           "exam_date": (MON + timedelta(days=9)).isoformat(), "title": "Terme", "why": "x", "format": None, "level": None, "href": "#"}
+    monkeypatch.setattr(sp, "compute", lambda a, d: [one])
     rewards.note(1, "feedback", 1, KID, at(MON, 14))
     state = rewards.day_state(1, MON, at(MON, 14))
     assert state["learning_open"] == 1 and not state["clear"]
@@ -208,7 +217,7 @@ def test_geschafft_needs_learning(world):
     assert rewards.day_state(1, tue, at(tue, 14))["learning_open"] == 0
 
 
-def test_rescue_counts_learning_done_next_morning(world):
+def test_rescue_counts_learning_done_next_morning(world, monkeypatch):
     tue = MON + timedelta(days=1)
     with closing(db.webapp_conn()) as c, c:
         c.execute("INSERT INTO reward_config(id,start_day) VALUES(1,?)", (MON.isoformat(),))
@@ -216,6 +225,10 @@ def test_rescue_counts_learning_done_next_morning(world):
                   (int(MON.strftime("%Y%m%d")),))
     ids = exam("ma", "Mathematik", MON + timedelta(days=9), ["Terme"])
     answer(ids[0], 1, 1, source="paper", when=at(MON - timedelta(days=2), 10))
+    one = {"key": f"dialog:{ids[0]}", "kind": "dialog", "topic_id": ids[0], "subject": "Mathematik", "exam_key": "ma",
+           "exam_date": (MON + timedelta(days=9)).isoformat(), "title": "Terme", "why": "x", "format": None, "level": None, "href": "#"}
+    later = {**one, "key": "paper:ma:kurz:", "kind": "paper", "format": "kurz"}
+    monkeypatch.setattr(sp, "compute", lambda a, d: [one] if d == MON else [later])  # Dienstag noch offen
     rewards.note(1, "feedback", 1, KID, at(MON, 14))
     for m in range(3):
         answer(ids[0], 1, 3, when=at(tue, 7, m))
@@ -238,7 +251,7 @@ def test_endpoint_and_today_payload(env, world):
     child(state)
     r = client.get("/api/accounts/1/study-plan/today").json()
     assert r["frozen"] and not r["read_only"] and r["total"] == 1 and r["done"] == 0
-    assert today_routes._study_plan(1, KID)["steps"][0]["key"] == "paper:ma:einstieg"
+    assert today_routes._study_plan(1, KID)["steps"][0]["key"] == "paper:ma:einstieg:"
 
 
 def test_dialog_answer_rechecks_the_day(world, monkeypatch):

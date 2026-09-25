@@ -10,19 +10,19 @@ nächsten ersetzt und „Lernen" wäre nie fertig. Ob ein Schritt erledigt ist,
 wird dagegen live geprüft. Freiwilliges ersetzt nie einen Pflichtschritt,
 zählt aber auch nicht dagegen.
 
-Je Arbeit ein Schritt:
+Je Arbeit wird aus dem Raster abgeleitet, was noch fehlt (D188):
   alles offen                 Einstiegstest
-  ein Thema nicht sicher      Lücken schließen: Kurztest zum schwächsten
-                              Thema, im Wechsel mit einer Einheit beim
-                              Lernbegleiter (zuletzt Gespräch → Kurztest)
-  alles sicher                Probearbeit, wenn keine in den letzten 3 Tagen
-  letzter Schultag davor      Mix als kurzer Abschluss, wenn nicht alles
-                              bestätigt ist
-Dringlichkeit: (1 − sicher/alle) / max(1, Schultage bis zur Arbeit). An
-Schultagen höchstens zwei Schritte, am Wochenende und in Ferien keiner, außer
-die Zeit wird eng (D179). Grundpensum: an jedem Schultag mindestens ein
-Schritt, sonst aus dem Vokabelpensum oder zur jüngsten „nicht verstanden“-
-Rückmeldung.
+  je Thema, das nicht sitzt   Üben beim Lernbegleiter und ein Kurztest als
+                              Nachweis (ist das Thema schon „fast“, nur der Kurztest)
+  danach                      Probearbeit, wenn keine in den letzten 3 Tagen
+Kein fester Deckel je Tag: Der Bedarf wird auf die Lerntage bis zwei Schultage
+vor der Arbeit verteilt (Puffer für spontane Tests, viele Hausaufgaben und
+Wiederholung). Arbeiten bis sechs Wochen voraus zählen mit kleinen, regelmäßigen
+Schritten, damit sich vor einer Arbeit nichts knubbelt. Wochenende und Ferien
+bleiben frei, solange die Schultage reichen (mehr als zwei Schritte am Tag je
+Arbeit gilt als nicht reichend); sonst zählen sie voll mit (D179). Die nächste
+Arbeit steht vorn. Grundpensum: an jedem Schultag mindestens ein Schritt, sonst
+aus dem Vokabelpensum oder zur jüngsten „nicht verstanden“-Rückmeldung.
 """
 from __future__ import annotations
 
@@ -37,8 +37,9 @@ from .db import webapp_conn
 
 LOG = logging.getLogger("schul_cockpit.study_plan")
 
-HORIZON = 28          # Tage voraus, in denen eine Arbeit zählt
-MAX_SCHOOL = 2        # Pflichtschritte aus Arbeiten an einem Schultag
+HORIZON = 42          # Tage voraus, in denen eine Arbeit zählt (früh anfangen, D188)
+BUFFER = 2            # Schultage vor der Arbeit, an denen der Stoff schon durch ist
+SCHOOL_RATE = 2       # mehr Schritte je Arbeit und Schultag: Wochenende hilft mit
 DIALOG_ANSWERS = 3    # Antworten im Gespräch, die einen Gesprächsschritt erledigen
 PROBE_GAP = 3         # Tage, in denen keine zweite Probearbeit fällig wird
 FEEDBACK_DAYS = 7     # so weit zurück zählt eine „nicht verstanden“-Rückmeldung
@@ -106,47 +107,73 @@ def _vocab_step(v: dict) -> dict:
 
 # ---------------------------------------------------------------- Berechnen
 
-def exam_step(account_id: int, exam: dict, day: date, school: list[date]) -> dict | None:
-    """Der eine Schritt, den diese Arbeit heute braucht, oder keiner."""
+def _stable(key: str) -> int:
+    return sum(ord(ch) * (i + 1) for i, ch in enumerate(key))
+
+
+def exam_plan(account_id: int, exam: dict, day: date, school: list[date]) -> dict | None:
+    """Was diese Arbeit noch braucht, wie viele Lerntage bis zum Puffer bleiben
+    und welche Schritte davon heute dran sind."""
     exam_day = date.fromisoformat(exam["exam_date"])
-    left = sum(1 for d in school if day <= d < exam_day)
-    last = not any(day < d < exam_day for d in school)
     r = practice.raster(account_id, exam["exam_key"])
     rows, total, ready = r["topics"], r["total"], r["ready"]
     if not total:
         return None
-    not_ready = [t for t in rows if not t["ready"]]
-    urgency = (1 - ready / total) / max(1, left)
-    # Eng: weniger Schultage als offene Themen, oder die letzten zwei und nicht alles sicher.
-    tight = bool(not_ready) and (left <= len(not_ready) or left <= 2)
     from .subject_names import label as subject_label
     subject, when = subject_label(exam["subject"]) or exam["subject"], _de(exam["exam_date"])
     base = {"subject": subject, "exam_key": exam["exam_key"], "exam_date": exam["exam_date"], "topic_id": None,
-            "level": None, "href": None, "urgency": round(urgency, 4), "tight": tight, "days_left": left}
+            "level": None, "href": None}
 
     def paper(fmt, title, why, topic_id=None):
-        return {**base, "key": f"paper:{exam['exam_key']}:{fmt}", "kind": "paper", "format": fmt,
+        return {**base, "key": f"paper:{exam['exam_key']}:{fmt}:{topic_id or ''}", "kind": "paper", "format": fmt,
                 "title": title, "why": why, "topic_id": topic_id}
 
-    # Noch gar nichts gemessen: zuerst der Einstiegstest, auch am letzten Tag.
+    def dialog(t):
+        return {**base, "key": f"dialog:{t['id']}", "kind": "dialog", "format": None, "topic_id": t["id"],
+                "title": f"{subject}: {t['title']}", "href": f"#/learning?topic_id={t['id']}",
+                "why": f"Das Thema sitzt noch nicht sicher. Drei Aufgaben mit dem Lernbegleiter, Arbeit am {when}"}
+
+    seq: list[dict] = []
     if all(cell["state"] == "offen" for t in rows for cell in t["cells"].values()):
-        return paper("einstieg", f"Einstiegstest {subject}", f"Zeigt, wo du für die Arbeit am {when} stehst.")
-    if last:
-        if all(t["cells"]["2"]["state"] == "bestaetigt" for t in rows):
-            return None
-        return paper("mix", f"Mix {subject}", f"Die Arbeit ist am {when}: ein kurzer Abschluss mit den schwächsten Themen.")
+        seq.append(paper("einstieg", f"Einstiegstest {subject}", f"Zeigt, wo du für die Arbeit am {when} stehst."))
+    not_ready = sorted([t for t in rows if not t["ready"]], key=practice._weakness)
     with closing(webapp_conn()) as c:
-        if not_ready:
-            weak = sorted(not_ready, key=practice._weakness)[0]
-            if _last_was_dialog(c, account_id, weak["id"]):
-                return paper("kurz", f"Kurztest {subject}: {weak['title']}",
-                             f"Im Gespräch geübt, jetzt zeigst du es auf Papier. Arbeit am {when}", weak["id"])
-            return {**base, "key": f"dialog:{weak['id']}", "kind": "dialog", "format": None, "topic_id": weak["id"],
-                    "title": f"{subject}: {weak['title']}", "href": f"#/learning?topic_id={weak['id']}",
-                    "why": f"Das Thema sitzt noch nicht sicher. Drei Aufgaben mit dem Lernbegleiter, Arbeit am {when}"}
-        if _recent_probe(c, account_id, [t["id"] for t in rows], day):
-            return None
-    return paper("probe", f"Probearbeit {subject}", f"Alle Themen sitzen. Die Probearbeit zeigt, ob es auch wie in der echten Arbeit am {when} klappt.")
+        for t in not_ready:
+            near = t["cells"][str(t["target"])]["state"] == "fast"
+            if not near and not _last_was_dialog(c, account_id, t["id"]):
+                seq.append(dialog(t))
+            seq.append(paper("kurz", f"Kurztest {subject}: {t['title']}",
+                             f"Zeigt auf Papier, ob „{t['title']}“ sitzt. Arbeit am {when}", t["id"]))
+        confirmed = all(t["cells"]["2"]["state"] == "bestaetigt" for t in rows)
+        if not confirmed and not _recent_probe(c, account_id, [t["id"] for t in rows], day):
+            seq.append(paper("probe", f"Probearbeit {subject}",
+                             f"Alle Themen wie in der echten Arbeit am {when}. Zeigt, was noch fehlt."))
+    need = len(seq)
+    before = [d for d in school if day <= d < exam_day]
+    window = before[:-BUFFER] if len(before) > BUFFER else before
+    behind = not window and need > 0          # schon im Puffer und noch nicht durch
+    if behind:
+        window = before or [day]
+    all_days = [day + timedelta(days=i) for i in range((exam_day - day).days)]
+    last_window = window[-1] if window else day
+    free_days = [d for d in all_days if d <= last_window and d not in school]
+    weekend = bool(need) and (len(window) == 0 or need / max(1, len(window)) > SCHOOL_RATE)
+    days = sorted(set(window) | (set(free_days) if weekend else set()))
+    quota = 0
+    if need and day in days:
+        remaining = len([d for d in days if d >= day])
+        rate = need / max(1, remaining)
+        if rate >= 1:
+            quota = -(-need // remaining)
+        else:
+            gap = max(1, round(1 / rate))
+            quota = 1 if (day.toordinal() + _stable(exam["exam_key"])) % gap == 0 else 0
+    tight = weekend or behind
+    today_steps = [{**st, "tight": tight} for st in seq[:quota]]
+    return {"exam_key": exam["exam_key"], "subject": subject, "exam_date": exam["exam_date"], "need": need,
+            "days": len([d for d in days if d >= day]), "weekend": weekend, "behind": behind,
+            "ready": ready, "total": total, "steps": today_steps,
+            "sequence": [{k: st.get(k) for k in ("key", "kind", "format", "topic_id", "title")} for st in seq]}
 
 
 def _lesson_step(account_id: int, day: date) -> dict | None:
@@ -174,37 +201,52 @@ def _lesson_step(account_id: int, day: date) -> dict | None:
             "level": None, "href": href, "lesson_id": l["id"]}
 
 
-def compute(account_id: int, day: date) -> list[dict]:
-    """Die Pflichtschritte eines Tages aus dem jetzigen Stand."""
+def plans(account_id: int, day: date) -> list[dict]:
+    """Je anstehender Arbeit: Bedarf, Lerntage und die Schritte von heute."""
     school = rewards.school_days(account_id, day, day + timedelta(days=HORIZON))
-    school_day = day in school
-    cands = []
+    out = []
     for exam in _exams(account_id, day):
         try:
-            step = exam_step(account_id, exam, day, school)
+            p = exam_plan(account_id, exam, day, school)
         except Exception:
-            LOG.warning("Lernschritt für %s nicht berechenbar", exam.get("exam_key"), exc_info=True)
+            LOG.warning("Lernschritte für %s nicht berechenbar", exam.get("exam_key"), exc_info=True)
             continue
-        if step:
-            cands.append(step)
-    cands.sort(key=lambda s: (-s["urgency"], s["exam_date"]))
-    if school_day:
-        steps = cands[:MAX_SCHOOL]
-    else:
-        # Wochenende und Ferien dienen der Erholung (D179), außer die Zeit wird eng.
-        steps = [s for s in cands if s["tight"]][:1]
-    if not school_day:
-        return steps
+        if p:
+            out.append(p)
+    return out
+
+
+def compute(account_id: int, day: date) -> list[dict]:
+    """Die Pflichtschritte eines Tages aus dem jetzigen Stand, die nächste Arbeit zuerst."""
+    school_day = day in rewards.school_days(account_id, day, day)
+    steps = [st for p in sorted(plans(account_id, day), key=lambda p: p["exam_date"]) for st in p["steps"]]
     vocab = _vocab(account_id, day)
-    # Steht ein Vokabeltest an, ist das Pensum zusätzlich Pflicht, außerhalb der zwei.
+    # Steht ein Vokabeltest an, ist das Pensum zusätzlich Pflicht; an freien Tagen
+    # entscheidet das Pensum selbst, ob die Zeit bis zum Test das verlangt (D179).
     steps += [_vocab_step(v) for v in vocab if v.get("exam_key")]
-    if not steps:
-        # Grundpensum: jeden Schultag etwas, das erspart das Büffeln am Ende.
-        steps = [_vocab_step(v) for v in vocab[:1]]
+    if steps or not school_day:
+        return steps
+    # Grundpensum: jeden Schultag etwas, das erspart das Büffeln am Ende.
+    steps = [_vocab_step(v) for v in vocab[:1]]
     if not steps:
         lesson = _lesson_step(account_id, day)
         steps = [lesson] if lesson else []
     return steps
+
+
+def outlook(account_id: int, day: date) -> str:
+    """Ein ehrlicher Satz zur Lage, aus den Zahlen: nächste Arbeiten, was noch
+    fehlt, wie viele Lerntage bis zum Puffer bleiben."""
+    ps = [p for p in sorted(plans(account_id, day), key=lambda p: p["exam_date"]) if p["need"]]
+    if not ps:
+        return ""
+    bits = []
+    for p in ps[:2]:
+        extra = " mit Wochenende" if p["weekend"] else ""
+        bits.append(f"{p['subject']} am {_de(p['exam_date'])}: noch etwa {p['need']} "
+                    f"{'Schritt' if p['need'] == 1 else 'Schritte'} in {p['days']} {'Lerntag' if p['days'] == 1 else 'Lerntagen'}{extra}")
+    head = "Es wird eng. " if any(p["weekend"] or p["behind"] for p in ps[:2]) else ""
+    return head + "; ".join(bits) + "."
 
 
 # -------------------------------------------------------------- Einfrieren
@@ -233,15 +275,15 @@ def ensure(account_id: int, day: date) -> list[dict]:
 
 # ----------------------------------------------------------------- Erledigt
 
-def _paper_done(c, account_id: int, s: dict, first: str, last: str) -> bool:
-    # Jede heute ausgewertete Übungsarbeit dieser Arbeit erledigt den Papier-Schritt,
-    # gleich welches Format: gemessen ist gemessen.
-    return bool(c.execute(
-        "SELECT 1 FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id "
+def _paper_count(c, account_id: int, exam_key: str, first: str, last: str) -> int:
+    # Jede im Zeitraum ausgewertete Übungsarbeit dieser Arbeit erledigt einen
+    # Papier-Schritt, gleich welches Format: gemessen ist gemessen.
+    return c.execute(
+        "SELECT COUNT(DISTINCT a.id) FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id "
         "WHERE a.account_id=? AND e.exam_key=? AND a.status='graded' AND a.is_test=0 AND ("
         " EXISTS(SELECT 1 FROM topic_answers t WHERE t.attempt_id=a.id AND substr(t.created_at,1,10) BETWEEN ? AND ?)"
-        " OR substr(a.submitted_at,1,10) BETWEEN ? AND ?) LIMIT 1",
-        (account_id, s["exam_key"], first, last, first, last)).fetchone())
+        " OR substr(a.submitted_at,1,10) BETWEEN ? AND ?)",
+        (account_id, exam_key, first, last, first, last)).fetchone()[0]
 
 
 def _dialog_done(c, account_id: int, s: dict, first: str, last: str) -> bool:
@@ -266,12 +308,19 @@ def mark_done(account_id: int, steps: list[dict], day: date, until: date | None 
     first, last = day.isoformat(), (until or day).isoformat()
     vocab = None
     out = []
+    papers: dict[str, int] = {}
     with closing(webapp_conn()) as c:
         for s in steps:
             done = False
             try:
                 if s["kind"] == "paper":
-                    done = _paper_done(c, account_id, s, first, last)
+                    key = s["exam_key"]
+                    if key not in papers:
+                        papers[key] = _paper_count(c, account_id, key, first, last)
+                    # Mehrere Papier-Schritte einer Arbeit: der Reihe nach je eine Arbeit.
+                    done = papers[key] > 0
+                    if done:
+                        papers[key] -= 1
                 elif s["kind"] == "dialog" and s.get("topic_id"):
                     done = _dialog_done(c, account_id, s, first, last)
                 elif s["kind"] == "dialog" and s.get("lesson_id"):
@@ -313,9 +362,15 @@ def view(account_id: int, day: date, *, store: bool) -> dict:
         free = day not in rewards.school_days(account_id, day, day)
     except Exception:
         free = False
-    tight = [{"subject": s["subject"], "exam_date": s["exam_date"]} for s in checked if s.get("tight")]
+    tight = sorted({(s["subject"], s["exam_date"]) for s in checked if s.get("tight") and s.get("exam_date")}, key=lambda t: t[1])
+    tight = [{"subject": a, "exam_date": b} for a, b in tight]
+    try:
+        text = outlook(account_id, day)
+    except Exception:
+        LOG.debug("Ausblick nicht berechenbar", exc_info=True)
+        text = ""
     return {"day": day.isoformat(), "steps": [{k: s.get(k) for k in PUBLIC} for s in checked],
-            "engpass": bool(tight), "tight": tight, "free_day": free, "frozen": frozen, "read_only": not store,
+            "engpass": bool(tight), "tight": tight, "outlook": text, "free_day": free, "frozen": frozen, "read_only": not store,
             "done": sum(1 for s in checked if s["done"]), "total": len(checked)}
 
 
