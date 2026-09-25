@@ -117,7 +117,7 @@
       const checked = e.sources.notice_verified;
       return {
         tone: checked ? 'ok' : 'warn',
-        text: `Offizielle Themenliste liegt vor · ${n} ${n === 1 ? 'Thema' : 'Themen'}${checked ? '' : ' · noch nicht gegengelesen'}`,
+        text: `Offizielle Themenliste liegt vor · ${n} ${n === 1 ? 'Thema' : 'Themen'}${checked ? '' : ' · eine Seitenzahl bitte prüfen'}`,
         action: checked ? { label: 'ansehen', open: true } : { label: 'gegenlesen', href: `#/materialien?material=${e.sources.notice_id}` },
       };
     }
@@ -316,7 +316,7 @@
           <div class="detail">
             {#if e.sources?.notice}
               <p class="lead">Die offizielle Themenliste der Lehrkraft legt den Stoff fest.
-                <a href={`#/materialien?material=${e.sources.notice_id}`}>Foto ansehen</a>{#if !e.sources.notice_verified} · <a href={`#/materialien?material=${e.sources.notice_id}`}>Bitte gegenlesen</a>, Handschrift lese ich nicht sicher.{/if}</p>
+                <a href={`#/materialien?material=${e.sources.notice_id}`}>Foto ansehen</a>{#if !e.sources.notice_verified} · <a href={`#/materialien?material=${e.sources.notice_id}`}>Bitte prüfen</a>: Eine Seitenzahl kennt der Unterricht nicht.{/if}</p>
             {:else}
               <p class="lead">Keine offizielle Themenliste. Bis die Lehrkraft eingrenzt, zählt alles, was im Unterricht behandelt wurde {sinceLabel(e.scope)}. Sobald ein Zettel oder Tafelfoto vorliegt, <a href={materialUrl(e)}>lege es unter Materialien ab</a>.</p>
             {/if}

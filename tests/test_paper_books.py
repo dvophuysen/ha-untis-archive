@@ -686,9 +686,14 @@ def test_only_an_uncertain_reading_goes_to_review():
     eintrag = {**sauber, "doubts": '[{"text": "[Kind: 6/7]", "alternative": "[Kind: 5/7]", "reason": "6 oder 5"}]'}
     assert needs_review(eintrag) is False
     assert needs_review({**sauber, "content_text": "a) 2/7 + 4/7 = ___ [Kind: […]]"}) is False
-    # Eine gedruckte Stelle, die gar nicht gelesen werden konnte, bleibt ein Grund.
-    assert needs_review({**sauber, "content_text": "a) […] = ___ [Kind: 6/7]"}) is True
-    # Eine Themenliste und ein Verzeichnis immer: daraus entstehen Stellen und
-    # Kapitel, ein falsch gelesener Zettel wirkt wochenlang weiter.
-    assert needs_review({**gedruckt, "kind": "exam_notice"}) is True
-    assert needs_review({**gedruckt, "kind": "toc"}) is True
+    # „[…]“ bei unsicherer Lesung bleibt ein Grund. Bei sicherer Lesung ohne einen
+    # genannten Zweifel ist es eine gedruckte Lücke, wie sie das Modell im
+    # Lückentext schreibt; jede unleserliche Stelle soll es als Zweifel melden (D167).
+    assert needs_review({**sauber, "confidence": 0.6, "content_text": "a) […] = ___ [Kind: 6/7]"}) is True
+    assert needs_review({**sauber, "content_text": "Es la plaza más […] de Madrid."}) is False
+    # Themenliste und Verzeichnis gelten wie jede Seite (D167): sauber gelesen
+    # kein Blick; ein Zettel mit Seiten, die der Unterricht nicht kennt, kommt
+    # über die Prüfung gegen den Unterricht dazu, ein echter Zweifel wie überall.
+    assert needs_review({**gedruckt, "kind": "exam_notice"}) is False
+    assert needs_review({**gedruckt, "kind": "toc"}) is False
+    assert needs_review({**unsicher, "kind": "toc"}) is True

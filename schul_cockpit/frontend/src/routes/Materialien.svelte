@@ -506,11 +506,26 @@
   <div class="card retake" data-section="fotos">
     <strong>Bitte noch einmal fotografieren</strong>
     {#each (data.materials ?? []).filter((m) => m.retake) as m (m.id)}
+      <!-- Welche Seite, welche Stelle: Vorschau des alten Fotos, Heft und Seite,
+           die unsichere Stelle wörtlich. Eltern können die Bitte schließen (D167). -->
       <div class="retake-item">
-        <p><b>{m.title || 'Ohne Titel'}</b>{m.subject_name ? ` · ${subjectStyle(m.subject_name).name}` : ''}<br /><small class="muted">{m.retake}</small></p>
-        <div class="row gap-sm">
-          <button class="primary" disabled={busy || uploading} onclick={() => retake(m, true)}>📷 Neu fotografieren</button>
-          <button class="quiet" disabled={busy || uploading} onclick={() => retake(m, false)}>Datei wählen</button>
+        {#if m.has_file && (m.mime_type || '').startsWith('image/')}
+          <a class="retake-thumb" href={`.${base}/${m.id}/file`} target="_blank" rel="noreferrer" aria-label="Altes Foto groß ansehen">
+            <img src={`.${base}/${m.id}/file`} alt="Bisheriges Foto der Seite" loading="lazy" />
+          </a>
+        {/if}
+        <div class="retake-text">
+          <p><b>{m.source_page ? `${m.source_label || 'Buch'} S. ${m.source_page}` : (m.title || 'Ohne Titel')}</b>{m.subject_name ? ` · ${subjectStyle(m.subject_name).name}` : ''}
+            {#if m.source_page && m.title}<br /><small>{m.title}</small>{/if}</p>
+          {#if m.retake_spot}<p class="spot">Stelle: „{m.retake_spot}“</p>{/if}
+          <p><small class="muted">{m.retake}</small></p>
+          <div class="row gap-sm">
+            <button class="primary" disabled={busy || uploading} onclick={() => retake(m, true)}>📷 Neu fotografieren</button>
+            <button class="quiet" disabled={busy || uploading} onclick={() => retake(m, false)}>Datei wählen</button>
+            {#if data.can_manage}
+              <button class="quiet" disabled={busy} onclick={() => act(async () => { await api.post(`${base}/${m.id}/verified`, { value: true }); message = 'Gut, die Seite bleibt, wie sie gelesen ist.'; await load(); })}>Passt so, kein neues Foto</button>
+            {/if}
+          </div>
         </div>
       </div>
     {/each}
@@ -521,7 +536,7 @@
   <div class="card review">
     <strong>Bitte gegenlesen</strong>
     <p class="lead">Gezeigt wird nur, wo ich beim Lesen unsicher war — <mark>markiert</mark>, mit einer Zeile Zusammenhang.
-      Sauber Gelesenes steht nicht hier. Themenlisten und Inhaltsverzeichnisse zeige ich immer, weil daraus Stellen und Kapitel entstehen.</p>
+      Sauber Gelesenes steht nicht hier, auch keine Themenliste und kein Inhaltsverzeichnis, die sich gegen den Unterricht als stimmig erweisen.</p>
     {#each (data.materials ?? []).filter((m) => m.needs_review && m.kind !== 'toc') as m (m.id)}
       <div class="review-item">
         <div><strong>{m.title || 'Ohne Titel'}</strong> <small class="muted">· {KIND_NAMES[m.kind] ?? m.kind}{m.subject_name ? ` · ${subjectStyle(m.subject_name).name}` : ''}{m.source_label ? ` · ${m.source_label}` : ''}</small></div>
@@ -960,7 +975,10 @@
   .wanted>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;list-style:none}
   .wanted>summary::-webkit-details-marker{display:none}
   .review{border-left:4px solid var(--warm,#b26a00)}
-  .retake{border-left:4px solid var(--accent)}.retake-item{padding:8px 0;border-top:1px solid var(--border)}.retake-item:first-of-type{border-top:0}.retake-item p{margin:0 0 6px;overflow-wrap:anywhere}
+  .retake{border-left:4px solid var(--accent)}.retake-item{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--border)}.retake-item:first-of-type{border-top:0}.retake-item p{margin:0 0 6px;overflow-wrap:anywhere}
+  .retake-text{flex:1;min-width:0}.retake-thumb{flex:none;width:88px}.retake-thumb img{display:block;width:88px;max-height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+  .retake .spot{font-size:.88rem;background:var(--bg-elevated);border-radius:6px;padding:4px 8px}
+  .retake-text .row{flex-wrap:wrap}
   .notice-row{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between}
   .books .book{border-top:1px solid var(--border);padding:6px 0}
   .books .book>summary{cursor:pointer;min-height:40px;display:flex;align-items:center;font-size:0.9rem}

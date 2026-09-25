@@ -440,12 +440,22 @@ def test_only_real_doubts_ask_the_parents(env):
     schwa = _read(client, doubts=[{"text": "international [ˌɪntəˈnæʃənl]", "alternative": "international [ˌɪntəˈnæʃnəl]",
                                    "reason": "Schriftbild am Wortende schwer zu lesen"},
                                   {"text": "Reise-", "alternative": "Reise- (Fortsetzung)", "reason": "Der Bindestrich deutet auf eine Fortsetzung"}])
-    real = _read(client, doubts=[{"text": "child [tʃaɪld] Kind", "alternative": "chill", "reason": "Wort unsicher"}])
+    # Auf einer Vokabelliste ist das einzelne Wort der Stoff: bleibt ein Zweifel.
+    real = _read(client, page_type="table", doubts=[{"text": "child [tʃaɪld] Kind", "alternative": "chill", "reason": "Wort unsicher"}])
+    # Im Fließtext genügt die genannte Lesart; eine Jahreszahl bleibt ein Zweifel (D167).
+    prose = _read(client, page_type="text", content_text="Um selbst König zu werden",
+                  doubts=[{"text": "Um selbst König", "alternative": "Zum selbst König", "reason": "Wortanfang unsicher"}])
+    year = _read(client, page_type="text", content_text="gestorben 754",
+                 doubts=[{"text": "gestorben 754", "alternative": "gestorben 745", "reason": "Ziffern klein"}])
+    credit = _read(client, page_type="mixed", doubts=[{"text": "Foto: Fotolia", "reason": "Foto-Credits klein, nicht relevant"}])
+    gaps = _read(client, kind="workbook", page_type="mixed", confidence=0.94,
+                 content_text="Es la plaza más […] de Madrid.")
     listing = client.get(URL).json()
     by_id = {m["id"]: m for m in listing["materials"]}
-    assert [i for i in (ipa, pupil, clean, blurry_ipa, unsure_pupil, schwa, real) if by_id[i]["needs_review"]] == [real]
+    assert [i for i in (ipa, pupil, clean, blurry_ipa, unsure_pupil, schwa, real, prose, year, credit, gaps)
+            if by_id[i]["needs_review"]] == [real, year]
     assert not by_id[blurry_ipa]["retake"] and not by_id[unsure_pupil]["retake"]
-    assert listing["needs_check"] == 1
+    assert listing["needs_check"] == 2
 
 
 def test_a_blurry_page_goes_to_the_child_and_a_new_photo_replaces_it(env):
@@ -467,3 +477,26 @@ def test_a_blurry_page_goes_to_the_child_and_a_new_photo_replaces_it(env):
                              (new["id"],)).fetchone()
     assert old["hidden"] == 1 and moved
     assert store.retakes(1) == []
+
+
+def test_a_new_photo_only_when_it_really_helps(env):
+    """Eine einzelne unsichere Stelle ist kein neues Foto wert, ein Wort mit
+    genannter Lesart ebenso wenig; ein abgeschnittenes Stück Seite oder mehrere
+    ungelöste Stellen schon. Die Bitte nennt die Stelle (D167)."""
+    client = client_for(env)
+    single = _read(client, kind="workbook", page_type="mixed",
+                   doubts=[{"text": "Wort nach 'las mejores'", "reason": "klein und etwas unscharf"}])
+    settled = _read(client, kind="book_page", page_type="text",
+                    doubts=[{"text": "Um selbst", "alternative": "Zum selbst", "reason": "Anfang unscharf"},
+                            {"text": "Schla[…]zeilen", "alternative": "Schlagzeilen", "reason": "teilweise verdeckt"}])
+    pupil = _read(client, kind="workbook", page_type="mixed",
+                  doubts=[{"text": "Kästchen neben Aufgabe 2", "reason": "Handschriftliche Notiz unscharf"},
+                          {"text": "Kästchen neben Aufgabe 3", "reason": "Handschriftliche Eintragung unscharf"}])
+    cut = _read(client, kind="book_page", page_type="mixed",
+                doubts=[{"text": "25 d) […]", "alternative": "25 d) 3/4", "reason": "unten abgeschnitten"}])
+    many = _read(client, kind="book_page", page_type="text",
+                 doubts=[{"text": "a) […]", "reason": "unscharf"}, {"text": "b) […]", "reason": "verdeckt"}])
+    by_id = {m["id"]: m for m in client.get(URL).json()["materials"]}
+    assert [i for i in (single, settled, pupil, cut, many) if by_id[i]["retake"]] == [cut, many]
+    assert by_id[cut]["retake_spot"] == "25 d) […]" and by_id[cut]["needs_review"] is False
+    assert [r["spot"] for r in store.retakes(1)] == ["a) […]", "25 d) […]"]

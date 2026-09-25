@@ -62,6 +62,13 @@ def exam_kind(title: str | None) -> str:
     return "Arbeit"
 
 
+def _where(material: dict) -> str:
+    """Heft und Seite, wenn bekannt („Grammatikheft S. 24“), sonst der Titel."""
+    if material.get("source_page"):
+        return f"{material.get('source_label') or 'Buch'} S. {material['source_page']}"
+    return f"„{material.get('title') or 'Ohne Titel'}“"
+
+
 def _brief(text: str, limit: int = 60) -> str:
     """Ein Grund in Kurzform: bis zum ersten Semikolon, höchstens eine Zeile.
     Der volle Wortlaut steht in den Materialien."""
@@ -210,7 +217,7 @@ def acute(account_id: int, tasks: list[dict], today: date, now: datetime, evenin
     if retakes:
         rows.append({"key": "retake", "tone": "warn", "icon": "📷",
                      "title": f"{_plural(len(retakes), 'Seite', 'Seiten')} neu fotografieren",
-                     "detail": " · ".join(f"„{r['title']}“" for r in retakes[:2]) + f" · {_brief(retakes[0]['reason'])}",
+                     "detail": " · ".join(_where(r) for r in retakes[:2]) + f" · {_brief(retakes[0]['reason'])}",
                      "go": go("materialien", section="fotos")})
     return rows, ok
 

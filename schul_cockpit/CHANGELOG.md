@@ -1,3 +1,11 @@
+## 1.14.4
+
+- Gegenlesen nur noch bei echten Zweifeln. Nicht mehr vorgelegt werden: gedruckte Lücken im Lückentext, die als „[…]“ gelesen waren; Seiten mit Eintragungen des Kindes, deren Gesamtsicherheit nur wegen der Handschrift niedriger ist; Bildnachweise, Fußnotenzeichen und Ähnliches; einzelne Wörter im Fließtext, für die die Lesung eine plausible Lesart nennt. Zahlen (Seiten, Brüche, Jahreszahlen) und einzelne Wörter auf Vokabellisten bleiben ein Zweifel.
+- Themenzettel und Inhaltsverzeichnisse werden nicht mehr aus Prinzip vorgelegt. Ein Themenzettel kommt nur noch, wenn eine seiner Seitenzahlen im Unterricht nie vorkam (mit Vorschlag zur Berichtigung), ein Verzeichnis nur bei echten Zweifeln.
+- Ein neues Foto wird nur noch erbeten, wenn ein Stück Seite im Foto fehlt, mehrere Stellen ungelöst sind oder das ganze Foto unscharf ist; nicht mehr für ein einzelnes kleines Wort oder für Eintragungen des Kindes.
+- Die Foto-Bitte zeigt das bisherige Foto als Vorschau, Heft und Seite („Grammatikheft S. 24“) und die unsichere Stelle wörtlich. Eltern können sie mit „Passt so, kein neues Foto“ schließen.
+- Die Auswertung neuer Fotos schreibt gedruckte Lücken als ___ und meldet Belangloses nicht mehr als Zweifel.
+
 ## 1.14.3
 
 - Morgen-Erinnerung: prüft jetzt die Tasche für heute (am Vorabend gepackt) und die heute fälligen Aufgaben. Bisher meldete sie fast jeden Morgen „Schultasche“, weil sie auf die Tasche für morgen schaute. An Tagen, an denen alle Stunden ausfallen, kommt sie nicht mehr.

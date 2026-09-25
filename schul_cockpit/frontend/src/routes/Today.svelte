@@ -91,8 +91,9 @@
         <!-- Unscharf oder abgeschnitten: ein neues Foto statt Gegenlesen durch die Eltern (D165). -->
         <h4 data-section="fotos">Bitte noch einmal fotografieren</h4>
         {#each data.retakes as r (r.id)}
-          <p class="photo-request"><strong>{r.title}</strong> <span class="muted">· {r.reason}</span>
-            <a href="#/materialien">neu fotografieren</a></p>
+          <p class="photo-request"><strong>{r.source_page ? `${r.source_label || 'Buch'} S. ${r.source_page}` : r.title}</strong>
+            {#if r.spot}<span>· „{r.spot}“</span>{/if} <span class="muted">· {r.reason}</span>
+            <a href="#/materialien?s=fotos">neu fotografieren</a></p>
         {/each}
       {/if}
       {#if data?.photo_requests?.length}

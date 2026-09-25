@@ -267,7 +267,6 @@ def links(conn, material_id: int) -> list[dict]:
 # Verzeichnis Kapitel. Was daraus wird, hängt an jedem gelesenen Zeichen, und
 # Handschrift liest das Modell nicht sicher („70" statt „10"). Solche
 # Materialien bitten um ein Gegenlesen, bis ein Elternteil sie bestätigt.
-REVIEW_KINDS = ("exam_notice", "toc")
 REVIEW_CONFIDENCE = 0.7
 
 
@@ -299,6 +298,38 @@ _IPA_REASON = re.compile(r"lautschrift|\bipa\b|betonung|aussprachezeichen|phonet
 _TYPO_REASON = re.compile(r"bindestrich|satzzeichen|leerzeichen|abstände|zeilenumbruch|ausrufezeichen|komma\b", re.I)
 
 
+# Belangloses: Bildnachweise, Fußnotenzeichen, Auslassungspunkte im Original.
+# Oft schreibt die Lesung selbst dazu, dass es für die Aufgabe keine Rolle spielt.
+_IRRELEVANT_REASON = re.compile(r"foto-?credit|bildnachweis|bildquelle|bildrechte|bildunterschrift|quellenangabe|"
+                                r"copyright|©|fu(?:ß|ss)note|auslassungspunkte|nicht relevant|irrelevant|unwichtig|belanglos",
+                                re.I)
+# Angeschnitten heißt: Ein Teil der Seite fehlt im Foto, das liest niemand nach.
+_CUT_REASON = re.compile(r"abgeschnitten|angeschnitten|au(?:ß|ss)erhalb des (?:fotos|bildes)|nicht (?:im|auf dem) (?:foto|bild)", re.I)
+
+
+def _irrelevant(d: dict) -> bool:
+    return bool(_IRRELEVANT_REASON.search(f"{d.get('reason') or ''} {d.get('text') or ''}"))
+
+
+def _settled(d: dict, page_type: str = "") -> bool:
+    """Die Lesung nennt eine plausible andere Lesart, und die zwei unterscheiden
+    sich nicht in Zahlen. Ob „Um“ oder „Zum“, „ihrem“ oder „ihrer“ im Fließtext:
+    Das ändert am Lernen nichts, niemand muss dafür gegenlesen oder neu
+    fotografieren. Bei Zahlen (Seiten, Brüche, Jahreszahlen) bleibt es ein
+    Zweifel, ebenso in Listen und Tabellen: Auf einer Vokabelliste ist das
+    einzelne Wort der Stoff."""
+    if page_type == "table":
+        return False
+    alt = (d.get("alternative") or "").strip()
+    if not alt or "[…]" in alt or "..." in alt:
+        return False
+    return re.findall(r"\d+", d.get("text") or "") == re.findall(r"\d+", alt)
+
+
+def _open(d: dict, page_type: str = "") -> bool:
+    return not _irrelevant(d) and not _settled(d, page_type)
+
+
 def _only_brackets_differ(d: dict) -> bool:
     """Die zwei Lesarten unterscheiden sich nur in der Lautschrift in eckigen
     Klammern (oder gar nicht, von Zeichen abgesehen)."""
@@ -326,7 +357,14 @@ _PUPIL_REASON = re.compile(r"eingetragen|eintragung|ausgefüllt|ergebnisfeld|lö
 PRINTED_KINDS = ("book_page", "workbook", "worksheet")
 
 
-def review_doubts(doubts: list[dict], kind: str = "") -> list[dict]:
+def _pupil_doubt(d: dict, kind: str) -> bool:
+    """Der Zweifel betrifft eine Eintragung des Kindes (oder der Lehrkraft) auf
+    einer gedruckten Seite: Die prüft die Kontrolle am Foto (D165)."""
+    return bool(proofread.PUPIL.search(d.get("text") or "")
+                or (kind in PRINTED_KINDS and _PUPIL_REASON.search(d.get("reason") or "")))
+
+
+def review_doubts(doubts: list[dict], kind: str = "", page_type: str = "") -> list[dict]:
     """Die Zweifel, die wirklich ein Elternteil brauchen."""
     return [d for d in doubts
             if not _IPA_REASON.search(d.get("reason") or "")
@@ -334,27 +372,43 @@ def review_doubts(doubts: list[dict], kind: str = "") -> list[dict]:
             and not _only_brackets_differ(d)
             and not proofread.PUPIL.search(d.get("text") or "")
             and not (kind in PRINTED_KINDS and _PUPIL_REASON.search(d.get("reason") or ""))
-            and not _photo_doubt(d)]
+            and not _photo_doubt(d)
+            and _open(d, page_type)]
 
 
 def retake_reason(row) -> str:
     """Warum das Kind die Seite noch einmal fotografieren soll; leer, wenn nicht.
     Nur bei einer Lesung, der das Foto im Weg stand: eine unscharfe Seite, die
     trotzdem sauber gelesen wurde, braucht kein neues Foto."""
+    return retake_doubt(row)[0]
+
+
+def retake_spot(row) -> str:
+    """Die Stelle, um die es geht, so wie sie gelesen wurde: Damit findet man sie
+    auf der Seite, ohne raten zu müssen."""
+    return retake_doubt(row)[1]
+
+
+def retake_doubt(row) -> tuple[str, str]:
     keys = row.keys() if hasattr(row, "keys") else row
-    if (row["origin"] if "origin" in keys else "") == "book_fetch" or row["kind"] in REVIEW_KINDS:
-        return ""
+    if (row["origin"] if "origin" in keys else "") == "book_fetch":
+        return "", ""
     if row["analysis_state"] != "ready" or row["verified"] or ("hidden" in keys and row["hidden"]):
-        return ""
+        return "", ""
     doubts = doubts_of(row)
-    photo = [d for d in doubts if _photo_doubt(d)]
-    if photo:
-        return photo[0]["reason"]
+    # Eine einzelne unsichere Stelle ist kein neues Foto wert; ein Stück Seite,
+    # das im Foto fehlt, oder mehrere ungelöste Stellen schon.
+    page_type = (row["page_type"] if "page_type" in keys else "") or ""
+    photo = [d for d in doubts if _photo_doubt(d) and _open(d, page_type) and not _pupil_doubt(d, row["kind"])]
+    cut = [d for d in photo if _CUT_REASON.search(d.get("reason") or "")]
+    if cut or len(photo) >= 2:
+        first = (cut or photo)[0]
+        return first["reason"], (first.get("text") or "").strip()[:160]
     text = proofread.PUPIL.sub("", (row["content_text"] if "content_text" in keys else "") or "")
     sharp = row["sharpness"] if "sharpness" in keys else None
-    if sharp is not None and sharp < BLURRY_BELOW and (review_doubts(doubts, row["kind"]) or proofread.UNREADABLE.search(text)):
-        return "Das Foto ist unscharf; einige Stellen ließen sich nicht sicher lesen."
-    return ""
+    if sharp is not None and sharp < BLURRY_BELOW and (review_doubts(doubts, row["kind"], page_type) or proofread.UNREADABLE.search(text)):
+        return "Das Foto ist unscharf; einige Stellen ließen sich nicht sicher lesen.", ""
+    return "", ""
 
 
 def needs_review(row) -> bool:
@@ -363,8 +417,11 @@ def needs_review(row) -> bool:
         return False
     if row["analysis_state"] != "ready" or row["verified"]:
         return False
-    if row["kind"] in REVIEW_KINDS:
-        return True
+    # Themenzettel und Inhaltsverzeichnisse gelten wie jede Seite: Ein Zettel,
+    # dessen Seiten der Unterricht nicht kennt, kommt über die Prüfung gegen den
+    # Unterricht dazu (call_for_review), ein Verzeichnis mit echten Zweifeln
+    # über diese. Ein ganzes Verzeichnis Zeile für Zeile nachzulesen machte
+    # mehr Fehler, als es fand (D167).
     # Braucht die Seite ein neues Foto, ist das eine Bitte an das Kind, nicht an
     # die Eltern (D165).
     if retake_reason(row):
@@ -376,18 +433,27 @@ def needs_review(row) -> bool:
     # kostet jetzt keinen Blick mehr, eine unleserliche Stelle schon: Sie ist
     # das Eingeständnis, nicht gelesen zu haben.
     doubts = doubts_of(row)
-    if review_doubts(doubts, row["kind"]):
-        return True
-    # Eine unleserliche Stelle in der Eintragung des Kindes zählt nicht (D165).
-    text = proofread.PUPIL.sub("", (row["content_text"] if "content_text" in keys else "") or "")
-    if proofread.UNREADABLE.search(text):
+    if review_doubts(doubts, row["kind"], (row["page_type"] if "page_type" in keys else "") or ""):
         return True
     # Nennt die Lesung ihre Zweifel und keiner davon braucht einen Blick, ist
     # die niedrige Gesamtsicherheit durch eben diese Stellen erklärt (D165).
     if doubts:
         return False
     confidence = row["confidence"] if "confidence" in keys else None
-    return confidence is not None and confidence < REVIEW_CONFIDENCE
+    low = confidence is not None and confidence < REVIEW_CONFIDENCE
+    # Eine unleserliche Stelle in der Eintragung des Kindes zählt nicht (D165).
+    # „[…]“ ohne einen einzigen genannten Zweifel bei sicherer Lesung ist eine
+    # gedruckte Lücke, die das Modell so geschrieben hat, keine unleserliche
+    # Stelle: Jede unleserliche soll es als Zweifel melden (D167).
+    text = proofread.PUPIL.sub("", (row["content_text"] if "content_text" in keys else "") or "")
+    if proofread.UNREADABLE.search(text):
+        return low
+    # Niedrige Sicherheit ohne genannten Zweifel auf einer gedruckten Seite mit
+    # Eintragungen des Kindes kommt von der Handschrift, und die liest die
+    # Kontrolle am Foto. Im Heftaufschrieb ist die Handschrift der Stoff.
+    pupil = ("pupil_entries" in keys and row["pupil_entries"]) or \
+        (row["kind"] in PRINTED_KINDS and "handwritten" in keys and row["handwritten"])
+    return low and not pupil
 
 
 def _public(row, with_links=None) -> dict:
@@ -395,7 +461,7 @@ def _public(row, with_links=None) -> dict:
     result["has_file"] = bool(row["filename"])
     result["locked_fields"] = json.loads(row["locked_fields"] or "[]")
     result["needs_review"] = needs_review(row)
-    result["retake"] = retake_reason(row)
+    result["retake"], result["retake_spot"] = retake_doubt(row)
     # Die gedruckte Seite ohne die Eintragungen des Kindes: So schlägt das Kind
     # im Lernraum dieselbe Seite auf, die der Mentor als Grundlage hat (D101).
     keys = row.keys()
@@ -406,7 +472,8 @@ def _public(row, with_links=None) -> dict:
     if "doubts" in keys:
         result["doubts"] = doubts_of(row)
     if result["needs_review"] and "content_text" in keys:
-        result["review"] = proofread.view(row["content_text"] or "", review_doubts(result.get("doubts") or [], row["kind"]))
+        result["review"] = proofread.view(row["content_text"] or "", review_doubts(result.get("doubts") or [], row["kind"],
+                                                                                  result.get("page_type") or ""))
     result["blurry"] = bool("sharpness" in keys and row["sharpness"] is not None and row["sharpness"] < BLURRY_BELOW)
     if with_links is not None:
         result["links"] = with_links
@@ -482,7 +549,7 @@ def retakes(account_id: int, days: int = 30, limit: int = 3) -> list[dict]:
     with closing(webapp_conn()) as conn:
         rows = conn.execute(
             "SELECT id,kind,subject_name,title,origin,analysis_state,verified,hidden,doubts,sharpness,content_text,"
-            "source_label,source_page FROM materials WHERE account_id=? AND hidden=0 AND verified=0 "
+            "page_type,source_label,source_page FROM materials WHERE account_id=? AND hidden=0 AND verified=0 "
             "AND analysis_state='ready' AND COALESCE(origin,'')!='book_fetch' AND substr(created_at,1,10)>=? "
             "AND (COALESCE(doubts,'') NOT IN ('','[]') OR sharpness<?) ORDER BY created_at DESC, id DESC LIMIT 40",
             (account_id, since_iso, BLURRY_BELOW)).fetchall()
@@ -491,6 +558,7 @@ def retakes(account_id: int, days: int = 30, limit: int = 3) -> list[dict]:
         why = retake_reason(r)
         if why:
             out.append({"id": r["id"], "title": r["title"] or "Ohne Titel", "subject_name": r["subject_name"],
+                        "spot": retake_spot(r),
                         "kind": r["kind"], "source_label": r["source_label"], "source_page": r["source_page"],
                         "reason": why})
         if len(out) >= limit:

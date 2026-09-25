@@ -1387,9 +1387,28 @@ def label_or_book(link: dict) -> str:
     return (link.get("part_label") or "").strip() or "Schulbuch"
 
 
+def _notice_checked(notice: dict) -> bool:
+    """Braucht der Zettel keinen Blick? Bestätigt, oder sauber gelesen und jede
+    genannte Seite ist aus dem Unterricht bekannt (D167). Ein ganzer Zettel wird
+    nicht mehr aus Prinzip vorgelegt."""
+    if notice["verified"]:
+        return True
+    from . import materials as store, notice_check
+    with closing(webapp_conn()) as conn:
+        row = conn.execute("SELECT * FROM materials WHERE id=?", (notice["id"],)).fetchone()
+    if not row or store.needs_review(row):
+        return False
+    try:
+        found = notice_check.checker(row["account_id"])(dict(row))
+    except Exception:
+        log.debug("Zettel %s nicht gegen den Unterricht prüfbar", notice["id"], exc_info=True)
+        return True
+    return not (found or {}).get("unknown")
+
+
 def _notice_summary(notices: list[dict]) -> dict:
     if not notices:
         return {}
     newest = max(notices, key=lambda n: n["date"])
     return {"notice_id": newest["id"], "notice_text": newest["text"][:300],
-            "notice_verified": all(n["verified"] for n in notices)}
+            "notice_verified": all(_notice_checked(n) for n in notices)}
