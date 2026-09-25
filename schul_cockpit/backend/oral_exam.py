@@ -168,6 +168,11 @@ def topic_ready(account_id: int, exam_key: str, topic_id: int) -> bool:
     return len(runs) == READY_RUNS and all(s["lowest"] >= READY_SCORE for s in runs)
 
 
+def measured(account_id: int, exam_key: str) -> bool:
+    """Gab es schon eine verlässliche Probe? Sonst kommt zuerst der Einstiegstest (D195)."""
+    return any(s["reliable"] for s in sims(account_id, exam_key, 20))
+
+
 def full_ready(account_id: int, exam_key: str) -> bool:
     runs = [s for s in sims(account_id, exam_key, 20) if s["reliable"] and s["full"]][:1]
     return bool(runs) and runs[0]["lowest"] >= READY_SCORE and not runs[0]["weak_spots"]

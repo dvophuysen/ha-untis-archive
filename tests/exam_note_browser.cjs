@@ -37,7 +37,7 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  assert.deepEqual(p.off,['topic:5'],'abgewählte Referenz gespeichert');
  await p.page.getByText(/Grammatik 2/).waitFor();await p.page.getByText('Baustellen: has statt have').waitFor();
  await p.page.getByRole('button',{name:'zu streng'}).click();await p.page.waitForFunction(()=>document.querySelector('.feel.active')?.textContent==='zu streng');assert.equal(p.verdict,'streng');
- assert.equal(await p.page.locator('a[href^="#/learning?oral="]').count(),3,'Gesamtprobe und je Thema eine');
+ assert.equal(await p.page.locator('a[href^="#/learning?oral="]').count(),3,'Gesamtprobe und je Thema eine');await p.page.getByRole('link',{name:/Gesamtprobe/}).waitFor();
  assert.deepEqual(p.posted[1][1],{exam_key:'k1',subject:'ENGLISCH',title:'Meine Familie',detail:'Personen beschreiben'});
  await p.page.getByText(/2 Sprechthemen eingetragen/).waitFor();
  assert.equal(await p.page.getByText('Übungsarbeit wie in echt').count(),0,'kein Papierweg bei der Sprechprüfung');

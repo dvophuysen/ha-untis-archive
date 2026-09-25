@@ -518,7 +518,7 @@ async def start_oral(account_id,body,user):
         if body.topic_id:
             topic=c.execute('SELECT * FROM exam_topics WHERE id=? AND account_id=? AND exam_key=?',(body.topic_id,account_id,key)).fetchone()
             if not topic:raise HTTPException(404,'Thema nicht gefunden.')
-        subject=topic['subject'] if topic else (c.execute("SELECT subject FROM exam_topics WHERE account_id=? AND exam_key=? AND stale=0 LIMIT 1",(account_id,key)).fetchone() or [None])[0]
+        subject=topic['subject'] if topic else (c.execute("SELECT subject FROM exam_topics WHERE account_id=? AND exam_key=? ORDER BY stale LIMIT 1",(account_id,key)).fetchone() or [None])[0]
         if not subject:raise HTTPException(422,'Zu dieser Arbeit fehlen noch die Sprechthemen.')
         for r in c.execute("SELECT * FROM mentor_sessions WHERE account_id=? AND is_demo=0 AND status='active' AND json_extract(source_json,'$.mode')='oral' "
                            "AND json_extract(source_json,'$.exam_key')=? ORDER BY id DESC",(account_id,key)).fetchall():

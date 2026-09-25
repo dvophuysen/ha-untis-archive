@@ -365,13 +365,12 @@ def ensure_assumed_topics(account_id: int, exam_key: str, subject: str | None, s
         c.execute("BEGIN IMMEDIATE")
         has_notice = c.execute("SELECT 1 FROM exam_topics WHERE account_id=? AND exam_key=? AND origin='notice' AND stale=0 LIMIT 1",
                                (account_id, exam_key)).fetchone()
-        # Bei einer Sprechprüfung sind die von Eltern eingetragenen Sprechthemen
-        # die Liste; der Grammatikstoff aus dem Unterricht tritt zurück (D193).
+        # Bei einer Sprechprüfung ist der Stoff aus dem Unterricht Maßstab, kein
+        # eigenes Sprechthema: Die Themen werden angelegt, treten aber gleich zurück
+        # und stehen als Referenz zum Ankreuzen bereit (D193, D195).
         from .exam_meta import oral
-        spoken = oral(account_id, exam_key) and c.execute(
-            "SELECT 1 FROM exam_topics WHERE account_id=? AND exam_key=? AND origin='manual' AND stale=0 LIMIT 1",
-            (account_id, exam_key)).fetchone()
-        if has_notice or spoken:
+        spoken = oral(account_id, exam_key)
+        if has_notice:
             c.execute("UPDATE exam_topics SET stale=1,updated_at=? WHERE account_id=? AND exam_key=? AND origin='assumed' AND stale=0",
                       (now_iso(), account_id, exam_key))
             return
@@ -409,6 +408,9 @@ def ensure_assumed_topics(account_id: int, exam_key: str, subject: str | None, s
                       (account_id, subject, exam_key, pos, title, (t.get("field") or "")[:400], places_json, now_iso(), now_iso()))
             pos += 1
             existing[title.casefold()] = (c.execute("SELECT last_insert_rowid()").fetchone()[0], "assumed")
+        if spoken:
+            c.execute("UPDATE exam_topics SET stale=1,updated_at=? WHERE account_id=? AND exam_key=? AND origin='assumed' AND stale=0",
+                      (now_iso(), account_id, exam_key))
         # Angenommene Themen, die der Unterricht nicht mehr hergibt, ohne Antworten: weg.
         titles = {(t.get("title") or "").strip().casefold() for t in scope["topics"]}
         for r in c.execute("SELECT id,title FROM exam_topics WHERE account_id=? AND exam_key=? AND origin='assumed'", (account_id, exam_key)).fetchall():

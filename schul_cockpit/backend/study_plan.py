@@ -66,7 +66,7 @@ def _exams(account_id: int, day: date) -> list[dict]:
             rows = c.execute(
                 "SELECT d.exam_key, d.exam_date, "
                 "(SELECT subject FROM exam_topics t WHERE t.account_id=d.account_id AND t.exam_key=d.exam_key "
-                " AND t.stale=0 LIMIT 1) AS subject "
+                " ORDER BY t.stale LIMIT 1) AS subject "
                 "FROM exam_dates d WHERE d.account_id=? AND substr(d.exam_date,1,10)>? AND substr(d.exam_date,1,10)<=? "
                 "ORDER BY d.exam_date", (account_id, day.isoformat(), last.isoformat())).fetchall()
     except Exception:
@@ -119,13 +119,46 @@ def _stable(key: str) -> int:
     return sum(ord(ch) * (i + 1) for i, ch in enumerate(key))
 
 
+def oral_step(exam: dict, subject: str, when: str) -> dict:
+    """Der Einstiegstest einer Sprechprüfung: eine Gesamtprobe, die zeigt, wo das Kind steht (D195)."""
+    return {"subject": subject, "exam_key": exam["exam_key"], "exam_date": exam["exam_date"], "level": None,
+            "key": f"oral:{exam['exam_key']}:einstieg", "kind": "oral", "format": "einstieg", "topic_id": None,
+            "title": f"Einstiegstest Sprechprüfung {subject}", "href": f"#/learning?oral={quote(exam['exam_key'], safe='')}",
+            "why": f"Ein Gespräch wie in der Sprechprüfung am {when}, mit Bewertung. Zeigt, woran du noch arbeiten solltest."}
+
+
+def _convert_oral(account_id: int, steps: list[dict], day: date) -> list[dict]:
+    """Ist eine Arbeit nachträglich als Sprechprüfung erkannt, verschwinden ihre
+    schriftlichen Schritte aus dem festgehaltenen Tag, und ihr Einstiegstest wird
+    zum Einstiegstest Sprechprüfung (D195). Die Liste wird dabei nicht länger."""
+    from .exam_meta import oral
+    from .subject_names import label as subject_label
+    known: dict[str, bool] = {}
+    out = []
+    for s in steps:
+        key = s.get("exam_key")
+        if key and s.get("kind") in ("paper", "dialog"):
+            if key not in known:
+                known[key] = oral(account_id, key)
+            if known[key]:
+                if s.get("format") == "einstieg" and not any(x.get("key") == f"oral:{key}:einstieg" for x in steps):
+                    subject = s.get("subject") or ""
+                    out.append(oral_step({"exam_key": key, "exam_date": s.get("exam_date") or day.isoformat()},
+                                         subject_label(subject) or subject, _de(s.get("exam_date") or day.isoformat())))
+                continue
+        out.append(s)
+    return out
+
+
 def exam_plan(account_id: int, exam: dict, day: date, school: list[date]) -> dict | None:
     """Was diese Arbeit noch braucht, wie viele Lerntage bis zum Puffer bleiben
     und welche Schritte davon heute dran sind."""
     exam_day = date.fromisoformat(exam["exam_date"])
     r = practice.raster(account_id, exam["exam_key"])
     rows, total, ready = r["topics"], r["total"], r["ready"]
-    if not total:
+    from .exam_meta import oral
+    spoken = oral(account_id, exam["exam_key"])
+    if not total and not spoken:
         return None
     from .subject_names import label as subject_label
     subject, when = subject_label(exam["subject"]) or exam["subject"], _de(exam["exam_date"])
@@ -142,21 +175,26 @@ def exam_plan(account_id: int, exam: dict, day: date, school: list[date]) -> dic
                 "why": f"Das Thema sitzt noch nicht sicher. Drei Aufgaben mit dem Lernbegleiter, Arbeit am {when}"}
 
     seq: list[dict] = []
-    from .exam_meta import oral
-    spoken = oral(account_id, exam["exam_key"])
     if spoken:
-        # Sprechprüfung (D193, D194): Sprechproben mit dem Lernbegleiter als Prüfer,
-        # je Thema, dann eine Gesamtprobe; kein Papier. Fertig ist ein Thema, wenn
-        # die letzten zwei Proben in jedem Kriterium mindestens 3 von 4 haben.
+        # Sprechprüfung (D193, D194, D195): zuerst ein Einstiegstest als Gesamtprobe,
+        # danach Sprechproben je eingetragenem Sprechthema und eine Gesamtprobe; kein
+        # Papier. Grammatik und Themen aus dem Unterricht sind Maßstab, keine eigenen
+        # Schritte. Fertig ist ein Thema, wenn die letzten zwei Proben in jedem
+        # Kriterium mindestens 3 von 4 haben.
         from . import oral_exam
         q = quote(exam["exam_key"], safe="")
+        if not oral_exam.measured(account_id, exam["exam_key"]):
+            seq.append(oral_step(exam, subject, when))
+            rows = []
         for t in rows:
             if not oral_exam.topic_ready(account_id, exam["exam_key"], t["id"]):
                 seq.append({**base, "key": f"oral:{exam['exam_key']}:{t['id']}", "kind": "oral", "format": None, "topic_id": t["id"],
                             "title": f"Sprechprobe {subject}: {t['title']}", "href": f"#/learning?oral={q}&topic_id={t['id']}",
                             "why": f"Sprechprüfung am {when}. Ein kurzes Gespräch mit dem Lernbegleiter als Prüfer; am Ende "
                                    "bekommst du eine Bewertung und Tipps."})
-        if not oral_exam.full_ready(account_id, exam["exam_key"]):
+        if seq and seq[0]["format"] == "einstieg":
+            pass  # Erst messen, dann planen: Der Einstiegstest steht allein.
+        elif not oral_exam.full_ready(account_id, exam["exam_key"]):
             seq.append({**base, "key": f"oral:{exam['exam_key']}:full", "kind": "oral", "format": None,
                         "title": f"Gesamtprobe {subject}", "href": f"#/learning?oral={q}",
                         "why": f"Alle Themen wie in der echten Sprechprüfung am {when}, mit Bewertung am Ende."})
@@ -383,6 +421,10 @@ def mark_done(account_id: int, steps: list[dict], day: date, until: date | None 
     """Jeden Schritt live prüfen. Zählt ab dem Plantag bis ``until``: Wer einen
     Tag rettet (D172), holt den Schritt am nächsten Morgen nach."""
     first, last = day.isoformat(), (until or day).isoformat()
+    try:
+        steps = _convert_oral(account_id, steps, day)
+    except Exception:
+        LOG.debug("Sprechprüfung im Tagesplan nicht umstellbar", exc_info=True)
     vocab = None
     out = []
     papers: dict[str, int] = {}

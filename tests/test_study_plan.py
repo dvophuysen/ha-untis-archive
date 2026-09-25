@@ -351,11 +351,11 @@ def test_speaking_exam_is_practised_in_conversation_and_old_paper_steps_go(world
     frozen = sp.ensure(1, MON)
     assert frozen[0]["format"] == "einstieg"
     exam_meta.remember(1, "en", "Sprechprüfung Englisch Jg.6")
-    assert seq("en") == [("oral", None), ("oral", None), ("oral", None)], "zwei Themenproben, eine Gesamtprobe (D194)"
+    assert seq("en") == [("oral", "einstieg")], "zuerst der Einstiegstest Sprechprüfung (D195)"
     view = sp.view(1, MON, store=True)
-    papers = [s for s in view["steps"] if s["kind"] == "paper"]
-    assert papers and all(s["done"] and s["skipped"] for s in papers)
-    assert not any(s["waiting"] for s in view["steps"]), "kein Einstiegstest, auf den gewartet wird"
+    assert [(s["kind"], s["format"], s["title"]) for s in view["steps"]] == [("oral", "einstieg", "Einstiegstest Sprechprüfung Englisch")], \
+        "schriftliche Schritte verschwinden, der Einstiegstest wird umgestellt"
+    assert view["total"] == 1 and sp.open_count(1, MON) == 1
 
 
 def test_speaking_exam_plans_simulations_with_a_one_day_buffer(world):
@@ -366,13 +366,30 @@ def test_speaking_exam_plans_simulations_with_a_one_day_buffer(world):
     ids = exam("en", "Englisch", MON + timedelta(days=3), ["Meine Familie", "Hobbys"])
     exam_meta.remember(1, "en", "Sprechprüfung Englisch")
     p = next(p for p in sp.plans(1, MON) if p["exam_key"] == "en")
-    assert [(x["kind"], x["topic_id"]) for x in p["sequence"]] == [("oral", ids[0]), ("oral", ids[1]), ("oral", None)]
+    assert [(x["kind"], x["format"], x["topic_id"]) for x in p["sequence"]] == [("oral", "einstieg", None)]
     assert p["days"] == 2, "Donnerstag Prüfung, Mittwoch Puffer: Montag und Dienstag"
     steps = sp.ensure(1, MON)
-    assert steps[0]["href"] == f"#/learning?oral=en&topic_id={ids[0]}" and steps[0]["title"] == "Sprechprobe Englisch: Meine Familie"
-    good = _json.dumps([{"criterion": "aufgabe", "score": 3, "evidence": "x"}])
+    assert steps[0]["href"] == "#/learning?oral=en" and steps[0]["title"] == "Einstiegstest Sprechprüfung Englisch"
+    good = _json.dumps([{"criterion": "aufgabe", "score": 2, "evidence": "x"}])
     with closing(db.webapp_conn()) as c, c:
-        c.execute("INSERT INTO oral_sims(account_id,exam_key,topic_id,full,session_id,created_at,scores_json,reliable) VALUES(1,'en',?,0,1,?,?,1)",
-                  (ids[0], at(MON, 16).isoformat(), good))
+        c.execute("INSERT INTO oral_sims(account_id,exam_key,topic_id,full,session_id,created_at,scores_json,reliable) VALUES(1,'en',NULL,1,1,?,?,1)",
+                  (at(MON, 16).isoformat(), good))
     view = sp.view(1, MON, store=True)
     assert view["steps"][0]["done"] and not view["steps"][0].get("skipped")
+    # Danach: je Sprechthema eine Probe und eine Gesamtprobe.
+    p = next(p for p in sp.plans(1, MON) if p["exam_key"] == "en")
+    assert [(x["kind"], x["topic_id"]) for x in p["sequence"]] == [("oral", ids[0]), ("oral", ids[1]), ("oral", None)]
+    assert p["sequence"][0]["title"] == "Sprechprobe Englisch: Meine Familie"
+
+
+def test_speaking_exam_without_own_topics_uses_the_taught_grammar_only_as_reference(world):
+    """D195: Ohne eingetragene Sprechthemen treten die Themen aus dem Unterricht
+    zurück; der Plan kennt die Prüfung trotzdem und beginnt mit dem Einstiegstest."""
+    from backend import exam_meta, lernstand
+    exam_meta.remember(1, "en", "Sprechprüfung Englisch")
+    mentor_opening.remember_exam(1, "en", (MON + timedelta(days=3)).isoformat())
+    scope = {"topics": [{"title": "Simple past", "field": "Vergangenheit", "lesson_ids": []}]}
+    lernstand.ensure_assumed_topics(1, "en", "Englisch", scope)
+    with closing(db.webapp_conn()) as c:
+        assert [tuple(r) for r in c.execute("SELECT title,origin,stale FROM exam_topics WHERE exam_key='en'")] == [("Simple past", "assumed", 1)]
+    assert seq("en") == [("oral", "einstieg")]
