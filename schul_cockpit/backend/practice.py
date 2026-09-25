@@ -61,9 +61,12 @@ def cell(answers: list[dict]) -> dict:
     got = sum(r[0] for _, r in rows)
     most = sum(r[1] for _, r in rows)
     ratio = got / most if most else 0.0
+    # Volle Punkte im Einstiegstest zählen wie zwei Aufgaben (D192): Das
+    # Einstufen kalibriert den Plan, die Probearbeit prüft am Ende nach.
+    entry = len(rows) == 1 and rows[0][0].get("paper_format") == "einstieg" and ratio >= 1.0
     if ratio < NEAR:
         state = "unsicher"
-    elif ratio < SURE or len(rows) < 2:
+    elif ratio < SURE or (len(rows) < 2 and not entry):
         state = "fast"
     elif any(a.get("paper_format") == "probe" for a, _ in rows):
         state = "bestaetigt"

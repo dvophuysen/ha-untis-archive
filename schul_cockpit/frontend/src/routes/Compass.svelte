@@ -142,10 +142,11 @@
       {#if plan.outlook}<p class="hint">{plan.outlook}</p>{/if}
       <div class="list">
         {#each plan.steps as s (s.key)}
-          <div class="step" class:done={s.done}>
+          <div class="step" class:done={s.done} class:waiting={s.waiting}>
             <span class="check" class:checked={s.done} aria-hidden="true">{s.done ? '✓' : ''}</span>
             <span class="body"><strong>{s.title}</strong><small>{s.why}</small></span>
-            {#if s.done}<span class="state">erledigt</span>
+            {#if s.done}<span class="state">{s.skipped ? 'entfällt' : 'erledigt'}</span>
+            {:else if s.waiting}<span class="state">wartet</span>
             {:else if s.attempt_id}<button class="primary go" onclick={() => startStep(s)}>{canGo ? 'Weiter' : 'Öffnen'}</button>
             {:else if canGo}<button class="primary go" disabled={!!stepBusy} onclick={() => startStep(s)}>{stepBusy === s.key ? 'Wird erstellt …' : 'Los'}</button>{/if}
           </div>
@@ -338,6 +339,7 @@
   .check { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border); display: grid; place-items: center; font-weight: 800; font-size: var(--fs-xs); }
   .check.checked { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
   .step.done .body strong { color: var(--fg-muted); }
+  .step.waiting { opacity: 0.7; }
   .state { font-size: var(--fs-xs); color: var(--good-fg); font-weight: 700; }
   .go { min-width: 64px; border-radius: var(--r-md); }
   .explain { margin-top: var(--sp-2); font-size: var(--fs-sm); }

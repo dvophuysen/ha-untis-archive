@@ -23,6 +23,10 @@ bleiben frei, solange die Schultage reichen (mehr als zwei Schritte am Tag je
 Arbeit gilt als nicht reichend); sonst zählen sie voll mit (D179). Die nächste
 Arbeit steht vorn. Grundpensum: an jedem Schultag mindestens ein Schritt, sonst
 aus dem Vokabelpensum oder zur jüngsten „nicht verstanden“-Rückmeldung.
+
+Der eingefrorene Tag darf schrumpfen, nie wachsen (D192): Was ein neuer Nachweis
+überflüssig macht, zählt als erledigt; bis der Einstiegstest einer Arbeit
+ausgewertet ist, warten ihre übrigen Schritte auf ihn.
 """
 from __future__ import annotations
 
@@ -386,7 +390,44 @@ def mark_done(account_id: int, steps: list[dict], day: date, until: date | None 
             except Exception:
                 LOG.debug("Lernschritt %s nicht prüfbar", s.get("key"), exc_info=True)
             out.append({**s, "done": done})
+    try:
+        _settle(account_id, out)
+    except Exception:
+        LOG.debug("Überholte Lernschritte nicht prüfbar", exc_info=True)
     return out
+
+
+def _settle(account_id: int, steps: list[dict]) -> None:
+    """Die Liste des Tages darf schrumpfen, nie wachsen (D192). Was ein neuer
+    Nachweis überflüssig gemacht hat, zählt als erledigt („nicht mehr nötig“);
+    steht der Einstiegstest einer Arbeit noch aus, warten ihre übrigen Schritte
+    auf ihn, weil er entscheidet, welche davon bleiben."""
+    rasters: dict[str, dict] = {}
+    with closing(webapp_conn()) as c:
+        for s in steps:
+            if s["done"] or not s.get("exam_key") or s["kind"] not in ("paper", "dialog"):
+                continue
+            if s["exam_key"] not in rasters:
+                rasters[s["exam_key"]] = {r["id"]: r for r in practice.raster(account_id, s["exam_key"])["topics"]}
+            rows = rasters[s["exam_key"]]
+            row = rows.get(s.get("topic_id"))
+            reason = ""
+            if s["kind"] == "dialog" and row:
+                if row["ready"]:
+                    reason = "Nicht mehr nötig: Das Thema sitzt schon."
+                elif row["cells"][str(row["target"])]["state"] == "fast" and not _last_was_dialog(c, account_id, row["id"]):
+                    reason = "Nicht mehr nötig: Das Thema ist fast sicher, der Kurztest reicht."
+            elif s["kind"] == "paper" and s.get("format") == "kurz" and row and row["ready"]:
+                reason = "Nicht mehr nötig: Das Thema sitzt schon."
+            elif s["kind"] == "paper" and s.get("format") == "probe" and rows and all(
+                    r["cells"]["2"]["state"] == "bestaetigt" for r in rows.values()):
+                reason = "Nicht mehr nötig: Alle Themen sind bestätigt."
+            if reason:
+                s.update(done=True, skipped=True, why=reason)
+    waiting = {s["exam_key"] for s in steps if s["kind"] == "paper" and s.get("format") == "einstieg" and not s["done"]}
+    for s in steps:
+        if s.get("exam_key") in waiting and not s["done"] and s.get("format") != "einstieg" and s["kind"] != "vocab":
+            s.update(waiting=True, why="Kommt nach dem Einstiegstest. Was er schon zeigt, fällt hier weg.")
 
 
 def open_count(account_id: int, day: date, until: date | None = None) -> int:
@@ -400,7 +441,7 @@ def open_count(account_id: int, day: date, until: date | None = None) -> int:
 # ------------------------------------------------------------------ Ansicht
 
 PUBLIC = ("key", "kind", "title", "why", "subject", "exam_key", "exam_date", "format", "topic_id", "level", "href",
-          "done", "tight", "attempt_id")
+          "done", "tight", "attempt_id", "skipped", "waiting")
 
 
 def _attach_papers(account_id: int, steps: list[dict], day: date) -> None:

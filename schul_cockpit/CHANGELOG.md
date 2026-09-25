@@ -1,3 +1,9 @@
+## 1.25.6
+
+- Der Einstiegstest zählt jetzt richtig: Was dort voll gelöst ist, gilt gleich als sicher, und die Übungsschritte zu diesem Thema entfallen. Die Probearbeit am Ende prüft nach.
+- Die Lernliste des Tages wird nur kürzer, nie länger: Überflüssig gewordene Schritte stehen als „entfällt“ da und zählen als erledigt.
+- Solange der Einstiegstest einer Arbeit aussteht, warten ihre übrigen Schritte auf ihn („wartet“), denn er entscheidet, welche davon bleiben.
+
 ## 1.25.5
 
 - Drucken klappt jetzt direkt in der App, auch auf dem iPhone mit Bildschirmzeit: Das Blatt öffnet sich in der App und lässt sich drucken oder teilen, ohne neue Anmeldung.

@@ -80,7 +80,7 @@
   const study = $derived(data?.study_plan ?? null);
   const learnSteps = $derived(study?.steps ?? []);
   const learnOpen = $derived(learnSteps.filter(s => !s.done).length);
-  const nextStep = $derived(learnSteps.find(s => !s.done) ?? null);
+  const nextStep = $derived(learnSteps.find(s => !s.done && !s.waiting) ?? null);
   const afterSchool = $derived(phase === 'nach' || phase === 'frei');
   const done = $derived(afterSchool && !!data && !!nextSchoolDay && !openTasks.length && !learnOpen && !!bag?.packed && !feedbackOpen);
   const nextTask = $derived(openTasks[0] ?? null);
@@ -322,10 +322,10 @@
         {#if tightText}<p class="learn-hint">{tightText}</p>{/if}
         <div class="list">
           {#each learnSteps as s (s.key)}
-            <div class="learn-step" class:done={s.done}>
+            <div class="learn-step" class:done={s.done} class:waiting={s.waiting}>
               <span class="learn-check" class:checked={s.done} aria-hidden="true">{s.done ? '✓' : ''}</span>
               <span class="learn-body"><strong>{s.title}</strong><small>{s.why}</small></span>
-              {#if s.done}<span class="learn-state">erledigt</span>{:else if s.attempt_id}<button class="primary learn-go" onclick={() => startStep(s)}>{study?.read_only ? 'Öffnen' : 'Weiter'}</button>{:else if !study?.read_only}<button class="primary learn-go" disabled={!!stepBusy} onclick={() => startStep(s)}>{stepBusy === s.key ? 'Wird erstellt …' : 'Los'}</button>{/if}
+              {#if s.done}<span class="learn-state">{s.skipped ? 'entfällt' : 'erledigt'}</span>{:else if s.waiting}<span class="learn-state">wartet</span>{:else if s.attempt_id}<button class="primary learn-go" onclick={() => startStep(s)}>{study?.read_only ? 'Öffnen' : 'Weiter'}</button>{:else if !study?.read_only}<button class="primary learn-go" disabled={!!stepBusy} onclick={() => startStep(s)}>{stepBusy === s.key ? 'Wird erstellt …' : 'Los'}</button>{/if}
             </div>
           {:else}<p class="all-clear">✓ Heute ist nichts zum Lernen Pflicht.</p>{/each}
         </div>
@@ -407,6 +407,7 @@
   .learn-body{display:grid;gap:2px;overflow-wrap:anywhere}
   .learn-body small{color:var(--fg-muted);font-size:var(--fs-xs)}
   .learn-step.done .learn-body strong{color:var(--fg-muted)}
+  .learn-step.waiting{opacity:.7}
   .learn-state{font-size:var(--fs-xs);color:var(--good-fg);font-weight:700}
   .learn-go{min-height:44px;min-width:64px}
   .done-card{text-align:center;justify-items:center;animation:rise .45s}

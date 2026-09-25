@@ -313,3 +313,31 @@ def test_open_paper_is_offered_again_even_when_only_reading(world):
                         "VALUES(1,?,2,'{}',?,'active',0)", (eid, at(MON, 15).isoformat())).lastrowid
     view = sp.view(1, MON, store=False)
     assert view["read_only"] and view["steps"][0]["format"] == "einstieg" and view["steps"][0]["attempt_id"] == aid
+
+
+def test_entry_test_calibrates_and_the_day_only_shrinks(world):
+    """D192: Solange der Einstiegstest aussteht, warten die übrigen Schritte der
+    Arbeit; danach entfällt, was er schon zeigt. Die Liste wächst nie."""
+    ids = exam("ma", "Mathematik", MON + timedelta(days=1), ["Terme", "Gleichungen"])
+    steps = sp.ensure(1, MON)
+    assert [(s["kind"], s["format"]) for s in steps] == [("paper", "einstieg"), ("dialog", None), ("paper", "kurz"),
+                                                         ("dialog", None), ("paper", "kurz"), ("paper", "probe")]
+    view = sp.view(1, MON, store=True)
+    assert [bool(s["waiting"]) for s in view["steps"]] == [False] + [True] * 5
+    assert view["total"] == 6 and view["done"] == 0
+    with closing(db.webapp_conn()) as c, c:
+        eid = c.execute("INSERT INTO mentor_exams(account_id,title,subject,scope_json,tasks_json,minutes,created_at,status,exam_key,paper_format) "
+                        "VALUES(1,'E','Mathematik','{}','[]',30,'t','published','ma','einstieg')").lastrowid
+        aid = c.execute("INSERT INTO mentor_exam_attempts(account_id,exam_id,user_id,snapshot,started_at,status,is_test,submitted_at) "
+                        "VALUES(1,?,2,'{}','t','graded',0,?)", (eid, at(MON, 16).isoformat())).lastrowid
+    for afb in (1, 2):
+        answer(ids[0], afb, 4, when=at(MON, 16), source="paper", fmt="einstieg", attempt=aid)
+        answer(ids[1], afb, 1, when=at(MON, 16), source="paper", fmt="einstieg", attempt=aid)
+    view = sp.view(1, MON, store=True)
+    got = [(s["format"], s["topic_id"], s["done"], bool(s["skipped"]), bool(s["waiting"])) for s in view["steps"]]
+    assert got == [("einstieg", None, True, False, False),
+                   (None, ids[0], True, True, False), ("kurz", ids[0], True, True, False),
+                   (None, ids[1], False, False, False), ("kurz", ids[1], False, False, False),
+                   ("probe", None, False, False, False)]
+    assert view["total"] == 6 and view["done"] == 3 and sp.open_count(1, MON) == 3
+    assert all(s["why"].startswith("Nicht mehr nötig") for s in view["steps"] if s["skipped"])
