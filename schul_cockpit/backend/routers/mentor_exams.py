@@ -208,7 +208,7 @@ def start(account_id:int,eid:int,user:CurrentUser=Depends(get_current_user)):
         pack={'title':r['title'],'subject':r['subject'],'minutes':r['minutes'],'scope':json.loads(r['scope_json']),'tasks':json.loads(r['tasks_json'])}
         c.execute('INSERT OR IGNORE INTO mentor_exam_attempts(account_id,exam_id,user_id,snapshot,active_since,started_at,is_test) VALUES(?,?,?,?,?,?,?)',(account_id,eid,user.id,json.dumps(pack,ensure_ascii=False),now_iso(),now_iso(),int(not acting_child(user))))
         row=c.execute('SELECT * FROM mentor_exam_attempts WHERE exam_id=? AND user_id=?',(eid,user.id)).fetchone()
-        return attempt_view(dict(row))
+        return shown(dict(row),user)
 
 
 @router.get('/attempts/{aid}')
