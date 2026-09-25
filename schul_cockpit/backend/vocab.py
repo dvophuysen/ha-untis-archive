@@ -21,6 +21,7 @@ from typing import Annotated
 from pydantic import ConfigDict, Field, ValidationError
 
 from .db import webapp_conn
+from .request_cache import memo
 from .material_analysis import ClippedStr, _clip
 from .learning import InputModel, now_iso, today_local
 from . import mentor_context as mc
@@ -1326,6 +1327,7 @@ def regroup(account_id: int, subject: str) -> int:
     return changed
 
 
+@memo
 def units(account_id: int, subject: str) -> list[dict]:
     """Je Lektion oder Unit: Seiten, Wörter und wie viele je Stufe sitzen."""
     from . import vocab_catalog

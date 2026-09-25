@@ -20,6 +20,7 @@ from __future__ import annotations
 from contextlib import closing
 
 from .db import webapp_conn
+from .request_cache import memo
 
 AFBS = (1, 2, 3)
 AFB_NAMES = {1: "Wiedergeben", 2: "Anwenden", 3: "Übertragen"}
@@ -110,6 +111,7 @@ def topics(account_id: int, exam_key: str) -> list[dict]:
     return [public(r) for r in rows if not is_vocab_topic(r) and f"topic:{r['id']}" not in off]
 
 
+@memo
 def raster(account_id: int, exam_key: str, until: str | None = None) -> dict:
     """Das Raster einer Arbeit. ``until`` (ISO-Tag) zählt nur Antworten bis
     einschließlich dieses Tages: der Stand zum Zeitpunkt der Arbeit."""

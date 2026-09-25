@@ -24,6 +24,7 @@ from contextlib import closing
 from datetime import date, timedelta
 
 from .db import webapp_conn
+from .request_cache import memo
 
 LOG = logging.getLogger("schul_cockpit.vocab_pensum")
 
@@ -91,6 +92,7 @@ def _unit_number(label: str) -> tuple[str, int] | None:
     return (m.group(1).casefold()[:3], int(m.group(2))) if m else None
 
 
+@memo
 def _homework_tests(account_id: int, day: date) -> list[dict]:
     """Offene Hausaufgaben, die einen Vokabeltest zu einer Lektion ankündigen.
     Termin: das Datum „am TT.MM.JJJJ“ im Text, sonst der Fälligkeitstag."""
@@ -303,6 +305,7 @@ def _base_entry(account_id: int, day: date) -> dict | None:
 
 # ------------------------------------------------------------------ Schnittstelle
 
+@memo
 def daily(account_id: int, day: date) -> list[dict]:
     """Das Vokabelpensum eines Tages, der nächste Test zuerst, höchstens zwei Einträge.
 

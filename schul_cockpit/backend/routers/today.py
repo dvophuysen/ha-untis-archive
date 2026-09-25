@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends
 
-from .. import day_close
+from .. import day_close, request_cache
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..courses import hidden_keys, lesson_is_hidden
 from ..learning import today_local
@@ -35,6 +35,12 @@ async def today(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     assert_account_access(user, account_id)
+    # Lernplan und Ausblick lesen Raster und Pensum mehrfach: einmal je Aufruf.
+    with request_cache.scope():
+        return await _today(account_id, user)
+
+
+async def _today(account_id: int, user) -> dict:
     today_date = today_local()
     today_iso = today_date.isoformat()
     conn = history_conn()

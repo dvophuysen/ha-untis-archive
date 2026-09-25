@@ -21,6 +21,7 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from .db import history_conn, webapp_conn
+from .request_cache import memo
 
 LOG = logging.getLogger("schul_cockpit.rewards")
 TZ = ZoneInfo("Europe/Berlin")
@@ -91,6 +92,7 @@ def acting_child(user) -> bool:
     return getattr(user, "role", None) == "child" or view_mode.current.get() == "child"
 
 
+@memo(shallow=True)  # die Stunden liest jeder Aufrufer nur
 def _lessons(account_id: int, first: date, last: date) -> list[dict]:
     from .courses import hidden_keys, lesson_is_hidden
     from .queries import lessons_in_range
