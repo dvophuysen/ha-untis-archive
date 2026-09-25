@@ -1287,3 +1287,22 @@ _MIGRATIONS.append(("reward_badges_002_celebrated", """
 ALTER TABLE reward_badges ADD COLUMN celebrated_at TEXT;
 UPDATE reward_badges SET celebrated_at=reached_at;
 """))
+
+# KI- und Materialpipeline: Wiederholungen mit Zähler statt ohne Ende, eine
+# Lesung zugleich je Material. Je Spalte eine eigene Migration, damit eine
+# schon vorhandene Spalte die übrigen nicht mitreißt.
+_MIGRATIONS.append(("opt_ki_001_figure_attempts",
+                    "ALTER TABLE material_figure_scans ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0"))
+_MIGRATIONS.append(("opt_ki_002_analysis_attempts",
+                    "ALTER TABLE materials ADD COLUMN analysis_attempts INTEGER NOT NULL DEFAULT 0"))
+_MIGRATIONS.append(("opt_ki_003_analysis_failed_at", "ALTER TABLE materials ADD COLUMN analysis_failed_at TEXT"))
+_MIGRATIONS.append(("opt_ki_004_analysis_claimed_at", "ALTER TABLE materials ADD COLUMN analysis_claimed_at TEXT"))
+# Bis 1.31.2 sperrte eine Abrechnung über der Reservierung alle KI-Aufrufe bis
+# zur Elternbestätigung. Steht die Sperre nur deshalb, wird sie gelöst: Im
+# Monat einer echten Anfangsbestätigung kann vor ihr kein Aufruf abgerechnet sein.
+_MIGRATIONS.append(("opt_ki_005_overrun_unlock", """
+UPDATE mentor_ai_config SET opening_confirmed=1
+WHERE opening_confirmed=0 AND EXISTS (
+ SELECT 1 FROM mentor_ai_calls c WHERE c.month=mentor_ai_config.opening_month
+ AND c.status='settled' AND c.charged_micro>c.reserved_micro);
+"""))

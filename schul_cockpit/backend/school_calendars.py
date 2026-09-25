@@ -123,6 +123,7 @@ async def sync(account_id: int, *, past_days: int = PAST_DAYS, ahead_days: int =
         today = date.today()
         start, end = today - timedelta(days=past_days), today + timedelta(days=ahead_days)
         total = 0
+        kept: list[int] = []
         live = {url: cid for url, cid in wanted.items() if url in ids}
         # Every plugin in one go: each fall back to the browser costs a session.
         plugins = {iserv_portal._window(url, start, end): cid
@@ -131,7 +132,15 @@ async def sync(account_id: int, *, past_days: int = PAST_DAYS, ahead_days: int =
             answers = await iserv_portal.portal_json(
                 row["portal_url"], row["username"], password, tuple(plugins))
             for full, calendar_id in plugins.items():
-                events = iserv_portal.parse_plugin(answers.get(full), start, end)
+                # Nur eine echte Liste, auch eine leere, ersetzt den Stand.
+                # Fehlt die Antwort (Fehlerstatus, leerer oder unlesbarer
+                # Text), bleiben die Termine stehen: Bis 1.31.2 löschte ein
+                # gestörter Abruf den ganzen Klausurplan im Fenster.
+                data = answers.get(full)
+                if not isinstance(data, list):
+                    kept.append(calendar_id)
+                    continue
+                events = iserv_portal.parse_plugin(data, start, end)
                 total += _store_events(account_id, calendar_id, events, start, end)
         for url, calendar_id in live.items():
             if iserv_portal.is_plugin(url):
@@ -146,7 +155,12 @@ async def sync(account_id: int, *, past_days: int = PAST_DAYS, ahead_days: int =
         raise IservCalendarError("Die Kalender konnten nicht gelesen werden") from None
     finally:
         password = ""
-    _record(account_id, "ready", None, len(found), total)
+    # Teilweise gelesen bleibt „ready“ (andere Zustände kennt die Anzeige
+    # nicht); der Fehlertext sagt, welcher Stand nicht erneuert wurde.
+    note = f"{len(kept)} Kalender nicht erreichbar, bisherige Termine bleiben" if kept else None
+    if kept:
+        _LOGGER.warning("Kalender-Plugins ohne Antwort, Stand behalten: %s", kept)
+    _record(account_id, "ready", note, len(found), total)
     return state(account_id)
 
 

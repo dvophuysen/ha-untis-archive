@@ -28,6 +28,7 @@ from . import material_analysis as analysis
 from . import sources
 from .db import webapp_conn
 from .learning import now_iso, today_local
+from .materials import printed_list
 from .textbook_browser import looks_blank
 from .textbook_context import book_and_credentials, fetch_pages, job_state, start_job
 
@@ -38,8 +39,11 @@ NIGHT_HOUR = 2
 # Seiten je Kind und Lauf. Der Erstlauf eines Schuljahresstarts liegt bei
 # etwa fünfzig Buchseiten; zwei Läufe, dann ist es die Differenz des Tages.
 PAGE_BUDGET = 40
-# Nach so vielen vergeblichen Abrufen gilt eine Seite als nicht lieferbar.
+# Nach so vielen vergeblichen Abrufen gilt eine Seite als nicht lieferbar,
+# aber nicht für immer: Nach ATTEMPTS_EXPIRE_DAYS ohne neuen Versuch verfallen
+# die Versuche, und die Seite wird wieder bestellt.
 MAX_ATTEMPTS = 3
+ATTEMPTS_EXPIRE_DAYS = 3
 # So viele Seiten schafft eine Browsersitzung zuverlässig in ihrem Zeitbudget
 # (gemessen: neun Seiten in rund 140 Sekunden, zehn liefen in die Grenze).
 PAGES_PER_SESSION = 9
@@ -222,6 +226,18 @@ async def analyze_page(account_id: int, material_id: int) -> dict | None:
     return dict(row) if row else None
 
 
+def expire_attempts(account_id: int) -> int:
+    """Alte Fehlversuche vergessen. Bis 1.31.2 blieb eine Seite nach drei
+    vergeblichen Abrufen für immer liegen, auch wenn nur die Anmeldung an
+    einem Tag gestört war."""
+    from datetime import timedelta
+    cutoff = (datetime.fromisoformat(now_iso()) - timedelta(days=ATTEMPTS_EXPIRE_DAYS)).isoformat()
+    with closing(webapp_conn()) as conn:
+        return conn.execute(
+            "UPDATE source_links SET attempts=0 WHERE account_id=? AND attempts>0 "
+            "AND julianday(updated_at)<julianday(?)", (account_id, cutoff)).rowcount
+
+
 def _bump(account_id: int, subject: str, page: int, detail: str | None = None) -> None:
     with closing(webapp_conn()) as conn, conn:
         conn.execute(
@@ -292,10 +308,7 @@ def spread_left(account_id: int, book_title: str) -> int | None:
             "AND source_book=? AND printed_pages IS NOT NULL", (account_id, book_title)).fetchall()
     seiten = []
     for row in rows:
-        try:
-            found = sorted(int(x) for x in json.loads(row[0] or "[]"))
-        except (ValueError, TypeError):
-            continue
+        found = sorted(printed_list(row[0]))
         if len(found) == 2 and found[1] == found[0] + 1:
             seiten.append(found[0] % 2)
     if len(seiten) < 3:
@@ -370,14 +383,20 @@ def _unread_pages(account_id: int, limit: int, priority: dict | None = None) -> 
     dringende zuerst."""
     with closing(webapp_conn()) as conn:
         rows = [dict(r) for r in conn.execute(
-            "SELECT id,subject_name,source_page FROM materials WHERE account_id=? AND origin='book_fetch' AND hidden=0 "
+            "SELECT id,subject_name,source_page,analysis_state,analysis_attempts,analysis_failed_at FROM materials "
+            "WHERE account_id=? AND origin='book_fetch' AND hidden=0 "
             "AND analysis_state IN ('pending','failed') ORDER BY id", (account_id,))]
+    # Eine gescheiterte Seite wartet ihre Pause ab und hat höchstens fünf
+    # Versuche; jeder ist ein bezahlter Aufruf.
+    rows = [r for r in rows if analysis.may_retry(r)]
     rows.sort(key=lambda r: _rank(priority, r["subject_name"] or "", r["source_page"] or 0, False))
     return [r["id"] for r in rows[:limit]]
 
 
 async def _collect(account_id: int, budget: int) -> dict:
     started = datetime.now()
+    # Vor dem Abgleich, damit eine wieder freie Seite gleich als offen gilt.
+    expire_attempts(account_id)
     sync = sources.sync_links(account_id)
     sources.refresh_status(account_id)
     summary = {"account_id": account_id, "links": sync["links"], "fetched": 0, "stored": 0, "verified": 0,
@@ -445,9 +464,18 @@ async def _collect(account_id: int, budget: int) -> dict:
                                      budget=90 + 25 * len(pages))
         summary["fetched"] += len(pages)
         if delivery["status"] == "viewer_error":
+            # Ein Sitzungsfehler (Anmeldung, Regal, Betrachter brach ab; dann
+            # nennt die Lieferung die Stufe) ist kein Fehlversuch der einzelnen
+            # Seite, solange das Buch schon einmal geliefert hat. Lief die
+            # Sitzung durch und brachte nichts, zählt es weiter je Seite, ebenso
+            # bei einem Buch, das nie geliefert hat: Daran erkennt die Bilanz
+            # „nicht lieferbar“.
+            session_error = bool(delivery.get("stage")) and (
+                access_of(account_id, book["title"]) or {}).get("status") in ("proven", "readable")
             record_access(account_id, book["title"], "viewer_error", detail=delivery.get("detail"))
-            for page in pages:
-                _bump(account_id, subject, page, delivery.get("stage") or "viewer_error")
+            if not session_error:
+                for page in pages:
+                    _bump(account_id, subject, page, delivery.get("stage") or "viewer_error")
             summary["failed"] += len(pages)
             continue
         delivered = {p: image for p, image in delivery["shots"] if p is not None}
@@ -485,7 +513,7 @@ async def _collect(account_id: int, budget: int) -> dict:
                 summary["verified"] += 1
             elif row and row.get("page_check") == "mismatch":
                 summary["mismatch"] += 1
-                printed = json.loads(row.get("printed_pages") or "[]")
+                printed = printed_list(row.get("printed_pages"))
                 offset = page - min(printed) if printed else 0
                 # Bestellung 50 lieferte 48/49: einmal mit dem Versatz nachbestellen.
                 if offset and abs(offset) <= 4 and remaining > 0:

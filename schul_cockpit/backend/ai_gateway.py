@@ -112,12 +112,14 @@ def projection(c, month, used_micro, today):
 
     Grundlage sind die letzten sieben Tage, nicht der Monatsschnitt: Ein
     einmaliges Einlesen eines Buchbestands am Monatsanfang würde die
-    Hochrechnung sonst dauerhaft verzerren."""
+    Hochrechnung sonst dauerhaft verzerren. Am Monatsanfang zählen nur die
+    Tage des laufenden Monats: Bis 1.31.2 standen dort Vormonatstage im
+    Fenster, geteilt durch die wenigen Tage seit dem Ersten."""
     import calendar
     days_in_month=calendar.monthrange(today.year,today.month)[1]
-    window=[(today-timedelta(days=n)).isoformat() for n in range(7)]
+    window=[(today-timedelta(days=n)).isoformat() for n in range(min(7,today.day))]
     recent=effective_sum(c,'day IN (%s)'%','.join('?'*len(window)),tuple(window))
-    per_day=recent/min(7,today.day)
+    per_day=recent/len(window)
     return round((used_micro+per_day*(days_in_month-today.day))/1e6,2),round(per_day/1e6,3)
 
 
@@ -306,9 +308,15 @@ def settle(key, result=None, error=None):
         row=c.execute('SELECT * FROM mentor_ai_calls WHERE id=?',(key,)).fetchone()
         if valid:
             charge=math.ceil(inp*row['input_rate']+out*row['output_rate'])
-            # Never conceal an accounting overrun: disable calls pending reconciliation.
+            # Eine Abrechnung über der Reservierung wird gebucht und gemeldet,
+            # nicht verschwiegen. Bis 1.31.2 sperrte sie jeden weiteren
+            # KI-Aufruf aller Kinder bis zur Elternbestätigung; nach D89 ist
+            # Stillstand der schlechtere Ausgang.
             if charge>row['reserved_micro']:
-                c.execute('UPDATE mentor_ai_config SET opening_confirmed=0,opening_month=? WHERE id=1',(today_local().strftime('%Y-%m'),))
+                over=','.join(x for x in (row['over_budget'] or '').split(',')+['reservierung'] if x)
+                c.execute('UPDATE mentor_ai_calls SET over_budget=? WHERE id=?',(over,key))
+                LOG.warning('KI-Abrechnung über der Reservierung (%s): %s statt %s Mikro-Euro',
+                            row['purpose'],charge,row['reserved_micro'])
             # Gebucht wird weiter der volle Eingangssatz, auch für Cache-Token:
             # Die Anrechnung bleibt konservativ, die Zahlen zeigen die Wirkung.
             c.execute("UPDATE mentor_ai_calls SET status='settled',charged_micro=?,input_tokens=?,output_tokens=?,"
@@ -465,7 +473,6 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
     # ohnehin der Verbrauch, die Grenze bucht nur vor.
     if not 256<=max_output<=16000: raise ValueError('Invalid output boundary')
     images=images or []
-    normalized=[]
     # Übung: zwei Bilder. Der Quellenbestand liest ein fotografiertes
     # Inhaltsverzeichnis mit bis zu sechs Aufnahmen in einem Aufruf; zusammen-
     # gefügt würden sie beim Verkleinern auf 1600 Pixel unlesbar. Der Chat
@@ -474,38 +481,44 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
     most=MAX_IMAGES.get(purpose,2)
     if len(images)>most: raise HTTPException(413,f'Bitte höchstens {most} Bilder auf einmal verwenden.')
     style=vision_style(config['model'])
-    bounds=[];pending_pages=[];counts=[]
+    bounds=[];pending_pages=[];counts=[];normalized=[]
 
-    def flush_pages():
-        # Aufeinanderfolgende Seitenbilder gemeinsam: Die Zahl der Ausschnitte
-        # richtet sich nach allen Seiten eines Aufrufs (D169).
-        if not pending_pages:return
-        parts,sizes=page_images(pending_pages,config['model'])
-        counts.append((len(normalized),sizes))
-        for part in parts:
-            from PIL import Image
-            img=Image.open(io.BytesIO(base64.b64decode(part['image_url']['url'].split(',',1)[1])))
-            bounds.append(image_bound(img.width,img.height,style if part['image_url']['detail']=='auto' else 'tile'))
-        normalized.extend(parts);pending_pages.clear()
+    def prepare():
+        # Dekodieren, Drehen, Kacheln und neu Kodieren ist reine Rechenarbeit
+        # und läuft neben der Ereignisschleife, damit andere Anfragen weiter
+        # bedient werden, während eine große Seite aufbereitet wird.
+        def flush_pages():
+            # Aufeinanderfolgende Seitenbilder gemeinsam: Die Zahl der Ausschnitte
+            # richtet sich nach allen Seiten eines Aufrufs (D169).
+            if not pending_pages:return
+            parts,sizes=page_images(pending_pages,config['model'])
+            counts.append((len(normalized),sizes))
+            for part in parts:
+                from PIL import Image
+                img=Image.open(io.BytesIO(base64.b64decode(part['image_url']['url'].split(',',1)[1])))
+                bounds.append(image_bound(img.width,img.height,style if part['image_url']['detail']=='auto' else 'tile'))
+            normalized.extend(parts);pending_pages.clear()
 
-    for part in images:
-        try:
-            from PIL import Image,ImageOps
-            uri=part['image_url']['url']
-            if not uri.startswith(('data:image/jpeg;base64,','data:image/png;base64,','data:image/webp;base64,')):raise ValueError()
-            blob=base64.b64decode(uri.split(',',1)[1],validate=True)
-            img=Image.open(io.BytesIO(blob))
-            if img.width*img.height>(50_000_000 if part.get('page') else 25_000_000):raise ValueError()
-            img=ImageOps.exif_transpose(img).convert('RGB')
-            if part.get('page'):
-                pending_pages.append(img);continue
-            flush_pages()
-            img.thumbnail((1600,1600))
-            out=io.BytesIO();img.save(out,format='JPEG',quality=85)
-            normalized.append({'type':'image_url','image_url':{'url':'data:image/jpeg;base64,'+base64.b64encode(out.getvalue()).decode(),'detail':'high'}})
-            bounds.append(32768)
-        except (ValueError,KeyError,OSError):raise HTTPException(422,'Das Bild ist nicht lesbar oder zu groß.') from None
-    flush_pages()
+        for part in images:
+            try:
+                from PIL import Image,ImageOps
+                uri=part['image_url']['url']
+                if not uri.startswith(('data:image/jpeg;base64,','data:image/png;base64,','data:image/webp;base64,')):raise ValueError()
+                blob=base64.b64decode(uri.split(',',1)[1],validate=True)
+                img=Image.open(io.BytesIO(blob))
+                if img.width*img.height>(50_000_000 if part.get('page') else 25_000_000):raise ValueError()
+                img=ImageOps.exif_transpose(img).convert('RGB')
+                if part.get('page'):
+                    pending_pages.append(img);continue
+                flush_pages()
+                img.thumbnail((1600,1600))
+                out=io.BytesIO();img.save(out,format='JPEG',quality=85)
+                normalized.append({'type':'image_url','image_url':{'url':'data:image/jpeg;base64,'+base64.b64encode(out.getvalue()).decode(),'detail':'high'}})
+                bounds.append(32768)
+            except (ValueError,KeyError,OSError):raise HTTPException(422,'Das Bild ist nicht lesbar oder zu groß.') from None
+        flush_pages()
+
+    if images: await asyncio.to_thread(prepare)
     images=normalized
     notes=[layout_note(sizes,offset) for offset,sizes in counts]
     if any(notes):
@@ -536,7 +549,9 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
         # Fest 90 Sekunden hieß, dass ein bezahlter Aufruf kurz vor dem Ergebnis
         # abgeschnitten wurde (D119).
         patience=min(300,max(90,round(max_output/50)))
-        async with httpx.AsyncClient(timeout=patience,follow_redirects=False) as client:
+        # Der Verbindungsaufbau hat seine eigene, kurze Frist: Kommt keine
+        # Verbindung zustande, ist nichts gelaufen und nichts zu bezahlen.
+        async with httpx.AsyncClient(timeout=httpx.Timeout(patience,connect=15),follow_redirects=False) as client:
             for attempt in range(RATE_RETRIES+1):
                 response=await client.post(endpoint,json=payload,headers={'api-key':api_key})
                 wait=retry_wait(response) if response.status_code==429 and attempt<RATE_RETRIES else None
@@ -546,7 +561,10 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
             response.raise_for_status();result=response.json()
         if not isinstance(result,dict): raise ValueError('Invalid envelope')
         settle(key,result)
-        raw=model_output(endpoint,result).strip()
+        raw=model_output(endpoint,result)
+        # Chat Completions liefert bei abgebrochener Antwort content=None.
+        if not isinstance(raw,str): raise ValueError('No assistant text')
+        raw=raw.strip()
         if raw.startswith('```'): raw=raw.split('\n',1)[1].rsplit('```',1)[0].strip()
         return raw,result,key
     except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError) as exc:
@@ -557,7 +575,7 @@ async def complete(account_id, purpose, instruction, context, images=None, max_o
             # hat kein Token gekostet: Reservierung auflösen statt buchen. Zeitüberschreitung
             # und Serverfehler bleiben stehen, dort kann das Modell gelaufen sein.
             status=getattr(getattr(exc,'response',None),'status_code',None)
-            if (status is not None and status<500) or isinstance(exc,httpx.ConnectError):
+            if (status is not None and status<500) or isinstance(exc,(httpx.ConnectError,httpx.ConnectTimeout)):
                 release(key,f'nicht angenommen ({status or "keine Verbindung"})')
             else:
                 settle(key,error='provider_error')
@@ -619,7 +637,7 @@ async def transcribe(account_id, audio, mime, language=None, prompt='', session_
     except (httpx.HTTPError,ValueError,KeyError,TypeError) as exc:
         if result is None:
             status=getattr(getattr(exc,'response',None),'status_code',None)
-            if (status is not None and status<500) or isinstance(exc,httpx.ConnectError):
+            if (status is not None and status<500) or isinstance(exc,(httpx.ConnectError,httpx.ConnectTimeout)):
                 release(key,f'nicht angenommen ({status or "keine Verbindung"})')
             else:
                 settle(key,error='provider_error')

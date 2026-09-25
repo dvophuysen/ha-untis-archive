@@ -16,7 +16,7 @@ from contextlib import closing
 from datetime import datetime, timezone
 
 from . import proofread
-from .db import webapp_conn
+from .db import tx, webapp_conn
 
 _LOGGER = logging.getLogger("schul_cockpit.materials")
 
@@ -75,6 +75,33 @@ def canonical_subject(account_id: int, name: str | None) -> str | None:
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def printed_list(value) -> list[int]:
+    """Die gedruckten Seitenzahlen eines Materials als Zahlen.
+
+    Gespeichert ist JSON („[160, 161]“); ältere Werte können „160,161“ sein.
+    Bis 1.31.2 zerlegten zwei Stellen das JSON am Komma, und die zweite Seite
+    einer Doppelseite passte nie. Unlesbares ergibt eine leere Liste."""
+    if value is None or value == "":
+        return []
+    items = value
+    if not isinstance(value, (list, tuple)):
+        try:
+            items = json.loads(value)
+        except (TypeError, ValueError):
+            items = str(value).split(",")
+    if not isinstance(items, (list, tuple)):
+        items = [items]
+    out = []
+    for item in items:
+        if isinstance(item, bool):
+            continue
+        try:
+            out.append(int(str(item).strip()))
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def sniff(content: bytes) -> str | None:
@@ -655,8 +682,11 @@ def unlink(account_id: int, material_id: int, kind: str, target_id: int) -> bool
 
 
 def remove(account_id: int, material_id: int) -> bool:
-    with closing(webapp_conn()) as conn, conn:
-        conn.execute("DELETE FROM material_links WHERE material_id=?", (material_id,))
+    # Nur die Bezüge eines eigenen Materials: Bis 1.31.2 löschte ein Aufruf
+    # mit fremdem Konto die Bezüge, bevor das Konto geprüft war.
+    with closing(webapp_conn()) as conn, tx(conn):
+        conn.execute("DELETE FROM material_links WHERE material_id IN "
+                     "(SELECT id FROM materials WHERE id=? AND account_id=?)", (material_id, account_id))
         gone = bool(conn.execute("DELETE FROM materials WHERE id=? AND account_id=?",
                                  (material_id, account_id)).rowcount)
     if gone:

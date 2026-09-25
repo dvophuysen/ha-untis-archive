@@ -60,9 +60,18 @@ def _start(arguments: list[str]) -> webdriver.Chrome:
 
 
 # Whether the browser came up with software WebGL in this process. A failed
-# start costs two minutes of waiting on the driver, so it is tried once and
-# remembered until the add-on restarts.
+# start costs two minutes of waiting on the driver, so a failure is remembered,
+# but only for an hour: until 1.31.2 one bad start (a busy machine, a crashed
+# driver) kept every WebGL reader blank until the add-on restarted.
 _SOFTWARE_WEBGL_WORKS: bool | None = None
+_SOFTWARE_WEBGL_FAILED_AT: float | None = None
+SOFTWARE_WEBGL_RETRY = 3600.0
+
+
+def _try_software_webgl() -> bool:
+    if _SOFTWARE_WEBGL_WORKS is not False:
+        return True
+    return _SOFTWARE_WEBGL_FAILED_AT is not None and time.monotonic() - _SOFTWARE_WEBGL_FAILED_AT >= SOFTWARE_WEBGL_RETRY
 
 
 def _driver(*extra_args: str) -> webdriver.Chrome:
@@ -73,8 +82,8 @@ def _driver(*extra_args: str) -> webdriver.Chrome:
     Software WebGL first; if the browser does not come up that way, once more
     without a GPU, so the readers that never needed WebGL keep working.
     """
-    global _SOFTWARE_WEBGL_WORKS
-    if _SOFTWARE_WEBGL_WORKS is not False:
+    global _SOFTWARE_WEBGL_WORKS, _SOFTWARE_WEBGL_FAILED_AT
+    if _try_software_webgl():
         started = time.monotonic()
         try:
             driver = _start(browser_arguments(*extra_args))
@@ -83,8 +92,9 @@ def _driver(*extra_args: str) -> webdriver.Chrome:
             return driver
         except Exception as exc:
             _SOFTWARE_WEBGL_WORKS = False
+            _SOFTWARE_WEBGL_FAILED_AT = time.monotonic()
             _LOGGER.warning("textbook browser start with software WebGL failed after %.1fs: %s; "
-                            "running without GPU until the next restart", time.monotonic() - started, type(exc).__name__)
+                            "running without GPU, next try in an hour", time.monotonic() - started, type(exc).__name__)
     started = time.monotonic()
     driver = _start(browser_arguments(*extra_args, software_webgl=False))
     _LOGGER.info("textbook browser up after %.1fs (no GPU)", time.monotonic() - started)

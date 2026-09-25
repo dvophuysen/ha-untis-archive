@@ -527,7 +527,8 @@ def test_only_pages_that_measured_worse_are_read_a_second_time(env):
 
 def test_the_second_pass_is_what_gets_stored(env, monkeypatch):
     from backend import material_analysis as analysis
-    ai_env(monkeypatch)
+    # Mit Modell auf „klein“: Ohne liest die Stufe des Zwecks zuerst (first_tier).
+    ai_env(monkeypatch, tiers={"klein": {"modellname": "test-luna", "foundry": "1"}})
     seen = []
 
     async def extract(account_id, row, tier=None, effort=None):

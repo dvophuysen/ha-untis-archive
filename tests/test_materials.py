@@ -399,10 +399,34 @@ def test_the_page_is_read_on_the_small_tier_and_the_careful_one_is_a_bonus(env, 
             raise RuntimeError("kein Kontingent")
         return analysis.Insight(kind="workbook", content_text="Text", confidence=0.9, handwritten=True), tier
     monkeypatch.setattr(analysis, "extract", extract)
+    monkeypatch.setattr(analysis.ai, "model_name", lambda tier="hoch": {"klein": "gpt-5-mini", "hoch": "gpt-5.1"}.get(tier, ""))
     row = {"id": 7, "kind": "workbook", "subject_name": "DEUTSCH", "origin": ""}
     insight, tier = asyncio.run(analysis.read_material(1, row))
     assert stufen == ["klein", "hoch"], "erst klein, dann die gründliche Stufe"
     assert tier == "klein" and insight.content_text == "Text"
+
+
+def test_without_a_small_model_the_first_reading_takes_the_tier_of_its_purpose(env, monkeypatch):
+    """Ohne Modell für „klein“ lehnte bis 1.31.2 jede Lesung mit 503 ab. Jetzt
+    liest die Stufe, die der Zweck sonst hätte; mit „klein“ bleibt alles gleich."""
+    stufen = []
+
+    async def extract(account_id, row, tier=None, effort=None):
+        stufen.append(tier)
+        return analysis.Insight(kind="book_page", content_text="Text", confidence=0.9), tier
+    monkeypatch.setattr(analysis, "extract", extract)
+    row = {"id": 7, "kind": "book_page", "subject_name": "DEUTSCH", "origin": ""}
+    names = {"hoch": "gpt-5.1", "mittel": "gpt-5-mini"}
+    monkeypatch.setattr(analysis.ai, "model_name", lambda tier="hoch": names.get(tier, ""))
+    monkeypatch.setattr(analysis.ai, "tier_for", lambda purpose, cfg=None, override=None: "mittel")
+    insight, tier = asyncio.run(analysis.read_material(1, row))
+    assert stufen == ["mittel"] and tier == "mittel"
+    assert "gpt-5-mini" in analysis._reading_models(), "sonst wäre die Seite jede Nacht fällig"
+    names["klein"] = "gpt-6-luna"
+    stufen.clear()
+    insight, tier = asyncio.run(analysis.read_material(1, row))
+    assert stufen == ["klein"] and tier == "klein"
+    assert analysis._reading_models() == {"gpt-6-luna", "gpt-5.1"}
 
 
 def test_an_overlong_doubt_does_not_throw_away_the_whole_reading():

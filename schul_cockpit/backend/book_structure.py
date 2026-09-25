@@ -22,7 +22,7 @@ from contextlib import closing
 from pydantic import Field, ValidationError
 
 from . import ai_gateway as ai
-from .db import webapp_conn
+from .db import tx, webapp_conn
 from .learning import InputModel, now_iso
 
 log = logging.getLogger("schul_cockpit.sources")
@@ -210,9 +210,17 @@ def store_chapters(account_id: int, title: str, chapters: list[Chapter]) -> int:
         rows.append({"number": chapter.number.strip(), "title": chapter.title.strip(), "kind": kind, "level": chapter.level,
                      "start_page": chapter.start_page, "end_page": chapter.end_page,
                      "belongs_to": chapter.belongs_to.strip() or None, "locked": 0})
-    with closing(webapp_conn()) as conn, conn:
+    with closing(webapp_conn()) as conn, tx(conn):
         kept = [dict(r) for r in conn.execute(
             "SELECT * FROM book_chapters WHERE account_id=? AND book_title=? AND locked=1", (account_id, title))]
+        # Die Kapitel werden neu angelegt und bekommen neue Nummern. Was
+        # Stundeneinträge auf ein Kapitel zeigte, zog bis 1.31.2 ins Leere und
+        # wurde nie neu zugeordnet; jetzt folgt es seinem Kapitel.
+        old_keys = {r["id"]: _chapter_key(r) for r in conn.execute(
+            "SELECT id,number,level,title FROM book_chapters WHERE account_id=? AND book_title=?", (account_id, title))}
+        assigned = [dict(r) for r in conn.execute(
+            "SELECT entry_kind,entry_id,chapter_id FROM entry_chapters WHERE account_id=? AND book_title=? "
+            "AND chapter_id IS NOT NULL", (account_id, title))]
         for fixed in kept:
             match = next((r for r in rows if r["number"] == fixed["number"] and r["level"] == fixed["level"]
                           and (fixed["number"] or r["title"].casefold() == fixed["title"].casefold())), None)
@@ -229,7 +237,24 @@ def store_chapters(account_id: int, title: str, chapters: list[Chapter]) -> int:
                 "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                 (account_id, title, row["number"], row["title"], row["kind"], row["level"], row["start_page"], end,
                  row["belongs_to"], stamp, row["locked"]))
+        new_ids = {_chapter_key(r): r["id"] for r in conn.execute(
+            "SELECT id,number,level,title FROM book_chapters WHERE account_id=? AND book_title=? ORDER BY id DESC",
+            (account_id, title))}
+        for entry in assigned:
+            target = new_ids.get(old_keys.get(entry["chapter_id"]))
+            if target:
+                conn.execute("UPDATE entry_chapters SET chapter_id=? WHERE account_id=? AND entry_kind=? AND entry_id=?",
+                             (target, account_id, entry["entry_kind"], entry["entry_id"]))
+            else:
+                # Das Kapitel gibt es so nicht mehr: neu zuordnen lassen.
+                conn.execute("DELETE FROM entry_chapters WHERE account_id=? AND entry_kind=? AND entry_id=?",
+                             (account_id, entry["entry_kind"], entry["entry_id"]))
     return len(ordered)
+
+
+def _chapter_key(row) -> tuple:
+    """Woran ein Kapitel über ein neues Lesen hinweg wiedererkannt wird."""
+    return ((row["number"] or "").strip(), row["level"], (row["title"] or "").strip().casefold())
 
 
 def update_chapter(account_id: int, chapter_id: int, changes: dict) -> dict | None:
