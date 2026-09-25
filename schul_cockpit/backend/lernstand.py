@@ -365,7 +365,13 @@ def ensure_assumed_topics(account_id: int, exam_key: str, subject: str | None, s
         c.execute("BEGIN IMMEDIATE")
         has_notice = c.execute("SELECT 1 FROM exam_topics WHERE account_id=? AND exam_key=? AND origin='notice' AND stale=0 LIMIT 1",
                                (account_id, exam_key)).fetchone()
-        if has_notice:
+        # Bei einer Sprechprüfung sind die von Eltern eingetragenen Sprechthemen
+        # die Liste; der Grammatikstoff aus dem Unterricht tritt zurück (D193).
+        from .exam_meta import oral
+        spoken = oral(account_id, exam_key) and c.execute(
+            "SELECT 1 FROM exam_topics WHERE account_id=? AND exam_key=? AND origin='manual' AND stale=0 LIMIT 1",
+            (account_id, exam_key)).fetchone()
+        if has_notice or spoken:
             c.execute("UPDATE exam_topics SET stale=1,updated_at=? WHERE account_id=? AND exam_key=? AND origin='assumed' AND stale=0",
                       (now_iso(), account_id, exam_key))
             return
@@ -846,7 +852,25 @@ def context_for(account_id: int, topic_id: int, session_id: int | None = None) -
         # Einstieg „Schulbuch S. 50“ und erfand den Inhalt, obwohl zu diesem Thema
         # kein einziges Material vorlag (D96).
         "material_fehlt": not material,
+        **_exam_form(account_id, topic["exam_key"]),
     }
+
+
+def _exam_form(account_id: int, exam_key: str) -> dict:
+    """Art der Arbeit und Hinweise der Eltern für den Lernbegleiter (D193)."""
+    from .exam_meta import get
+    meta = get(account_id, exam_key)
+    out = {}
+    if meta["oral"]:
+        out["pruefungsform"] = (
+            "Sprechprüfung, keine schriftliche Arbeit. Übe das Sprechen in der Fremdsprache wie in der mündlichen "
+            "Prüfung: Stelle Fragen oder kleine Sprechanlässe zum Thema, auf die das Kind in ganzen Sätzen in der "
+            "Fremdsprache antwortet (gesprochen oder getippt). Gib nach jeder Antwort kurz Rückmeldung zu "
+            "Verständlichkeit, Wortschatz und typischen Fehlern, jeweils mit einer besseren Formulierung. Keine "
+            "Lückentexte, keine Grammatikregeln abfragen; Grammatik nur, wo sie beim Sprechen stört.")
+    if meta["note"]:
+        out["hinweise_eltern"] = meta["note"]
+    return out
 
 
 # Fortschritt zählt aufwärts in dieser Reihenfolge; RANK oben sortiert die

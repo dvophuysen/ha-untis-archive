@@ -1,3 +1,9 @@
+## 1.26.0
+
+- Sprechprüfungen werden erkannt und so geübt: im Gespräch mit dem Lernbegleiter, in ganzen Sätzen, mit Rückmeldung. Einstiegstest, Kurztests und Probearbeit auf Papier entfallen dafür.
+- Eltern können an jeder Arbeit „Hinweise zur Arbeit“ eintragen und Themen zeilenweise ergänzen, direkt an der Karte. Statt „ablegen“ steht dort jetzt „eintragen“; Kinder lesen die Hinweise mit.
+- Sobald eigene Sprechthemen eingetragen sind, tritt der vermutete Stoff aus dem Unterricht zurück.
+
 ## 1.25.6
 
 - Der Einstiegstest zählt jetzt richtig: Was dort voll gelöst ist, gilt gleich als sicher, und die Übungsschritte zu diesem Thema entfallen. Die Probearbeit am Ende prüft nach.

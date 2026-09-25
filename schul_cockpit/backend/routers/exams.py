@@ -24,7 +24,7 @@ from ..exams import (
     resolve_exams,
 )
 from ..supervisor_client import SupervisorError, get_supervisor
-from .. import lernstand
+from .. import exam_meta, lernstand
 
 router = APIRouter()
 _LOG = logging.getLogger("schul_cockpit.exams")
@@ -271,6 +271,7 @@ async def exams_all(
             try:
                 from .. import mentor_opening
                 mentor_opening.remember_exam(account_id, e["exam_key"], e["date"])
+                exam_meta.remember(account_id, e["exam_key"], e.get("title"))
                 await lernstand.ensure_topics(account_id, e["exam_key"], e.get("subject_name"), since, e["date"])
                 # Ohne Themenliste werden die angenommenen Themen aus dem Unterricht
                 # genauso geführt: mit Stufe, Stellen und Üben-Knopf.
@@ -280,6 +281,10 @@ async def exams_all(
             except Exception:
                 _LOG.warning("Themen der Arbeit in %s nicht lesbar", e.get("subject_name"), exc_info=True)
                 e["topics"], e["stages"] = [], None
+        if e["date"] >= today_iso:
+            meta = exam_meta.get(account_id, e["exam_key"]) if e.get("exam_key") else {}
+            e["oral"] = bool(meta.get("oral")) or exam_meta.is_oral_title(e.get("title"))
+            e["note"] = meta.get("note") or ""
         (upcoming if e["date"] >= today_iso else past).append(e)
 
     cutoff = archive_before(account_id)
@@ -375,6 +380,19 @@ def add_topic(account_id: int, body: TopicIn, user: CurrentUser = Depends(get_cu
     if not topic:
         raise HTTPException(409, "Dieses Thema steht schon auf der Liste.")
     return lernstand.public(topic)
+
+
+class NoteIn(BaseModel):
+    exam_key: str = Field(min_length=1, max_length=120)
+    note: str = Field(default="", max_length=exam_meta.NOTE_MAX)
+
+
+@router.post("/accounts/{account_id}/exams/note")
+def set_note(account_id: int, body: NoteIn, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Hinweise der Eltern zu einer Arbeit, etwa worüber in der Sprechprüfung gesprochen wird (D193)."""
+    assert_account_access(user, account_id)
+    _require_parent(user)
+    return exam_meta.set_note(account_id, body.exam_key, body.note)
 
 
 @router.delete("/accounts/{account_id}/exams/topics/{topic_id}")

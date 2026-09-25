@@ -142,9 +142,17 @@ def exam_plan(account_id: int, exam: dict, day: date, school: list[date]) -> dic
                 "why": f"Das Thema sitzt noch nicht sicher. Drei Aufgaben mit dem Lernbegleiter, Arbeit am {when}"}
 
     seq: list[dict] = []
-    if all(cell["state"] == "offen" for t in rows for cell in t["cells"].values()):
+    from .exam_meta import oral
+    spoken = oral(account_id, exam["exam_key"])
+    if spoken:
+        # Sprechprüfung (D193): geübt wird im Gespräch, kein Papier.
+        for t in sorted([t for t in rows if not t["ready"]], key=practice._weakness):
+            seq.append({**dialog(t), "title": f"{subject} sprechen: {t['title']}",
+                        "why": f"Sprechprüfung am {when}. Mit dem Lernbegleiter darüber sprechen, in ganzen Sätzen; "
+                               "er sagt dir, wie es besser klingt."})
+    elif all(cell["state"] == "offen" for t in rows for cell in t["cells"].values()):
         seq.append(paper("einstieg", f"Einstiegstest {subject}", f"Zeigt, wo du für die Arbeit am {when} stehst."))
-    not_ready = sorted([t for t in rows if not t["ready"]], key=practice._weakness)
+    not_ready = [] if spoken else sorted([t for t in rows if not t["ready"]], key=practice._weakness)
     with closing(webapp_conn()) as c:
         for t in not_ready:
             near = t["cells"][str(t["target"])]["state"] == "fast"
@@ -153,7 +161,7 @@ def exam_plan(account_id: int, exam: dict, day: date, school: list[date]) -> dic
             seq.append(paper("kurz", f"Kurztest {subject}: {t['title']}",
                              f"Zeigt auf Papier, ob „{t['title']}“ sitzt. Arbeit am {when}", t["id"]))
         confirmed = all(t["cells"]["2"]["state"] == "bestaetigt" for t in rows)
-        if not confirmed and not _recent_probe(c, account_id, [t["id"] for t in rows], day):
+        if not confirmed and not spoken and not _recent_probe(c, account_id, [t["id"] for t in rows], day):
             seq.append(paper("probe", f"Probearbeit {subject}",
                              f"Alle Themen wie in der echten Arbeit am {when}. Zeigt, was noch fehlt."))
     need = len(seq)
@@ -402,6 +410,7 @@ def _settle(account_id: int, steps: list[dict]) -> None:
     Nachweis überflüssig gemacht hat, zählt als erledigt („nicht mehr nötig“);
     steht der Einstiegstest einer Arbeit noch aus, warten ihre übrigen Schritte
     auf ihn, weil er entscheidet, welche davon bleiben."""
+    from .exam_meta import oral
     rasters: dict[str, dict] = {}
     with closing(webapp_conn()) as c:
         for s in steps:
@@ -412,7 +421,11 @@ def _settle(account_id: int, steps: list[dict]) -> None:
             rows = rasters[s["exam_key"]]
             row = rows.get(s.get("topic_id"))
             reason = ""
-            if s["kind"] == "dialog" and row:
+            if s["kind"] == "paper" and oral(account_id, s["exam_key"]):
+                reason = "Nicht mehr nötig: Es ist eine Sprechprüfung, geübt wird im Gespräch."
+            elif s.get("topic_id") and rows and not row:
+                reason = "Nicht mehr nötig: Das Thema steht nicht mehr auf der Liste."
+            elif s["kind"] == "dialog" and row:
                 if row["ready"]:
                     reason = "Nicht mehr nötig: Das Thema sitzt schon."
                 elif row["cells"][str(row["target"])]["state"] == "fast" and not _last_was_dialog(c, account_id, row["id"]):

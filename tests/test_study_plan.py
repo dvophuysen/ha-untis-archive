@@ -341,3 +341,19 @@ def test_entry_test_calibrates_and_the_day_only_shrinks(world):
                    ("probe", None, False, False, False)]
     assert view["total"] == 6 and view["done"] == 3 and sp.open_count(1, MON) == 3
     assert all(s["why"].startswith("Nicht mehr nötig") for s in view["steps"] if s["skipped"])
+
+
+def test_speaking_exam_is_practised_in_conversation_and_old_paper_steps_go(world):
+    """D193: Bei einer Sprechprüfung nur Gesprächsschritte je Thema, kein Papier;
+    schon festgehaltene Papierschritte entfallen."""
+    from backend import exam_meta
+    exam("en", "Englisch", MON + timedelta(days=1), ["Meine Familie", "Hobbys"])
+    frozen = sp.ensure(1, MON)
+    assert frozen[0]["format"] == "einstieg"
+    exam_meta.remember(1, "en", "Sprechprüfung Englisch Jg.6")
+    assert seq("en") == [("dialog", None), ("dialog", None)]
+    assert all(s["title"].startswith("Englisch sprechen: ") for p in sp.plans(1, MON) for s in p["steps"])
+    view = sp.view(1, MON, store=True)
+    papers = [s for s in view["steps"] if s["kind"] == "paper"]
+    assert papers and all(s["done"] and s["skipped"] for s in papers)
+    assert not any(s["waiting"] for s in view["steps"]), "kein Einstiegstest, auf den gewartet wird"

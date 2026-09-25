@@ -24,6 +24,10 @@
   const jumped = (query.get('s') || '').startsWith('arbeit-') ? query.get('s').slice(7) : '';
   let openKey = $state(query.get('exam') || jumped);
   let newTopic = $state({});
+  // Hinweise und Themenzeilen der Eltern je Arbeit (D193).
+  let noteDraft = $state({});
+  let linesDraft = $state({});
+  let noteSaved = $state('');
 
   // Eltern-Werkzeuge nicht beim Mitlesen und nicht, wenn das Kind das Gerät benutzt (D183).
   const canManage = $derived(actsAsParent(appState.me));
@@ -116,6 +120,15 @@
   // Die drei Punkte je Arbeit.
   function stoff(e) {
     const n = liveTopics(e).length;
+    if (e.oral) {
+      const own = liveTopics(e).filter((t) => t.origin === 'manual').length;
+      return {
+        tone: own ? 'ok' : 'warn',
+        text: own ? `Sprechprüfung · ${own} ${own === 1 ? 'Sprechthema' : 'Sprechthemen'} eingetragen`
+          : 'Sprechprüfung · noch keine Sprechthemen eingetragen, geübt wird am Stoff aus dem Unterricht',
+        action: { label: canManage ? 'eintragen' : 'ansehen', open: true },
+      };
+    }
     if (e.sources?.notice) {
       const checked = e.sources.notice_verified;
       return {
@@ -128,7 +141,8 @@
     return {
       tone: parts ? 'warn' : 'none',
       text: `Keine Themenliste · angenommen: alles ${sinceLabel(e.scope)}${parts ? `, ${parts} ${parts === 1 ? 'Thema' : 'Themen'}` : ''}`,
-      action: { label: 'ablegen', href: materialUrl(e), title: 'Zettel oder Tafelfoto der Lehrkraft fotografieren' },
+      action: canManage ? { label: 'Themen eintragen', open: true }
+        : { label: 'Zettel fotografieren', href: materialUrl(e), title: 'Zettel oder Tafelfoto der Lehrkraft fotografieren' },
     };
   }
   function material(e) {
@@ -213,6 +227,39 @@
       busyKey = null;
     }
   }
+  async function saveNote(exam) {
+    busyKey = `note-${exam.exam_key}`;
+    noteSaved = '';
+    try {
+      const text = noteDraft[exam.exam_key] ?? exam.note ?? '';
+      if (text !== (exam.note || '')) {
+        const r = await api.post(`/api/accounts/${accountId}/exams/note`, { exam_key: exam.exam_key, note: text });
+        exam.note = r.note;
+      }
+      // Eine Zeile je Thema; „Thema: Hinweis“ trennt den Hinweis ab.
+      const lines = (linesDraft[exam.exam_key] || '').split('\n').map((l) => l.trim()).filter((l) => l.length >= 2);
+      for (const line of lines) {
+        const [title, ...rest] = line.split(':');
+        try {
+          const t = await api.post(`/api/accounts/${accountId}/exams/topics`, {
+            exam_key: exam.exam_key, subject: exam.subject_name ?? exam.title ?? '',
+            title: title.trim().slice(0, 120), detail: rest.join(':').trim().slice(0, 400),
+          });
+          exam.topics = [...(exam.topics || []), { ...t, material: null, check_due: false }];
+        } catch (err) {
+          if (!String(err.message).includes('schon')) throw err;
+        }
+      }
+      linesDraft[exam.exam_key] = '';
+      if (lines.length) await load();
+      noteSaved = exam.exam_key;
+      data = { ...data };
+    } catch (e) {
+      error = e.message;
+    } finally {
+      busyKey = null;
+    }
+  }
   async function addTopic(exam) {
     const title = (newTopic[exam.exam_key] || '').trim();
     if (title.length < 2) return;
@@ -281,7 +328,7 @@
           <span class="icon" aria-hidden="true">{st.emoji}</span>
           <span class="who">
             <strong>{st.name}</strong>
-            <span class="dim">{longDay(e.date)}{#if far} · {whenLabel(e.date)}{/if}{#if e.source === 'manual'} · selbst eingetragen{/if}</span>
+            <span class="dim">{longDay(e.date)}{#if far} · {whenLabel(e.date)}{/if}{#if e.source === 'manual'} · selbst eingetragen{/if}{#if e.oral} · <b class="oral">Sprechprüfung</b>{/if}</span>
             {#if e.title && e.subject_name && e.title !== e.subject_name}<span class="dim ellipsis" title={e.title}>{e.title}</span>{/if}
           </span>
           {#if !far}<span class="badge when {urgencyClass(e.date)}">{whenLabel(e.date)}</span>{:else}<span class="chev" aria-hidden="true">▸</span>{/if}
@@ -302,6 +349,7 @@
             {/each}
           </div>
 
+          {#if e.note && !open}<p class="exam-note"><b>Hinweise:</b> {e.note}</p>{/if}
           {#if !open}
             <div class="cta">
               <button class="primary go" onclick={() => (openKey = e.exam_key)}>Für {st.name} üben</button>
@@ -317,7 +365,27 @@
 
         {#if open}
           <div class="detail">
-            {#if e.sources?.notice}
+            {#if canManage}
+              <div class="note-box" data-section={`hinweise-${e.exam_key}`}>
+                <label><strong>Hinweise zur Arbeit</strong>
+                  <small class="dim">{e.oral ? 'Zum Beispiel: worüber gesprochen wird, Ablauf, Partnergespräch, Bildbeschreibung.' : 'Was die Lehrkraft dazu gesagt hat. Die Kinder lesen mit, der Lernbegleiter bekommt es mit.'}</small>
+                  <textarea rows="4" maxlength="2000" bind:value={() => noteDraft[e.exam_key] ?? e.note ?? '', (v) => (noteDraft[e.exam_key] = v)} placeholder={e.oral ? 'Sich vorstellen, Hobbys, Ferien; Bild beschreiben; Gespräch zu zweit …' : 'Hinweise der Lehrkraft …'}></textarea>
+                </label>
+                <label><strong>{e.oral ? 'Sprechthemen' : 'Themen'} ergänzen</strong>
+                  <small class="dim">Eine Zeile je Thema, ein Hinweis nach Doppelpunkt, z. B. „Meine Familie: Personen beschreiben“.{#if e.oral} Sobald eigene Sprechthemen da sind, tritt der Stoff aus dem Unterricht zurück.{/if}</small>
+                  <textarea rows="3" bind:value={() => linesDraft[e.exam_key] ?? '', (v) => (linesDraft[e.exam_key] = v)}></textarea>
+                </label>
+                <div class="row" style="gap:0.5rem; align-items:center;">
+                  <button class="primary" disabled={busyKey === `note-${e.exam_key}`} onclick={() => saveNote(e)}>{busyKey === `note-${e.exam_key}` ? 'Speichert …' : 'Speichern'}</button>
+                  {#if noteSaved === e.exam_key}<span class="dim" role="status">Gespeichert.</span>{/if}
+                </div>
+              </div>
+            {:else if e.note}
+              <p class="exam-note"><b>Hinweise:</b> {e.note}</p>
+            {/if}
+            {#if e.oral}
+              <p class="lead">Sprechprüfung: Geübt wird im Gespräch mit dem Lernbegleiter, in ganzen Sätzen, mit Rückmeldung, wie es besser klingt. Kein Einstiegstest und keine Übungsarbeit auf Papier.</p>
+            {:else if e.sources?.notice}
               <p class="lead">Die offizielle Themenliste der Lehrkraft legt den Stoff fest.
                 <a href={`#/materialien?material=${e.sources.notice_id}`}>Foto ansehen</a>{#if !e.sources.notice_verified} · <a href={`#/materialien?material=${e.sources.notice_id}`}>Bitte prüfen</a>: Eine Seitenzahl kennt der Unterricht nicht.{/if}</p>
             {:else}
@@ -363,7 +431,7 @@
               </div>
             {/if}
 
-            {#if topics.some((t) => !t.vocab)}
+            {#if topics.some((t) => !t.vocab) && !e.oral}
               <PracticeRaster {accountId} examKey={e.exam_key} parent={canManage && view.mode !== 'child'} />
             {/if}
 
@@ -388,7 +456,7 @@
             {/if}
 
             <div class="row between" style="align-items:center; margin-top:0.8rem; gap:0.6rem; flex-wrap:wrap;">
-              <a class="practice-link" href={practiceUrl(e)}>Übungsarbeit wie in echt</a>
+              {#if !e.oral}<a class="practice-link" href={practiceUrl(e)}>Übungsarbeit wie in echt</a>{:else}<span></span>{/if}
               <div class="feel-row">
                 <span class="dim">Dein Gefühl zur ganzen Arbeit</span>
                 {#each FEEL as f}
@@ -517,6 +585,11 @@
   .also-row { padding: 0.15rem 0; }
   .practice-link { font-weight: 600; }
   .legend { font-size: 0.78rem; margin: 0.6rem 0 0; }
+  .oral { color: var(--accent); font-weight: 600; }
+  .exam-note { margin: 0.5rem 0 0; padding: 0.5rem 0.7rem; background: var(--bg-soft, var(--bg)); border-radius: var(--r-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .note-box { display: grid; gap: 0.6rem; margin: 0 0 0.8rem; padding: 0.7rem; border: 1px solid var(--border); border-radius: var(--r-sm); }
+  .note-box label { display: grid; gap: 0.25rem; }
+  .note-box textarea { width: 100%; box-sizing: border-box; font: inherit; }
   .close { width: 100%; margin-top: 0.4rem; }
   .grade-box { flex-shrink: 0; }
   .grade-input { width: 110px; text-align: center; font-weight: 600; min-height: 40px; }

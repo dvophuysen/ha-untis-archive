@@ -440,3 +440,37 @@ def test_the_exam_scope_names_the_chapter_pages_it_has(env):
     assert len(found) == 1
     assert [(p['page'], p['title']) for p in found[0]['page_index']] == [(48, 'Quiz und Hörübung'), (50, 'Un rally por Madrid')]
     assert found[0]['pages_stored'] == 2 and found[0]['pages'] == 5
+
+
+def test_speaking_exam_note_and_own_topics_replace_the_taught_grammar(exam_env):
+    """D193: Eine Sprechprüfung wird am Titel erkannt. Eltern schreiben Hinweise
+    und Sprechthemen dazu; der Grammatikstoff aus dem Unterricht tritt zurück,
+    der Lernbegleiter bekommt Prüfungsform und Hinweise mit."""
+    client, state, patch, nid, extraction = exam_env
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("DELETE FROM materials WHERE kind='exam_notice'")
+    key = "cal:latein-2026-09-21"
+    patch.setitem(EXAMS["exams"][0], "title", "Sprechprüfung Latein Jg.6 (Klausur)")
+    scope = {"since": "2026-08-01", "parts": 1, "shown": 0, "verified": False, "topics": [
+        {"id": 1, "title": "Simple past", "field": None, "shown": False, "lesson_ids": []}]}
+    patch.setattr(exams_router, "exam_scope", lambda *a, **k: scope)
+    exam = client.get("/api/accounts/1/exams/all").json()["upcoming"][0]
+    assert exam["oral"] and exam["note"] == "" and [t["origin"] for t in exam["topics"]] == ["assumed"]
+    r = client.post("/api/accounts/1/exams/note", json={"exam_key": key, "note": "Sich vorstellen; Bild beschreiben"})
+    assert r.status_code == 200 and r.json()["note"] == "Sich vorstellen; Bild beschreiben"
+    tid = client.post("/api/accounts/1/exams/topics", json={"exam_key": key, "subject": "Latein", "title": "Meine Familie",
+                                                            "detail": "Personen beschreiben"}).json()["id"]
+    exam = client.get("/api/accounts/1/exams/all").json()["upcoming"][0]
+    live = [(t["title"], t["origin"]) for t in exam["topics"] if not t["stale"]]
+    assert live == [("Meine Familie", "manual")] and exam["note"] == "Sich vorstellen; Bild beschreiben"
+    ctx = lernstand.context_for(1, tid)
+    assert "Sprechprüfung" in ctx["pruefungsform"] and ctx["hinweise_eltern"] == "Sich vorstellen; Bild beschreiben"
+    child(state)
+    assert client.post("/api/accounts/1/exams/note", json={"exam_key": key, "note": "x"}).status_code in (403, 404)
+    assert client.get("/api/accounts/1/exams/all").json()["upcoming"][0]["note"] == "Sich vorstellen; Bild beschreiben"
+
+
+def test_oral_exam_titles():
+    from backend.exam_meta import is_oral_title
+    assert is_oral_title("Sprechprüfung Englisch Jg.6 (Klausur)") and is_oral_title("Mündliche Prüfung") and is_oral_title("Präsentation Erdkunde")
+    assert not is_oral_title("Englisch Klassenarbeit") and not is_oral_title(None)

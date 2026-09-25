@@ -1158,3 +1158,13 @@ _MIGRATIONS.append(("learning_archive_001", "ALTER TABLE mentor_sessions ADD COL
 
 # Stand der Planlogik je festgehaltenem Tagesplan (D189).
 _MIGRATIONS.append(("study_plan_002_version", "ALTER TABLE study_plan_days ADD COLUMN version INTEGER NOT NULL DEFAULT 1"))
+
+# Art und Hinweise einer Arbeit (D193): Sprechprüfung am Titel erkannt,
+# Hinweise der Eltern frei dazu.
+_MIGRATIONS.append(("exam_meta_001", """
+CREATE TABLE IF NOT EXISTS exam_meta (
+ account_id INTEGER NOT NULL, exam_key TEXT NOT NULL, title TEXT NOT NULL DEFAULT '',
+ oral INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', note_updated_at TEXT,
+ updated_at TEXT NOT NULL, PRIMARY KEY(account_id, exam_key)
+);
+"""))
