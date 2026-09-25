@@ -23,6 +23,7 @@ Per child:
 from __future__ import annotations
 
 import json
+import logging
 import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
@@ -32,10 +33,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import DOMAIN, OPEN_HOMEWORK_MAX_OVERDUE_DAYS
 from .coordinator import UntisCoordinator
 
+_LOGGER = logging.getLogger(__name__)
 
 def _slug(name: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
@@ -91,6 +94,7 @@ class _Base(CoordinatorEntity[UntisCoordinator], SensorEntity):
         self._slug = slug
         self._value: int | None = None
         self._attrs: dict[str, Any] = {}
+        self._db_ok = True
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": f"UNTIS Archive – {entry.title}",
@@ -98,14 +102,32 @@ class _Base(CoordinatorEntity[UntisCoordinator], SensorEntity):
             "model": "Untis Archive",
         }
 
-    def _compute(self) -> tuple[int, dict[str, Any]]:
-        """Wert und Attribute aus der Datenbank; läuft im Executor."""
+    def _compute(self, today: date) -> tuple[int, dict[str, Any]]:
+        """Wert und Attribute aus der Datenbank; läuft im Executor.
+
+        ``today`` ist das Datum in der Zeitzone von HA, bestimmt in der
+        Ereignisschleife."""
         raise NotImplementedError
 
     async def _async_recompute(self, write: bool = True) -> None:
-        self._value, self._attrs = await self.hass.async_add_executor_job(self._compute)
+        today = dt_util.now().date()
+        try:
+            self._value, self._attrs = await self.hass.async_add_executor_job(
+                self._compute, today
+            )
+            self._db_ok = True
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Sensor %s: Datenbank nicht lesbar", self.entity_id)
+            self._db_ok = False
         if write:
             self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        # Die Werte kommen aus der lokalen Datenbank. Ein fehlgeschlagener
+        # WebUntis-Abruf (Wartung, Netz) macht sie nicht falsch; bis 0.5.4
+        # wurden alle Sensoren dann „nicht verfügbar“.
+        return self.coordinator.storage_ready and self._db_ok
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -134,12 +156,13 @@ class LehrstoffHeuteSensor(_Base):
         self._attr_translation_key = "lehrstoff_heute"
         self._attr_name = "Lehrstoff heute"
 
-    def _read(self) -> list[dict[str, Any]]:
-        today = date.today().isoformat()
-        return self.coordinator.storage.lessons_for_day(self.coordinator.account_id, today)
+    def _read(self, today: date) -> list[dict[str, Any]]:
+        return self.coordinator.storage.lessons_for_day(
+            self.coordinator.account_id, today.isoformat()
+        )
 
-    def _compute(self) -> tuple[int, dict[str, Any]]:
-        rows = self._read()
+    def _compute(self, today: date) -> tuple[int, dict[str, Any]]:
+        rows = self._read(today)
         value = sum(1 for r in rows if (r.get("lstext") or r.get("lstext_manual_override")))
         items = []
         for r in rows:
@@ -168,8 +191,13 @@ class HausaufgabenOffenSensor(_Base):
         self._attr_translation_key = "hausaufgaben_offen"
         self._attr_name = "Hausaufgaben offen"
 
-    def _compute(self) -> tuple[int, dict[str, Any]]:
-        items = self.coordinator.storage.open_homework(self.coordinator.account_id)
+    def _compute(self, today: date) -> tuple[int, dict[str, Any]]:
+        # Länger als zwei Wochen überfällige, nie abgehakte Aufgaben fallen
+        # heraus; ohne Grenze wuchs die Liste unbegrenzt.
+        items = self.coordinator.storage.open_homework(
+            self.coordinator.account_id,
+            (today - timedelta(days=OPEN_HOMEWORK_MAX_OVERDUE_DAYS)).isoformat(),
+        )
         return len(items), {
             "items": [
                 {
@@ -209,18 +237,17 @@ class VersaeumterStoffSensor(_Base):
         self._attr_translation_key = "versaeumter_stoff"
         self._attr_name = "Versäumter Stoff"
 
-    def _window(self) -> tuple[str, str]:
-        today = date.today()
+    def _window(self, today: date) -> tuple[str, str]:
         return (today - timedelta(days=14)).isoformat(), today.isoformat()
 
-    def _missed(self) -> list[dict[str, Any]]:
-        start, end = self._window()
+    def _missed(self, today: date) -> list[dict[str, Any]]:
+        start, end = self._window(today)
         return self.coordinator.storage.missed_lessons(
             self.coordinator.account_id, start, end
         )
 
-    def _compute(self) -> tuple[int, dict[str, Any]]:
-        rows = self._missed()
+    def _compute(self, today: date) -> tuple[int, dict[str, Any]]:
+        rows = self._missed(today)
         return len(rows), {
             "items": [
                 {
@@ -245,16 +272,15 @@ class FehlzeitenSchuljahrSensor(_Base):
         self._attr_translation_key = "fehlzeiten_schuljahr"
         self._attr_name = "Fehlzeiten Schuljahr"
 
-    def _absences(self) -> list[dict[str, Any]]:
-        today = date.today()
+    def _absences(self, today: date) -> list[dict[str, Any]]:
         start = _school_year_start(today).isoformat()
         end = (today + timedelta(days=14)).isoformat()
         return self.coordinator.storage.absences_between(
             self.coordinator.account_id, start, end
         )
 
-    def _compute(self) -> tuple[int, dict[str, Any]]:
-        rows = self._absences()
+    def _compute(self, today: date) -> tuple[int, dict[str, Any]]:
+        rows = self._absences(today)
         unexcused = [r for r in rows if not r.get("is_excused")]
         return len(rows), {
             "unexcused_count": len(unexcused),
@@ -295,7 +321,7 @@ class StundenplanAenderungenSensor(_Base):
             self.coordinator.account_id, since
         )
 
-    def _compute(self) -> tuple[int, dict[str, Any]]:
+    def _compute(self, today: date) -> tuple[int, dict[str, Any]]:
         rows = self._changes()
         items = []
         for r in rows[:50]:
@@ -337,16 +363,15 @@ class FachVerlaufSensor(_Base):
         self._attr_translation_key = "fach_verlauf"
         self._attr_name = "Fach-Verlauf"
 
-    def _rows(self) -> list[dict[str, Any]]:
-        today = date.today()
+    def _rows(self, today: date) -> list[dict[str, Any]]:
         start = _school_year_start(today).isoformat()
         end = today.isoformat()
         return self.coordinator.storage.lessons_between(
             self.coordinator.account_id, start, end
         )
 
-    def _compute(self) -> tuple[int, dict[str, Any]]:
-        rows = self._rows()
+    def _compute(self, today: date) -> tuple[int, dict[str, Any]]:
+        rows = self._rows(today)
         grouped: dict[str, list[dict[str, Any]]] = {}
         for r in rows:
             if (r.get("code") or "") == "cancelled":
@@ -398,8 +423,7 @@ class KrankheitsperiodenSensor(_Base):
         self._attr_translation_key = "krankheitsperioden"
         self._attr_name = "Krankheitsperioden"
 
-    def _build(self) -> list[dict[str, Any]]:
-        today = date.today()
+    def _build(self, today: date) -> list[dict[str, Any]]:
         start = _school_year_start(today).isoformat()
         end = (today + timedelta(days=14)).isoformat()
         absences = self.coordinator.storage.absences_between(
@@ -446,6 +470,6 @@ class KrankheitsperiodenSensor(_Base):
         periods.sort(key=lambda p: p["start_date"], reverse=True)
         return periods
 
-    def _compute(self) -> tuple[int, dict[str, Any]]:
-        periods = self._build()
+    def _compute(self, today: date) -> tuple[int, dict[str, Any]]:
+        periods = self._build(today)
         return len(periods), {"periods": periods}

@@ -112,7 +112,8 @@ Eindeutig über `(account_id, untis_period_id)`.
 | `info` | Info-Text |
 | `was_absent` | `1` = Kind war in dieser Stunde laut Fehlzeiten abwesend |
 | `absence_reason` | Grund der Abwesenheit (falls `was_absent=1`) |
-| `is_late_addition` | `1` = Stunde wurde **nachträglich** in den Plan eingefügt |
+| `is_late_addition` | `1` = Stunde lag bei ihrem ersten Auftauchen schon vor dem heutigen Tag (nachträglich eingetragen; ab 0.5.5, vorher bei jeder neu ins Fenster gerückten Stunde) |
+| `removed_at` | gesetzt, wenn WebUntis die Stunde für einen Tag, den es geliefert hat, nicht mehr führt (Geisterstunde, ab 0.5.5). Die Zeile bleibt; Sensoren und Kalender der Integration blenden sie aus. Kommt sie zurück, wird das Feld wieder NULL |
 | `teacher_orig_untis_id`, `teacher_orig_name` | ursprüngliche Lehrkraft bei Vertretung (Name = **Kürzel**) |
 | `subject_orig_*`, `room_orig` | analog für Fach/Raum |
 | `is_teacher_substituted` | `1` = Lehrervertretung |
@@ -179,6 +180,12 @@ Eindeutig über `(account_id, untis_absence_id)`. Nur **aktueller Stand**
 | `is_excused` | `1` = entschuldigt, `0` = offen/unentschuldigt |
 | `created_user`, `updated_user` | erfassende Lehrkraft |
 | `payload_json` | Roh-Antwort (enthält u. a. Untis-`lastUpdate`) |
+
+Liefert WebUntis eine Fehlzeit des laufenden Schuljahrs nicht mehr (von der
+Schule gelöscht), entfernt die Integration sie aus `absences` (ab 0.5.5; nur
+nach erfolgreichem, nicht leerem Abruf und höchstens fünf je Abruf). Die
+vollständige Zeile steht danach als JSON in `absence_deletions`
+(`account_id`, `untis_absence_id`, `deleted_at`, `row_json`).
 
 ---
 
@@ -331,6 +338,8 @@ https://developers.home-assistant.io/docs/api/websocket.
 - Fehlzeiten-Fenster: **−400 bis +30 Tage**.
 - Wenn der Untis-Server keinen neuen Stundenplan-Import meldet, wird der
   Stundenplan-Pass übersprungen (Hausaufgaben/Fehlzeiten laufen trotzdem).
+  Fehlender Lehrstoff der letzten fünf Tage wird bei jedem Pull nachgefragt
+  (höchstens 40 Stunden).
 - Sofort-Abruf manuell auslösbar via HA-Service `untis_archive.refresh`
   (optional `account: "<Anzeigename>"`).
 

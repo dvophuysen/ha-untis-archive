@@ -216,6 +216,7 @@ class _BaseCalendar(CoordinatorEntity[UntisCoordinator], CalendarEntity):
         super().__init__(coordinator)
         self._entry = entry
         self._candidates: list[CalendarEvent] = []
+        self._db_ok = True
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": f"UNTIS Archive – {entry.title}",
@@ -223,18 +224,27 @@ class _BaseCalendar(CoordinatorEntity[UntisCoordinator], CalendarEntity):
             "model": "Untis Archive",
         }
 
-    def _load(self) -> list[CalendarEvent]:
+    def _load(self, today: date) -> list[CalendarEvent]:
         """Die Termine, aus denen ``event`` wählt; läuft im Executor."""
         raise NotImplementedError
 
     async def _async_reload(self, write: bool = True) -> None:
+        today = dt_util.now().date()
         try:
-            self._candidates = await self.hass.async_add_executor_job(self._load)
+            self._candidates = await self.hass.async_add_executor_job(self._load, today)
+            self._db_ok = True
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Kalender %s: Termine nicht lesbar", self.entity_id)
             self._candidates = []
+            self._db_ok = False
         if write:
             self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        # Die Termine kommen aus der lokalen Datenbank; ein fehlgeschlagener
+        # WebUntis-Abruf macht den Kalender nicht unbrauchbar.
+        return self.coordinator.storage_ready and self._db_ok
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -253,10 +263,9 @@ class UntisCalendar(_BaseCalendar):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_calendar"
 
-    def _load(self) -> list[CalendarEvent]:
+    def _load(self, today: date) -> list[CalendarEvent]:
         # Heute und morgen: Nach Mitternacht gilt bis zur nächsten
         # Aktualisierung schon der neue Tag.
-        today = dt_util.now().date()
         events: list[CalendarEvent] = []
         for day in (today, today + timedelta(days=1)):
             for row in self.coordinator.storage.lessons_for_day(
@@ -314,8 +323,7 @@ class UntisEreignisseCalendar(_BaseCalendar):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_calendar_ereignisse"
 
-    def _load(self) -> list[CalendarEvent]:
-        today = dt_util.now().date()
+    def _load(self, today: date) -> list[CalendarEvent]:
         return self._build_events(today, today + timedelta(days=31))
 
     @property

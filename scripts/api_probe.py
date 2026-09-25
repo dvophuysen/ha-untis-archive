@@ -71,7 +71,9 @@ async def main() -> int:
             return 1
 
         print("=== SESSION ===")
-        print(json.dumps(session.__dict__, indent=2, default=str))
+        # Die Sitzungs-ID ist ein Zugangsschlüssel: nicht ausgeben.
+        shown = {**session.__dict__, "session_id": "***"}
+        print(json.dumps(shown, indent=2, default=str))
 
         print("\n=== TIMETABLE (extended) ===")
         try:

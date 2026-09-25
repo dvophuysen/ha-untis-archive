@@ -176,10 +176,8 @@ async def main() -> int:
                 "period_info_json": json.dumps(info, ensure_ascii=False, default=str),
             }
             if text:
+                # is_supervision_guess leitet storage aus Code und Lehrstoff ab.
                 update["lstext"] = text
-                update["is_supervision_guess"] = bool(
-                    lesson["code"] == "irregular" and not text
-                )
                 topic_ok += 1
             store.upsert_lesson(account_id, update)
         print(f"  Lehrstoff nachgezogen: {topic_ok} (Fehler {topic_fail})")

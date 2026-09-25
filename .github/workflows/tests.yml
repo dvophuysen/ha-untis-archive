@@ -45,6 +45,8 @@ jobs:
           cache: npm
           cache-dependency-path: schul_cockpit/frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - name: Unit-Tests
+        run: node --test src/lib/*.test.js
       - run: npm run build
 
   component:
@@ -56,6 +58,8 @@ jobs:
         with:
           python-version: "3.13"
       - name: Abhängigkeiten
-        run: pip install pytest-homeassistant-custom-component
+        # Fest auf die zuletzt lokal geprüfte Version (bringt Home Assistant
+        # 2026.2.3 mit); neuere verlangen teils ein neueres Python.
+        run: pip install pytest-homeassistant-custom-component==0.13.316
       - name: Tests
         run: python -m pytest -q tests_ha -c tests_ha/pytest.ini
