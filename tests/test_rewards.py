@@ -258,3 +258,9 @@ def test_a_badge_whose_basis_is_gone_is_taken_back(world):
     assert all(r["badge"] != "probearbeit" for r in s["reached_today"])
     with closing(db.webapp_conn()) as c:
         assert c.execute("SELECT COUNT(*) FROM reward_badges WHERE badge='probearbeit'").fetchone()[0] == 0
+
+
+def test_on_the_way_shows_a_goal_even_without_any_progress(world):
+    """D203: Auch ohne jeden Fortschritt steht ein nächstes Ziel da, das mit dem kleinsten Schritt zuerst."""
+    s = rewards.summary(1, at(START, 18))
+    assert s["next_up"] and s["next_up"][0]["badge"] == "zielniveau" and s["next_up"][0]["missing"] == 1

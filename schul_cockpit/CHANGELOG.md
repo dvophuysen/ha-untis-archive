@@ -1,3 +1,7 @@
+## 1.30.1
+
+- „Auf dem Weg“ zeigt auch dann ein nächstes Ziel, wenn bei keinem Abzeichen schon Fortschritt da ist.
+
 ## 1.30.0
 
 - Neue Abzeichen werden groß gefeiert: bildschirmfüllend mit Konfetti, sobald das Kind die App öffnet, einmal je Stufe.

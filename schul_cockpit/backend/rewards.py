@@ -389,8 +389,10 @@ def summary(account_id: int, now: datetime | None = None) -> dict:
         ({"badge": b["key"], "name": b["name"], "emoji": b["emoji"], "what": b["what"], "value": b["value"],
           "next": b["next"], "missing": b["next"] - b["value"], "next_level": LEVELS[b["level"]],
           "progress": round((b["value"] - b["prev"]) / max(1, b["next"] - b["prev"]), 3)}
-         for b in badges if b["next"] and b["value"] > b["prev"]),
-        key=lambda x: (-x["progress"], x["missing"]))[:3]
+         for b in badges if b["next"]),
+        # Angefangenes zuerst, dann das, wofür am wenigsten fehlt: Auch wer noch
+        # nirgends angefangen hat, sieht sein nächstes Ziel.
+        key=lambda x: (-x["progress"], x["missing"] / max(1, x["next"]), x["missing"]))[:3]
 
     special = [
         {"key": "volle_woche", "name": "Volle Woche", "emoji": "🗓️", "count": len(full_weeks)},
