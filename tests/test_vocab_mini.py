@@ -114,3 +114,21 @@ def test_untitled_box_gets_descriptive_label_without_inventing_a_heading():
     assert result['elements'][0]['title'] == ''
     with pytest.raises(CatalogError, match='Überschrift'):
         mini.ordered_transcript({'elements': [{'type': 'heading', 'title': '', 'kind': 'unit'}]})
+
+
+def test_catalog_read_endpoint_starts_the_job_in_the_event_loop(env, monkeypatch):
+    """Bis 1.23.2 lief der Endpunkt im Nebenfaden und scheiterte mit
+    „no running event loop“; neue Buchseiten ließen sich nicht einlesen."""
+    client, state, patch = env
+    from backend.routers import vocab as routes
+    client.app.include_router(routes.router, prefix='/api')
+    mid = source()
+    monkeypatch.setattr(mini, 'ai_tiers', lambda: {'klein': {'model': 'gpt-5-mini', 'foundry': '2'}})
+    async def complete(*args, **kw):
+        return json.dumps({'printed_page': 10, 'elements': [], 'issues': []}), {}, 'test'
+    monkeypatch.setattr(mini.ai, 'complete', complete)
+    r = client.post('/api/accounts/1/learning/vocab/Englisch/catalog-read',
+                    json={'start_page': 10, 'pages': [{'material_id': mid, 'number': 10, 'side': 'full'}]})
+    assert r.status_code == 200, r.text
+    assert r.json()['state'] in ('running', 'done')
+    assert client.post('/api/accounts/1/learning/vocab/Englisch/catalog-capture', json={'pages': [10]}).status_code == 200

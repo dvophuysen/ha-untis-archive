@@ -1,3 +1,7 @@
+## 1.23.3
+
+- Korrektur: Neue Buchseiten für einen geprüften Vokabelbestand ließen sich nicht einlesen; der Leseauftrag brach mit einem Serverfehler ab. Das betraf auch das Übernehmen weiterer Lektionen.
+
 ## 1.23.2
 
 - Lernen räumt sich selbst auf: Einheiten zu einer geschriebenen Arbeit wandern am Tag danach ins Archiv, Hausaufgabenhilfe, sobald die Aufgabe abgehakt ist (sonst drei Tage nach dem Fälligkeitstag), alles andere nach 14 Tagen ohne Aktivität.

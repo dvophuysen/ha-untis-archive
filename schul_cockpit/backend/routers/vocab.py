@@ -107,7 +107,7 @@ class ReadCatalogIn(InputModel):
 
 
 @router.post('/{subject}/catalog-read')
-def read_catalog(account_id: int, subject: str, body: ReadCatalogIn, user: CurrentUser = Depends(get_current_user)):
+async def read_catalog(account_id: int, subject: str, body: ReadCatalogIn, user: CurrentUser = Depends(get_current_user)):
     access(user, account_id, write=True, parent=True)
     from ..vocab_mini import PageSpec, mini_tier, read_sequence
     from ..textbook_context import start_job
@@ -130,7 +130,7 @@ def catalog_read_status(account_id: int, subject: str, user: CurrentUser = Depen
 
 
 @router.post('/{subject}/catalog-capture')
-def capture_catalog(account_id: int, subject: str, body: CaptureCatalogIn, user: CurrentUser = Depends(get_current_user)):
+async def capture_catalog(account_id: int, subject: str, body: CaptureCatalogIn, user: CurrentUser = Depends(get_current_user)):
     access(user, account_id, write=True, parent=True)
     if any(p < 1 or p > 2000 for p in body.pages):
         raise HTTPException(422, 'Ungültige Seitenzahl.')
