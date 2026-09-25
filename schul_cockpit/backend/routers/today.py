@@ -124,6 +124,8 @@ async def today(
         "photo_requests": await photo_requests(account_id, today_iso),
         # Seiten, die das Kind noch einmal fotografieren soll (D165).
         "retakes": _retakes(account_id),
+        # Lern-Pflichtplan des Tages (D180), damit Heute mit einem Aufruf lädt (D177).
+        "study_plan": _study_plan(account_id, user),
         # Ob der Tag schon durchgegangen wurde — davon hängt die Abendkarte ab
         # und am nächsten Morgen die zweite Mitteilung.
         "day_close": {
@@ -144,6 +146,16 @@ def next_by_subject(account_id: int, today_date: date) -> dict[str, str]:
         return found
     except Exception:
         return {}
+
+
+def _study_plan(account_id: int, user) -> dict | None:
+    try:
+        from .. import study_plan
+        return study_plan.today(account_id, user)
+    except Exception:
+        import logging
+        logging.getLogger("schul_cockpit.today").warning("Lernplan für Konto %s nicht lesbar", account_id, exc_info=True)
+        return None
 
 
 def _retakes(account_id: int) -> list[dict]:

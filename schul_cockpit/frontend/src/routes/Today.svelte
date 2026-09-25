@@ -1,20 +1,21 @@
 <script>
   // Startseite nach Phasen des Schultags (D171): vor, in und nach der Schule.
-  // Das Layout bleibt, oben wechselt die Fokuskarte. „Geschafft“ (D172) heißt:
-  // alles bis zum nächsten Schultag erledigt, Tasche gepackt, Stunden zurückgemeldet.
+  // Das Layout bleibt, oben wechselt die Fokuskarte. Vier Bereiche je Schultag:
+  // Aufgaben, Lernen (D180), Tasche, Feedback. „Geschafft“ (D172) verlangt alle vier.
   import ActionLabel from '../lib/ActionLabel.svelte';
   import LearningGoal from '../lib/LearningGoal.svelte';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { api, ApiError } from '../lib/api.js';
-  import { isoToday, formatShortDate, daysBetween } from '../lib/format.js';
+  import { isoToday, formatShortDate, daysBetween, stripUntisMetadata } from '../lib/format.js';
   import { splitTasks } from '../lib/dayDashboard.js';
-  import { dayPhase, mergeLessons, held, lessonOver, minutesLeft } from '../lib/dayPhase.js';
+  import { dayPhase, mergeLessons, held, lessonOver } from '../lib/dayPhase.js';
   import { subjectStyle } from '../lib/subjectStyle.js';
   import PackingChecklist from '../lib/PackingChecklist.svelte';
   import DaySchedule from '../lib/DaySchedule.svelte';
   import QuickAdd from '../lib/QuickAdd.svelte';
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskDetail from '../lib/TaskDetail.svelte';
+  import PracticePaper from '../lib/PracticePaper.svelte';
   import { profile } from '../lib/profile.svelte.js';
 
   let { accountId } = $props();
@@ -23,12 +24,13 @@
   let editing = $state(null), now = $state(new Date());
   let showDone = $state(false), message = $state(''), bag = $state(null), todayBag = $state(null);
   let focusBusy = $state(false), celebrate = $state(false);
+  let paperId = $state(null), stepBusy = $state(''), stepError = $state('');
   let request = 0;
 
   async function load(reset = false) {
     if (!accountId) return;
     const id = accountId, ticket = ++request;
-    if (reset) { data = null; tasks = []; plan = null; editing = null; showDone = false; message = ''; bag = null; todayBag = null; loading = true; }
+    if (reset) { data = null; tasks = []; plan = null; editing = null; paperId = null; stepError = ''; showDone = false; message = ''; bag = null; todayBag = null; loading = true; }
     error = ''; planError = '';
     const results = await Promise.allSettled([
       api.get(`/api/accounts/${id}/today`), api.get(`/api/accounts/${id}/tasks?recent_done_days=14`), api.get(`/api/accounts/${id}/plan?compact=1`),
@@ -73,12 +75,24 @@
   const endedLessons = $derived(mergeLessons((data?.lessons ?? []).filter(l => held(l) && lessonOver(l, now))));
   const feedbackOpen = $derived(endedLessons.filter(g => g.lessons.some(l => l.checkin?.rating == null)).length);
   const notedToday = $derived(tasks.filter(t => t.source === 'manual' && (t.created_at || '').slice(0, 10) === day && t.status !== 'done'));
-  const bagLeft = $derived(bag ? bag.total - bag.done : 0);
+  // Lernen (D180): der eingefrorene Pflichtplan des Tages, erledigt live geprüft.
+  const study = $derived(data?.study_plan ?? null);
+  const learnSteps = $derived(study?.steps ?? []);
+  const learnOpen = $derived(learnSteps.filter(s => !s.done).length);
+  const nextStep = $derived(learnSteps.find(s => !s.done) ?? null);
   const afterSchool = $derived(phase === 'nach' || phase === 'frei');
-  const done = $derived(afterSchool && !!data && !!nextSchoolDay && !openTasks.length && !!bag?.packed && !feedbackOpen);
+  const done = $derived(afterSchool && !!data && !!nextSchoolDay && !openTasks.length && !learnOpen && !!bag?.packed && !feedbackOpen);
   const nextTask = $derived(openTasks[0] ?? null);
-  const left = $derived(openTasks.length + (bag && !bag.packed ? 1 : 0) + (feedbackOpen ? 1 : 0));
-  const eta = $derived(minutesLeft(openTasks, bagLeft, feedbackOpen));
+  const nextNotes = $derived(nextTask ? stripUntisMetadata(nextTask.notes) : '');
+  const left = $derived(openTasks.length + learnOpen + (bag && !bag.packed ? 1 : 0) + (feedbackOpen ? 1 : 0));
+  const tightText = $derived.by(() => {
+    const t = study?.tight?.[0];
+    if (!t) return '';
+    const name = subjectStyle(t.subject || '').name;
+    return study.free_day
+      ? `Heute ist eigentlich frei. Bis zur Arbeit in ${name} am ${formatShortDate(t.exam_date)} ist aber nicht mehr viel Zeit, darum ein kleiner Schritt.`
+      : `Die Arbeit in ${name} am ${formatShortDate(t.exam_date)} kommt bald. Ein Schritt am Tag reicht.`;
+  });
   const firstGroup = $derived(ph.first ? mergeLessons((data?.lessons ?? []).filter(held))[0] : null);
   const currentGroup = $derived.by(() => {
     const target = ph.current || ph.next;
@@ -142,6 +156,25 @@
     finally { focusBusy = false; }
   }
   function saved(text = '') { message = text; load(); }
+  // Ein Papier-Schritt startet die Übungsarbeit direkt (D178). Ist heute für
+  // diesen Schritt schon eine erstellt und noch offen, geht sie wieder auf.
+  async function startStep(s) {
+    if (s.kind !== 'paper') { if (s.href) location.hash = s.href; return; }
+    if (stepBusy) return;
+    stepBusy = s.key; stepError = '';
+    const id = accountId;
+    try {
+      const r = await api.get(`/api/accounts/${id}/practice?exam_key=${encodeURIComponent(s.exam_key)}`);
+      const open = (r.papers ?? []).find(p => p.paper_format === s.format && p.attempt_id && p.status !== 'graded' && (p.created_at || '').slice(0, 10) === day);
+      if (open) paperId = open.attempt_id;
+      else {
+        const a = await api.post(`/api/accounts/${id}/practice`, { exam_key: s.exam_key, format: s.format, topic_ids: s.topic_id ? [s.topic_id] : [], level: s.level ?? null });
+        paperId = a.id;
+      }
+      await tick(); jump('s-lernen');
+    } catch (e) { stepError = e instanceof ApiError ? e.message : 'Die Übungsarbeit konnte nicht geöffnet werden.'; }
+    finally { stepBusy = ''; }
+  }
   function jump(id) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   const ringStyle = (d, n) => `background:conic-gradient(var(--accent) ${n ? Math.round(d / n * 100) : 0}%, var(--bg-elevated) 0)`;
 </script>
@@ -158,6 +191,7 @@
       <span class="big-ring" aria-hidden="true"><span>✓</span></span>
       <strong class="focus-big">Geschafft. Freizeit!</strong>
       <span>Alles für {dayWord(nextSchoolDay)} ist erledigt.</span>
+      <span class="done-list">Aufgaben erledigt · Lernen erledigt · Tasche gepackt · Stunden zurückgemeldet</span>
       {#if gains}
         <span class="gains">
           <span><b>🔥 {gains.streak.current}</b>{gains.streak.current === 1 ? 'Tag' : 'Tage'} Serie</span>
@@ -193,15 +227,22 @@
       {:else}
         <span class="focus-k">{phase === 'frei' ? `Für ${dayWord(nextSchoolDay)}` : 'Nach der Schule'} · noch {left} bis zur Freizeit</span>
         {#if nextTask}
-          <strong class="focus-big">{nextTask.task_type === 'reminder' ? '📌' : subjectStyle(nextTask.subject_name || nextTask.title).emoji} {nextTask.task_type === 'reminder' ? '' : `${subjectStyle(nextTask.subject_name || nextTask.title).name}: `}{nextTask.task_type === 'reminder' ? nextTask.title : (nextTask.notes || nextTask.title)}</strong>
+          <!-- Wie in der Aufgabenliste: Fach oder Titel, darunter die Notiz ohne UNTIS-Angaben; Tippen öffnet das Detail. -->
+          <button class="focus-task" onclick={() => (editing = nextTask)}>
+            <strong class="focus-big clamp">{nextTask.task_type === 'reminder' ? '📌' : subjectStyle(nextTask.subject_name || nextTask.title).emoji} {nextTask.title}</strong>
+            {#if nextNotes}<span class="focus-note clamp">{nextNotes}</span>{/if}
+          </button>
           <span class="focus-actions">
             <button class="on-accent" disabled={focusBusy} onclick={() => finishTask(nextTask)}>Erledigt ✓</button>
             {#if nextTask.task_type !== 'reminder'}<a class="on-accent-link" href={`#/learning?help=${nextTask.id}`}><ActionLabel kind="chat" label="Hilfe holen" /></a>{/if}
           </span>
+        {:else if nextStep}
+          <strong class="focus-big clamp">{nextStep.title}</strong>
+          <span class="focus-note">{nextStep.why}</span>
+          {#if !study.read_only}<span class="focus-actions"><button class="on-accent" disabled={!!stepBusy} onclick={() => startStep(nextStep)}>Los</button></span>{/if}
         {:else}
           <strong class="focus-big">Aufgaben erledigt. Noch {bag && !bag.packed ? 'die Tasche' : ''}{bag && !bag.packed && feedbackOpen ? ' und ' : ''}{feedbackOpen ? 'die Rückmeldungen' : ''}.</strong>
         {/if}
-        <span class="focus-sub">⏱ Freizeit in ca. {Math.max(eta, 1)} Min.</span>
       {/if}
     </section>
   {/if}
@@ -209,8 +250,9 @@
   {#if afterSchool && nextSchoolDay}
     <div class="rings">
       <button class="ring-btn" class:full={!openTasks.length} onclick={() => jump('s-aufgaben')}><span class="ring" style={ringStyle(ringTasks.length - openTasks.length, ringTasks.length)}><span>{!openTasks.length ? '✓' : '📚'}</span></span><b>Aufgaben</b><small>{ringTasks.length - openTasks.length} von {ringTasks.length}</small></button>
+      <button class="ring-btn" class:full={!learnOpen} onclick={() => jump('s-lernen')}><span class="ring" style={ringStyle(learnSteps.length - learnOpen, learnSteps.length)}><span>{!learnOpen ? '✓' : '🧠'}</span></span><b>Lernen</b><small>{learnSteps.length ? `${learnSteps.length - learnOpen} von ${learnSteps.length}` : 'frei'}</small></button>
       <button class="ring-btn" class:full={bag?.packed} onclick={() => jump('s-tasche')}><span class="ring" style={ringStyle(bag?.done ?? 0, bag?.total ?? 0)}><span>{bag?.packed ? '✓' : '🎒'}</span></span><b>Tasche</b><small>{bag ? `${bag.done} von ${bag.total}` : '…'}</small></button>
-      <button class="ring-btn" class:full={!feedbackOpen} onclick={() => jump('s-stunden')}><span class="ring" style={ringStyle(endedLessons.length - feedbackOpen, endedLessons.length)}><span>{!feedbackOpen ? '✓' : '💬'}</span></span><b>Stunden</b><small>{endedLessons.length - feedbackOpen} von {endedLessons.length}</small></button>
+      <button class="ring-btn" class:full={!feedbackOpen} onclick={() => jump('s-stunden')}><span class="ring" style={ringStyle(endedLessons.length - feedbackOpen, endedLessons.length)}><span>{!feedbackOpen ? '✓' : '💬'}</span></span><b>Feedback</b><small>{endedLessons.length - feedbackOpen} von {endedLessons.length}</small></button>
     </div>
   {/if}
 
@@ -223,6 +265,9 @@
       <h3>Dein Tag{#if phase === 'in'} <small>😀 nach jeder Stunde</small>{/if}</h3>
       <DaySchedule {accountId} lessons={data.lessons} {now} onsaved={() => saved('Rückmeldung gespeichert.')} />
     </section>
+    {#if learnSteps.length}
+      <p class="learn-line" data-section="lernen-kurz"><b>Heute lernen:</b> {learnSteps.map(s => s.title).join(' · ')}</p>
+    {/if}
     {#if phase === 'vor'}
       <section class="sec" data-section="tasche">
         <h3>Dabei? <small>{todayBag?.packed ? '✓ alles drin' : 'Tasche für heute'}</small></h3>
@@ -251,6 +296,24 @@
         {#each work.due as task (task.id)}<TaskRow {accountId} {task} onchange={() => saved()} onopen={t => editing = t} />
         {:else}<p class="all-clear">✓ Keine Aufgabe offen.</p>{/each}
       </div>
+    </section>
+    <section class="sec" id="s-lernen" data-section="lernen">
+      <h3>Lernen <small>{learnSteps.length ? `${learnSteps.length - learnOpen} von ${learnSteps.length}` : 'heute frei'}</small></h3>
+      {#if paperId}
+        <PracticePaper {accountId} attemptId={paperId} backLabel="Zurück zu Heute" onclose={() => { paperId = null; load(); }} />
+      {:else}
+        {#if tightText}<p class="learn-hint">{tightText}</p>{/if}
+        <div class="list">
+          {#each learnSteps as s (s.key)}
+            <div class="learn-step" class:done={s.done}>
+              <span class="learn-check" class:checked={s.done} aria-hidden="true">{s.done ? '✓' : ''}</span>
+              <span class="learn-body"><strong>{s.title}</strong><small>{s.why}</small></span>
+              {#if s.done}<span class="learn-state">erledigt</span>{:else if !study?.read_only}<button class="primary learn-go" disabled={!!stepBusy} onclick={() => startStep(s)}>{stepBusy === s.key ? 'Wird erstellt …' : 'Los'}</button>{/if}
+            </div>
+          {:else}<p class="all-clear">✓ Heute ist nichts zum Lernen Pflicht.</p>{/each}
+        </div>
+        {#if stepError}<p class="error-box" role="alert">{stepError}</p>{/if}
+      {/if}
     </section>
     <section class="sec" id="s-tasche" data-section="tasche">
       <h3>Tasche für {WEEKDAYS[new Date(nextSchoolDay + 'T12:00:00').getDay()]} <small>antippen, wenn drin</small></h3>
@@ -313,7 +376,22 @@
   .focus-actions{display:flex;gap:var(--sp-2);align-items:center;flex-wrap:wrap;position:relative;z-index:1}
   .on-accent{background:var(--accent-fg);color:var(--accent);border:0;font-weight:800;border-radius:var(--r-md)}
   .on-accent-link{color:var(--accent-fg);font-weight:700;padding:10px 4px;min-height:44px;display:inline-flex;align-items:center}
-  .focus-sub{background:rgba(255,255,255,.14);border-radius:var(--r-md);padding:var(--sp-2) var(--sp-3);font-size:var(--fs-sm);position:relative;z-index:1}
+  .focus-task{display:grid;gap:4px;text-align:left;background:transparent;border:0;padding:0;color:inherit;min-height:44px;position:relative;z-index:1}
+  .focus-note{font-size:var(--fs-sm);opacity:.9;overflow-wrap:anywhere}
+  .clamp{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
+  .focus-note.clamp{-webkit-line-clamp:2;line-clamp:2}
+  .done-list{font-size:var(--fs-xs);opacity:.9}
+  .learn-line{margin:var(--sp-3) 0 0;font-size:var(--fs-sm);overflow-wrap:anywhere}
+  .learn-hint{margin:0 0 var(--sp-2);padding:var(--sp-2) var(--sp-3);background:var(--bg-elevated);border-radius:var(--r-md);font-size:var(--fs-sm)}
+  .learn-step{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:var(--sp-2);align-items:center;padding:var(--sp-2) 0;border-bottom:1px solid var(--border)}
+  .learn-step:last-child{border-bottom:0}
+  .learn-check{width:24px;height:24px;border-radius:50%;border:2px solid var(--border);display:grid;place-items:center;font-weight:800;font-size:.8rem}
+  .learn-check.checked{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .learn-body{display:grid;gap:2px;overflow-wrap:anywhere}
+  .learn-body small{color:var(--fg-muted);font-size:var(--fs-xs)}
+  .learn-step.done .learn-body strong{color:var(--fg-muted)}
+  .learn-state{font-size:var(--fs-xs);color:var(--good-fg);font-weight:700}
+  .learn-go{min-height:44px;min-width:64px}
   .done-card{text-align:center;justify-items:center;animation:rise .45s}
   .done-card.still{animation:none}
   .big-ring{width:84px;height:84px;border-radius:50%;background:var(--accent-fg);display:grid;place-items:center}
@@ -323,7 +401,7 @@
   .gains span{background:rgba(255,255,255,.15);border-radius:var(--r-md);padding:var(--sp-2) 4px;font-size:.72rem;display:grid}
   .gains b{font-size:var(--fs-md)}
   .new-badge{background:var(--accent-fg);color:var(--accent);border-radius:var(--r-pill);padding:6px 12px;font-weight:700;font-size:var(--fs-xs)}
-  .rings{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-2);margin-bottom:var(--sp-2)}
+  .rings{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-2);margin-bottom:var(--sp-2)}
   .ring-btn{display:grid;justify-items:center;gap:3px;padding:var(--sp-2) 4px;border-radius:var(--r-md);min-height:100px;background:var(--bg-card)}
   .ring{width:50px;height:50px;border-radius:50%;display:grid;place-items:center}
   .ring span{width:39px;height:39px;border-radius:50%;background:var(--bg-card);display:grid;place-items:center;font-size:1.1rem}

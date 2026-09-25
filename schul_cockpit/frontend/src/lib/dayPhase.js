@@ -41,10 +41,3 @@ export function mergeLessons(lessons) {
   }
   return groups;
 }
-
-/** Geschätzte Minuten bis zur Freizeit: Aufgaben mit Schätzung, sonst 15 Minuten,
- *  Erinnerungen und Kleinkram je eine Minute. */
-export function minutesLeft(openTasks, bagLeft, feedbackLeft) {
-  const work = openTasks.reduce((a, t) => a + (t.task_type === 'reminder' ? 1 : (t.estimated_minutes || 15)), 0);
-  return work + bagLeft * 1 + feedbackLeft;
-}

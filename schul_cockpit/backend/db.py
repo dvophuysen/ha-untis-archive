@@ -1124,3 +1124,12 @@ ALTER TABLE mentor_exams ADD COLUMN exam_key TEXT;
 ALTER TABLE mentor_exams ADD COLUMN paper_format TEXT;
 CREATE INDEX IF NOT EXISTS idx_mentor_exams_key ON mentor_exams(account_id, exam_key);
 """))
+
+# Lern-Pflichtplan (D180): einmal je Tag und Kind berechnet und eingefroren,
+# damit ein erledigter Schritt nicht sofort durch den nächsten ersetzt wird.
+_MIGRATIONS.append(("study_plan_001", """
+CREATE TABLE IF NOT EXISTS study_plan_days (
+ account_id INTEGER NOT NULL, day TEXT NOT NULL, steps_json TEXT NOT NULL, computed_at TEXT NOT NULL,
+ PRIMARY KEY(account_id, day)
+);
+"""))

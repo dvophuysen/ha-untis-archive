@@ -59,7 +59,7 @@
       {/each}
     </div>
     <p class="hint">
-      {data.week.some((d) => d.state === 'rescued') ? '½ heißt: am nächsten Morgen vor der ersten Stunde nachgeholt. ' : ''}Geschafft heißt: Aufgaben erledigt, Tasche gepackt, Stunden zurückgemeldet. Fertig vor {data.bonus_until} Uhr ist ein Frühstarter-Tag. Der letzte Schultag vor dem Wochenende zählt voll, wenn bis Sonntagabend alles erledigt ist.
+      {data.week.some((d) => d.state === 'rescued') ? '½ heißt: am nächsten Morgen vor der ersten Stunde nachgeholt. ' : ''}Geschafft heißt: Aufgaben erledigt, Lernen erledigt, Tasche gepackt, Stunden zurückgemeldet. Fertig vor {data.bonus_until} Uhr ist ein Frühstarter-Tag. Der letzte Schultag vor dem Wochenende zählt voll, wenn bis Sonntagabend alles erledigt ist.
     </p>
   </section>
 

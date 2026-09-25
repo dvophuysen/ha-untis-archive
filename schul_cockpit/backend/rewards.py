@@ -5,9 +5,10 @@ Elterngerät“ (D175). Mitlesen und Testmodus zählen nie. Alles gilt ab dem Ta
 an dem das System eingeführt wurde; frühere Tage zählen nicht.
 
 „Geschafft“ ist ein Schultag, an dem zu einem Zeitpunkt alles erledigt war:
-keine offene Aufgabe bis zum nächsten Schultag, die Tasche für den nächsten
-Schultag gepackt, die Stunden des Tages zurückgemeldet, und das Kind hat an
-dem Tag selbst etwas bestätigt. Ein offener Tag lässt sich bis zum Beginn der
+keine offene Aufgabe bis zum nächsten Schultag, die Pflichtschritte des
+Lernplans erledigt (D180), die Tasche für den nächsten Schultag gepackt, die
+Stunden des Tages zurückgemeldet, und das Kind hat an dem Tag selbst etwas
+bestätigt. Ein offener Tag lässt sich bis zum Beginn der
 ersten Stunde des nächsten Schultags retten, höchstens einmal je Kalenderwoche;
 er hält die Serie, zählt aber halb.
 """
@@ -133,10 +134,30 @@ def note(account_id: int, kind: str, ref: str | int, user, when: datetime | None
                       (account_id, kind, str(ref), when.date().isoformat(), when.isoformat()))
             c.execute("INSERT OR IGNORE INTO reward_activity(account_id,day,first_at) VALUES(?,?,?)",
                       (account_id, when.date().isoformat(), when.isoformat()))
+        _freeze_plan(account_id, when.date())
         evaluate(account_id, when)
     except Exception:
         # Belohnung ist Beiwerk: Sie darf nie eine Handlung des Kindes scheitern lassen.
         LOG.warning("Belohnung für Konto %s nicht erfasst", account_id, exc_info=True)
+
+
+def _freeze_plan(account_id: int, day: date) -> None:
+    """Der Lernplan des Tages steht fest, bevor der Tag als geschafft zählen
+    kann (D180); sonst hätte ein Tag ohne geöffnetes „Heute“ keine Lernpflicht."""
+    try:
+        from . import study_plan
+        study_plan.ensure(account_id, day)
+    except Exception:
+        LOG.warning("Lernplan für Konto %s nicht berechenbar", account_id, exc_info=True)
+
+
+def _learning_open(account_id: int, day: date, now: datetime) -> int:
+    try:
+        from . import study_plan
+        return study_plan.open_count(account_id, day, max(day, now.date()))
+    except Exception:
+        LOG.warning("Lernplan für Konto %s nicht prüfbar", account_id, exc_info=True)
+        return 0
 
 
 def note_prepared(account_id: int, exams: list[dict], today: date | None = None) -> None:
@@ -205,8 +226,9 @@ def day_state(account_id: int, day: date, now: datetime) -> dict:
         tasks = _open_tasks(c, account_id, nxt or day)
         bag = _bag_packed(c, account_id, nxt) if nxt else True
         feedback = _feedback_open(c, account_id, day, now)
+    learning = _learning_open(account_id, day, now)
     return {"next": nxt, "open_tasks": tasks, "bag_packed": bag, "feedback_open": feedback,
-            "clear": not tasks and bag and not feedback}
+            "learning_open": learning, "clear": not tasks and bag and not feedback and not learning}
 
 
 def _has_activity(c, account_id: int, *days: date) -> bool:

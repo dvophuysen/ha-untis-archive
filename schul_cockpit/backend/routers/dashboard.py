@@ -275,6 +275,16 @@ async def _dashboard_for_account(account_id: int, name: str, today: date) -> dic
     except Exception:
         _LOG.warning("Belohnung für Konto %s nicht lesbar", account_id, exc_info=True)
 
+    # Lernen heute (D180), nur zur Information: Die App steuert selbst nach.
+    study = None
+    try:
+        from .. import study_plan
+        p = await asyncio.to_thread(study_plan.view, account_id, now.date(), store=False)
+        if p["total"] or p["tight"]:
+            study = {"done": p["done"], "total": p["total"], "tight": p["tight"][:1], "frozen": p["frozen"]}
+    except Exception:
+        _LOG.warning("Lernplan für Konto %s nicht lesbar", account_id, exc_info=True)
+
     # Stundenplan-Raster und Tagesstreifen stehen nicht mehr auf der Startseite
     # (D166); der Plan liegt unter Übersichten → Woche.
     try:
@@ -284,6 +294,7 @@ async def _dashboard_for_account(account_id: int, name: str, today: date) -> dic
         profile = None
     return {
         "rewards": rewards_brief,
+        "study": study,
         "profile": profile,
         "account_id": account_id,
         "name": name,

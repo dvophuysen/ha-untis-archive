@@ -7,14 +7,17 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  const browser=await pw.launch({executablePath:process.env.SCHOOL_TEST_CHROMIUM,args:['--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-zygote'],headless:true});
  const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Europe/Berlin',serviceWorkers:'block'});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.clock.install({time:new Date('2026-09-14T14:00:00+02:00')});
- let rating=null,done=false,failRating=true,failTask=true,failPack=true;
+ let rating=null,done=false,failRating=true,failTask=true,failPack=true,studyDone=false,practicePosts=0;
  const bags={};let schoolDate='2026-09-14';
  function bag(day){const states=bags[day]||={};const items=[{key:'subject:math',label:'Mathematik'},{key:'subject:sport',label:'Sport'}].map(i=>({...i,done:!!states[i.key],revision:states[i.key]?1:0}));return {school_day:day,items,schedule:[{id:1,subject_name:'Mathematik',start_hhmm:'08:00',end_hhmm:'08:45',room:'204',material_key:'subject:math',material_checkbox:true},{id:2,subject_name:'Mathematik',start_hhmm:'08:45',end_hhmm:'09:30',room:'204',material_key:'subject:math',material_checkbox:false},{id:3,subject_name:'Sport',start_hhmm:'09:50',end_hhmm:'10:35',room:'Halle 2',room_orig:'Halle 1',is_room_substituted:true,teacher_name:'Vertretung',teacher_orig_name:'Stammlehrkraft',is_teacher_substituted:true,material_key:'subject:sport',material_checkbox:true},{id:4,subject_name:'Physik',start_hhmm:'10:50',end_hhmm:'11:35',is_cancelled:true}],plan_key:'a'.repeat(64),can_write:true,confirmed_count:items.filter(i=>i.done).length,status:items.every(i=>i.done)?'packed':'open'};}
  await page.route('**/api/**',async route=>{const req=route.request(),u=new URL(req.url()).pathname;let body={};let status=200;
  if(u==='/api/me')body={accounts:[{id:1,name:'Beispielkind'}],role:'child',is_admin:false};
  else if(u.includes('/packing/')){const day=u.split('/').at(-1);if(req.method()==='PUT'){if(failPack){status=500;body={detail:'Packen nicht gespeichert'};}else{const update=req.postDataJSON();(bags[day]||={})[update.item_key]=update.done;body=bag(day);}}else body=bag(day);}
- else if(u.endsWith('/today'))body={date:schoolDate,lessons:[{id:1,date:schoolDate,subject_name:'Deutsch',subject_short:'DE',start_hhmm:'08:00',start_time:800,end_time:845,room:'204',lstext:'Groß- und Kleinschreibung',checkin:{rating,note:null}}],next:{date:'2026-09-15',lessons:[{id:2,subject_name:'Sport',start_hhmm:'08:00',end_time:845,room:'Halle'}]}};
- else if(u.endsWith('/tasks')&&req.method()==='GET')body={tasks:[{id:1,title:'Mathematik',notes:'Brüche: Aufgabe 3',due_date:'2026-09-15',status:done?'done':'open',estimated_minutes:10},{id:2,title:'Englisch',notes:'Seite 24 lesen',due_date:'2026-09-18',status:'open'},{id:3,title:'Notiz ohne Termin',status:'open'},{id:4,title:'Geschichte',notes:'Lies den Text und beschreibe die Unterschiede. '.repeat(5),due_date:'2026-09-21',status:'open'}]};
+ else if(u.endsWith('/practice')&&req.method()==='GET')body={papers:[{id:5,paper_format:'einstieg',attempt_id:7,status:'active',created_at:'2026-09-14T10:00:00+02:00'}]};
+ else if(u.endsWith('/practice')&&req.method()==='POST'){practicePosts++;body={id:8};}
+ else if(u.includes('/practice/attempts/7'))body={id:7,label:'Einstiegstest',status:'active',exam:{title:'Einstiegstest Mathematik',minutes:30,tasks:[]},pages:[],answers:{},feedback:{},read_only:false};
+ else if(u.endsWith('/today'))body={study_plan:{day:schoolDate,steps:[{key:'paper:ma:einstieg',kind:'paper',title:'Einstiegstest Mathematik',why:'Zeigt, wo du für die Arbeit am 22.09. stehst.',subject:'Mathematik',exam_key:'ma',exam_date:'2026-09-22',format:'einstieg',topic_id:null,level:null,href:null,done:studyDone,tight:false}],engpass:false,tight:[],free_day:false,frozen:true,read_only:false,done:studyDone?1:0,total:1},date:schoolDate,lessons:[{id:1,date:schoolDate,subject_name:'Deutsch',subject_short:'DE',start_hhmm:'08:00',start_time:800,end_time:845,room:'204',lstext:'Groß- und Kleinschreibung',checkin:{rating,note:null}}],next:{date:'2026-09-15',lessons:[{id:2,subject_name:'Sport',start_hhmm:'08:00',end_time:845,room:'Halle'}]}};
+ else if(u.endsWith('/tasks')&&req.method()==='GET')body={tasks:[{id:1,title:'Mathematik',notes:'Brüche: Aufgabe 3\nGegeben am: Mo 14.09.\nFällig bis: Di 15.09.\n[MA0915]',due_date:'2026-09-15',status:done?'done':'open',estimated_minutes:10},{id:2,title:'Englisch',notes:'Seite 24 lesen',due_date:'2026-09-18',status:'open'},{id:3,title:'Notiz ohne Termin',status:'open'},{id:4,title:'Geschichte',notes:'Lies den Text und beschreibe die Unterschiede. '.repeat(5),due_date:'2026-09-21',status:'open'}]};
  else if(u.endsWith('/plan'))body={today:{actions:[{key:'math',subject:'Mathematik',title:'Brüche vergleichen',minutes:8,url:'#/learning?focus=math'}]},upcoming_exams:[],errors:[]};
  else if(u.endsWith('/checkin')){if(failRating){status=500;body={detail:'Test failure'};}else{rating=req.postDataJSON().rating;body={rating,note:null};}}
  else if(u==='/api/tasks/1'){if(failTask){status=500;body={detail:'Test failure'};}else{done=req.postDataJSON().status==='done';body={ok:true};}}
@@ -23,7 +26,20 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  await page.goto('http://127.0.0.1:4178/#/today');await page.getByRole('heading',{name:/^Aufgaben bis morgen/}).waitFor({timeout:8000}).catch(async e=>{console.log('ERRORS',errors,'BODY',await page.locator('body').innerText());throw e;});
  // Nach der Schule (D171): Ringe, Aufgaben bis zum nächsten Schultag, Tasche als Kacheln, Rückmeldungen.
  for(const title of [/^Tasche für Dienstag/,/^Stunden von heute/,/^Wenn du magst/])assert.equal(await page.getByRole('heading',{name:title}).count(),1);
- assert.equal(await page.locator('.ring-btn').count(),3);
+ // Vier Bereiche (D180): Aufgaben, Lernen, Tasche, Feedback.
+ assert.equal(await page.locator('.ring-btn').count(),4);
+ assert.deepEqual(await page.locator('.ring-btn b').allInnerTexts(),['Aufgaben','Lernen','Tasche','Feedback']);
+ // Fokuskarte: kurz wie in der Liste, ohne UNTIS-Angaben und ohne Zeitschätzung; Tippen öffnet das Detail.
+ const focusText=await page.locator('.focus').innerText();
+ assert(focusText.includes('Brüche: Aufgabe 3'),'note in focus card');
+ for(const noise of ['Gegeben am','Fällig bis','[MA0915]','Freizeit in','Min.'])assert(!focusText.includes(noise),'focus card without '+noise);
+ await page.locator('.focus-task').click();const detail=page.getByRole('dialog',{name:'Hausaufgabe'});await detail.waitFor();
+ assert((await detail.locator('.assignment').innerText()).includes('Brüche: Aufgabe 3'));await detail.getByRole('button',{name:'Schließen'}).click();await detail.waitFor({state:'detached'});
+ // Lernen: Schritt mit Grund und Los; eine heute offene Übungsarbeit geht wieder auf statt neu erstellt zu werden.
+ const learn=page.locator('#s-lernen');assert.equal(await page.getByRole('heading',{name:/^Lernen/}).count(),1);
+ assert((await learn.innerText()).includes('Zeigt, wo du für die Arbeit'));
+ await learn.getByRole('button',{name:'Los',exact:true}).click();await page.getByRole('button',{name:'← Zurück zu Heute'}).waitFor();assert.equal(practicePosts,0,'open paper reopened');
+ await page.getByRole('button',{name:'← Zurück zu Heute'}).click();await learn.getByRole('button',{name:'Los',exact:true}).waitFor();
  await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.getByRole('alert').filter({hasText:'Nicht gespeichert'}).waitFor();assert.equal(rating,null);
  failRating=false;await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.locator('#s-stunden button[aria-label="Verstanden"][aria-pressed="true"]').waitFor();assert.equal(rating,3);
  await page.locator('#s-aufgaben').getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Test failure',{exact:true}).waitFor();assert.equal(done,false);
@@ -31,9 +47,10 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  await page.getByRole('button',{name:'Material für Sport',exact:true}).click();await page.getByRole('alert').filter({hasText:'Packen nicht gespeichert'}).waitFor();
  assert.equal(await page.locator('.bag-item[aria-pressed="true"]').count(),0);
  failPack=false;await page.getByRole('button',{name:'Material für Sport',exact:true}).click();await page.locator('.bag-item[aria-pressed="true"]').waitFor();
- await page.reload();await page.locator('.bag-item[aria-pressed="true"]').waitFor();
+ studyDone=true;await page.reload();await page.locator('.bag-item[aria-pressed="true"]').waitFor();
+ await page.locator('#s-lernen .learn-state').filter({hasText:'erledigt'}).waitFor();assert.equal(await page.locator('#s-lernen').getByRole('button',{name:'Los'}).count(),0);
  assert.equal(await page.locator('.bag-item[aria-pressed="true"]').count(),1);
- await page.getByRole('button',{name:'Material für Mathematik',exact:true}).click();await page.getByText('Geschafft. Freizeit!').waitFor();
+ await page.getByRole('button',{name:'Material für Mathematik',exact:true}).click();await page.getByText('Geschafft. Freizeit!').waitFor();assert(await page.getByText(/Lernen erledigt/).count()>0,'done card names learning');
  await page.locator('.fold summary').click();
  for(const width of [320,390,430,768]){
   await page.setViewportSize({width,height:900});
@@ -49,5 +66,6 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-390.png'),fullPage:true});
  await page.emulateMedia({colorScheme:'dark'});if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-dark.png'),fullPage:true});
  schoolDate='2026-09-15';await page.clock.setFixedTime(new Date('2026-09-15T07:00:00+02:00'));await page.reload();await page.getByRole('heading',{name:/^Dabei\?/}).waitFor();await page.locator('.bag-item[aria-pressed="true"]').nth(1).waitFor();assert.equal(await page.locator('.bag-item[aria-pressed="true"]').count(),2,'afternoon confirmations remain in morning checklist');assert.equal(await page.locator('.ring-btn').count(),0,'no rings before school');
- assert.deepEqual(errors,[]);console.log('PASS: phases after and before school, rings, failed/successful checkin and task save, persistent packing as tiles, done moment, 320/390/430/768 px, stacked actions, no JS exceptions');await browser.close();await new Promise(r=>server.close(r));
+ assert((await page.locator('.learn-line').innerText()).startsWith('Heute lernen:'),'compact learning line before school');
+ assert.deepEqual(errors,[]);console.log('PASS: phases after and before school, four rings, learning steps, compact focus card with task detail, failed/successful checkin and task save, persistent packing as tiles, done moment, 320/390/430/768 px, stacked actions, no JS exceptions');await browser.close();await new Promise(r=>server.close(r));
 })().catch(e=>{console.error(e);process.exit(1)});
