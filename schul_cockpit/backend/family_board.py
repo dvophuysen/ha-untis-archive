@@ -329,7 +329,7 @@ def schedule_day(day: str, lessons: list[dict], today: date, now: datetime, exam
         periods.append({"short": (l.get("subject_short") or _subject(l)[:3] or "?")[:4], "subject": _subject(l),
                         "start": l.get("start_hhmm"), "end": l.get("end_hhmm"), "state": _state(l), "exam": exam,
                         "room_changed": bool(l.get("is_room_substituted")), "room": l.get("room"),
-                        "absent": bool(l.get("was_absent")), "extra": bool(l.get("is_late_addition")),
+                        "absent": bool(l.get("was_absent")),
                         "now": bool(is_today and start is not None and end is not None and start <= clock < end),
                         "past": bool(is_today and end is not None and end <= clock)})
     planned_start = min((_clock(l.get("start_time")) for l in lessons if _clock(l.get("start_time")) is not None), default=None)
@@ -346,7 +346,6 @@ def schedule_day(day: str, lessons: list[dict], today: date, now: datetime, exam
                      else f"{subject} {items[0]['start']} fällt aus")
     notes += [f"{p['subject']} {p['start']} Vertretung" for p in periods if p["state"] == "sub"]
     notes += [f"{p['subject']} in Raum {p['room']}" for p in periods if p["room_changed"] and p["state"] != "cancelled" and p["room"]]
-    notes += [f"{p['subject']} {p['start']} zusätzlich" for p in periods if p["extra"] and p["state"] != "cancelled"]
     notes += [f"{p['subject']}: Arbeit" for p in periods if p["exam"]][:1]
     all_out = bool(lessons) and not held
     early = bool(end and planned_end and end < planned_end)

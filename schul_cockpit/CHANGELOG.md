@@ -1,3 +1,7 @@
+## 1.16.1
+
+- Startseite, Stundenplan: Der Hinweis „zusätzlich“ stand an Stunden, die nur später ins Archiv gekommen waren, bei vielen Tagen an jeder Stunde. Er entfällt.
+
 ## 1.16.0
 
 - Startseite: Jede Kinderkarte zeigt wieder den Stundenplan, kompakt als zwei Leisten: der heutige und der nächste Schultag. Gewechselt wird um Mitternacht, nachmittags sieht man also noch, ob das Kind heute früher Schluss hatte. Am Wochenende und in den Ferien stehen die nächsten zwei Schultage da.

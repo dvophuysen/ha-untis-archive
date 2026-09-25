@@ -223,6 +223,10 @@ def test_the_schedule_shows_today_and_the_next_school_day(env):
     assert today["notes"] == ["Mathematik 11:35–13:10 fällt aus"]
     assert all(p["past"] for p in today["periods"]) and [p["state"] for p in today["periods"]][-1] == "cancelled"
     assert not days[1]["deviates"]
+    # „Spät ins Archiv gekommen“ ist keine Zusatzstunde und kein Hinweis wert.
+    with sqlite3.connect(db.SETTINGS.history_db_path) as c:
+        c.execute("UPDATE lessons SET is_late_addition=1 WHERE date='2026-09-28'")
+    assert fb.schedule(1, friday, datetime(2026, 9, 25, 14, 0))[1]["notes"] == []
     # Vormittags läuft die zweite Stunde.
     running = fb.schedule(1, friday, datetime(2026, 9, 25, 10, 0))[0]
     assert [p["now"] for p in running["periods"]] == [False, True, False, False]
