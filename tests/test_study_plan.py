@@ -263,3 +263,20 @@ def test_dialog_answer_rechecks_the_day(world, monkeypatch):
     answer(ids[0], 1, 3)
     mentor.note_learning(1, 1, KID)
     assert seen == [("learn", f"dialog:{1}")]
+
+
+def test_weekend_before_the_buffer_counts_and_unknown_timetable_is_weekdays(world, monkeypatch):
+    """Arbeit am Mittwoch, heute Freitag: Puffer Montag und Dienstag, gelernt wird
+    Freitag, Samstag, Sonntag. Hinter dem bekannten Stundenplan zählen Mo–Fr."""
+    fri = MON + timedelta(days=4)
+    exam("ma", "Mathematik", fri + timedelta(days=5), ["A", "B"])  # Mittwoch
+    p = {x["exam_key"]: x for x in sp.plans(1, fri)}["ma"]
+    assert p["need"] == 6 and p["days"] == 3 and p["weekend"]
+    assert len(p["steps"]) == 2
+    # Nur zwei Wochen Stundenplan bekannt: eine Arbeit in fünf Wochen bekommt nicht täglich mehrere Schritte.
+    known = MON + timedelta(days=11)
+    orig = rewards._lessons
+    monkeypatch.setattr(rewards, "_lessons", lambda a, first, last: [l for l in orig(a, first, last) if l["date"] <= known.isoformat()])
+    exam("po", "Politik", MON + timedelta(days=35), ["A", "B", "C"])
+    far = {x["exam_key"]: x for x in sp.plans(1, MON)}["po"]
+    assert far["days"] > 15 and len(far["steps"]) <= 1 and not far["weekend"]

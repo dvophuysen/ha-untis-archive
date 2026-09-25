@@ -1,3 +1,7 @@
+## 1.25.1
+
+- Lernplan: Das Wochenende vor den letzten zwei Schultagen einer Arbeit zählt als Lernzeit mit, wenn die Schultage nicht reichen. Hinter dem bekannten Stundenplan zählen Montag bis Freitag als Schultage, so bekommen ferne Arbeiten nicht zu viele Schritte auf einmal.
+
 ## 1.25.0
 
 - Lernen ist jetzt dein Kompass: oben die nächste Arbeit mit Stand („1 von 2 Themen sicher“) und einem ehrlichen Satz, wie viel noch fehlt und wie viele Lerntage bleiben.

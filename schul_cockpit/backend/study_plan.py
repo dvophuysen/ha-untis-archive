@@ -150,14 +150,15 @@ def exam_plan(account_id: int, exam: dict, day: date, school: list[date]) -> dic
                              f"Alle Themen wie in der echten Arbeit am {when}. Zeigt, was noch fehlt."))
     need = len(seq)
     before = [d for d in school if day <= d < exam_day]
-    window = before[:-BUFFER] if len(before) > BUFFER else before
-    behind = not window and need > 0          # schon im Puffer und noch nicht durch
-    if behind:
-        window = before or [day]
+    if len(before) > BUFFER:
+        # Die letzten Schultage vor der Arbeit sind Puffer; gelernt wird davor.
+        window, cutoff, behind = before[:-BUFFER], before[-BUFFER], False
+    else:
+        # Schon im Puffer: was fehlt, kommt jetzt, bis zum Tag vor der Arbeit.
+        window, cutoff, behind = before, exam_day, need > 0
     all_days = [day + timedelta(days=i) for i in range((exam_day - day).days)]
-    last_window = window[-1] if window else day
-    free_days = [d for d in all_days if d <= last_window and d not in school]
-    weekend = bool(need) and (len(window) == 0 or need / max(1, len(window)) > SCHOOL_RATE)
+    free_days = [d for d in all_days if d < cutoff and d not in school]
+    weekend = bool(need) and (behind or not window or need / max(1, len(window)) > SCHOOL_RATE)
     days = sorted(set(window) | (set(free_days) if weekend else set()))
     quota = 0
     if need and day in days:
@@ -201,9 +202,18 @@ def _lesson_step(account_id: int, day: date) -> dict | None:
             "level": None, "href": href, "lesson_id": l["id"]}
 
 
+def school_days(account_id: int, first: date, last: date) -> list[date]:
+    """Schultage im Zeitraum. Der Stundenplan reicht nur ein, zwei Wochen voraus:
+    dahinter zählen Montag bis Freitag (wie im Vokabelpensum)."""
+    known = set(rewards.school_days(account_id, first, last))
+    horizon = max(known) if known else first - timedelta(days=1)
+    rest = (first + timedelta(days=i) for i in range((last - first).days + 1))
+    return sorted(known | {d for d in rest if d > horizon and d.weekday() < 5})
+
+
 def plans(account_id: int, day: date) -> list[dict]:
     """Je anstehender Arbeit: Bedarf, Lerntage und die Schritte von heute."""
-    school = rewards.school_days(account_id, day, day + timedelta(days=HORIZON))
+    school = school_days(account_id, day, day + timedelta(days=HORIZON))
     out = []
     for exam in _exams(account_id, day):
         try:
