@@ -6,7 +6,7 @@ from pydantic import Field
 from ..auth import CurrentUser, get_current_user
 from ..db import webapp_conn
 from ..learning import InputModel
-from .. import ai_gateway as ai, vocab, vocab_catalog
+from .. import ai_gateway as ai, request_cache, vocab, vocab_catalog
 from .learning import access
 
 router = APIRouter(prefix='/accounts/{account_id}/learning/vocab', tags=['vocab'])
@@ -20,7 +20,8 @@ class ExtractIn(InputModel):
 def languages(account_id: int, user: CurrentUser = Depends(get_current_user)):
     """Einstieg ohne Fach: alle Fremdsprachen des Kindes mit Trainerstand."""
     access(user, account_id)
-    return {'languages': vocab.languages(account_id), 'speech': bool(ai.transcribe_url())}
+    with request_cache.scope():
+        return {'languages': vocab.languages(account_id), 'speech': bool(ai.transcribe_url())}
 
 
 @router.get('/{subject}/units')
@@ -28,9 +29,11 @@ def units(account_id: int, subject: str, background: BackgroundTasks, user: Curr
     """Read the active corpus. Opening the trainer never starts an import."""
     access(user, account_id)
     lang = vocab.language_of(subject)
-    found = vocab.units(account_id, subject)
     from ..vocab_progress import annotate
-    overview = annotate(account_id, subject, found)
+    # Einheiten, Bestand und Wortstände werden je Aufruf nur einmal gelesen.
+    with request_cache.scope():
+        found = vocab.units(account_id, subject)
+        overview = annotate(account_id, subject, found)
     # Imports are explicit parent actions and stay separate from this GET.
     reading = 0
     return {'subject': subject, 'language': lang, 'units': found, 'reading': reading, 'overview': overview,

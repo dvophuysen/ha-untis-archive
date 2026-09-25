@@ -1401,3 +1401,31 @@ def test_a_bare_number_in_the_running_head_is_no_abbreviation():
                              kopf('1. Lernen mit dem Buch', 'a', groesser=True, farbig=True),
                              kopf('2. Lernen mit dem Vokabelheft', 'b', groesser=True, farbig=True)], {})
     assert art['1. lernen mit dem buch'] == art['2. lernen mit dem vokabelheft'] == 'abschnitt'
+
+
+def test_progress_sections_and_boxes_match_cards(setup):
+    """Die Fortschrittsanzeige nimmt Abschnitte und Kästen aus den Karten der
+    Einheit statt je Teil neu zu lesen; das Ergebnis muss dasselbe sein."""
+    from backend import vocab_progress
+    client, state, patch = setup
+    client.app.include_router(vocab_router.router, prefix="/api")
+    mid = seed_page()
+    layout = [("Texto A", "Kasten 1"), ("Texto A", "Kasten 2"), ("Texto B", ""), ("", ""), (" Texto A ", "Kasten 1")]
+    with closing(db.webapp_conn()) as c, c:
+        for pos, (section, box) in enumerate(layout):
+            c.execute("INSERT INTO vocab_words(account_id,subject,material_id,source_label,page,unit,section,box,position,foreign_word,plain,meanings_json,created_at) "
+                      "VALUES(1,'LATEIN',?,'Begleitband',10,'Lektion 1',?,?,?,?,?,?,'now')",
+                      (mid, section, box, pos, f"verbum{pos}", f"verbum{pos}", json.dumps(["Wort"])))
+        ids = [r[0] for r in c.execute("SELECT id FROM vocab_words ORDER BY position")]
+    client.post(V + "/attempts", json={"word_id": ids[0], "stage": 1, "direction": "from", "answer": "Wort", "seconds": 3})
+    unit = vocab.cards(1, "LATEIN", "Lektion 1", 1, "from", 100000)
+    assert len(unit) == 5
+    for section, box in {("Texto A", ""), ("Texto A", "Kasten 1"), ("Texto A", "Kasten 2"), ("Texto B", ""), ("", "")}:
+        expected = vocab.cards(1, "LATEIN", "Lektion 1", 1, "from", 100000, section=section, box=box)
+        got = vocab_progress._subset(1, "LATEIN", unit, "Lektion 1", section, box)
+        assert sorted(w["id"] for w in got) == sorted(w["id"] for w in expected), (section, box)
+    body = client.get(V + "/LATEIN/units").json()
+    lektion = next(u for u in body["units"] if u["unit"] == "Lektion 1")
+    parts = {p["section"]: p for p in lektion["sections"]}
+    assert parts["Texto A"]["progress"]["total"] == 3
+    assert {b["box"]: b["progress"]["total"] for b in parts["Texto A"]["boxes"]} == {"Kasten 1": 2, "Kasten 2": 1}
