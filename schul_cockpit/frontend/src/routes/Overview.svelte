@@ -16,6 +16,8 @@
   import { setActiveAccount } from '../lib/store.svelte.js';
   import { setViewMode } from '../lib/viewMode.svelte.js';
   import { jumpHash } from '../lib/jump.js';
+  // Gemeinsame Zeitfenster, Pausen und parallele Stunden wie in der Woche (D184).
+  import { slotsOf, withGaps, periodTitle } from '../lib/dayStrip.js';
 
   let data = $state(null);
   let loading = $state(true);
@@ -54,26 +56,6 @@
     window.location.hash = jumpHash(target);
   }
 
-  // Pausen als Lücke in der Leiste: ab zehn Minuten zwischen zwei Stunden.
-  const minutes = (hhmm) => (hhmm ? Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5)) : null);
-  // Beide Tage auf gemeinsamen Zeitfenstern, damit gleiche Stunden
-  // untereinander stehen; ein freies Fenster bleibt leer.
-  function slotsOf(days) {
-    const byStart = new Map();
-    for (const d of days) for (const p of d.periods) if (p.start && !byStart.has(p.start)) byStart.set(p.start, p.end);
-    return [...byStart.entries()].sort((a, b) => minutes(a[0]) - minutes(b[0])).map(([start, end]) => ({ start, end }));
-  }
-  function withGaps(day, slots) {
-    const out = [];
-    slots.forEach((slot, i) => {
-      const prev = slots[i - 1];
-      if (prev && minutes(slot.start) - minutes(prev.end) >= 10) out.push({ gap: true, key: `g${i}` });
-      const p = day.periods.find((x) => x.start === slot.start);
-      out.push(p ? { ...p, key: `p${i}` } : { empty: true, key: `e${i}` });
-    });
-    return out;
-  }
-  const periodTitle = (p) => `${p.start}–${p.end} ${p.subject}${p.state === 'cancelled' ? ', fällt aus' : p.state === 'sub' ? ', Vertretung' : ''}${p.exam ? ', Arbeit' : ''}${p.absent ? ', gefehlt' : ''}`;
 
   const STAGES = [['sitzt', 'sitzt'], ['wackelt', 'wackelt'], ['angefangen', 'angefangen'], ['neu', 'noch nicht geübt']];
   const inDays = (n) => (n <= 0 ? 'heute' : n === 1 ? 'morgen' : `in ${n} Tagen`);
@@ -116,6 +98,13 @@
                   {#each withGaps(d, slots) as p (p.key)}
                     {#if p.gap}<i class="gap"></i>
                     {:else if p.empty}<i class="empty"></i>
+                    {:else if p.parallel}
+                      <span class="par">
+                        {#each p.parallel as q, n (n)}
+                          <i class:x={q.state === 'cancelled'} class:sub={q.state === 'sub'} class:arbeit={q.exam}
+                             class:now={q.now} class:past={q.past} class:absent={q.absent} title={periodTitle(q)}>{q.short}</i>
+                        {/each}
+                      </span>
                     {:else}<i class:x={p.state === 'cancelled'} class:sub={p.state === 'sub'} class:arbeit={p.exam}
                               class:now={p.now} class:past={p.past} class:absent={p.absent} title={periodTitle(p)}>{p.short}</i>{/if}
                   {/each}
@@ -233,6 +222,8 @@
   .ps i { flex: 1; min-width: 0; overflow: hidden; font-style: normal; text-align: center; font-size: 0.72rem; font-weight: 650;
     padding: 5px 0; border-radius: 6px; background: color-mix(in srgb, var(--fg) 8%, var(--bg-card)); }
   .ps i.gap { flex: 0.35; background: transparent; }
+  .par { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .ps .par i { padding: 1px 0; }
   .ps i.empty { background: transparent; }
   .ps i.x { background: transparent; border: 1px dashed var(--cancelled); color: var(--cancelled); text-decoration: line-through; }
   .ps i.sub { outline: 2px solid var(--substitution); outline-offset: -2px; color: var(--substitution-fg); }

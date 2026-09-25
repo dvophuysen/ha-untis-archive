@@ -20,11 +20,11 @@ const fs=require('fs'),http=require('http'),path=require('path'),assert=require(
  await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
  });
  await page.goto('http://127.0.0.1:4182/#/subjects');await page.locator('.subject-row').first().waitFor();
- assert.deepEqual(await page.locator('.subject-name').allTextContents(),['🌍 Englisch','📖 Deutsch','💡 Physik','🤝 Werte und Normen']);
+ assert.deepEqual(await page.locator('.subject-name').allTextContents(),['🇬🇧 Englisch','🖋️ Deutsch','💡 Physik','🤝 Werte und Normen']);
  assert.equal(await page.locator('.subject-panel').count(),0);assert.equal(await page.locator('.subject-bar').count(),2);
  await page.getByRole('button',{name:/Deutsch/}).click();await page.getByRole('heading',{name:'Argumentieren und Debattieren'}).waitFor();
  assert.equal(await page.getByRole('link',{name:'Üben',exact:true}).getAttribute('href'),'#/learning?goal=topic-1');
- await page.getByText('Rückmeldungsverlauf · 2 Einträge').click();await page.getByText('Einzelne Selbsteinschätzungen in zeitlicher Reihenfolge.',{exact:false}).waitFor();
+ await page.getByText('Selbsteinschätzungen aus dem Unterricht · 2 Einträge').click();await page.getByText('Einzelne Rückmeldungen zu Stunden in zeitlicher Reihenfolge.',{exact:false}).waitFor();
  await page.getByRole('button',{name:/Physik/}).click();assert.equal(await page.locator('.subject-panel').count(),1);assert.equal(await page.getByRole('heading',{name:'Argumentieren und Debattieren'}).count(),0);
  await page.getByRole('button',{name:/Physik/}).press('Enter');assert.equal(await page.locator('.subject-panel').count(),0);
  for(const width of [320,390,430,768]){await page.setViewportSize({width,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'overflow '+width);}

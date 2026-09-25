@@ -1,6 +1,8 @@
 // Tiny rune-based global appState.
 
-import { api, ApiError } from './api.js';
+import { api, ApiError, onUnauthorized } from './api.js';
+import { resetProfile } from './profile.svelte.js';
+import { forgetTodo } from './parentTodo.svelte.js';
 
 export const appState = $state({
   loading: true,
@@ -16,7 +18,10 @@ export async function loadMe() {
   try {
     appState.me = await api.get('/api/me');
     appState.needsLogin = false;
-    if (appState.me.accounts.length > 0 && appState.activeAccountId == null) {
+    // Nach Abmelden und Anmelden eines anderen Nutzers kann das gewählte Kind
+    // fehlen; dann neu wählen statt „nicht verlinkt“ zu zeigen.
+    const known = appState.me.accounts.some((a) => a.id === appState.activeAccountId);
+    if (appState.me.accounts.length > 0 && (appState.activeAccountId == null || !known)) {
       // Deep-link override: ?acc=<id> in the URL wins over the saved one.
       // Useful for HA-cron WhatsApp links so they jump straight to the
       // right child (e.g. https://schule.example.com/?acc=1#/today).
@@ -45,6 +50,22 @@ export async function loadMe() {
   } finally {
     appState.loading = false;
   }
+}
+
+// Eine abgelaufene PIN-Anmeldung führt bei jedem Aufruf zur Anmeldung, nicht
+// erst beim nächsten Start. Nur die PIN-Anmeldung kann ablaufen; unter Ingress
+// meldet Home Assistant an, dort erscheint nie ein PIN-Dialog.
+onUnauthorized(() => {
+  if (appState.me?.auth_source === 'pin') appState.needsLogin = true;
+});
+
+/** Abmelden: Kind, Gestaltung und Elternliste des bisherigen Nutzers vergessen. */
+export async function logout() {
+  try { await api.post('/api/auth/logout'); } catch (_) { /* ignore */ }
+  appState.activeAccountId = null;
+  resetProfile();
+  forgetTodo();
+  await loadMe();
 }
 
 export function setActiveAccount(id) {

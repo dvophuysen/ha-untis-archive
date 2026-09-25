@@ -2,6 +2,24 @@
 // war und in welcher Ansicht. Gespeichert werden nur Sekunden je Tag und
 // Ansicht, kein Klickprotokoll; nach 90 Tagen gelöscht.
 import { api, joinUrl } from './api.js';
+import { viewHeader } from './viewMode.svelte.js';
+
+// Beim Verlassen der App: fetch mit keepalive überlebt das Schließen wie
+// sendBeacon, schickt aber die Kopfzeile X-View-Mode mit. Ohne sie zählte die
+// Zeit „Kind am Elterngerät“ als Nutzung der Eltern (D175). sendBeacon bleibt
+// der Rückfall für Browser ohne keepalive.
+function sendOnLeave(body) {
+  const url = joinUrl('/api/usage/ping');
+  const json = JSON.stringify(body);
+  try {
+    const headers = { 'content-type': 'application/json' };
+    const mode = viewHeader();
+    if (mode) headers['x-view-mode'] = mode;
+    fetch(url, { method: 'POST', keepalive: true, credentials: 'include', headers, body: json }).catch(() => {});
+    return;
+  } catch (_) { /* weiter mit sendBeacon */ }
+  if (navigator.sendBeacon) navigator.sendBeacon(url, new Blob([json], { type: 'application/json' }));
+}
 
 const TICK = 15000;
 const SEND = 60000;
@@ -24,8 +42,8 @@ export function startUsagePing(current) {
     const body = { account_id: target.accountId, view: target.view || '', seconds, open: opened };
     opened = false;
     try {
-      if (beacon && navigator.sendBeacon) {
-        navigator.sendBeacon(joinUrl('/api/usage/ping'), new Blob([JSON.stringify(body)], { type: 'application/json' }));
+      if (beacon) {
+        sendOnLeave(body);
       } else {
         api.post('/api/usage/ping', body).catch(() => {});
       }

@@ -4,7 +4,7 @@
   // Seiten (Einstellungen, Setup, Kurse, Arbeiten-Kalender, Änderungen) bleiben
   // als Unterseiten erreichbar; hier steht, was es gibt, und der Weg dorthin.
   import { api, ApiError } from '../lib/api.js';
-  import { appState, loadMe } from '../lib/store.svelte.js';
+  import { appState, logout } from '../lib/store.svelte.js';
   import ActionLabel from '../lib/ActionLabel.svelte';
   import KidChips from '../lib/KidChips.svelte';
   import ReminderSettings from '../lib/ReminderSettings.svelte';
@@ -32,10 +32,6 @@
       bonus = r.bonus_until; bonusMsg = 'Gespeichert.';
     } catch (e) { bonusMsg = e instanceof ApiError ? e.message : 'Nicht gespeichert.'; }
     finally { bonusBusy = false; }
-  }
-  async function logout() {
-    try { await api.post('/api/auth/logout'); } catch (_) { /* egal */ }
-    await loadMe();
   }
   const link = (hash) => () => (window.location.hash = hash);
 </script>

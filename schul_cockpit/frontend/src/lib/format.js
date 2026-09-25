@@ -19,6 +19,29 @@ export function isoToday() {
   return isoLocal(new Date());
 }
 
+/** Der lokale Kalendertag eines Zeitstempels vom Server. Der Server speichert
+ *  in UTC („2026-09-24T22:30:00+00:00“ ist hier schon der 25.); ein bloßes
+ *  slice(0, 10) nahm den UTC-Tag. Ohne Uhrzeit oder Zeitzone bleibt der Text
+ *  unverändert, weil unklar ist, welcher Tag gemeint ist. */
+export function localDay(stamp) {
+  if (!stamp) return '';
+  const text = String(stamp);
+  if (!/\d[T ]\d{2}:\d{2}/.test(text) || !/(?:Z|[+-]\d{2}:?\d{2})$/.test(text)) return text.slice(0, 10);
+  const d = new Date(text.replace(' ', 'T'));
+  return Number.isNaN(d.getTime()) ? text.slice(0, 10) : isoLocal(d);
+}
+
+/** Datum einer Aufgabenangabe ohne Jahr („Gegeben am 29.12.“): das Jahr der
+ *  Fälligkeit, außer der Tag läge dann nach der Fälligkeit (Jahreswechsel). */
+export function givenDate(day, month, year, dueIso) {
+  const pad = (n) => String(n).padStart(2, '0');
+  if (year) return `${String(year).length === 2 ? `20${year}` : year}-${pad(month)}-${pad(day)}`;
+  const ref = dueIso || isoToday();
+  let y = Number(ref.slice(0, 4));
+  if (`${y}-${pad(month)}-${pad(day)}` > ref) y -= 1;
+  return `${y}-${pad(month)}-${pad(day)}`;
+}
+
 export function shiftDateIso(iso, days) {
   if (!iso) return '';
   // Use midday so a +/- DST hour can't roll us into the wrong calendar day.

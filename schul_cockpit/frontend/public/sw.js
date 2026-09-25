@@ -32,15 +32,30 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Der Pfad der App: „/“ am Direktport, „/api/hassio_ingress/<token>/“ unter
+// Ingress. Bis 1.31.2 galt jeder Pfad mit „/api/“ als Schnittstelle, unter
+// Ingress also alles, und der Worker tat dort nichts.
+const SCOPE = new URL(self.registration.scope).pathname;
+
+// Was nie aus dem Cache kommen darf und nicht angefasst wird: fremde Adressen,
+// alles außerhalb der App und jede Schnittstelle der App (Kontodaten,
+// Erledigt-Stände). Im Zweifel lieber zu viel als zu wenig.
+function passThrough(url) {
+  if (url.origin !== self.location.origin) return true;
+  if (!url.pathname.startsWith(SCOPE)) return true;
+  return /(?:^|\/)api(?:\/|$)/.test(url.pathname.slice(SCOPE.length));
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
-  // Account data and completion states must never be served from an old cache.
-  if (/\/api(?:\/|$)/.test(new URL(req.url).pathname)) return;
+  const url = new URL(req.url);
+  if (passThrough(url)) return;
 
   // Dateien unter assets/ tragen einen Hash im Namen und ändern sich nie:
-  // aus dem Cache, sonst einmal holen (D177). Alles andere network-first.
-  if (/\/assets\/[^/]+$/.test(new URL(req.url).pathname)) {
+  // aus dem Cache, sonst einmal holen (D177). Alles andere, auch die
+  // Startseite, network-first; der Cache ist nur der Rückfall ohne Netz.
+  if (/\/assets\/[^/]+$/.test(url.pathname)) {
     event.respondWith(
       caches.match(req).then((hit) => hit || fetch(req).then((resp) => {
         if (resp && resp.ok && resp.type === 'basic') {

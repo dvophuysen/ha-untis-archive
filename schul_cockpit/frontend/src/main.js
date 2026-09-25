@@ -1,5 +1,6 @@
 import { mount } from 'svelte';
 import App from './App.svelte';
+import { reloadOnce, pageBusy } from './lib/reload.js';
 
 // Detect installed-PWA mode reliably. iOS Safari sets the legacy
 // `window.navigator.standalone` flag; modern browsers expose it via
@@ -15,6 +16,12 @@ if (isStandalone()) document.body.classList.add('standalone');
 
 mount(App, { target: document.getElementById('app') });
 
+// Nach einem Add-on-Update fehlen die alten, gehashten Dateien. Scheitert das
+// Vorladen einer Seite deshalb, einmal neu laden (siehe Lazy.svelte).
+window.addEventListener('vite:preloadError', (event) => {
+  if (reloadOnce()) event.preventDefault();
+});
+
 // Service worker with fully automatic, hands-off updates. No more deleting
 // and re-adding the home-screen app to get a new version.
 //
@@ -22,16 +29,31 @@ mount(App, { target: document.getElementById('app') });
 //  - The new SW skips waiting and claims clients the moment it installs
 //    (see sw.js), so a freshly-fetched version takes over immediately.
 //  - When that happens the browser fires `controllerchange`; we reload the
-//    page exactly once (guarded against loops) so the user lands on the
-//    new code without lifting a finger.
+//    page once so the user lands on the new code without lifting a finger.
+//    Not on the very first visit (there was no worker before, the page is
+//    already current), and never while something typed or a running chat
+//    turn would be lost: then on the next page change or return to the app.
 //  - We re-check for a new SW on every launch AND whenever the app is
 //    brought back to the foreground — iOS otherwise revalidates lazily.
 if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloadPending = false;
   let reloadedForUpdate = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloadedForUpdate) return;
+  const tryReload = () => {
+    if (!reloadPending || reloadedForUpdate) return;
+    if (pageBusy()) return;
     reloadedForUpdate = true;
     window.location.reload();
+  };
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return;
+    reloadPending = true;
+    tryReload();
+  });
+  // Nach dem Seitenwechsel erst prüfen, wenn die neue Seite steht.
+  window.addEventListener('hashchange', () => setTimeout(tryReload, 300));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') tryReload();
   });
 
   window.addEventListener('load', async () => {

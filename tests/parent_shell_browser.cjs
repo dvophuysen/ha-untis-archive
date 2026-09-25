@@ -123,7 +123,6 @@ await kidA.getByRole('button',{name:'Ja, streichen'}).click();
 await kidA.getByText('Material für Mathematik fotografieren').waitFor({state:'detached'});
 assert.deepEqual(dismissals,[{u:'/api/accounts/1/materials/sources/dismiss',body:{subject:'MATHEMATIK',label:'Arbeitsheft',pages:[12,13,14]},mode:''}]);
 await kidA.getByText('Themenzettel Mathematik gegenlesen').waitFor();
-assert.deepEqual(errors,[]);
 // Kind am Elterngerät: Kinder-Leiste, keine Eltern-Werkzeuge, Elternseiten führen zu Heute.
 await page.evaluate(()=>localStorage.setItem('viewMode',JSON.stringify({mode:'child',at:Date.now(),day:'2026-09-24'})));
 // Nur der Hash ändert sich: neu laden, damit der gespeicherte Gerätezustand gilt.
@@ -136,6 +135,8 @@ assert.equal(await page.locator('.nav-badge').count(),0);
 assert(!calls.some(c=>c.u==='/api/parent/todo'&&c.mode==='child'),'no parent list in child mode');
 assert(calls.filter(c=>c.u.startsWith('/api/accounts/')).every(c=>c.mode==='child'),'child header on every request');
 for(const target of ['einstellen','scannen','settings','overview']){await page.goto(`http://127.0.0.1:4181/#/${target}`);await page.waitForFunction(()=>location.hash==='#/today');}
+// Erst am Ende: Auch der Kindmodus darf keinen Seitenfehler werfen.
+assert.deepEqual(errors,[]);
 console.log('PASS: parent nav only, badge, Erledigen grouped per child with write jumps, source line and Nicht nötig, Scannen with suggestion via material upload for two children, Einstellen per child and household with bonus time and AI budget, child mode without parent tools, 320/390/768 px');
 }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exit(1)});

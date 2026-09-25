@@ -15,7 +15,10 @@
     load();
   });
 
+  // Nur das zuletzt angeforderte Blatt gilt (Umschalten „nur Aufgaben“).
+  let request = 0;
   async function load() {
+    const ticket = ++request;
     error = ''; html = '';
     try {
       const headers = {};
@@ -25,9 +28,10 @@
       const resp = await fetch(joinUrl(target), { credentials: 'include', headers });
       if (!resp.ok) throw new Error(resp.status === 401 ? 'Nicht angemeldet.' : `Fehler ${resp.status}`);
       // Die eingebauten Hinweise des Blatts gelten für den Browser; in der App druckt der Knopf oben.
-      html = (await resp.text()).replace('</head>', '<style>.tools{display:none!important}</style></head>');
+      const text = (await resp.text()).replace('</head>', '<style>.tools{display:none!important}</style></head>');
+      if (ticket === request) html = text;
     } catch (e) {
-      error = `Das Blatt konnte nicht geladen werden. ${e.message}`;
+      if (ticket === request) error = `Das Blatt konnte nicht geladen werden. ${e.message}`;
     }
   }
 

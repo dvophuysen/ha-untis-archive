@@ -6,7 +6,7 @@
   import LearningGoal from '../lib/LearningGoal.svelte';
   import { onMount, tick } from 'svelte';
   import { api, ApiError } from '../lib/api.js';
-  import { isoToday, formatShortDate, daysBetween, stripUntisMetadata, carryText } from '../lib/format.js';
+  import { isoToday, formatShortDate, daysBetween, stripUntisMetadata, carryText, localDay } from '../lib/format.js';
   import { splitTasks } from '../lib/dayDashboard.js';
   import { dayPhase, mergeLessons, held, lessonOver } from '../lib/dayPhase.js';
   import { subjectStyle } from '../lib/subjectStyle.js';
@@ -42,7 +42,7 @@
     const [day, work, learning] = results;
     if (day.status === 'fulfilled') { data = { ...day.value, lessons: (day.value.lessons ?? []).map(l => ({ ...l, date: l.date || day.value.date })) }; }
     else error = 'Dein Stundenplan konnte nicht aktualisiert werden.';
-    if (work.status === 'fulfilled') tasks = work.value.tasks;
+    if (work.status === 'fulfilled') tasks = work.value?.tasks ?? [];
     else error += ' Deine Aufgaben konnten nicht aktualisiert werden.';
     if (learning.status === 'fulfilled') plan = learning.value;
     else { plan = null; planError = 'Deine Lernvorschläge sind gerade nicht verfügbar.'; }
@@ -77,7 +77,7 @@
   // Rückmeldungen je Zeile gezählt: eine Doppelstunde ist eine Rückmeldung.
   const endedLessons = $derived(mergeLessons((data?.lessons ?? []).filter(l => held(l) && lessonOver(l, now))));
   const feedbackOpen = $derived(endedLessons.filter(g => g.lessons.some(l => l.checkin?.rating == null)).length);
-  const notedToday = $derived(tasks.filter(t => t.source === 'manual' && (t.created_at || '').slice(0, 10) === day && t.status !== 'done'));
+  const notedToday = $derived(tasks.filter(t => t.source === 'manual' && localDay(t.created_at) === day && t.status !== 'done'));
   // Lernen (D180): der eingefrorene Pflichtplan des Tages, erledigt live geprüft.
   const study = $derived(data?.study_plan ?? null);
   const learnSteps = $derived(study?.steps ?? []);

@@ -8,16 +8,21 @@
   let error = $state(null);
   let busy = $state(false);
 
+  // Nur die letzte Antwort für dieses Kind gilt.
+  let request = 0;
   async function load() {
     if (!accountId) return;
+    const id = accountId, ticket = ++request;
+    const current = () => ticket === request && id === accountId;
     loading = true;
     error = null;
     try {
-      courses = (await api.get(`/api/accounts/${accountId}/courses`)).courses;
+      const list = (await api.get(`/api/accounts/${id}/courses`)).courses;
+      if (current()) courses = list;
     } catch (e) {
-      error = e.message;
+      if (current()) error = e.message;
     } finally {
-      loading = false;
+      if (current()) loading = false;
     }
   }
 

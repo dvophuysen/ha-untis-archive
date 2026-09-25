@@ -2,6 +2,7 @@
   // Vokabeltrainer: Wörter aus den Originalseiten, zwei Stufen. Stufe 1 fragt
   // die Bedeutung gesprochen, Stufe 2 die Schreibweise getippt in die
   // Fremdsprache. Kein Multiple Choice; die App wertet, nicht das Kind.
+  import { onDestroy } from 'svelte';
   import { api } from '../lib/api.js';
   import Speech from '../lib/Speech.svelte';
   import { answerClock } from '../lib/answerClock.js';
@@ -51,6 +52,9 @@
   // Wortseiten werden beim Öffnen automatisch in Wörter zerlegt; solange das
   // läuft, lädt die Ansicht alle paar Sekunden nach.
   let pollTimer = null, polls = 0;
+  // Eine Antwort, die erst nach dem Verlassen ankommt, stellt keinen neuen Zeitgeber mehr.
+  let alive = true;
+  onDestroy(() => { alive = false; clearTimeout(pollTimer); });
   let languages = $state(null);
   async function load() {
     error = '';
@@ -59,6 +63,7 @@
       data = await api.get(`${base}/${encodeURIComponent(subject)}/units`);
       if (data.units.length && !data.units.some(u => u.unit === unit)) unit = (data.units.find(u => u.label === unit) || data.units[0]).unit;
       clearTimeout(pollTimer);
+      if (!alive) return;
       if (data.reading && polls < 20) { polls += 1; pollTimer = setTimeout(load, 4000); } else polls = 0;
     } catch (e) { error = e.message; }
   }
