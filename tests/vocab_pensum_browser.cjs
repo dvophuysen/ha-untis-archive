@@ -21,6 +21,7 @@ const fs=require('fs');const http=require('http');const path=require('path');con
   else if(u==='/api/accounts/1/vocab/papers'&&req.method()==='GET')body={papers:created?[{id:7,code:'V7',unit:'Unit 3',status:graded?'graded':'active',right:graded?6:0,total:graded?10:0}]:[]};
   else if(u==='/api/accounts/1/vocab/papers'&&req.method()==='POST'){created=req.postDataJSON();body=paper();}
   else if(u==='/api/accounts/1/vocab/papers/7')body=paper();
+  else if(u==='/api/accounts/1/vocab/papers/8')body={...paper(),id:8,code:'V8',status:'review',words:words.map(w=>({nr:w.nr,prompt:w.prompt})),overall:'',result:null,check:null};
   else if(u.endsWith('/papers/7/pages')&&req.method()==='POST'){pages=[...pages,pages.length+100];body=paper();}
   else if(u.includes('/papers/7/pages/'))return route.fulfill({status:200,contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=','base64')});
   else if(u.endsWith('/papers/7/grade')){graded=true;body=paper();}
@@ -48,5 +49,10 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  await page.getByRole('button',{name:'Fertig'}).click();
  await page.getByText('Heute: 21 von 25 Wörtern').waitFor();
  await page.getByRole('button',{name:/Blatt V7 · 6 von 10 richtig/}).waitFor();
- assert.deepEqual(errors,[]);console.log('PASS: pensum line with bar and reason, paper sheet created, print link, page upload, grading result, 320/390/768 px, no JS exceptions');await browser.close();await new Promise(r=>server.close(r));
+ // D202: zurückgehaltenes Blatt aus einem Link (?paper=…): Das Kind sieht kein Ergebnis.
+ await page.goto('http://127.0.0.1:4181/#/vokabeln/ENGLISCH?paper=8');await page.reload();
+ await page.getByText('Dein Blatt ist abgegeben.').waitFor();
+ await page.getByText(/Deine Eltern schauen sich die Auswertung an/).waitFor();
+ assert.equal(await page.getByText(/von 10 richtig/).count(),0);assert.equal(await page.locator('.words').count(),0);
+ assert.deepEqual(errors,[]);console.log('PASS: pensum line with bar and reason, paper sheet created, print link, page upload, grading result, held paper without result for the child, 320/390/768 px, no JS exceptions');await browser.close();await new Promise(r=>server.close(r));
 })().catch(e=>{console.error(e);process.exit(1)});

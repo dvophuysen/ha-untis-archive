@@ -245,6 +245,80 @@ def test_paper_of_a_parent_does_not_count_and_bad_grading_is_refused(setup):
     assert client.post("/api/accounts/1/vocab/papers", json={"subject": "Mathematik", "unit": "x"}).status_code == 422
 
 
+def passes(patch, verdict_lists, seen):
+    """Ein Durchgang je Liste der Reihe nach; die letzte bleibt stehen (D202)."""
+    outs = list(verdict_lists)
+
+    async def complete(account, purpose, instruction, context, images=None, **kw):
+        seen.append(purpose)
+        v = outs.pop(0) if len(outs) > 1 else outs[0]
+        return json.dumps({"words": [{"nr": w["nr"], "verdict": v[w["nr"] - 1], "read": f"r{w['nr']}"} for w in context["woerter"]],
+                           "overall": "Gut."}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+
+
+def child_paper(client, state):
+    client.app.include_router(vocab_daily.router, prefix="/api")
+    words(12)
+    child(state)
+    p = client.post("/api/accounts/1/vocab/papers", json={"subject": EN, "unit": "Unit 3", "count": 10}).json()
+    client.post(f"/api/accounts/1/vocab/papers/{p['id']}/pages", files={"file": ("p.jpg", image(), "image/jpeg")})
+    return p
+
+
+def test_word_counts_only_when_two_passes_agree(setup):
+    """D202: Uneinig heißt dritter Durchgang, die Mehrheit entscheidet; was offen
+    bleibt, zählt nicht und steht als nicht sicher gelesen da."""
+    client, state, patch = setup
+    p = child_paper(client, state)
+    R, F, U = "richtig", "falsch", "unklar"
+    seen = []
+    passes(patch, [[R] * 10, [F, U, U] + [R] * 7, [F, R, U] + [R] * 7], seen)
+    g = client.post(f"/api/accounts/1/vocab/papers/{p['id']}/grade").json()
+    assert len(seen) == 3 and g["status"] == "graded"
+    by = {w["nr"]: w for w in g["words"]}
+    assert by[1]["verdict"] == F and by[2]["verdict"] == R and by[3]["verdict"] == U and by[3]["votes"] == [R, U, U]
+    assert g["result"] == {"richtig": 8, "falsch": 1, "unklar": 1} and g["check"]["unsure"] == [3] and not g["check"]["held"]
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT COUNT(*) FROM vocab_attempts").fetchone()[0] == 9
+    assert vocab_daily.majority([R, F]) is None and vocab_daily.majority([U, U, R]) is None
+
+
+def test_too_many_unsure_words_hold_the_paper_for_the_parents(setup):
+    """D202: Bleiben mehr als 10 % der Wörter offen, zählt nichts, das Kind sieht
+    kein Ergebnis, und die Eltern entscheiden je Wort."""
+    client, state, patch = setup
+    parent = state.user
+    p = child_paper(client, state)
+    R, F, U = "richtig", "falsch", "unklar"
+    seen = []
+    passes(patch, [[R] * 10, [U, U, F] + [R] * 7, [U, F, U] + [R] * 7], seen)
+    g = client.post(f"/api/accounts/1/vocab/papers/{p['id']}/grade").json()
+    assert len(seen) == 3 and g["status"] == "review" and g["result"] is None and g["check"] is None
+    assert "verdict" not in json.dumps(g["words"]) and "expected" not in json.dumps(g["words"]), "Kind sieht nichts"
+    assert client.get("/api/accounts/1/vocab/papers", params={"subject": EN}).json()["papers"][0]["right"] == 0
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT COUNT(*) FROM vocab_attempts").fetchone()[0] == 0
+    assert client.post(f"/api/accounts/1/vocab/papers/{p['id']}/grade").json()["status"] == "review"
+    assert client.post(f"/api/accounts/1/vocab/papers/{p['id']}/review", json={"verdicts": {}}).status_code == 403
+    state.user = parent
+    seen_by_parent = client.get(f"/api/accounts/1/vocab/papers/{p['id']}").json()
+    assert seen_by_parent["check"]["unsure"] == [1, 2, 3] and seen_by_parent["words"][0]["expected"]
+    assert vocab_daily.review_items(1) == [{"paper_id": p["id"], "code": f"V{p['id']}", "subject": EN, "open": [1, 2, 3], "passes": 3}]
+    from backend.parent_todo import vocab_review_items
+    todo = vocab_review_items(1, "Beispielkind")
+    assert todo[0]["title"].startswith(f"Vokabeltest V{p['id']} von Beispielkind prüfen") and "3 Wörter" in todo[0]["reason"]
+    assert todo[0]["action"]["page"] == "vokabeln" and todo[0]["action"]["args"] == [EN] and todo[0]["action"]["query"] == {"paper": str(p["id"])}
+    assert client.post(f"/api/accounts/1/vocab/papers/{p['id']}/review", json={"verdicts": {"1": R}}).status_code == 422
+    r = client.post(f"/api/accounts/1/vocab/papers/{p['id']}/review", json={"verdicts": {"1": R, "2": F, "3": R}})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "graded" and r.json()["result"] == {"richtig": 9, "falsch": 1, "unklar": 0}
+    with closing(db.webapp_conn()) as c:
+        rows = [dict(x) for x in c.execute("SELECT result,user_id FROM vocab_attempts")]
+    assert len(rows) == 10 and {x["user_id"] for x in rows} == {2}, "zählt für das Kind"
+    assert vocab_daily.review_items(1) == []
+
+
 def test_test_mode_blocks_paper_writes_but_not_the_pensum():
     assert view_mode.TEST_BLOCKED.match("/api/accounts/1/vocab/papers")
     assert view_mode.TEST_BLOCKED.match("/api/accounts/1/learning/vocab/attempts")

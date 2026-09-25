@@ -18,6 +18,7 @@ from pydantic import Field, ValidationError
 from .. import ai_gateway as ai
 from .. import mentor_context as mc
 from .. import practice as pr
+from ..grading_consensus import settle
 from ..auth import CurrentUser, get_current_user
 from ..db import webapp_conn
 from ..learning import InputModel, now_iso
@@ -415,9 +416,6 @@ class TypedAnswers(InputModel):
     answers: dict[str, str] = Field(default_factory=dict)
 
 
-TOLERANCE = 1.0  # Punkte, um die zwei Durchgänge je Aufgabe höchstens auseinanderliegen
-
-
 async def _grade_pass(account_id: int, instruction: str, context: dict, images: list, tasks: list[dict],
                       effort: str | None = None) -> PaperGrade | None:
     """Ein Auswertungsdurchgang; ungültige Antworten zählen nicht als Durchgang."""
@@ -435,33 +433,16 @@ async def _grade_pass(account_id: int, instruction: str, context: dict, images: 
 
 def consensus(passes: list[PaperGrade], tasks: list[dict]) -> tuple[dict[int, dict], list[int]]:
     """Je Aufgabe das Ergebnis, auf das sich mindestens zwei Durchgänge einigen
-    (höchstens TOLERANCE auseinander, Mittelwert auf halbe Punkte). Aufgaben ohne
+    (höchstens grading_consensus.TOLERANCE auseinander, Mittelwert auf halbe Punkte). Aufgaben ohne
     Einigung oder mit weniger als zwei lesbaren Durchgängen bleiben offen (D202)."""
     final, open_nrs = {}, []
     if not passes:
         return final, [i + 1 for i in range(len(tasks))]
     for i, t in enumerate(tasks):
         nr = i + 1
-        xs = [{x.nr: x for x in g.tasks}[nr] for g in passes]
-        sure = [x for x in xs if not x.uncertain]
-        agree = []
-        if len(sure) >= 2:
-            vals = sorted(x.points for x in sure)
-            if vals[-1] - vals[0] <= TOLERANCE:
-                agree = sure
-            elif len(sure) >= 3:
-                mid = vals[len(vals) // 2]
-                agree = [x for x in sure if abs(x.points - mid) <= TOLERANCE]
-                agree = agree if len(agree) >= 2 else []
-        if agree:
-            pts = min(t["points"], round(sum(x.points for x in agree) / len(agree) * 2) / 2)
-            best = min(agree, key=lambda x: abs(x.points - pts))
-            final[nr] = {**best.model_dump(exclude={"nr"}), "points": pts, "uncertain": False}
-        else:
+        final[nr] = settle([{x.nr: x for x in g.tasks}[nr] for g in passes], t["points"], {"nr"})
+        if final[nr]["uncertain"]:
             open_nrs.append(nr)
-            best = (sure or xs)[0]
-            final[nr] = {**best.model_dump(exclude={"nr"}), "uncertain": True,
-                         "spread": [x.points for x in sure]}
     return final, open_nrs
 
 
@@ -505,6 +486,8 @@ def resolve_review(account_id: int, aid: int, body: ReviewIn, user: CurrentUser 
         snap = json.loads(r["snapshot"])
         tasks = snap["tasks"]
         feedback = json.loads(r["feedback_json"] or "{}")
+        if (feedback.get("check") or {}).get("per_task"):
+            raise HTTPException(409, "Diese Übungsklausur wird bei der Übungsklausur geprüft.")
         open_idx = [str(nr - 1) for nr in (feedback.get("check") or {}).get("open", [])]
         for k in open_idx:
             v = body.points.get(k)
@@ -557,10 +540,15 @@ def review_items(account_id: int) -> list[dict]:
         rows = [dict(r) for r in c.execute(
             "SELECT a.id,a.feedback_json,e.subject,e.paper_format,e.exam_key FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id "
             "WHERE a.account_id=? AND a.status='review' AND a.is_test=0 ORDER BY a.id", (account_id,))]
-    return [{"attempt_id": r["id"], "subject": r["subject"], "exam_key": r["exam_key"],
-             "label": pr.FORMATS.get(r["paper_format"] or "", {}).get("label", "Übungsarbeit"),
-             "open": (json.loads(r["feedback_json"] or "{}").get("check") or {}).get("open", []),
-             "passes": (json.loads(r["feedback_json"] or "{}").get("check") or {}).get("passes", 1)} for r in rows]
+    out = []
+    for r in rows:
+        check = json.loads(r["feedback_json"] or "{}").get("check") or {}
+        if check.get("per_task"):
+            continue  # Übungsklausur Aufgabe für Aufgabe: eigener Eintrag (mentor_exams.review_items)
+        out.append({"attempt_id": r["id"], "subject": r["subject"], "exam_key": r["exam_key"],
+                    "label": pr.FORMATS.get(r["paper_format"] or "", {}).get("label", "Übungsarbeit"),
+                    "open": check.get("open", []), "passes": check.get("passes", 1)})
+    return out
 
 
 @router.post("/attempts/{aid}/grade")

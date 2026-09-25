@@ -163,6 +163,43 @@ def paper_review_items(account_id: int, name: str) -> list[dict]:
     return out
 
 
+def _open_text(nums: list[int], unit: str = "Aufgabe", units: str = "Aufgaben") -> str:
+    return f"{unit if len(nums) == 1 else units} {', '.join(str(n) for n in nums)}"
+
+
+def exam_review_items(account_id: int, name: str) -> list[dict]:
+    """Übungsklausuren, deren Bewertung Aufgabe für Aufgabe nicht sicher wurde:
+    Eltern tragen die Punkte ein oder lassen die Seiten neu auswerten (D202)."""
+    try:
+        from .routers.mentor_exams import review_items
+        rows = review_items(account_id)
+    except Exception:
+        _LOG.warning("Zu prüfende Übungsklausuren für Konto %s nicht lesbar", account_id, exc_info=True)
+        return []
+    return [item(f"exam-review:{r['attempt_id']}", "exam_review",
+                 f"Übungsklausur „{r['title']}“ von {name} prüfen",
+                 f"{_open_text(r['open'])} {'ließ' if len(r['open']) == 1 else 'ließen'} sich auch nach "
+                 f"{r['passes']} Bewertungen nicht sicher bewerten. Bis zur Prüfung sieht {name} keine Punkte, "
+                 "und nichts zählt für den Lernstand.",
+                 action("Prüfen", "learning", exam_attempt=r["attempt_id"])) for r in rows]
+
+
+def vocab_review_items(account_id: int, name: str) -> list[dict]:
+    """Vokabeltests auf Papier mit zu vielen unsicher gelesenen Wörtern: Eltern
+    sehen auf den Fotos nach und entscheiden je Wort (D202)."""
+    try:
+        from .routers.vocab_daily import review_items
+        rows = review_items(account_id)
+    except Exception:
+        _LOG.warning("Zu prüfende Vokabeltests für Konto %s nicht lesbar", account_id, exc_info=True)
+        return []
+    return [item(f"vocab-review:{r['paper_id']}", "vocab_review",
+                 f"Vokabeltest {r['code']} von {name} prüfen ({subject_label(r['subject'] or '') or r['subject']})",
+                 f"{_plural(len(r['open']), 'Wort ließ', 'Wörter ließen')} sich auch nach {r['passes']} Auswertungen "
+                 f"nicht sicher lesen. Bis zur Prüfung sieht {name} kein Ergebnis, und nichts zählt im Trainer.",
+                 action("Prüfen", "vokabeln", r["subject"], paper=r["paper_id"])) for r in rows]
+
+
 def household_items(status: dict | None = None) -> list[dict]:
     """KI-Rahmen der Familie: Anfangsstand und Kostensätze."""
     try:
@@ -246,7 +283,8 @@ async def collect(user, account_ids: list[int], today: date) -> dict:
         items += calendar_items(account_id, data.get("all_entries") or [], today)
         items += learning_items(account_id)
         # Eine zurückgehaltene Auswertung steht vorn: Das Kind wartet darauf (D202).
-        items = paper_review_items(account_id, name) + items
+        items = (paper_review_items(account_id, name) + exam_review_items(account_id, name)
+                 + vocab_review_items(account_id, name) + items)
         for it in items:
             it["account_id"] = account_id
         kids.append({"account_id": account_id, "name": name, "items": items})

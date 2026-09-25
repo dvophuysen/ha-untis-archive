@@ -74,7 +74,8 @@
   const pct = (e) => Math.min(100, Math.round((100 * e.practiced) / Math.max(1, e.target)));
 
   // Vokabeltest auf Papier (D181).
-  let paperId = $state(null), paperCount = $state(20), papers = $state([]);
+  // Aus „Erledigen“ öffnet ?paper=… das zu prüfende Blatt (D202).
+  let paperId = $state(Number(new URLSearchParams(window.location.hash.split('?')[1] || '').get('paper')) || null), paperCount = $state(20), papers = $state([]);
   async function loadPapers() {
     if (!subject) return;
     try { papers = (await api.get(`/api/accounts/${accountId}/vocab/papers?subject=${encodeURIComponent(subject)}`)).papers; } catch { papers = []; }
@@ -321,7 +322,7 @@
             {#if papers.length}
               <div class="actions">
                 {#each papers.slice(0, 3) as pp (pp.id)}
-                  <button class="ghost" onclick={() => (paperId = pp.id)}>Blatt {pp.code} · {pp.status === 'graded' ? `${pp.right} von ${pp.total} richtig` : 'offen'}</button>
+                  <button class="ghost" onclick={() => (paperId = pp.id)}>Blatt {pp.code} · {pp.status === 'graded' ? `${pp.right} von ${pp.total} richtig` : pp.status === 'review' ? 'wird geprüft' : 'offen'}</button>
                 {/each}
               </div>
             {/if}
