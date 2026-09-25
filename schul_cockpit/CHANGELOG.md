@@ -1,3 +1,10 @@
+## 1.27.2
+
+- Bilder aus den abgelegten Seiten: Die App erkennt einmal je Seite, welche Bilder, Zeichnungen und Schaltpläne darauf sind. Der Lernbegleiter kann eine davon in einer Aufgabe zeigen, Übungsarbeiten drucken sie mit, und die Sprechprobe zeigt ein Bild zur Bildbeschreibung. Antippen vergrößert.
+- Jeder Hinweis „Material fehlt“ sagt jetzt, woher er kommt (Hausaufgabe, Stunde oder Zettel, mit Datum und Zitat). Mit „Nicht nötig“ lässt sich ein Hinweis streichen.
+- Ein Blatt, das nur in einem abgelegten Themenzettel erwähnt wird, gilt nicht mehr als fehlend.
+- An jeder Arbeit können Eltern Themen abwählen und Material zum Üben anheften.
+
 ## 1.27.1
 
 - Sprechprüfung: Der Zettel der Lehrkraft gilt als Ablauf der Prüfung. Die Gesamtprobe folgt ihm Teil für Teil (Interview, Monologue, Dialogue), statt jeden Punkt des Zettels als eigenes Sprechthema zu üben.
