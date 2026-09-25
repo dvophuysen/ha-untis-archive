@@ -200,7 +200,7 @@ def test_extra_mile_only_beyond_the_pensum_and_only_for_the_child(world, monkeyp
     school(world, START, 1)
     # Eine im Lernplan vorgesehene Übungsarbeit ist Pflicht, keine Extrameile (D180).
     with closing(db.webapp_conn()) as c, c:
-        c.execute("INSERT INTO study_plan_days VALUES(1,?,?,'t')",
+        c.execute("INSERT INTO study_plan_days(account_id,day,steps_json,computed_at) VALUES(1,?,?,'t')",
                   (START.isoformat(), '[{"kind": "paper", "exam_key": "k1", "key": "p"}]'))
     assert not reward_extras.note_extra_practice(1, 5, "k1", KID, START)
     assert reward_extras.note_extra_practice(1, 6, None, KID, START + timedelta(days=5))

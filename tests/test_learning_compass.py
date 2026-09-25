@@ -48,7 +48,7 @@ def test_next_exam_with_verdict(compass):
     assert (n["exam_key"], n["subject"], n["day_label"], n["school_days_left"]) == ("ma", "Mathematik", "Mi 07.10.", 7)
     # D188: 6 Schritte (Einstieg, je Thema Üben und Nachweis, Probearbeit) in 5 Lerntagen vor dem Puffer.
     assert (n["ready"], n["total"], n["verdict"]) == (0, 2, "knapp") and d["calm"] is None
-    assert n["verdict_text"] == "Knapp: noch etwa 6 Schritte in 5 Lerntagen. Jeden Tag dranbleiben."
+    assert n["verdict_text"] == "Knapp: noch etwa 6 Schritte in 5 Schultagen. Jeden Tag dranbleiben."
     assert [p["state"] for p in n["path"]] == ["now", "todo", "todo", "todo"] and n["stage"] == "einstieg"
     assert [t["state"] for t in n["raster"]] == ["neu", "neu"]
     ready(ids[0])

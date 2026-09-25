@@ -112,31 +112,36 @@ def test_no_cap_nearest_exam_first(world):
     ready(far[0]); ready(mid[0])
     steps = sp.compute(1, MON)
     got = [s["exam_key"] for s in steps]
-    # Biologie: 6 Schritte in 2 Lerntagen vor dem Puffer → heute 3; Physik: 3 in 4 → heute 1.
-    assert got[:4] == ["bi", "bi", "bi", "ph"], got
+    # Biologie: 6 Schritte in 2 Schultagen vor dem Puffer → heute 3; Physik: 3 in 4 → heute 1.
+    # Im Wechsel, nicht ein Fach am Stück (D189).
+    assert got.count("bi") == 3 and got.count("ph") == 1 and got[:2] == ["bi", "ph"], got
     plans = {p["exam_key"]: p for p in sp.plans(1, MON)}
     assert plans["bi"]["need"] == 6 and plans["bi"]["days"] == 2 and plans["ge"]["need"] == 3
-    assert "Biologie am 02.10.: noch etwa 6 Schritte in 2 Lerntagen" in sp.outlook(1, MON)
+    assert "Biologie am 02.10.: noch etwa 6 Schritte in 2 Schultagen" in sp.outlook(1, MON)
 
 
-def test_weekend_free_unless_the_school_days_do_not_suffice(world, monkeypatch):
+def test_no_new_tasks_on_the_weekend_the_friday_list_carries_it(world, monkeypatch):
+    fri = MON + timedelta(days=4)
     exam("ma", "Mathematik", SAT + timedelta(days=9), ["A", "B"])
-    assert sp.compute(1, SAT) == [], "Wochenende frei: 6 Schritte in 3 Schultagen reichen"
-    exam("fr", "Französisch", SAT + timedelta(days=3), ["A", "B", "C"])  # Dienstag: 8 Schritte, ein Schultag
-    steps = sp.compute(1, SAT)
-    assert [s["exam_key"] for s in steps] == ["fr"] * 3 and steps[0]["format"] == "einstieg" and steps[0]["tight"]
-    view = sp.view(1, SAT, store=False)
-    assert view["engpass"] and view["free_day"] and view["tight"] == [{"subject": "Französisch", "exam_date": "2026-10-06"}]
+    assert not [s for s in sp.compute(1, fri) if s["exam_key"] == "ma" and s["tight"]], "Schultage reichen: kein Notpuffer"
+    exam("fr", "Französisch", SAT + timedelta(days=3), ["A", "B", "C"])  # Dienstag: 8 Schritte, Fr und Mo
+    steps = [s for s in sp.compute(1, fri) if s["exam_key"] == "fr"]
+    # Freitag trägt seinen Anteil und den des Wochenendes: 8 × 3/4 = 6.
+    assert len(steps) == 6 and steps[0]["format"] == "einstieg" and steps[0]["tight"]
+    assert sp.compute(1, SAT) == [] and sp.compute(1, SAT + timedelta(days=1)) == [], "am Wochenende nichts Neues"
+    view = sp.view(1, fri, store=False)
+    assert view["engpass"] and view["tight"][0] == {"subject": "Französisch", "exam_date": "2026-10-06"}
     assert view["outlook"].startswith("Es wird eng. Französisch am 06.10.")
-    # Ferien wie Wochenende.
+    assert view["outlook"].endswith("Diese Liste gilt bis Sonntagabend, am Wochenende kommt nichts Neues dazu.")
+    # Ferien wie Wochenende: keine neuen Aufgaben.
     world["free"].update(MON + timedelta(days=i) for i in range(5))
-    assert {s["exam_key"] for s in sp.compute(1, MON)} == {"fr"}, "in den Ferien nur, was sonst nicht reicht"
+    assert sp.compute(1, MON) == []
     world["free"].clear()
-    # Vokabeltest steht an: zusätzlich Pflicht.
     vocab(monkeypatch, [{"subject": "Englisch", "unit": "Unit 2", "target": 20, "done": False, "href": "#/vokabeln",
                          "exam_key": "voc", "why": "Test am Freitag."}])
-    assert sp.compute(1, MON)[-1]["kind"] == "vocab"
-    assert sp.compute(1, SAT)[-1]["kind"] == "vocab", "am Wochenende entscheidet das Pensum selbst"
+    kinds = [s["kind"] for s in sp.compute(1, fri)]
+    assert "vocab" in kinds and kinds.index("vocab") < len(kinds) - 1, "Vokabeln im Wechsel, nicht ans Ende"
+    assert sp.compute(1, SAT) == []
 
 
 def test_basic_daily_step_fallbacks(world, monkeypatch):
@@ -265,14 +270,15 @@ def test_dialog_answer_rechecks_the_day(world, monkeypatch):
     assert seen == [("learn", f"dialog:{1}")]
 
 
-def test_weekend_before_the_buffer_counts_and_unknown_timetable_is_weekdays(world, monkeypatch):
-    """Arbeit am Mittwoch, heute Freitag: Puffer Montag und Dienstag, gelernt wird
-    Freitag, Samstag, Sonntag. Hinter dem bekannten Stundenplan zählen Mo–Fr."""
+def test_friday_carries_the_weekend_and_unknown_timetable_is_weekdays(world, monkeypatch):
+    """Arbeit am Mittwoch, heute Freitag: Puffer Montag und Dienstag; die
+    Freitagsliste trägt alles, das Wochenende ist Notpuffer. Hinter dem bekannten
+    Stundenplan zählen Mo–Fr."""
     fri = MON + timedelta(days=4)
     exam("ma", "Mathematik", fri + timedelta(days=5), ["A", "B"])  # Mittwoch
     p = {x["exam_key"]: x for x in sp.plans(1, fri)}["ma"]
-    assert p["need"] == 6 and p["days"] == 3 and p["weekend"]
-    assert len(p["steps"]) == 2
+    assert p["need"] == 6 and p["days"] == 1 and p["weekend"]
+    assert len(p["steps"]) == 6, "Freitag trägt auch den Anteil des Wochenendes"
     # Nur zwei Wochen Stundenplan bekannt: eine Arbeit in fünf Wochen bekommt nicht täglich mehrere Schritte.
     known = MON + timedelta(days=11)
     orig = rewards._lessons
@@ -280,3 +286,17 @@ def test_weekend_before_the_buffer_counts_and_unknown_timetable_is_weekdays(worl
     exam("po", "Politik", MON + timedelta(days=35), ["A", "B", "C"])
     far = {x["exam_key"]: x for x in sp.plans(1, MON)}["po"]
     assert far["days"] > 15 and len(far["steps"]) <= 1 and not far["weekend"]
+
+
+def test_frozen_plan_is_recomputed_only_on_the_introduction_day(world, monkeypatch):
+    intro = date(2026, 9, 25)
+    old = [{"key": "alt", "kind": "dialog", "title": "alt", "why": "", "subject": "", "exam_key": None,
+            "exam_date": None, "format": None, "topic_id": None, "level": None, "href": "#"}]
+    with closing(db.webapp_conn()) as c, c:
+        for d in (intro, MON):
+            c.execute("INSERT INTO study_plan_days(account_id,day,steps_json,computed_at) VALUES(1,?,?,'t')",
+                      (d.isoformat(), '[{"key": "alt", "kind": "dialog"}]'))
+    monkeypatch.setattr(sp, "compute", lambda a, d: [{**old[0], "key": "neu"}])
+    assert [s["key"] for s in sp.ensure(1, intro)] == ["neu"], "am Einführungstag neu gerechnet"
+    assert [s["key"] for s in sp.ensure(1, intro)] == ["neu"]
+    assert [s["key"] for s in sp.ensure(1, MON)] == ["alt"], "sonst bleibt der Tag, wie er war"

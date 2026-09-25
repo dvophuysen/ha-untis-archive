@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from contextlib import closing
 from datetime import date, datetime, timedelta
 from urllib.parse import urlencode
@@ -159,20 +160,29 @@ def exam_plan(account_id: int, exam: dict, day: date, school: list[date]) -> dic
     all_days = [day + timedelta(days=i) for i in range((exam_day - day).days)]
     free_days = [d for d in all_days if d < cutoff and d not in school]
     weekend = bool(need) and (behind or not window or need / max(1, len(window)) > SCHOOL_RATE)
-    days = sorted(set(window) | (set(free_days) if weekend else set()))
+    # D189: Freie Tage bekommen keine eigenen Aufgaben. Reichen die Schultage
+    # nicht, hängt ihr Anteil am Schultag davor (die Freitagsliste gilt bis
+    # Sonntagabend, D179); das Wochenende ist Notpuffer, kein Lerntag.
+    units = {d: 1 for d in window}
+    if weekend:
+        for f in free_days:
+            prev = max((d for d in window if d < f), default=None)
+            if prev is not None:
+                units[prev] += 1
+    days = [d for d in window if d >= day]
     quota = 0
-    if need and day in days:
-        remaining = len([d for d in days if d >= day])
-        rate = need / max(1, remaining)
-        if rate >= 1:
-            quota = -(-need // remaining)
+    if need and units.get(day):
+        total = sum(u for d, u in units.items() if d >= day)
+        exact = need * units[day] / max(1, total)
+        if exact >= 1:
+            quota = math.ceil(exact - 1e-9)
         else:
-            gap = max(1, round(1 / rate))
+            gap = max(1, round(1 / exact))
             quota = 1 if (day.toordinal() + _stable(exam["exam_key"])) % gap == 0 else 0
     tight = weekend or behind
     today_steps = [{**st, "tight": tight} for st in seq[:quota]]
     return {"exam_key": exam["exam_key"], "subject": subject, "exam_date": exam["exam_date"], "need": need,
-            "days": len([d for d in days if d >= day]), "weekend": weekend, "behind": behind,
+            "days": len(days), "weekend": weekend, "behind": behind,
             "ready": ready, "total": total, "steps": today_steps,
             "sequence": [{k: st.get(k) for k in ("key", "kind", "format", "topic_id", "title")} for st in seq]}
 
@@ -228,13 +238,19 @@ def plans(account_id: int, day: date) -> list[dict]:
 
 def compute(account_id: int, day: date) -> list[dict]:
     """Die Pflichtschritte eines Tages aus dem jetzigen Stand, die nächste Arbeit zuerst."""
-    school_day = day in rewards.school_days(account_id, day, day)
-    steps = [st for p in sorted(plans(account_id, day), key=lambda p: p["exam_date"]) for st in p["steps"]]
+    if day not in rewards.school_days(account_id, day, day):
+        return []  # Am Wochenende und in Ferien kommt nichts Neues dazu (D189).
     vocab = _vocab(account_id, day)
-    # Steht ein Vokabeltest an, ist das Pensum zusätzlich Pflicht; an freien Tagen
-    # entscheidet das Pensum selbst, ob die Zeit bis zum Test das verlangt (D179).
-    steps += [_vocab_step(v) for v in vocab if v.get("exam_key")]
-    if steps or not school_day:
+    # Alle anstehenden Prüfungen im Wechsel, nicht ein Fach am Stück (D189):
+    # je Arbeit ihr Anteil, die Schritte reihum, die nächste Prüfung zuerst.
+    groups = [p["steps"] for p in sorted(plans(account_id, day), key=lambda p: p["exam_date"]) if p["steps"]]
+    groups += [[_vocab_step(v)] for v in vocab if v.get("exam_key")]
+    steps = []
+    while any(groups):
+        for g in groups:
+            if g:
+                steps.append(g.pop(0))
+    if steps:
         return steps
     # Grundpensum: jeden Schultag etwas, das erspart das Büffeln am Ende.
     steps = [_vocab_step(v) for v in vocab[:1]]
@@ -245,18 +261,24 @@ def compute(account_id: int, day: date) -> list[dict]:
 
 
 def outlook(account_id: int, day: date) -> str:
-    """Ein ehrlicher Satz zur Lage, aus den Zahlen: nächste Arbeiten, was noch
-    fehlt, wie viele Lerntage bis zum Puffer bleiben."""
+    """Ein ehrlicher Satz zur Lage, aus den Zahlen: alle nahen Prüfungen, was je
+    Prüfung noch fehlt, wie viele Lerntage bis zum Puffer bleiben."""
     ps = [p for p in sorted(plans(account_id, day), key=lambda p: p["exam_date"]) if p["need"]]
-    if not ps:
-        return ""
     bits = []
-    for p in ps[:2]:
-        extra = " mit Wochenende" if p["weekend"] else ""
+    for p in ps[:3]:
         bits.append(f"{p['subject']} am {_de(p['exam_date'])}: noch etwa {p['need']} "
-                    f"{'Schritt' if p['need'] == 1 else 'Schritte'} in {p['days']} {'Lerntag' if p['days'] == 1 else 'Lerntagen'}{extra}")
-    head = "Es wird eng. " if any(p["weekend"] or p["behind"] for p in ps[:2]) else ""
-    return head + "; ".join(bits) + "."
+                    f"{'Schritt' if p['need'] == 1 else 'Schritte'} in {p['days']} {'Schultag' if p['days'] == 1 else 'Schultagen'}")
+    for v in _vocab(account_id, day):
+        if v.get("exam_key") and v.get("exam_date") and v.get("open"):
+            bits.append(f"{v.get('subject', '').capitalize()} Vokabeltest am {_de(v['exam_date'])}: {v['open']} Wörter offen")
+    if not bits:
+        return ""
+    head = "Es wird eng. " if any(p["weekend"] or p["behind"] for p in ps[:3]) else ""
+    text = head + "; ".join(bits) + "."
+    school = rewards.school_days(account_id, day, day + timedelta(days=1))
+    if day in school and day + timedelta(days=1) not in school and any(p["weekend"] for p in ps):
+        text += " Diese Liste gilt bis Sonntagabend, am Wochenende kommt nichts Neues dazu."
+    return text
 
 
 # -------------------------------------------------------------- Einfrieren
@@ -271,16 +293,35 @@ def stored(account_id: int, day: date) -> list[dict] | None:
     return json.loads(row[0]) if row else None
 
 
+# Stand der Planlogik. Ein festgehaltener Tagesplan wird nur an den hier
+# genannten Tagen mit neuer Logik neu berechnet: am 25.09.2026 bei der
+# Einführung (Nutzer: „Heute haben wir noch einen Freibrief“). Sonst gilt eine
+# neue Logik ab dem nächsten Morgen; tagsüber wächst nichts dazu (D189).
+PLAN_VERSION = 2
+REPLAN_DAYS = ("2026-09-25",)
+
+
 def ensure(account_id: int, day: date) -> list[dict]:
     """Den Plan des Tages einmal berechnen und festhalten; danach bleibt er."""
     found = stored(account_id, day)
-    if found is not None:
+    if found is not None and not (day.isoformat() in REPLAN_DAYS and _version(account_id, day) < PLAN_VERSION):
         return found
     steps = compute(account_id, day)
     with closing(webapp_conn()) as c, c:
-        c.execute("INSERT OR IGNORE INTO study_plan_days(account_id,day,steps_json,computed_at) VALUES(?,?,?,?)",
-                  (account_id, day.isoformat(), json.dumps(steps, ensure_ascii=False), rewards.now_local().isoformat()))
+        c.execute("INSERT INTO study_plan_days(account_id,day,steps_json,computed_at,version) VALUES(?,?,?,?,?) "
+                  "ON CONFLICT(account_id,day) DO UPDATE SET steps_json=excluded.steps_json,computed_at=excluded.computed_at,"
+                  "version=excluded.version",
+                  (account_id, day.isoformat(), json.dumps(steps, ensure_ascii=False), rewards.now_local().isoformat(), PLAN_VERSION))
     return stored(account_id, day) or steps
+
+
+def _version(account_id: int, day: date) -> int:
+    try:
+        with closing(webapp_conn()) as c:
+            row = c.execute("SELECT version FROM study_plan_days WHERE account_id=? AND day=?", (account_id, day.isoformat())).fetchone()
+        return int(row[0] or 0) if row else 0
+    except Exception:
+        return 0
 
 
 # ----------------------------------------------------------------- Erledigt

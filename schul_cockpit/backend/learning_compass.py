@@ -158,11 +158,11 @@ def plan_verdict(p: dict) -> tuple[str, str]:
     """Die Einschätzung aus demselben Bedarf wie der Tagesplan (D188): was laut
     Raster noch fehlt, gegen die Lerntage bis zum Puffer vor der Arbeit."""
     need, days = p["need"], p["days"]
-    steps = f"noch etwa {need} {'Schritt' if need == 1 else 'Schritte'} in {days} {'Lerntag' if days == 1 else 'Lerntagen'}"
+    steps = f"noch etwa {need} {'Schritt' if need == 1 else 'Schritte'} in {days} {'Schultag' if days == 1 else 'Schultagen'}"
     if not need:
         return "auf_kurs", "Auf Kurs: Alles sitzt. Jetzt nur noch wiederholen."
     if p["weekend"] or p["behind"]:
-        return "eng", f"Eng: {steps}, auch am Wochenende."
+        return "eng", f"Eng: {steps}. Das Wochenende ist nur Notpuffer für die Freitagsliste."
     if need > days:
         return "knapp", f"Knapp: {steps}. Jeden Tag dranbleiben."
     return "auf_kurs", f"Auf Kurs: {steps}."
@@ -532,7 +532,7 @@ async def build(account_id: int, user, now: datetime | None = None) -> dict:
         "plan_explain": [
             "Jeden Morgen entsteht der Plan neu: aus dem, was je Thema noch fehlt, und den Lerntagen bis zur Arbeit.",
             "Der Stoff soll zwei Schultage vor der Arbeit durch sein. So bleibt Luft für spontane Tests und viele Hausaufgaben.",
-            "Das Wochenende bleibt frei, solange die Schultage reichen. Vokabeln kommen nach deinem Pensum dazu.",
+            "Am Wochenende kommt nichts Neues dazu. Ist die Freitagsliste lang, darf sie bis Sonntagabend fertig werden. Alle nahen Prüfungen kommen im Wechsel dran.",
         ],
         "exams": upcoming,
         "strengths": strengths(progress, skills, day),

@@ -1155,3 +1155,6 @@ CREATE TABLE IF NOT EXISTS vocab_paper_pages (
 # Archiv nach der Arbeit (D182): „Wieder aufnehmen“ merkt sich den Tag, damit
 # eine ins Archiv gewanderte Einheit zurückkommt.
 _MIGRATIONS.append(("learning_archive_001", "ALTER TABLE mentor_sessions ADD COLUMN unarchived_at TEXT"))
+
+# Stand der Planlogik je festgehaltenem Tagesplan (D189).
+_MIGRATIONS.append(("study_plan_002_version", "ALTER TABLE study_plan_days ADD COLUMN version INTEGER NOT NULL DEFAULT 1"))

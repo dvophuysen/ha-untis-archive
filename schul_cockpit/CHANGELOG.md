@@ -1,3 +1,10 @@
+## 1.25.2
+
+- Am Wochenende kommen keine neuen Lernaufgaben dazu. Der Plan für das Wochenende steht am Freitag nach der Schule fest: Reichen die Schultage nicht, trägt die Freitagsliste den Rest, und sie darf bis Sonntagabend fertig werden. Das Wochenende ist Notpuffer, kein Lerntag.
+- Alle nahen Prüfungen kommen im Wechsel dran, zum Beispiel Mathe, Englisch, Latein, Mathe, statt ein Fach am Stück. Jede Prüfung bekommt ihren Anteil nach dem, was noch fehlt, und den Tagen bis dahin.
+- Der Hinweis über „Lernen“ nennt alle nahen Prüfungen mit ihren Zahlen, auch Vokabeltests, und am Freitag, dass die Liste bis Sonntagabend gilt.
+- Einmalig am Einführungstag: Bereits festgelegte Tagespläne werden mit der neuen Logik neu berechnet. Sonst wächst ein Tagesplan im Laufe des Tages nie.
+
 ## 1.25.1
 
 - Lernplan: Das Wochenende vor den letzten zwei Schultagen einer Arbeit zählt als Lernzeit mit, wenn die Schultage nicht reichen. Hinter dem bekannten Stundenplan zählen Montag bis Freitag als Schultage, so bekommen ferne Arbeiten nicht zu viele Schritte auf einmal.
