@@ -116,6 +116,9 @@ async def today(
         "upcoming_exams": exams,
         "next": next_block,
         "evening_from": evening_from(account_id),
+        # Fürs Selbsteintragen (D174): an welchem Tag jedes Fach als Nächstes
+        # Unterricht hat; dorthin schlägt die App den Termin vor.
+        "next_by_subject": next_by_subject(account_id, today_date),
         # Vor einer Arbeit: Heftseiten, die der Unterricht nennt und die weder
         # digital noch fotografiert vorliegen. Höchstens drei Bitten.
         "photo_requests": await photo_requests(account_id, today_iso),
@@ -128,6 +131,19 @@ async def today(
             "reliability": day_close.reliability(account_id, today_date),
         },
     }
+
+
+def next_by_subject(account_id: int, today_date: date) -> dict[str, str]:
+    try:
+        from ..afternoon_check import _lessons_after
+        found: dict[str, str] = {}
+        for lesson in _lessons_after(account_id, today_date, 21):
+            name = lesson.get("subject_name")
+            if name and name not in found:
+                found[name] = lesson["date"]
+        return found
+    except Exception:
+        return {}
 
 
 def _retakes(account_id: int) -> list[dict]:

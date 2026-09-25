@@ -20,19 +20,21 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  else if(u==='/api/tasks/1'){if(failTask){status=500;body={detail:'Test failure'};}else{done=req.postDataJSON().status==='done';body={ok:true};}}
  await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
  });
- await page.goto('http://127.0.0.1:4178/#/today');await page.getByRole('heading',{name:'Heute erledigen',exact:true}).waitFor({timeout:8000}).catch(async e=>{console.log('ERRORS',errors,'BODY',await page.locator('body').innerText());throw e;});
- for(const title of ['Schon vorziehen','Noch ohne Termin','Üben & vorbereiten'])assert.equal(await page.getByRole('heading',{name:title,exact:true}).count(),1);
- await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.getByRole('alert').filter({hasText:'Nicht gespeichert'}).waitFor();assert.equal(await page.getByRole('button',{name:'Verstanden',exact:true}).count(),1);
- failRating=false;await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.getByRole('button',{name:/Vergangene Stunden ansehen/}).waitFor();assert.equal(await page.getByRole('button',{name:'Verstanden',exact:true}).count(),0);
- await page.getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Test failure',{exact:true}).waitFor();assert.equal(done,false);
- failTask=false;await page.getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Für morgen ist nichts mehr offen!').waitFor();
- await page.locator('.schedule-row').first().waitFor();assert.equal(await page.locator('.schedule-row').count(),4);assert.equal(await page.getByRole('button',{name:'Material für Mathematik',exact:true}).count(),1);await page.getByText('❌ Entfällt',{exact:true}).waitFor();await page.getByText(/Raum Halle 2.*statt Halle 1/).waitFor();
+ await page.goto('http://127.0.0.1:4178/#/today');await page.getByRole('heading',{name:/^Aufgaben bis morgen/}).waitFor({timeout:8000}).catch(async e=>{console.log('ERRORS',errors,'BODY',await page.locator('body').innerText());throw e;});
+ // Nach der Schule (D171): Ringe, Aufgaben bis zum nächsten Schultag, Tasche als Kacheln, Rückmeldungen.
+ for(const title of [/^Tasche für Dienstag/,/^Stunden von heute/,/^Wenn du magst/])assert.equal(await page.getByRole('heading',{name:title}).count(),1);
+ assert.equal(await page.locator('.ring-btn').count(),3);
+ await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.getByRole('alert').filter({hasText:'Nicht gespeichert'}).waitFor();assert.equal(rating,null);
+ failRating=false;await page.getByRole('button',{name:'Verstanden',exact:true}).click();await page.locator('#s-stunden button[aria-label="Verstanden"][aria-pressed="true"]').waitFor();assert.equal(rating,3);
+ await page.locator('#s-aufgaben').getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('Test failure',{exact:true}).waitFor();assert.equal(done,false);
+ failTask=false;await page.locator('#s-aufgaben').getByRole('button',{name:'Als erledigt markieren',exact:true}).first().click();await page.getByText('✓ Keine Aufgabe offen.').waitFor();assert.equal(done,true);
  await page.getByRole('button',{name:'Material für Sport',exact:true}).click();await page.getByRole('alert').filter({hasText:'Packen nicht gespeichert'}).waitFor();
- assert.equal(await page.locator('.pack-row[aria-pressed="true"]').count(),0);
- failPack=false;await page.getByRole('button',{name:'Material für Sport',exact:true}).click();await page.locator('.pack-row[aria-pressed="true"]').waitFor();
- await page.reload();await page.locator('.pack-row[aria-pressed="true"]').waitFor();
- assert.equal(await page.locator('.pack-row[aria-pressed="true"]').count(),1);
- await page.getByRole('button',{name:'Material für Mathematik',exact:true}).click();await page.getByText('✓ Material für alle Fächer abgehakt.').first().waitFor();
+ assert.equal(await page.locator('.bag-item[aria-pressed="true"]').count(),0);
+ failPack=false;await page.getByRole('button',{name:'Material für Sport',exact:true}).click();await page.locator('.bag-item[aria-pressed="true"]').waitFor();
+ await page.reload();await page.locator('.bag-item[aria-pressed="true"]').waitFor();
+ assert.equal(await page.locator('.bag-item[aria-pressed="true"]').count(),1);
+ await page.getByRole('button',{name:'Material für Mathematik',exact:true}).click();await page.getByText('Geschafft. Freizeit!').waitFor();
+ await page.locator('.fold summary').click();
  for(const width of [320,390,430,768]){
   await page.setViewportSize({width,height:900});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'overflow '+width);
@@ -46,6 +48,6 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  await page.setViewportSize({width:768,height:900});const edges=await page.locator('.row-actions').evaluateAll(rows=>rows.map(r=>r.getBoundingClientRect().right));assert(edges.every(x=>Math.abs(x-edges[0])<1),'task actions have one right edge');if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-tablet.png'),fullPage:true});
  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-390.png'),fullPage:true});
  await page.emulateMedia({colorScheme:'dark'});if(process.env.SCHOOL_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.SCHOOL_SCREENSHOT_DIR,'dashboard-dark.png'),fullPage:true});
- schoolDate='2026-09-15';await page.clock.setFixedTime(new Date('2026-09-15T07:00:00+02:00'));await page.reload();await page.getByText('✓ Material für alle Fächer abgehakt.').first().waitFor();assert.equal(await page.locator('.school .pack-row[aria-pressed="true"]').count(),2,'evening confirmations remain in morning checklist');
- assert.deepEqual(errors,[]);console.log('PASS: dashboard sections, failed/successful checkin and task save, persistent packing and failed packing save, 320/390/430/768 px, stacked actions, no JS exceptions');await browser.close();await new Promise(r=>server.close(r));
+ schoolDate='2026-09-15';await page.clock.setFixedTime(new Date('2026-09-15T07:00:00+02:00'));await page.reload();await page.getByRole('heading',{name:/^Dabei\?/}).waitFor();await page.locator('.bag-item[aria-pressed="true"]').nth(1).waitFor();assert.equal(await page.locator('.bag-item[aria-pressed="true"]').count(),2,'afternoon confirmations remain in morning checklist');assert.equal(await page.locator('.ring-btn').count(),0,'no rings before school');
+ assert.deepEqual(errors,[]);console.log('PASS: phases after and before school, rings, failed/successful checkin and task save, persistent packing as tiles, done moment, 320/390/430/768 px, stacked actions, no JS exceptions');await browser.close();await new Promise(r=>server.close(r));
 })().catch(e=>{console.error(e);process.exit(1)});

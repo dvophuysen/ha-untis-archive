@@ -2,7 +2,9 @@
   import {subjectStyle} from './subjectStyle.js';
   import { onMount } from 'svelte';
   import { api } from './api.js';
-  let { accountId, schoolDay } = $props();
+  // variant „grid“ (D171): die Fächer als Kacheln zum Abhaken, für die Tasche
+  // von morgen nach Schulschluss. onstatus meldet den Stand an die Startseite.
+  let { accountId, schoolDay, variant = 'schedule', onstatus = null } = $props();
   let data = $state(null), error = $state(''), loading = $state(true), busy = $state(false);
   let request = 0;
   async function load(reset = false) {
@@ -19,6 +21,8 @@
     finally { if (ticket === request) loading = false; }
   }
   $effect(() => { void accountId; void schoolDay; load(true); });
+  $effect(() => { if (data) onstatus?.({ done: data.confirmed_count, total: data.items.length, packed: data.status === 'packed' || !data.items.length }); });
+  const firstLesson = (key) => data?.schedule.find((l) => l.material_key === key && !l.is_cancelled);
   onMount(() => {
     const resume = () => { if (!document.hidden && !busy) load(); };
     document.addEventListener('visibilitychange', resume);
@@ -42,6 +46,17 @@
 <section class="packing" aria-label="Stundenplan mit Materialcheck">
   {#if error}<p class="error-box" role="alert">{error}</p><button class="ghost" disabled={busy} onclick={() => load()}>Neu laden</button>{/if}
   {#if loading && !data}<p class="muted">Stundenplan wird geladen …</p>
+  {:else if data && variant === 'grid'}
+    <div class="bag">
+      {#each data.items as item (item.key)}
+        {@const l = firstLesson(item.key)}
+        {@const st = subjectStyle(item.label)}
+        <button class="bag-item" class:packed={item.done} aria-label={`Material für ${item.label}`} aria-pressed={item.done} disabled={busy || loading || !data.can_write} onclick={() => toggle(item)}>
+          <span class="bag-emoji" aria-hidden="true">{st.emoji}</span>
+          <span><b>{st.name || item.label}</b><small>{item.done ? '✓ drin' : ''}{item.done && l ? ' · ' : ''}{l ? `${l.start_hhmm}${l.room ? ` · Raum ${l.room}` : ''}` : ''}</small></span>
+        </button>
+      {:else}<p class="muted">Für diesen Tag ist nichts einzupacken.</p>{/each}
+    </div>
   {:else if data}
     <p class="packing-hint">Material dabei? Hake die Fächer ab.</p>
     <div class="schedule">
@@ -80,4 +95,9 @@
   .schedule-time{font-size:.85rem;color:var(--fg-muted);font-variant-numeric:tabular-nums}.schedule-info p{margin:3px 0;font-size:.85rem;overflow-wrap:anywhere;color:var(--fg-muted)}
   .schedule-info .change{font-size:.85rem;font-weight:600;color:var(--fg)}.cancelled .schedule-head strong{text-decoration:line-through}.lesson-topic{white-space:pre-wrap}
   .pack-status{font-size:.9rem;margin:8px 0 0;color:var(--accent)}
+  .bag{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-2)}
+  .bag-item{display:grid;grid-template-columns:30px minmax(0,1fr);gap:6px;align-items:center;text-align:left;min-height:58px;padding:var(--sp-2);border:2px dashed var(--border);border-radius:var(--r-md);background:var(--bg-card);color:var(--fg)}
+  .bag-item b{display:block;font-size:var(--fs-sm);overflow-wrap:anywhere}.bag-item small{font-size:.72rem;color:var(--fg-muted)}
+  .bag-item.packed{border-style:solid;border-color:var(--accent);background:color-mix(in oklab,var(--accent) 11%,var(--bg-card))}
+  .bag-emoji{font-size:1.3rem}
 </style>

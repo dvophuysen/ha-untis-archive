@@ -17,6 +17,8 @@
     dueDays !== null && dueDays >= 0 && dueDays <= 1 && task.status !== 'done',
   );
   const isExam = $derived(task.task_type === 'exam_prep');
+  // Erinnerungen (D174) haben kein Fach und keine Hilfe.
+  const isReminder = $derived(task.task_type === 'reminder');
   const cleanNotes = $derived(stripUntisMetadata(task.notes));
   // Sofort sichtbarer Haken (D177), ohne task.status vorzeitig zu ändern:
   // Die Startseite sortiert erledigte Zeilen weg, ein Fehler wäre sonst unsichtbar.
@@ -77,7 +79,7 @@
     onkeydown={onBodyKey}
   >
     <div class="head">
-      <span class="title" class:done={isDone}>{subjectStyle(task.subject_name || task.title).emoji}
+      <span class="title" class:done={isDone}>{isReminder ? '📌' : subjectStyle(task.subject_name || task.title).emoji}
         {#if task.source_state}<span class="dot {task.source_state}" title={task.source_state === 'ready' ? 'Material liegt vor' : task.source_state === 'pending' ? 'Material wird geholt' : 'Material fehlt'}></span>{/if}
         <SourceText segments={task.title_segments} text={task.title} subject={task.subject_name} taskId={task.id} /></span>
 
@@ -88,6 +90,12 @@
     {#if task.subitems && task.subitems.length > 0}
       <div class="dim sub">
         ☑ {task.subitems.filter((s) => s.done).length}/{task.subitems.length} Teilaufgaben
+      </div>
+    {/if}
+    {#if isReminder || task.source === 'manual'}
+      <div class="meta">
+        {#if isReminder}<span class="pill reminder">Erinnerung</span>{/if}
+        {#if task.source === 'manual'}<span class="pill self">selbst notiert</span>{/if}
       </div>
     {/if}
     {#if isExam || task.task_type === 'catch_up' || task.task_type === 'practice'}
@@ -104,7 +112,7 @@
           {dueLabel(task.due_date, today)}
         </span>
       {/if}
-  {#if !isDone}<a class="practice-link" aria-label={`Hilfe bei ${task.title}`} title="Dabei brauche ich Hilfe" href={`#/learning?help=${task.id}`}><ActionLabel kind="chat" label="Hilfe" /></a>{/if}
+  {#if !isDone && !isReminder}<a class="practice-link" aria-label={`Hilfe bei ${task.title}`} title="Dabei brauche ich Hilfe" href={`#/learning?help=${task.id}`}><ActionLabel kind="chat" label="Hilfe" /></a>{/if}
   </div>
 </div>
 
@@ -190,6 +198,9 @@
   .notes.done { text-decoration: line-through; color: var(--fg-dim); }
   .sub { font-size: 0.75rem; margin-top: 2px; }
   .meta { margin-top: 4px; display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .pill { font-size: .7rem; font-weight: 700; border-radius: 999px; padding: 1px 7px; background: var(--bg-elevated); color: var(--fg-muted); }
+  .pill.reminder { background: var(--warm-soft); color: var(--warn-fg); }
+  .pill.self { background: color-mix(in oklab, var(--accent) 12%, var(--bg-card)); color: var(--accent); }
   .due {
     flex-shrink: 0;
     font-size: 0.75rem;

@@ -1,3 +1,12 @@
+## 1.18.0
+
+- Neue Startseite nach dem Schultag: vor, in und nach der Schule, bestimmt aus dem echten Stundenplan. Oben steht eine Karte für das, was gerade dran ist: morgens die erste Stunde mit Raumwechsel und Schulschluss, in der Schule die laufende und die nächste Stunde, danach die nächste Aufgabe mit „Erledigt“, „Hilfe holen“ und der geschätzten Zeit bis zur Freizeit.
+- Vor und in der Schule steht der Stundenplan des Tages im Mittelpunkt, mit Raumwechsel, Vertretung und Ausfall in Worten; Doppelstunden stehen in einer Zeile. Nach dem Ende einer Stunde lässt sie sich direkt dort zurückmelden. Morgens fragt „Dabei?“ nach der Tasche für heute, dazu kommt, was heute abzugeben ist.
+- Nach der Schule zeigen drei Ringe, was bis zum nächsten Schultag noch fehlt: Aufgaben, Tasche und Rückmeldungen. Die Tasche für morgen ist eine Liste der Fächer zum Antippen. Sie erscheint erst nach Schulschluss.
+- Sind alle drei Ringe voll, heißt es „Geschafft. Freizeit!“ mit kurzem Konfetti, einmal am Tag. Der Abendmodus der Startseite entfällt.
+- Selbst eintragen: Aufgaben, die nicht in UNTIS stehen, und Erinnerungen wie „Elternbrief abgeben“ gehen als Text in ein Feld. Fach und Termin schlägt die App vor, in der Schule das Fach der laufenden Stunde und als Termin dessen nächste Stunde. Selbst Eingetragenes ist als „selbst notiert“ markiert, Erinnerungen gelb. Ein Foto geht weiterhin, als Alternative. Die Frage „Alles von heute notiert?“ geht darin auf.
+- Späteres, Übungsvorschläge und die nächsten Arbeiten stehen gesammelt unter „Wenn du magst“.
+
 ## 1.17.0
 
 - Schneller: Die Startseite lädt nur noch offene und in den letzten zwei Wochen erledigte Aufgaben und vom Lernplan nur den heutigen Vorschlag, statt jedes Mal über 200 KB. Beim Zurückkehren in die App lädt sie einmal statt zweimal neu.

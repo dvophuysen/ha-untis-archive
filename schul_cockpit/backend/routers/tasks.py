@@ -16,7 +16,8 @@ _LOGGER = logging.getLogger("schul_cockpit.tasks")
 
 router = APIRouter()
 
-VALID_TYPES = {"homework", "exam_prep", "catch_up", "practice", "project"}
+# „reminder“ (D174): Erinnerung ohne Fach, etwa „Elternbrief abgeben“.
+VALID_TYPES = {"homework", "exam_prep", "catch_up", "practice", "project", "reminder"}
 VALID_STATUS = {"open", "in_progress", "done", "skipped"}
 
 

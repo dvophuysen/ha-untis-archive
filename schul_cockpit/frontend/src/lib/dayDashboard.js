@@ -18,9 +18,10 @@ export function splitLessons(lessons, day, now) {
   return { open, upcoming, history };
 }
 
-export function splitTasks(tasks, today) {
+// Fällig ist alles bis zum nächsten Schultag (D172), ohne Angabe bis morgen.
+export function splitTasks(tasks, today, until = null) {
   const due = [], ahead = [], undated = [], done = [];
-  const tomorrow = shiftDateIso(today, 1);
+  const tomorrow = until || shiftDateIso(today, 1);
   for (const task of tasks) {
     if (task.status === 'done') { done.push(task); continue; }
     if (!task.due_date) undated.push(task);
