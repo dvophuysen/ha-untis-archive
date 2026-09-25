@@ -92,6 +92,8 @@ class Task(InputModel):
     optionen:list[Option]=Field(default_factory=list,max_length=4)
     # Eine Abbildung aus topic.abbildungen (ID): das Kind sieht den Ausschnitt der Seite (D198).
     abbildung:int|None=None
+    # Eine von der App gezeichnete Abbildung als JSON-Beschreibung (Schaltplan, Zahlenstrahl, D197).
+    figur:dict|None=None
 
 class Assessment(InputModel):
     result:Literal['correct','partial','incorrect','uncertain']
@@ -1586,7 +1588,9 @@ async def _turn(account_id,sid,body,user):
             sheet=sheet_for_task(account_id,task_id) if task_id else None
             ctx['arbeitsblatt']=sheet or {'vorhanden':False}
         from .. import oral_exam
-        instruction=INSTRUCTION.replace(SCHEMA_TAIL,oral_exam.ORAL_RULE+CONTINUE_RULE+SCHEMA_TAIL) if oral else CHECK_INSTRUCTION if check else HOMEWORK_INSTRUCTION if homework_help else INSTRUCTION.replace(SCHEMA_TAIL,TASK_RULE+(TOPIC_RULE if topic_mode else '')+CONTINUE_RULE+SCHEMA_TAIL)
+        from .. import figures
+        drawing=' '+figures.SPEC_HELP+' Eine Aufgabe darf so eine Abbildung in task.figur mitbringen, wenn sie ohne Bild nicht gut geht; der Auftrag bezieht sich dann auf die IDs darin. ' if figures.suits(s['subject']) and not (oral or homework_help or check) else ''
+        instruction=INSTRUCTION.replace(SCHEMA_TAIL,oral_exam.ORAL_RULE+CONTINUE_RULE+SCHEMA_TAIL) if oral else CHECK_INSTRUCTION if check else HOMEWORK_INSTRUCTION if homework_help else INSTRUCTION.replace(SCHEMA_TAIL,TASK_RULE+drawing+(TOPIC_RULE if topic_mode else '')+CONTINUE_RULE+SCHEMA_TAIL)
         stoff=context_text(ctx)
         note=''
         for versuch in range(2):
@@ -1602,6 +1606,9 @@ async def _turn(account_id,sid,body,user):
             # Fehler, keine Nachlässigkeit. Ein Hinweis, ein zweiter Versuch
             # (G1, D126).
             fehlt=task_fault(reply,stoff)
+            if not fehlt and reply.task and reply.task.figur:
+                try:figures.validate(reply.task.figur)
+                except ValueError as e:fehlt=f'Die Abbildung in task.figur ist ungültig ({str(e)[:200]}). Korrigiere sie nach der Anleitung oder lass figur weg.'
             if not fehlt:
                 break
             LOG.info('Aufgabe zurückgewiesen: %s',fehlt[:80])
@@ -1659,6 +1666,8 @@ async def _turn(account_id,sid,body,user):
                         skill=c.execute('SELECT id FROM mentor_skills WHERE account_id=? AND subject=? AND title=?',(account_id,s['subject'],reply.task.skill_title)).fetchone()[0]
                     lp.link_session(c,account_id,s,skill)
                     task_data=prepare_task(reply.task).model_dump_json();task_help=int(help_now)
+                    if reply.task.figur:
+                        task_data=json.dumps({**json.loads(task_data),**figures.prepared(reply.task.figur)},ensure_ascii=False)
                     if reply.task.abbildung:
                         fig=page_figures.get(account_id,reply.task.abbildung)
                         task_data=json.dumps({**json.loads(task_data),'abbildung_text':(fig or {}).get('beschreibung',''),'abbildung_seite':(fig or {}).get('seite','')},ensure_ascii=False)

@@ -713,7 +713,7 @@ def _symbol(t: Teil) -> Any:
     if t.teil == "widerstand":
         return elm.ResistorIEC()
     if t.teil == "schalter":
-        return elm.Switch(nc=t.zustand == "geschlossen")
+        return _geschlossen() if t.zustand == "geschlossen" else elm.Switch()
     if t.teil == "amperemeter":
         return elm.MeterA()
     if t.teil == "voltmeter":
@@ -724,6 +724,23 @@ def _symbol(t: Teil) -> Any:
         return m
     d = elm.Diode()
     return d.reverse() if t.sperrrichtung else d
+
+
+def _geschlossen() -> Any:
+    """Geschlossener Schalter als gerader Hebel zwischen beiden Kontakten. Das
+    Öffner-Symbol von schemdraw liegt schräg und war auf dem Blatt kaum von
+    einem offenen Schalter zu unterscheiden."""
+    from schemdraw.elements.twoterm import Element2Term, gap
+    from schemdraw.segments import Segment, SegmentCircle
+    r = 0.075
+
+    class Geschlossen(Element2Term):
+        def __init__(self, **kw):
+            super().__init__(**kw)
+            self.segments.append(Segment([(0, 0), gap, (r * 2, 0), (1 - r * 2, 0), gap, (1, 0)]))
+            self.segments.append(SegmentCircle((r, 0), r, fill="bg", zorder=3))
+            self.segments.append(SegmentCircle((1 - r, 0), r, fill="bg", zorder=3))
+    return Geschlossen()
 
 
 def _quelle_symbol(art: str) -> Any:
@@ -1243,3 +1260,24 @@ Terme nur in x mit Zahlen, + - * / ^, Klammern, pi, sqrt(), abs(), sin(), cos() 
 {"type":"tabelle","kopf":["x","y"],"zeilen":[["1","2"],["2","4"]]}
 Bis 8 Spalten, 15 Zeilen, Zellen bis 20 Zeichen; jede Zeile so lang wie der Kopf.
 """
+
+
+# ------------------------------------------------------------------ Einbindung
+
+MINT = re.compile(r"mathe|physik|chemie|technik|informatik|naturwiss|\bnw\b|werken|biolog", re.I)
+
+
+def suits(subject: str | None) -> bool:
+    """Fächer, in denen Aufgaben gezeichnete Abbildungen brauchen können."""
+    return bool(MINT.search(subject or ""))
+
+
+def prepared(spec: Any) -> dict:
+    """Geprüfte Abbildung für eine gespeicherte Aufgabe: Beschreibung, Klartext
+    und das SVG als data-URI (als <img> eingebunden, also ohne Skript)."""
+    import base64
+    figure = validate(spec)
+    data = figure.model_dump(mode="json", exclude_none=True) if hasattr(figure, "model_dump") else spec
+    svg = render(data)
+    return {"figur": data, "figur_text": describe(data),
+            "figur_src": "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()}

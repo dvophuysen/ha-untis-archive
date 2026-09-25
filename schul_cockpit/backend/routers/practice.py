@@ -162,16 +162,16 @@ async def create_paper(account_id: int, body: PaperIn, user: CurrentUser = Depen
                "stellen": full[p["topic_id"]]["places_label"], "afb": p["afb"], "bereich": pr.AFB_NAMES[p["afb"]]}
               for i, p in enumerate(plan)]
     # Abbildungen der Seiten zu den Themen (D198): eine Aufgabe darf eine davon mitdrucken.
-    from .. import page_figures
-    figures = {}
+    from .. import figures, page_figures
+    figures_on = {}
     for tid in used:
         for f in page_figures.for_places(account_id, info["subject"], full[tid]["places"], limit=6):
-            figures.setdefault(f["id"], {"id": f["id"], "thema": full[tid]["title"], "art": f["kind"], "beschreibung": f["beschreibung"], "seite": f["seite"]})
+            figures_on.setdefault(f["id"], {"id": f["id"], "thema": full[tid]["title"], "art": f["kind"], "beschreibung": f["beschreibung"], "seite": f["seite"]})
     from .. import exam_meta
     for f in page_figures.for_materials(account_id, exam_meta.pinned(account_id, body.exam_key), limit=6):
-        figures.setdefault(f["id"], {"id": f["id"], "thema": "angeheftet", "art": f["kind"], "beschreibung": f["beschreibung"], "seite": f["seite"]})
+        figures_on.setdefault(f["id"], {"id": f["id"], "thema": "angeheftet", "art": f["kind"], "beschreibung": f["beschreibung"], "seite": f["seite"]})
     context = {"klasse": s["profile"]["grade"], "fach": info["subject"], "art": fmt["label"], "minuten": fmt["minutes"],
-               "plaetze": places, "material": material, "abbildungen": list(figures.values())[:12],
+               "plaetze": places, "material": material, "abbildungen": list(figures_on.values())[:12],
                # Von Eltern angeheftet (D199): daran besonders üben.
                "material_eltern": exam_meta.pinned_context(account_id, body.exam_key, 4000)}
     instruction = (
@@ -184,7 +184,8 @@ async def create_paper(account_id: int, body: PaperIn, user: CurrentUser = Depen
         "Aufgaben wie in einer echten Klassenarbeit dieser Klassenstufe, am Stoff aus material und den Stellen orientiert, keine Wiederholung derselben Aufgabe. "
         "material_eltern haben die Eltern ausdrücklich zum Üben angeheftet: Aufgaben nehmen dieses Material bevorzugt auf, soweit es zu den Plätzen passt. "
         "Eine Aufgabe darf genau eine Abbildung aus abbildungen nutzen (abbildung = ihre id); sie wird mitgedruckt, die Aufgabe muss genau zu ihrer beschreibung passen. "
-        "Sonst ist jede Aufgabe ohne Abbildung vollständig lösbar; Tabellen als Text. Teilaufgaben mit a), b) in eigenen Zeilen. "
+        "Sonst ist jede Aufgabe ohne Abbildung vollständig lösbar; Tabellen als Text. "
+        + (figures.SPEC_HELP + " Eine Aufgabe darf statt einer Seitenabbildung eine solche gezeichnete Abbildung in figur mitbringen, wenn sie ohne Bild nicht gut geht; der Auftrag bezieht sich dann auf die IDs darin. " if figures.suits(info["subject"]) else "") + "Teilaufgaben mit a), b) in eigenen Zeilen. "
         "Punkte passend zum Umfang (I meist 2 bis 4, II 3 bis 6, III 4 bis 8), minutes je Aufgabe, zusammen etwa minuten. "
         "solution vollständig und korrekt; criteria nennt die Teilpunkte einzeln mit Punktzahl, z. B. „1 P Ansatz; 2 P Rechnung; 1 P Antwortsatz“. "
         "Keine Buchstellen, Bilder oder Quellen erfinden. Kein Versprechen, dass dies der echte Klausurstoff sei. Nur JSON: "
@@ -197,16 +198,21 @@ async def create_paper(account_id: int, body: PaperIn, user: CurrentUser = Depen
             raise ValueError("slots")
         if len({t.prompt for t in tasks}) != len(tasks):
             raise ValueError("duplicate")
+        for t in tasks:
+            if t.figur:
+                figures.validate(t.figur)  # eine ungültige Zeichnung heißt: neu erstellen (D197)
     except (ValueError, ValidationError):
         raise HTTPException(502, "Die Übungsarbeit ist nicht vollständig geworden. Bitte noch einmal erstellen.") from None
     stored = []
     for t, p in zip(tasks, plan):
         d = t.model_dump()
         d.update(topic_id=p["topic_id"], afb=p["afb"], skill_title=full[p["topic_id"]]["title"])
-        if d.get("abbildung") in figures:
-            d.update(abbildung_text=figures[d["abbildung"]]["beschreibung"], abbildung_seite=figures[d["abbildung"]]["seite"])
+        if d.get("abbildung") in figures_on:
+            d.update(abbildung_text=figures_on[d["abbildung"]]["beschreibung"], abbildung_seite=figures_on[d["abbildung"]]["seite"])
         else:
             d["abbildung"] = None
+        if d.get("figur"):
+            d.update(figures.prepared(d["figur"]))  # oben schon geprüft
         stored.append(d)
     minutes = fmt["minutes"]
     child = _acting_child(user)
@@ -390,7 +396,7 @@ async def grade_paper(account_id: int, aid: int, body: TypedAnswers, user: Curre
         loose = [i for i, t in enumerate(tasks) if not t.get("topic_id")]
         exam_key, themen = _upcoming_topics(account_id, snap["subject"]) if loose else (None, [])
         context = {"fach": snap["subject"], "aufgaben": [
-            {"nr": i + 1, "aufgabe": t["prompt"], "loesung": t["solution"], "kriterien": t["criteria"], "abbildung": t.get("abbildung_text") or None,
+            {"nr": i + 1, "aufgabe": t["prompt"], "loesung": t["solution"], "kriterien": t["criteria"], "abbildung": t.get("abbildung_text") or t.get("figur_text") or None,
              "punkte": t["points"], "afb": t["afb"], "getippt": answers.get(str(i), "")} for i, t in enumerate(tasks)]}
         if themen:
             context["themen"] = [{"nr": n + 1, "titel": t["title"], "beschreibung": t["detail"]} for n, t in enumerate(themen)]

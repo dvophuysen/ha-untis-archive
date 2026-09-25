@@ -241,3 +241,23 @@ def test_paper_task_may_print_a_figure_of_the_topic_pages(paper, monkeypatch):
     assert t0["abbildung"] == 5 and t0["abbildung_seite"] == "Buch S. 30" and t1["abbildung"] is None
     sheet = client.get(f"{BASE}/attempts/{a['id']}/print").text
     assert sheet.count('<img class="fig" src="data:image/jpeg;base64,QUJD"') == 1
+
+
+def test_paper_task_may_bring_a_drawn_figure(paper):
+    """D197: In Mathematik darf eine Aufgabe eine gezeichnete Abbildung mitbringen;
+    eine ungültige heißt neu erstellen."""
+    client, state, patch = paper
+    child(state)
+    strip = {"type": "zahlenstrahl", "von": 0, "bis": 2, "schritt": "1/4"}
+    bad = pack(6)
+    bad["tasks"][0]["figur"] = {"type": "zahlenstrahl", "von": 5, "bis": 1}
+    seen = []
+    mock(patch, [bad], seen)
+    assert client.post(BASE, json={"exam_key": KEY, "format": "einstieg"}).status_code == 502
+    good = pack(6)
+    good["tasks"][0]["figur"] = strip
+    mock(patch, [good], seen)
+    a = client.post(BASE, json={"exam_key": KEY, "format": "einstieg"}).json()
+    assert a["exam"]["tasks"][0]["figur_src"].startswith("data:image/svg+xml;base64,")
+    sheet = client.get(f"{BASE}/attempts/{a['id']}/print").text
+    assert sheet.count('<img class="fig" src="data:image/svg+xml;base64,') == 1

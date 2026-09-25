@@ -1,3 +1,7 @@
+## 1.28.0
+
+- Gezeichnete Abbildungen: In Mathematik, Physik, Chemie und Technik kann der Lernbegleiter Aufgaben mit Schaltplan, Zahlenstrahl, Bruchstreifen, Funktionsgraph oder Wertetabelle stellen. Die App zeichnet sie selbst, sauber und richtig verschaltet; Übungsarbeiten drucken sie mit.
+
 ## 1.27.2
 
 - Bilder aus den abgelegten Seiten: Die App erkennt einmal je Seite, welche Bilder, Zeichnungen und Schaltpläne darauf sind. Der Lernbegleiter kann eine davon in einer Aufgabe zeigen, Übungsarbeiten drucken sie mit, und die Sprechprobe zeigt ein Bild zur Bildbeschreibung. Antippen vergrößert.

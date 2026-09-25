@@ -29,6 +29,9 @@ def sheet(exam, tasks, code=None, space="lines"):
         if str(t.get("abbildung_src") or "").startswith("data:image/"):
             # Abbildung aus der abgelegten Seite (D198), als eingebettetes Bild.
             fig = f'<img class="fig" src="{escape(t["abbildung_src"])}" alt="{escape(t.get("abbildung_text") or "Abbildung")}">'
+        if str(t.get("figur_src") or "").startswith("data:image/svg+xml;base64,"):
+            # Von der App gezeichnet (D197): Schaltplan, Zahlenstrahl, Graph.
+            fig += f'<img class="fig" src="{escape(t["figur_src"])}" alt="{escape(t.get("figur_text") or "Abbildung")}">'
         sections.append(f'<section><div class="q"><h2>Aufgabe {i+1} · {t["points"]} Punkte</h2>{fig}'
                         f'<p class="task">{escape(t["prompt"])}</p></div>{room}</section>')
     if code:

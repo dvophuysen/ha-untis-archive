@@ -129,3 +129,39 @@ def test_print_embeds_the_figure():
     assert '<img class="fig" src="data:image/jpeg;base64,AAAA" alt="Schaltplan">' in html
     assert "<img" not in sheet({"id": 1, "title": "T", "subject": "P", "minutes": 5},
                                [{"prompt": "x", "points": 1, "abbildung_src": "javascript:alert(1)"}])
+
+
+CIRCUIT = {"type": "schaltplan", "quelle": {"art": "batterie", "beschriftung": "4,5 V"},
+           "netz": {"reihe": [{"parallel": [{"teil": "lampe", "id": "L1"}, {"teil": "lampe", "id": "L2"}]}, {"teil": "amperemeter", "id": "A1"}]}}
+
+
+async def test_drawn_figure_in_a_topic_task_and_a_bad_one_is_retried(setup):
+    """D197: Das Modell beschreibt, die App zeichnet; eine ungültige Beschreibung
+    führt zu einem zweiten Versuch mit Hinweis."""
+    client, state, patch = setup
+    child(state)
+    tid = lernstand.add_manual(1, "cal:physik", "PHYSIK", "Parallelschaltung")["id"]
+    seen = []
+    bad = {**TASK, "prompt": "Wie groß ist I in A1?", "figur": {"type": "schaltplan", "netz": {"teil": "toaster", "id": "T"}}}
+    good = {**TASK, "prompt": "Wie groß ist I in A1?", "figur": CIRCUIT}
+    fake(patch, [{"message": "Schau.", "choices": [], "action": "task", "task": bad, "assessment": None, "summary": "x"},
+                 {"message": "Schau.", "choices": [], "action": "task", "task": good, "assessment": None, "summary": "x"}], seen)
+    s = client.post(B + "/sessions", json={"topic_id": tid}).json()
+    r = client.post(B + f"/sessions/{s['id']}/turn", json={"request_key": "drawn_1_x", "version": s["version"], "text": "Los"})
+    assert r.status_code == 200, r.text
+    task = r.json()["messages"][-1]["payload"]["task"]
+    assert task["figur_src"].startswith("data:image/svg+xml;base64,") and "parallel" in task["figur_text"]
+    assert "ABBILDUNGEN" in seen[0]["instruction"] and "task.figur ist ungültig" in seen[1]["instruction"]
+
+
+def test_no_drawing_help_outside_science_subjects():
+    from backend import figures
+    assert figures.suits("PHYSIK") and figures.suits("Mathematik") and not figures.suits("ENGLISCH") and not figures.suits("Latein")
+
+
+def test_print_embeds_a_drawn_figure():
+    from backend import figures
+    from backend.exam_print import sheet
+    t = {"prompt": "Wie groß ist I?", "points": 3, **figures.prepared(CIRCUIT)}
+    html = sheet({"id": 1, "title": "Kurztest", "subject": "Physik", "minutes": 20}, [t])
+    assert '<img class="fig" src="data:image/svg+xml;base64,' in html
