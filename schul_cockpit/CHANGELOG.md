@@ -1,3 +1,9 @@
+## 1.29.0
+
+- Übungsarbeiten werden jetzt zweimal unabhängig ausgewertet, bei Abweichungen dreimal. Es zählt nur, worin die Auswertungen übereinstimmen.
+- Lässt sich eine Aufgabe trotzdem nicht sicher lesen, sieht das Kind noch keine Punkte, und nichts zählt für den Lernstand. Eltern bekommen in „Erledigen“ eine Prüfaufgabe: Fotos ansehen und Punkte eintragen oder Seiten neu fotografieren.
+- Frühere Auswertungen mit unklar gelesenen Aufgaben werden einmalig zur Prüfung zurückgestellt.
+
 ## 1.28.2
 
 - Ausgewertete Übungsarbeiten stehen auf der Lernseite direkt bei der Arbeit, mit Punkten und einem Tipp zur Auswertung.

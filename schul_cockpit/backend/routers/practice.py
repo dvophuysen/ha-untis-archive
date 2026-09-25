@@ -2,6 +2,7 @@
 in einem Schritt auswerten, ins Raster Thema × Anforderungsbereich zählen (D178)."""
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 import json
@@ -126,8 +127,8 @@ def _papers(account_id: int, exam_key: str, user) -> list[dict]:
         fb = json.loads(r.pop("feedback_json") or "{}")
         r["tasks"] = len(tasks)
         r["points_max"] = sum(t["points"] for t in tasks)
-        r["points"] = sum(f.get("points", 0) for f in fb.values() if not f.get("uncertain")) if fb else None
-        r["unclear"] = sum(1 for k, f in fb.items() if k != "overall" and isinstance(f, dict) and f.get("uncertain"))
+        r["points"] = sum(f.get("points", 0) for k, f in fb.items() if k.isdigit() and not f.get("uncertain")) if fb else None
+        r["unclear"] = sum(1 for k, f in fb.items() if k.isdigit() and f.get("uncertain"))
         r["label"] = pr.FORMATS.get(r["paper_format"] or "", {}).get("label", "Übungsarbeit")
         out.append(r)
     return out
@@ -316,7 +317,7 @@ def reopen_for_grading(account_id: int, aid: int, user: CurrentUser = Depends(ge
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
         r = _writable(c, account_id, aid, user)
-        if r["status"] != "graded":
+        if r["status"] not in ("graded", "review"):
             raise HTTPException(409, "Die Arbeit ist noch nicht ausgewertet.")
         topics = [x[0] for x in c.execute("SELECT DISTINCT topic_id FROM topic_answers WHERE account_id=? AND attempt_id=?", (account_id, aid))]
         c.execute("DELETE FROM topic_answers WHERE account_id=? AND attempt_id=?", (account_id, aid))
@@ -341,8 +342,8 @@ def new_results(account_id: int, days: int = 14) -> list[dict]:
         fb = json.loads(r["feedback_json"] or "{}")
         out.append({"attempt_id": r["id"], "label": pr.FORMATS.get(r["paper_format"] or "", {}).get("label", "Übungsarbeit"),
                     "subject": r["subject"], "points_max": sum(t["points"] for t in tasks),
-                    "points": sum(f.get("points", 0) for k, f in fb.items() if k != "overall" and isinstance(f, dict) and not f.get("uncertain")),
-                    "unclear": sum(1 for k, f in fb.items() if k != "overall" and isinstance(f, dict) and f.get("uncertain"))})
+                    "points": sum(f.get("points", 0) for k, f in fb.items() if k.isdigit() and not f.get("uncertain")),
+                    "unclear": sum(1 for k, f in fb.items() if k.isdigit() and f.get("uncertain"))})
     return out
 
 
@@ -414,6 +415,153 @@ class TypedAnswers(InputModel):
     answers: dict[str, str] = Field(default_factory=dict)
 
 
+TOLERANCE = 1.0  # Punkte, um die zwei Durchgänge je Aufgabe höchstens auseinanderliegen
+
+
+async def _grade_pass(account_id: int, instruction: str, context: dict, images: list, tasks: list[dict],
+                      effort: str | None = None) -> PaperGrade | None:
+    """Ein Auswertungsdurchgang; ungültige Antworten zählen nicht als Durchgang."""
+    try:
+        raw, _, _ = await ai.complete(account_id, PAPER, instruction, context, images, max_output=12000, effort=effort)
+        g = PaperGrade.model_validate_json(raw)
+    except (ValueError, ValidationError, HTTPException):
+        _LOG.info("Auswertungsdurchgang für Konto %s unbrauchbar", account_id, exc_info=True)
+        return None
+    by_nr = {x.nr: x for x in g.tasks}
+    if set(by_nr) != set(range(1, len(tasks) + 1)) or any(by_nr[i + 1].points > t["points"] for i, t in enumerate(tasks)):
+        return None
+    return g
+
+
+def consensus(passes: list[PaperGrade], tasks: list[dict]) -> tuple[dict[int, dict], list[int]]:
+    """Je Aufgabe das Ergebnis, auf das sich mindestens zwei Durchgänge einigen
+    (höchstens TOLERANCE auseinander, Mittelwert auf halbe Punkte). Aufgaben ohne
+    Einigung oder mit weniger als zwei lesbaren Durchgängen bleiben offen (D202)."""
+    final, open_nrs = {}, []
+    if not passes:
+        return final, [i + 1 for i in range(len(tasks))]
+    for i, t in enumerate(tasks):
+        nr = i + 1
+        xs = [{x.nr: x for x in g.tasks}[nr] for g in passes]
+        sure = [x for x in xs if not x.uncertain]
+        agree = []
+        if len(sure) >= 2:
+            vals = sorted(x.points for x in sure)
+            if vals[-1] - vals[0] <= TOLERANCE:
+                agree = sure
+            elif len(sure) >= 3:
+                mid = vals[len(vals) // 2]
+                agree = [x for x in sure if abs(x.points - mid) <= TOLERANCE]
+                agree = agree if len(agree) >= 2 else []
+        if agree:
+            pts = min(t["points"], round(sum(x.points for x in agree) / len(agree) * 2) / 2)
+            best = min(agree, key=lambda x: abs(x.points - pts))
+            final[nr] = {**best.model_dump(exclude={"nr"}), "points": pts, "uncertain": False}
+        else:
+            open_nrs.append(nr)
+            best = (sure or xs)[0]
+            final[nr] = {**best.model_dump(exclude={"nr"}), "uncertain": True,
+                         "spread": [x.points for x in sure]}
+    return final, open_nrs
+
+
+def _record(c, account_id: int, aid: int, snap: dict, tasks: list[dict], feedback: dict, helped: bool, paper: bool) -> None:
+    """Die Antworten einer sicheren Auswertung in den Lernstand."""
+    from ..lernstand import record_answer, refresh
+    touched = set()
+    for i, t in enumerate(tasks):
+        x = feedback[str(i)]
+        if not t.get("topic_id"):
+            continue
+        aid_row = record_answer(c, account_id, t["topic_id"], -aid, None, t.get("operator") or "",
+                                pr.result_of(x["points"], t["points"], x.get("uncertain")), helped, None, None, False,
+                                t["afb"], t.get("form") or "")
+        c.execute("UPDATE topic_answers SET points=?,max_points=?,source=?,paper_format=?,attempt_id=? WHERE id=?",
+                  (None if x.get("uncertain") else x["points"], t["points"], "paper" if paper else "online",
+                   snap.get("format"), aid, aid_row))
+        touched.add(t["topic_id"])
+    for tid in touched:
+        refresh(c, tid)
+
+
+class ReviewIn(InputModel):
+    # Punkte je offener Aufgabe (Index ab 0 als Text), von Eltern auf dem Blatt nachgesehen.
+    points: dict[str, float] = Field(default_factory=dict, max_length=pr.MAX_TASKS)
+
+
+@router.post("/attempts/{aid}/review")
+def resolve_review(account_id: int, aid: int, body: ReviewIn, user: CurrentUser = Depends(get_current_user)):
+    """Eltern tragen die Punkte der unsicher gelesenen Aufgaben ein; erst dann
+    zählt die Arbeit und das Kind sieht sie (D202)."""
+    access(user, account_id)
+    from ..view_mode import acts_as_parent
+    if not acts_as_parent(user):
+        raise HTTPException(403, "Nur in der Elternansicht verfügbar")
+    with closing(webapp_conn()) as c, c:
+        c.execute("BEGIN IMMEDIATE")
+        r = _writable(c, account_id, aid, user)
+        if r["status"] != "review":
+            raise HTTPException(409, "Diese Arbeit wartet nicht auf eine Prüfung.")
+        snap = json.loads(r["snapshot"])
+        tasks = snap["tasks"]
+        feedback = json.loads(r["feedback_json"] or "{}")
+        open_idx = [str(nr - 1) for nr in (feedback.get("check") or {}).get("open", [])]
+        for k in open_idx:
+            v = body.points.get(k)
+            most = tasks[int(k)]["points"]
+            if v is None or not (0 <= v <= most) or (v * 2) != int(v * 2):
+                raise HTTPException(422, f"Für Aufgabe {int(k) + 1} fehlen gültige Punkte (0 bis {most}, halbe Punkte erlaubt).")
+            feedback[k] = {**feedback[k], "points": v, "uncertain": False, "checked_by_parent": True,
+                           "rationale": "Von Eltern auf dem Blatt geprüft. " + (feedback[k].get("rationale") or "")}
+            feedback[k].pop("spread", None)
+        feedback["check"] = {**(feedback.get("check") or {}), "open": [], "resolved_by_parent": [int(k) + 1 for k in open_idx]}
+        helped = any(isinstance(v, dict) and v.get("solution_seen") for k, v in feedback.items() if k.isdigit())
+        if not r["is_test"]:
+            pages = c.execute("SELECT 1 FROM mentor_exam_photos WHERE attempt_id=? AND question_index=-1 LIMIT 1", (aid,)).fetchone()
+            _record(c, account_id, aid, snap, tasks, feedback, helped, bool(pages))
+        c.execute("UPDATE mentor_exam_attempts SET feedback_json=?,status='graded',result_seen_at=NULL,version=version+1 WHERE id=?",
+                  (json.dumps(feedback, ensure_ascii=False), aid))
+    return paper_view(account_id, aid, user)
+
+
+def hold_uncertain() -> int:
+    """Einmalig beim Start: ältere Auswertungen mit unsicher gelesenen Aufgaben
+    aus dem Lernstand nehmen und den Eltern zur Prüfung vorlegen (D202)."""
+    from ..lernstand import refresh
+    held = 0
+    with closing(webapp_conn()) as c, c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT a.id,a.account_id,a.feedback_json FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id "
+            "WHERE a.status='graded' AND a.is_test=0 AND e.paper_format IS NOT NULL")]
+        for r in rows:
+            fb = json.loads(r["feedback_json"] or "{}")
+            if "check" in fb:
+                continue  # schon nach der neuen Regel ausgewertet
+            open_nrs = sorted(int(k) + 1 for k, f in fb.items() if k.isdigit() and isinstance(f, dict) and f.get("uncertain"))
+            if not open_nrs:
+                continue
+            fb["check"] = {"passes": 1, "open": open_nrs, "held_later": True}
+            topics = [x[0] for x in c.execute("SELECT DISTINCT topic_id FROM topic_answers WHERE attempt_id=?", (r["id"],))]
+            c.execute("DELETE FROM topic_answers WHERE attempt_id=?", (r["id"],))
+            c.execute("UPDATE mentor_exam_attempts SET status='review',feedback_json=?,version=version+1 WHERE id=?",
+                      (json.dumps(fb, ensure_ascii=False), r["id"]))
+            for tid in topics:
+                refresh(c, tid)
+            held += 1
+    return held
+
+
+def review_items(account_id: int) -> list[dict]:
+    """Arbeiten, die auf eine Prüfung durch die Eltern warten (für Erledigen)."""
+    with closing(webapp_conn()) as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT a.id,a.feedback_json,e.subject,e.paper_format,e.exam_key FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id "
+            "WHERE a.account_id=? AND a.status='review' AND a.is_test=0 ORDER BY a.id", (account_id,))]
+    return [{"attempt_id": r["id"], "subject": r["subject"], "exam_key": r["exam_key"],
+             "label": pr.FORMATS.get(r["paper_format"] or "", {}).get("label", "Übungsarbeit"),
+             "open": (json.loads(r["feedback_json"] or "{}").get("check") or {}).get("open", [])} for r in rows]
+
+
 @router.post("/attempts/{aid}/grade")
 async def grade_paper(account_id: int, aid: int, body: TypedAnswers, user: CurrentUser = Depends(get_current_user)):
     """Abgeben und alle Aufgaben in einem Aufruf auswerten: Fotos der Seiten
@@ -422,7 +570,7 @@ async def grade_paper(account_id: int, aid: int, body: TypedAnswers, user: Curre
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
         r = _writable(c, account_id, aid, user)
-        if r["status"] == "graded":
+        if r["status"] in ("graded", "review"):
             return paper_view(account_id, aid, user)
         if r["status"] == "grading":
             raise HTTPException(409, "Die Arbeit wird gerade ausgewertet. Bitte gleich neu laden.")
@@ -469,16 +617,19 @@ async def grade_paper(account_id: int, aid: int, body: TypedAnswers, user: Curre
             "rationale nennt konkret, welche Teilpunkte erreicht sind und was fehlt; next_step ist ein konkreter nächster Übungsschritt. "
             "Keine Schulnote. Eine Bewertung je Aufgabe, nr wie in aufgaben. "
             "Wenn themen vorhanden: thema_nr ordnet jede Aufgabe aus ohne_thema dem passenden Thema aus themen zu, sonst null. Nur JSON: " + json.dumps(PaperGrade.model_json_schema()))
-        raw, _, _ = await ai.complete(account_id, PAPER, instruction, context, images, max_output=12000)
-        try:
-            g = PaperGrade.model_validate_json(raw)
-            by_nr = {x.nr: x for x in g.tasks}
-            if set(by_nr) != set(range(1, len(tasks) + 1)):
-                raise ValueError("coverage")
-            if any(by_nr[i + 1].points > t["points"] for i, t in enumerate(tasks)):
-                raise ValueError("points")
-        except (ValueError, ValidationError):
-            raise HTTPException(502, "Die Auswertung ist nicht verlässlich geworden. Bitte noch einmal auswerten.") from None
+        # Mindestens zwei unabhängige Durchgänge, bei Abweichung oder Unleserlichem
+        # ein dritter; es zählt nur, worin zwei übereinstimmen (D202).
+        passes = [g for g in await asyncio.gather(*[_grade_pass(account_id, instruction, context, images, tasks) for _ in range(2)]) if g]
+        final, open_nrs = consensus(passes, tasks)
+        if len(passes) < 2 or open_nrs:
+            third = await _grade_pass(account_id, instruction, context, images, tasks, effort="medium")
+            if third:
+                passes.append(third)
+            final, open_nrs = consensus(passes, tasks)
+        if len(passes) < 2:
+            raise HTTPException(502, "Die Auswertung ist nicht verlässlich geworden. Bitte noch einmal auswerten.")
+        g = passes[0]
+        by_nr = final
         with closing(webapp_conn()) as c, c:
             r = _writable(c, account_id, aid, user)
             exposure = c.execute("SELECT created_at FROM mentor_exam_exposures WHERE account_id=? AND exam_id=? AND user_id=?",
@@ -487,39 +638,28 @@ async def grade_paper(account_id: int, aid: int, body: TypedAnswers, user: Curre
             feedback = {}
             for i, t in enumerate(tasks):
                 x = by_nr[i + 1]
-                feedback[str(i)] = {**x.model_dump(exclude={"nr"}), "solution_seen": helped}
+                feedback[str(i)] = {**x, "solution_seen": helped}
             feedback["overall"] = {"text": g.overall} if g.overall else None
+            feedback["check"] = {"passes": len(passes), "open": open_nrs}
             feedback = {k: v for k, v in feedback.items() if v is not None}
+            review = bool(open_nrs)
             # Ob es zählt, steht seit dem Anlegen fest (is_test); auch ein Elternteil darf die Seiten hochladen.
             counts = not r["is_test"]
             # Aufgaben ohne Thema bekommen das vom Auswerten zugeordnete Thema der
             # anstehenden Arbeit; es bleibt im Aufgabenstand dieses Versuchs stehen.
             if themen:
                 for i in loose:
-                    n = by_nr[i + 1].thema_nr
+                    n = by_nr[i + 1].get("thema_nr")
                     if n and 1 <= n <= len(themen):
                         tasks[i] = {**tasks[i], "topic_id": themen[n - 1]["id"], "original_skill": tasks[i].get("skill_title"),
                                     "skill_title": themen[n - 1]["title"]}
                 snap = {**snap, "tasks": tasks, "exam_key": exam_key}
                 c.execute("UPDATE mentor_exam_attempts SET snapshot=? WHERE id=?", (json.dumps(snap, ensure_ascii=False), aid))
-            if counts:
-                from ..lernstand import record_answer, refresh
-                touched = set()
-                for i, t in enumerate(tasks):
-                    x = by_nr[i + 1]
-                    if not t.get("topic_id"):
-                        continue
-                    aid_row = record_answer(c, account_id, t["topic_id"], -aid, None, t.get("operator") or "",
-                                            pr.result_of(x.points, t["points"], x.uncertain), helped, None, None, False,
-                                            t["afb"], t.get("form") or "")
-                    c.execute("UPDATE topic_answers SET points=?,max_points=?,source=?,paper_format=?,attempt_id=? WHERE id=?",
-                              (None if x.uncertain else x.points, t["points"], "paper" if pages else "online",
-                               snap.get("format"), aid, aid_row))
-                    touched.add(t["topic_id"])
-                for tid in touched:
-                    refresh(c, tid)
-            c.execute("UPDATE mentor_exam_attempts SET feedback_json=?,status='graded',version=version+1 WHERE id=?",
-                      (json.dumps(feedback, ensure_ascii=False), aid))
+            # Unsicheres geht nie in den Lernstand: Die Arbeit wartet auf die Eltern (D202).
+            if counts and not review:
+                _record(c, account_id, aid, snap, tasks, feedback, helped, bool(pages))
+            c.execute("UPDATE mentor_exam_attempts SET feedback_json=?,status=?,version=version+1 WHERE id=?",
+                      (json.dumps(feedback, ensure_ascii=False), "review" if review else "graded", aid))
         if counts:
             from .. import rewards
             rewards.note(account_id, "practice", aid, user)

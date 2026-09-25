@@ -53,6 +53,16 @@
   const photoUrl = (pid) => `./api/accounts/${accountId}/learning/mentor/exams/attempts/${attemptId}/photos/${pid}`;
   const printUrl = $derived(`.${base}/print`);
   const graded = $derived(a?.status === 'graded');
+  // Zurückgehalten (D202): mindestens eine Aufgabe auch nach drei Auswertungen unsicher.
+  const reviewing = $derived(a?.status === 'review');
+  const openNrs = $derived(a?.feedback?.check?.open ?? []);
+  const parentView = $derived(actsAsParent(appState.me));
+  let reviewPoints = $state({});
+  const reviewReady = $derived(openNrs.every((nr) => reviewPoints[String(nr - 1)] !== undefined && reviewPoints[String(nr - 1)] !== ''));
+  const saveReview = () => run('Wird gespeichert …', async () => {
+    const points = Object.fromEntries(openNrs.map((nr) => [String(nr - 1), Number(String(reviewPoints[String(nr - 1)]).replace(',', '.'))]));
+    a = await api.post(`${base}/review`, { points });
+  });
   const total = $derived(a ? a.exam.tasks.reduce((s, t) => s + t.points, 0) : 0);
   const got = $derived(a && graded ? a.exam.tasks.reduce((s, t, i) => s + (a.feedback[String(i)]?.uncertain ? 0 : a.feedback[String(i)]?.points || 0), 0) : 0);
   const canSubmit = $derived(a && (a.pages.length || Object.values(answers).some((v) => (v || '').trim())));
@@ -68,11 +78,42 @@
       <h3>{a.exam.title}</h3>
     </header>
 
-    {#if graded}
+    {#if reviewing && !parentView}
+      <div class="notice review-wait" role="status">
+        <strong>Deine Arbeit ist abgegeben.</strong>
+        <p>Einige Aufgaben konnte die App auch nach mehreren Versuchen nicht sicher lesen. Deine Eltern schauen sie sich an; danach siehst du hier deine Punkte. So bekommst du keine falschen Punkte, weder zu viele noch zu wenige.</p>
+      </div>
+    {:else if reviewing}
+      <div class="notice review-box">
+        <strong>Prüfung nötig: {openNrs.length === 1 ? `Aufgabe ${openNrs[0]}` : `Aufgaben ${openNrs.join(', ')}`}</strong>
+        <p>Diese Aufgaben ließen sich auch nach {a.feedback.check?.passes ?? 3} Auswertungen nicht sicher lesen. Bis ihr sie prüft, sieht das Kind keine Punkte, und nichts zählt für den Lernstand. Schaut auf den Fotos nach und tragt die Punkte ein, oder fotografiert die Seiten neu.</p>
+        {#if a.pages.length}
+          <div class="pages review-pages">
+            {#each a.pages as pid, n (pid)}<a href={photoUrl(pid)} target="_blank" rel="noreferrer"><img src={photoUrl(pid)} alt={`Seite ${n + 1}`} loading="lazy" /></a>{/each}
+          </div>
+        {/if}
+      </div>
+      {#each openNrs as nr (nr)}
+        {@const t = a.exam.tasks[nr - 1]}
+        {@const f = a.feedback[String(nr - 1)]}
+        <article class="task">
+          <div class="t-head"><strong>Aufgabe {nr}</strong><span class="tag">{t.skill_title}</span><span class="pts">höchstens {t.points} Punkte</span></div>
+          <p class="preserve">{t.prompt}</p>
+          {#if f?.transcription}<p class="dim"><strong>So hat die App gelesen:</strong> {f.transcription}</p>{/if}
+          {#if f?.spread?.length}<p class="dim">Die Auswertungen kamen auf {f.spread.map((x) => num(x)).join(' und ')} Punkte.</p>{/if}
+          <details><summary>Lösung und Punktkriterien</summary><p class="preserve">{t.solution}</p><p class="preserve dim">{t.criteria}</p></details>
+          <label class="review-points">Punkte nach eurer Prüfung
+            <input type="number" inputmode="decimal" min="0" max={t.points} step="0.5" bind:value={reviewPoints[String(nr - 1)]} />
+          </label>
+        </article>
+      {/each}
+      <button class="primary" disabled={!!busy || !reviewReady} onclick={saveReview}>Punkte übernehmen</button>
+      <button class="ghost" disabled={!!busy} onclick={regrade}>Seiten neu fotografieren und neu auswerten</button>
+    {:else if graded}
       <div class="result">
         <strong class="big">{num(got)} von {total} Punkten</strong>
         {#if a.feedback.overall?.text}<p>{a.feedback.overall.text}</p>{/if}
-        <p class="dim">KI-Auswertung nach den Punktkriterien, keine Schulnote. Unklar Gelesenes zählt nicht, weder für noch gegen dich.</p>
+        <p class="dim">{a.feedback.check?.resolved_by_parent?.length ? `Ausgewertet nach den Punktkriterien, Aufgabe ${a.feedback.check.resolved_by_parent.join(', ')} von deinen Eltern geprüft.` : a.feedback.check ? `Ausgewertet nach den Punktkriterien, ${a.feedback.check.passes} unabhängige Auswertungen stimmen überein.` : 'KI-Auswertung nach den Punktkriterien, keine Schulnote.'} Keine Schulnote.</p>
       </div>
       {#each a.exam.tasks as t, i}
         {@const f = a.feedback[String(i)]}
@@ -132,6 +173,11 @@
 </section>
 
 <style>
+  .review-box, .review-wait { display: grid; gap: 4px; }
+  .review-box p, .review-wait p { margin: 0; }
+  .review-pages a img { width: 96px; height: 128px; object-fit: cover; border-radius: var(--r-sm); border: 1px solid var(--border); }
+  .review-points { display: grid; gap: 2px; max-width: 12rem; }
+  .review-points input { font: inherit; min-height: 40px; }
   .regrade { display: grid; gap: 4px; padding: var(--sp-2); border: 1px dashed var(--border); border-radius: var(--r-md); }
   .regrade p { margin: 0; }
   .fig { display: block; max-width: 100%; max-height: 320px; margin: 0.3rem 0; background: #fff; border-radius: var(--r-sm); }

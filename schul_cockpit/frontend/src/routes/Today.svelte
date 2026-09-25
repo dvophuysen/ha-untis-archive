@@ -265,7 +265,7 @@
   {#each data?.new_results ?? [] as r (r.attempt_id)}
     <a class="result-note" href={`#/learning?paper=${r.attempt_id}`}>
       <span>📝 <strong>Deine {r.label} ist ausgewertet</strong>{r.subject ? ` · ${r.subject}` : ''}</span>
-      <small>{String(r.points).replace('.', ',')} von {r.points_max} Punkten{r.unclear ? ` · ${r.unclear} ${r.unclear === 1 ? 'Aufgabe' : 'Aufgaben'} unklar gelesen` : ''} · Ansehen</small>
+      <small>{String(r.points).replace('.', ',')} von {r.points_max} Punkten · Ansehen</small>
     </a>
   {/each}
 

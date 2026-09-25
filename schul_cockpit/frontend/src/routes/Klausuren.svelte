@@ -537,7 +537,7 @@
             {/if}
 
             {#if topics.some((t) => !t.vocab) && !e.oral}
-              <PracticeRaster {accountId} examKey={e.exam_key} parent={canManage && view.mode !== 'child'} />
+              <PracticeRaster {accountId} examKey={e.exam_key} parent={canManage && view.mode !== 'child'} initialPaper={e.exam_key === openKey && query.get('paper') ? Number(query.get('paper')) : null} />
             {/if}
 
             <form class="add-topic" onsubmit={(ev) => { ev.preventDefault(); addTopic(e); }}>

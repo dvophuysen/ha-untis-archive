@@ -140,6 +140,27 @@ def learning_items(account_id: int) -> list[dict]:
     return []
 
 
+def paper_review_items(account_id: int, name: str) -> list[dict]:
+    """Übungsarbeiten, die auch nach drei Auswertungen nicht sicher gelesen sind:
+    Eltern tragen die Punkte ein oder lassen mit neuen Fotos neu auswerten (D202)."""
+    try:
+        from .routers.practice import review_items
+        rows = review_items(account_id)
+    except Exception:
+        _LOG.warning("Zu prüfende Übungsarbeiten für Konto %s nicht lesbar", account_id, exc_info=True)
+        return []
+    out = []
+    for r in rows:
+        nums = ", ".join(str(n) for n in r["open"])
+        which = f"Aufgabe {nums}" if len(r["open"]) == 1 else f"Aufgaben {nums}"
+        out.append(item(f"paper-review:{r['attempt_id']}", "paper_review",
+                        f"{r['label']} von {name} prüfen ({subject_label(r['subject'] or '') or r['subject']})",
+                        f"{which} ließen sich auch nach drei Auswertungen nicht sicher lesen. Bis zur Prüfung sieht {name} keine Punkte, "
+                        "und nichts zählt für den Lernstand.",
+                        action("Prüfen", "klausuren", exam=r["exam_key"], paper=r["attempt_id"])))
+    return out
+
+
 def household_items(status: dict | None = None) -> list[dict]:
     """KI-Rahmen der Familie: Anfangsstand und Kostensätze."""
     try:
@@ -222,6 +243,8 @@ async def collect(user, account_ids: list[int], today: date) -> dict:
                               action("Gegenlesen", "materialien", section="gegenlesen")))
         items += calendar_items(account_id, data.get("all_entries") or [], today)
         items += learning_items(account_id)
+        # Eine zurückgehaltene Auswertung steht vorn: Das Kind wartet darauf (D202).
+        items = paper_review_items(account_id, name) + items
         for it in items:
             it["account_id"] = account_id
         kids.append({"account_id": account_id, "name": name, "items": items})

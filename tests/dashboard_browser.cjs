@@ -28,7 +28,7 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  await page.goto('http://127.0.0.1:4178/#/today');await page.getByRole('heading',{name:/^Aufgaben bis morgen/}).waitFor({timeout:8000}).catch(async e=>{console.log('ERRORS',errors,'BODY',await page.locator('body').innerText());throw e;});
  /* D201: neue Auswertung auf „Heute“, führt direkt zur Arbeit */
  const note=page.locator('a.result-note');assert.equal(await note.count(),1);
- assert.match(await note.innerText(),/Deine Probearbeit ist ausgewertet · Mathematik/);assert.match(await note.innerText(),/6 von 40 Punkten · 3 Aufgaben unklar gelesen/);
+ assert.match(await note.innerText(),/Deine Probearbeit ist ausgewertet · Mathematik/);assert.match(await note.innerText(),/6 von 40 Punkten · Ansehen/);
  assert.equal(await note.getAttribute('href'),'#/learning?paper=41');
  // Nach der Schule (D171): Ringe, Aufgaben bis zum nächsten Schultag, Tasche als Kacheln, Rückmeldungen.
  for(const title of [/^Tasche für Dienstag/,/^Stunden von heute/,/^Wenn du magst/])assert.equal(await page.getByRole('heading',{name:title}).count(),1);

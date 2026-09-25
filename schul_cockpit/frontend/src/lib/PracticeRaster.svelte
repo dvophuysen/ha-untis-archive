@@ -5,9 +5,11 @@
   import { formatShortDate } from './format.js';
   import PracticePaper from './PracticePaper.svelte';
 
-  let { accountId, examKey, parent = false } = $props();
+  let { accountId, examKey, parent = false, initialPaper = null } = $props();
   let data = $state(null), error = $state(''), busy = $state(false);
   let fmt = $state(''), chosen = $state([]), level = $state(0), paperId = $state(null);
+  // Direkt geöffnet, etwa aus „Erledigen“ (D202): einmal beim Laden.
+  $effect(() => { if (initialPaper) paperId = initialPaper; });
 
   const STATE = {
     offen: { label: 'offen', cls: 'st-neu' },
@@ -51,7 +53,7 @@
     return `${Math.round(c.ratio * 100)} % der Punkte in den letzten ${c.tasks} ${c.tasks === 1 ? 'Aufgabe' : 'Aufgaben'}${c.helped ? `, ${c.helped}× mit Hilfe (zählt nicht)` : ''}`;
   }
   const needsTopics = $derived(fmt === 'kurz');
-  const statusLabel = (p) => p.status === 'graded' ? `${Number(p.points).toLocaleString('de-DE')} von ${p.points_max} Punkten` : p.status === 'active' ? 'noch offen' : 'abgegeben, noch nicht ausgewertet';
+  const statusLabel = (p) => p.status === 'review' ? 'wartet auf Prüfung durch die Eltern' : p.status === 'graded' ? `${Number(p.points).toLocaleString('de-DE')} von ${p.points_max} Punkten` : p.status === 'active' ? 'noch offen' : 'abgegeben, noch nicht ausgewertet';
 </script>
 
 {#if paperId}

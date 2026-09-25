@@ -204,7 +204,7 @@
                     {#each e.papers as p (p.attempt_id)}
                       <button class="paper-row" onclick={() => { paperId = p.attempt_id; window.scrollTo?.(0, 0); }}>
                         <span><strong>{p.label}</strong> · {p.date ? formatShortDate(p.date) : ''}</span>
-                        <span class="dim">{p.status === 'graded' ? `${String(p.points).replace('.', ',')} von ${p.points_max} Punkten${p.unclear ? ` · ${p.unclear} unklar gelesen` : ''} · Ansehen` : p.status === 'grading' ? 'wird ausgewertet' : 'offen · Weiter'}</span>
+                        <span class="dim">{p.status === 'graded' ? `${String(p.points).replace('.', ',')} von ${p.points_max} Punkten · Ansehen` : p.status === 'review' ? 'deine Eltern prüfen die Auswertung' : p.status === 'grading' ? 'wird ausgewertet' : 'offen · Weiter'}</span>
                       </button>
                     {/each}
                   </div>

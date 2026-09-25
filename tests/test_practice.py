@@ -82,7 +82,8 @@ def mock(patch, outputs, seen=None):
     async def complete(account, purpose, instruction, context, *args, **kw):
         if seen is not None:
             seen.append((purpose, context, args))
-        return json.dumps(outputs.pop(0)), {}, "fake"
+        # Die letzte Antwort bleibt stehen: Jede Auswertung läuft zwei- bis dreimal (D202).
+        return json.dumps(outputs.pop(0) if len(outputs) > 1 else outputs[0]), {}, "fake"
     patch.setattr(ai, "complete", complete)
 
 
@@ -118,25 +119,25 @@ def test_paper_from_creation_to_raster(paper):
     r = client.post(f"{BASE}/attempts/{a['id']}/pages", files={"file": ("p.jpg", image(), "image/jpeg")})
     assert r.status_code == 200, r.text and len(r.json()["pages"]) == 1
     grades = [{"nr": i, "points": 4 if i != 3 else 1, "rationale": "Passt.", "next_step": "Weiter so."} for i in range(1, 7)]
-    grades[5]["uncertain"] = True
     seen.clear()
     mock(patch, [{"tasks": grades, "overall": "Gut begonnen."}], seen)
     r = client.post(f"{BASE}/attempts/{a['id']}/grade", json={"answers": {"1": "x = 3"}})
     assert r.status_code == 200, r.text
     g = r.json()
     assert g["status"] == "graded" and g["feedback"]["2"]["points"] == 1 and "loesung" in json.dumps(seen[0][1])
+    assert len(seen) == 2 and g["feedback"]["check"] == {"passes": 2, "open": []}, "zwei übereinstimmende Durchgänge"
     assert seen[0][0] == "exam_paper" and len(seen[0][2][0]) == 1
     with closing(db.webapp_conn()) as c:
         rows = [dict(x) for x in c.execute("SELECT * FROM topic_answers ORDER BY id")]
     assert len(rows) == 6 and rows[0]["source"] == "paper" and rows[0]["points"] == 4 and rows[0]["session_id"] == -a["id"]
-    assert rows[5]["result"] == "uncertain" and rows[5]["points"] is None
+    assert rows[5]["result"] == "correct" and rows[5]["points"] == 4
     raster = client.get(BASE, params={"exam_key": KEY}).json()
     first = raster["topics"][0]
     # Volle Punkte im Einstiegstest: gleich sicher (D192).
     assert first["cells"]["1"]["state"] == "sicher" and first["cells"]["2"]["state"] == "sicher" and first["ready"]
     assert raster["topics"][2]["cells"]["1"]["state"] == "unsicher"
-    assert raster["topics"][2]["cells"]["2"]["state"] == "offen"      # unklar gewertet
-    assert raster["papers"][0]["points"] == 4 * 4 + 1 and raster["papers"][0]["points_max"] == 24
+    assert raster["topics"][2]["cells"]["2"]["state"] == "sicher"
+    assert raster["papers"][0]["points"] == 5 * 4 + 1 and raster["papers"][0]["points_max"] == 24
     # Zweimal auswerten kostet nichts.
     assert client.post(f"{BASE}/attempts/{a['id']}/grade", json={}).json()["status"] == "graded"
     assert client.post(f"{BASE}/attempts/{a['id']}/pages", files={"file": ("p.jpg", image(), "image/jpeg")}).status_code == 409
@@ -273,15 +274,15 @@ def test_new_result_is_announced_until_the_child_opens_it_and_parents_can_reopen
     a = client.post(BASE, json={"exam_key": KEY, "format": "einstieg"}).json()
     client.post(f"{BASE}/attempts/{a['id']}/pages", files={"file": ("p.jpg", image(), "image/jpeg")})
     grades = [{"nr": i, "points": 4, "rationale": "Passt.", "next_step": "Weiter."} for i in range(1, 7)]
-    grades[2]["uncertain"] = True
+    grades[2]["points"] = 2
     mock(patch, [{"tasks": grades, "overall": "Gut."}])
     assert client.post(f"{BASE}/attempts/{a['id']}/grade", json={}).json()["status"] == "graded"
     news = rp.new_results(1)
-    assert [(n["attempt_id"], n["points"], n["points_max"], n["unclear"]) for n in news] == [(a["id"], 20, 24, 1)]
+    assert [(n["attempt_id"], n["points"], n["points_max"], n["unclear"]) for n in news] == [(a["id"], 22, 24, 0)]
     from backend.learning_compass import _papers_of
     from types import SimpleNamespace
     papers = _papers_of(1, KEY, SimpleNamespace(id=2))
-    assert papers[0]["attempt_id"] == a["id"] and papers[0]["status"] == "graded" and papers[0]["unclear"] == 1
+    assert papers[0]["attempt_id"] == a["id"] and papers[0]["status"] == "graded"
     client.get(f"{BASE}/attempts/{a['id']}")
     assert rp.new_results(1) == [], "vom Kind geöffnet: nicht mehr neu"
     # Kind darf nicht neu öffnen, Eltern schon.
@@ -291,7 +292,79 @@ def test_new_result_is_announced_until_the_child_opens_it_and_parents_can_reopen
     assert r.status_code == 200 and r.json()["status"] == "active"
     with closing(db.webapp_conn()) as c:
         assert c.execute("SELECT COUNT(*) FROM topic_answers WHERE attempt_id=?", (a["id"],)).fetchone()[0] == 0
-    mock(patch, [{"tasks": [{**g, "uncertain": False} for g in grades], "overall": "Besser lesbar."}])
+    grades[2]["points"] = 4
+    mock(patch, [{"tasks": grades, "overall": "Besser lesbar."}])
     again = client.post(f"{BASE}/attempts/{a['id']}/grade", json={}).json()
     assert again["status"] == "graded" and again["feedback"]["overall"]["text"] == "Besser lesbar."
     assert rp.new_results(1)[0]["points"] == 24, "neu ausgewertet: wieder als neu gemeldet"
+
+
+def g_pass(points, uncertain=()):
+    return {"tasks": [{"nr": i + 1, "points": p, "uncertain": (i + 1) in uncertain, "rationale": "Begründung.", "next_step": "Weiter."}
+                      for i, p in enumerate(points)], "overall": "Gesamt."}
+
+
+def test_consensus_needs_two_agreeing_passes():
+    """D202: Es zählt nur, worin zwei Durchgänge übereinstimmen (höchstens 1 Punkt)."""
+    tasks = [{"points": 4}, {"points": 6}, {"points": 4}]
+    P = rp.PaperGrade.model_validate
+    final, open_nrs = rp.consensus([P(g_pass([3, 5, 2])), P(g_pass([4, 5, 2]))], tasks)
+    assert open_nrs == [] and [final[n]["points"] for n in (1, 2, 3)] == [3.5, 5, 2]
+    final, open_nrs = rp.consensus([P(g_pass([4, 1, 2])), P(g_pass([4, 5, 2]))], tasks)
+    assert open_nrs == [2], "4 Punkte auseinander: offen, bis ein dritter Durchgang entscheidet"
+    final, open_nrs = rp.consensus([P(g_pass([4, 1, 2])), P(g_pass([4, 5, 2])), P(g_pass([4, 5.5, 2]))], tasks)
+    assert open_nrs == [] and final[2]["points"] == 5.0, "zwei von drei einig: deren Mittel"
+    final, open_nrs = rp.consensus([P(g_pass([4, 5, 2], uncertain={3})), P(g_pass([4, 5, 0], uncertain={3})), P(g_pass([4, 5, 2]))], tasks)
+    assert open_nrs == [3], "nur ein Durchgang konnte lesen: offen"
+    assert final[3]["uncertain"]
+
+
+def test_unsure_grading_is_held_for_the_parents_and_never_counts(paper):
+    """D202: Bleibt eine Aufgabe nach drei Durchgängen unsicher, sieht das Kind
+    keine Punkte, nichts geht in den Lernstand, die Eltern bekommen eine Aufgabe
+    und tragen die Punkte ein."""
+    client, state, patch = paper
+    child(state)
+    mock(patch, [pack(6)])
+    a = client.post(BASE, json={"exam_key": KEY, "format": "einstieg"}).json()
+    client.post(f"{BASE}/attempts/{a['id']}/pages", files={"file": ("p.jpg", image(), "image/jpeg")})
+    seen = []
+    mock(patch, [g_pass([4, 4, 4, 4, 4, 0], uncertain={6}), g_pass([4, 4, 4, 4, 4, 4]), g_pass([4, 4, 4, 4, 4, 1], uncertain={6})], seen)
+    r = client.post(f"{BASE}/attempts/{a['id']}/grade", json={}).json()
+    assert len(seen) == 3 and r["status"] == "review" and r["feedback"]["check"]["open"] == [6]
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT COUNT(*) FROM topic_answers WHERE attempt_id=?", (a["id"],)).fetchone()[0] == 0
+    assert rp.new_results(1) == [] and rp.review_items(1)[0]["open"] == [6]
+    from backend.parent_todo import paper_review_items
+    todo = paper_review_items(1, "Beispielkind")
+    assert todo[0]["title"].startswith("Einstiegstest von Beispielkind prüfen") and "Aufgabe 6" in todo[0]["reason"]
+    assert todo[0]["action"]["page"] == "klausuren" and todo[0]["action"]["query"]["paper"] == str(a["id"])
+    assert client.post(f"{BASE}/attempts/{a['id']}/review", json={"points": {"5": 3}}).status_code == 403, "Kind prüft nicht selbst"
+    state.user = CurrentUser(1, "p", "Eltern", "parent", False, "ingress")
+    assert client.post(f"{BASE}/attempts/{a['id']}/review", json={"points": {}}).status_code == 422
+    assert client.post(f"{BASE}/attempts/{a['id']}/review", json={"points": {"5": 9}}).status_code == 422
+    done = client.post(f"{BASE}/attempts/{a['id']}/review", json={"points": {"5": 3.5}}).json()
+    assert done["status"] == "graded" and done["feedback"]["5"]["points"] == 3.5 and done["feedback"]["5"]["checked_by_parent"]
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT COUNT(*) FROM topic_answers WHERE attempt_id=?", (a["id"],)).fetchone()[0] == 6
+    assert rp.new_results(1)[0]["points"] == 23.5 and rp.review_items(1) == []
+
+
+def test_older_unsure_results_are_held_back_once(paper):
+    """D202: Ältere Auswertungen mit unklaren Aufgaben verlassen beim Start den Lernstand."""
+    client, state, patch = paper
+    child(state)
+    mock(patch, [pack(6)])
+    a = client.post(BASE, json={"exam_key": KEY, "format": "einstieg"}).json()
+    client.post(f"{BASE}/attempts/{a['id']}/pages", files={"file": ("p.jpg", image(), "image/jpeg")})
+    mock(patch, [g_pass([4] * 6)])
+    client.post(f"{BASE}/attempts/{a['id']}/grade", json={})
+    with closing(db.webapp_conn()) as c, c:  # so sah eine Auswertung vor D202 aus
+        fb = json.loads(c.execute("SELECT feedback_json FROM mentor_exam_attempts WHERE id=?", (a["id"],)).fetchone()[0])
+        fb.pop("check")
+        fb["2"]["uncertain"] = True
+        c.execute("UPDATE mentor_exam_attempts SET feedback_json=? WHERE id=?", (json.dumps(fb), a["id"]))
+    assert rp.hold_uncertain() == 1 and rp.hold_uncertain() == 0
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT status FROM mentor_exam_attempts WHERE id=?", (a["id"],)).fetchone()[0] == "review"
+        assert c.execute("SELECT COUNT(*) FROM topic_answers WHERE attempt_id=?", (a["id"],)).fetchone()[0] == 0

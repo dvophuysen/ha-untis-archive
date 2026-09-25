@@ -396,7 +396,7 @@ def _paper_count(c, account_id: int, exam_key: str, first: str, last: str) -> in
     # Papier-Schritt, gleich welches Format: gemessen ist gemessen.
     return c.execute(
         "SELECT COUNT(DISTINCT a.id) FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id "
-        "WHERE a.account_id=? AND e.exam_key=? AND a.status='graded' AND a.is_test=0 AND ("
+        "WHERE a.account_id=? AND e.exam_key=? AND a.status IN ('graded','review') AND a.is_test=0 AND ("
         " EXISTS(SELECT 1 FROM topic_answers t WHERE t.attempt_id=a.id AND substr(t.created_at,1,10) BETWEEN ? AND ?)"
         " OR substr(a.submitted_at,1,10) BETWEEN ? AND ?)",
         (account_id, exam_key, first, last, first, last)).fetchone()[0]
@@ -526,7 +526,7 @@ def _attach_papers(account_id: int, steps: list[dict], day: date) -> None:
         for key in keys:
             pool[key] = [r[0] for r in c.execute(
                 "SELECT a.id FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id "
-                "WHERE a.account_id=? AND e.exam_key=? AND a.is_test=0 AND a.status!='graded' "
+                "WHERE a.account_id=? AND e.exam_key=? AND a.is_test=0 AND a.status NOT IN ('graded','review') "
                 "AND substr(a.started_at,1,10)>=? ORDER BY a.id", (account_id, key, day.isoformat()))]
     for s in steps:
         if s.get("kind") == "paper" and not s.get("done") and pool.get(s.get("exam_key")):

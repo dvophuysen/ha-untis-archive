@@ -117,6 +117,14 @@ async def lifespan(app: FastAPI):
     from .db import webapp_conn
     with __import__("contextlib").closing(webapp_conn()) as c:
         c.execute("UPDATE mentor_exam_attempts SET status='submitted' WHERE status='grading'")
+    # Unsicher gelesene Auswertungen zählen nie (D202): ältere einmal zurückstellen.
+    try:
+        from .routers.practice import hold_uncertain
+        held = hold_uncertain()
+        if held:
+            _LOGGER.info("%s Übungsarbeit(en) mit unsicherer Auswertung zur Prüfung zurückgestellt", held)
+    except Exception:
+        _LOGGER.warning("Unsichere Auswertungen nicht geprüft", exc_info=True)
     _LOGGER.info("Background HA-todo sync loop started")
     try:
         yield
