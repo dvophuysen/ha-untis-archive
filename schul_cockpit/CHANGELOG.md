@@ -1,3 +1,8 @@
+## 1.31.0
+
+- Auch die Übungsklausur der Eltern und der Vokabeltest auf Papier werden jetzt doppelt ausgewertet. Unsicheres zählt nie; bei Bedarf prüfen die Eltern, das Kind sieht bis dahin keine Punkte.
+- Die Lernseite und „Heute“ laden deutlich schneller.
+
 ## 1.30.1
 
 - „Auf dem Weg“ zeigt auch dann ein nächstes Ziel, wenn bei keinem Abzeichen schon Fortschritt da ist.
