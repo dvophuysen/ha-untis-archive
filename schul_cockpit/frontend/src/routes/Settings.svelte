@@ -1,4 +1,5 @@
 <script>
+  import { onDestroy } from 'svelte';
   import { api } from '../lib/api.js';
   import { appState, loadMe } from '../lib/store.svelte.js';
 
@@ -19,19 +20,38 @@
   let textbookTestBusy = $state(null);
   let textbookTest = $state(null);
 
+  // Nur die Antworten des letzten Ladens für dieses Kind gelten: Eine späte
+  // Antwort für ein anderes Kind landete sonst im Formular, und „Speichern“
+  // schrieb sie auf das falsche Kind.
+  let textbookRequest = 0;
+  let alive = true;
+  onDestroy(() => { alive = false; textbookRequest++; });
   async function loadTextbookAccess() {
     if (!accountId || !['parent', 'admin'].includes(appState.me?.role) && !appState.me?.is_admin) return;
-    try {
-      [textbookAccess, textbookCatalog] = await Promise.all([
-        api.get(`/api/accounts/${accountId}/textbooks`),
-        api.get(`/api/accounts/${accountId}/textbooks/catalog`),
-      ]);
-      textbookSubjects = (await api.get(`/api/accounts/${accountId}/subjects`)).subjects ?? [];
-      calendars = await api.get(`/api/accounts/${accountId}/calendars`);
-      textbookPassword = '';
-    } catch (e) {
-      textbookMessage = { ok: false, text: e.message };
+    const id = accountId, ticket = ++textbookRequest;
+    const current = () => ticket === textbookRequest && id === accountId;
+    // Alle vier gleichzeitig; übernommen wird wie früher der Reihe nach bis zum
+    // ersten Fehler (Zugang und Regal nur gemeinsam).
+    const [access, catalog, subjects, cals] = await Promise.allSettled([
+      api.get(`/api/accounts/${id}/textbooks`),
+      api.get(`/api/accounts/${id}/textbooks/catalog`),
+      api.get(`/api/accounts/${id}/subjects`),
+      api.get(`/api/accounts/${id}/calendars`),
+    ]);
+    if (!current()) return;
+    const failed = [access, catalog, subjects, cals].find((r) => r.status === 'rejected');
+    if (access.status === 'fulfilled' && catalog.status === 'fulfilled') {
+      textbookAccess = access.value;
+      textbookCatalog = catalog.value;
+      if (subjects.status === 'fulfilled') {
+        textbookSubjects = subjects.value.subjects ?? [];
+        if (cals.status === 'fulfilled') {
+          calendars = cals.value;
+          textbookPassword = '';
+        }
+      }
     }
+    if (failed) textbookMessage = { ok: false, text: failed.reason?.message ?? String(failed.reason) };
   }
 
   $effect(() => { void accountId; void appState.me?.role; loadTextbookAccess(); });
@@ -201,12 +221,15 @@
       // Der Abruf dauert länger, als der Fernzugriff einer Anfrage erlaubt.
       // Also anstoßen und nachfragen, bis er fertig ist.
       let state = await api.post(path, { page });
-      while (state.state === 'running' && Date.now() - startedAt < 6 * 60 * 1000) {
+      // Nach dem Verlassen der Seite nicht weiter nachfragen; der Abruf läuft auf dem Server weiter.
+      while (alive && state.state === 'running' && Date.now() - startedAt < 6 * 60 * 1000) {
         const seconds = Math.round((Date.now() - startedAt) / 1000);
         textbookTest = { book: book.title, page, status: 'running', detail: `Der Browser arbeitet seit ${seconds} Sekunden.` };
         await new Promise((resolve) => setTimeout(resolve, 4000));
+        if (!alive) return;
         state = await api.get(path);
       }
+      if (!alive) return;
       textbookTest = state.state === 'done'
         ? state.result
         : { book: book.title, page, status: 'request_failed', detail: 'Der Abruf läuft noch. Später erneut nachsehen.' };

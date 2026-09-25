@@ -1,7 +1,7 @@
 <script>
   // „Wer benutzt das Gerät?“ (D175): ein Tipp aufs Profil, kein PIN.
   import { api } from './api.js';
-  import { appState, setActiveAccount, loadMe } from './store.svelte.js';
+  import { appState, setActiveAccount, loadMe, logout as endSession } from './store.svelte.js';
   import { view, setViewMode } from './viewMode.svelte.js';
 
   let { onclose, navigate } = $props();
@@ -9,9 +9,8 @@
   const initials = (name) => (name || '?').split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase();
 
   async function logout() {
-    try { await api.post('/api/auth/logout'); } catch (_) { /* egal */ }
     onclose();
-    await loadMe();
+    await endSession();
   }
   async function leaveTest() {
     // Beim Verlassen des Testmodus alles zurücknehmen, was dabei geändert wurde.

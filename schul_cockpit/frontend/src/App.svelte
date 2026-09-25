@@ -6,20 +6,22 @@
   import { profile, loadProfile, applyProfile, initials } from './lib/profile.svelte.js';
   import { view, setViewMode, touchViewMode, expireViewMode } from './lib/viewMode.svelte.js';
   import { onMount } from 'svelte';
-  import { appState, loadMe, activeAccount } from './lib/store.svelte.js';
+  import { appState, loadMe, activeAccount, logout } from './lib/store.svelte.js';
   import KidChips from './lib/KidChips.svelte';
   import { todo, loadTodo } from './lib/parentTodo.svelte.js';
   import Today from './routes/Today.svelte';
   import Ich from './routes/Ich.svelte';
-  import Overview from './routes/Overview.svelte';
-  import Learning from './routes/Learning.svelte';
-  import Week from './routes/Week.svelte';
   import Subjects from './routes/Subjects.svelte';
   import SubjectDetail from './routes/SubjectDetail.svelte';
   import Login from './routes/Login.svelte';
   import Lazy from './lib/Lazy.svelte';
-  // Selten genutzte Seiten kommen erst beim Öffnen (D177).
+  // Selten genutzte Seiten kommen erst beim Öffnen (D177). Woche, Lernen und
+  // die Familienseite auch: Die Startseite der Kinder (Heute) lädt so schneller;
+  // Familie wird beim Start gleich mitgeholt, Woche und Lernen im Leerlauf.
   const LAZY = {
+    Overview: () => import('./routes/Overview.svelte'),
+    Week: () => import('./routes/Week.svelte'),
+    Learning: () => import('./routes/Learning.svelte'),
     Plan: () => import('./routes/Plan.svelte'),
     Materialien: () => import('./routes/Materialien.svelte'),
     Absences: () => import('./routes/Absences.svelte'),
@@ -38,9 +40,9 @@
   import { startUsagePing } from './lib/usagePing.js';
   import { jumpTo, sectionParam } from './lib/jump.js';
 
-  async function logout() {
-    try { await api.post('/api/auth/logout'); } catch (_) { /* ignore */ }
-    await loadMe();
+  // Eine Adresse mit „%“ im Namen ließ decodeURIComponent werfen: Die Seite blieb leer.
+  function decodePart(value) {
+    try { return decodeURIComponent(value ?? ''); } catch { return value ?? ''; }
   }
 
   // Ein-Klick-Reparatur verwaister Kind-Verlinkungen. Der Server biegt nur
@@ -77,6 +79,11 @@
   // Default-Switch sobald die Daten da sind.
   const hadEmptyInitialHash = !window.location.hash.replace(/^#\/?/, '');
   let route = $state(parseHash());
+  // Eltern landen auf der Familienseite: ihr Modul lädt gleichzeitig mit /api/me.
+  // Welche Hülle zuletzt offen war, merkt sich das Gerät; Kinder laden sie so nicht mit.
+  const SHELL_KEY = 'lastShell';
+  function lastShell() { try { return localStorage.getItem(SHELL_KEY); } catch { return null; } }
+  if ((hadEmptyInitialHash && lastShell() !== 'kid') || parseHash().name === 'overview') LAZY.Overview().catch(() => {});
 
   function parseHash() {
     const h = window.location.hash.replace(/^#\/?/, '');
@@ -191,13 +198,33 @@
   });
   const todoTotal = $derived(todo.data?.total ?? 0);
 
+  // Woche und Lernen (für Eltern auch Familie) vorladen, wenn die Startseite
+  // steht, damit der erste Tipp darauf ohne Warten öffnet. Einmal je Start;
+  // Fehler zeigt erst das Öffnen der Seite (Lazy.svelte).
+  let warmed = false;
+  $effect(() => {
+    if (warmed || appState.loading || !appState.me) return;
+    warmed = true;
+    const warm = () => {
+      LAZY.Week().catch(() => {});
+      LAZY.Learning().catch(() => {});
+      if (isParent) LAZY.Overview().catch(() => {});
+    };
+    setTimeout(() => (window.requestIdleCallback ? window.requestIdleCallback(warm, { timeout: 3000 }) : warm()), 2000);
+  });
+  $effect(() => {
+    if (!appState.me) return;
+    try { localStorage.setItem(SHELL_KEY, parentView ? 'parent' : 'kid'); } catch { /* nur ein Hinweis fürs Vorladen */ }
+  });
+
   const acc = $derived(activeAccount());
   const isParent = $derived(!!(appState.me?.is_admin || appState.me?.role === 'parent'));
   // Eigene Elternansicht nur im Zustand „Ich“; sonst sieht das Gerät aus wie beim Kind.
   const parentView = $derived(isParent && view.mode === 'parent');
   let deviceSheet = $state(false);
-  // Gestaltung des Kindes (D176) laden und anwenden, außer in der eigenen Elternansicht.
-  $effect(() => { if (appState.activeAccountId && profile.accountId !== appState.activeAccountId) loadProfile(appState.activeAccountId); });
+  // Gestaltung des Kindes (D176) laden und anwenden, außer in der eigenen
+  // Elternansicht: Dort gilt sie nicht, also auch nicht laden.
+  $effect(() => { if (!parentView && appState.activeAccountId && profile.accountId !== appState.activeAccountId) loadProfile(appState.activeAccountId); });
   $effect(() => { applyProfile(!parentView && profile.accountId === appState.activeAccountId ? profile.prefs : null); });
   $effect(() => {
     document.body.dataset.viewMode = isParent ? view.mode : 'own';
@@ -332,18 +359,23 @@
           <br><br>Bitte den Eltern-Account bitten, dich zuzuordnen.
         {/if}
       </div>
+    {:else if parentView ? !PARENT_ALLOWED.has(route.name) : (view.mode !== 'test' && PARENT_ONLY.has(route.name))}
+      <!-- Seite der anderen Hülle: gleich geht es weiter (Effekt oben). Bis dahin
+           nichts laden, sonst holte die Familie beim Start erst „Heute“ von Kind A. -->
+      <div class="empty"><span class="spinner"></span></div>
     {:else if route.name === 'setup'}
       <Lazy load={LAZY.Setup} {navigate} />
     {:else if route.name === 'settings'}
-      <Lazy load={LAZY.Settings} accountId={appState.activeAccountId} />
+      <!-- Je Kind neu aufbauen: Eine späte Antwort für das vorige Kind darf nie im Formular des neuen landen. -->
+      {#key appState.activeAccountId}<Lazy load={LAZY.Settings} accountId={appState.activeAccountId} />{/key}
     {:else if route.name === 'exams'}
-      <Lazy load={LAZY.ExamSetup} />
+      {#key appState.activeAccountId}<Lazy load={LAZY.ExamSetup} />{/key}
     {:else if route.name === 'courses'}
-      <Lazy load={LAZY.Courses} accountId={appState.activeAccountId} />
+      {#key appState.activeAccountId}<Lazy load={LAZY.Courses} accountId={appState.activeAccountId} />{/key}
     {:else if route.name === 'changes'}
       <Lazy load={LAZY.MyChanges} />
     {:else if route.name === 'overview'}
-      <Overview {navigate} />
+      <Lazy load={LAZY.Overview} {navigate} />
     {:else if route.name === 'erledigen'}
       <Lazy load={LAZY.Erledigen} />
     {:else if route.name === 'scannen'}
@@ -355,29 +387,29 @@
     {:else if route.name === 'today'}
       <Today accountId={appState.activeAccountId} />
     {:else if route.name === 'plan' || route.name === 'tasks'}
-      <Lazy load={LAZY.Plan} accountId={appState.activeAccountId} />
+      {#key appState.activeAccountId}<Lazy load={LAZY.Plan} accountId={appState.activeAccountId} />{/key}
     {:else if route.name === 'week'}
-      <Week accountId={appState.activeAccountId} />
+      <Lazy load={LAZY.Week} accountId={appState.activeAccountId} />
     {:else if route.name === 'materialien'}
       {#key `${appState.activeAccountId}:${(route.args ?? []).join('/')}`}
         <Lazy load={LAZY.Materialien} accountId={appState.activeAccountId}
-                     initialSubject={decodeURIComponent(route.args?.[0] ?? '')}
+                     initialSubject={decodePart(route.args?.[0])}
                      taskId={Number(route.args?.[1]) || null} />
       {/key}
     {:else if route.name === 'learning'}
       {#key appState.activeAccountId}
-        <Learning accountId={appState.activeAccountId} />
+        <Lazy load={LAZY.Learning} accountId={appState.activeAccountId} />
       {/key}
     {:else if route.name === 'klausuren'}
-      <Lazy load={LAZY.Klausuren} accountId={appState.activeAccountId} />
+      {#key appState.activeAccountId}<Lazy load={LAZY.Klausuren} accountId={appState.activeAccountId} />{/key}
     {:else if route.name === 'vokabeln'}
       {#key `${appState.activeAccountId}:${(route.args ?? []).join('/')}`}
         <Lazy load={LAZY.Vokabeln} accountId={appState.activeAccountId}
-                  subject={decodeURIComponent(route.args?.[0] ?? '')}
-                  initialUnit={decodeURIComponent((window.location.hash.split('?')[1] ? new URLSearchParams(window.location.hash.split('?')[1]).get('unit') : '') ?? '')} />
+                  subject={decodePart(route.args?.[0])}
+                  initialUnit={new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('unit') ?? ''} />
       {/key}
     {:else if route.name === 'absences'}
-      <Lazy load={LAZY.Absences} accountId={appState.activeAccountId} />
+      {#key appState.activeAccountId}<Lazy load={LAZY.Absences} accountId={appState.activeAccountId} />{/key}
     {:else if route.name === 'subjects'}
       <Subjects accountId={appState.activeAccountId} {navigate} />
     {:else if route.name === 'subject'}

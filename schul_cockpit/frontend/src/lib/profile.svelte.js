@@ -11,17 +11,29 @@ const DEFAULTS = { color: 'petrol', avatar: '', theme: 'system', density: 'norma
 
 export const profile = $state({ accountId: null, prefs: { ...DEFAULTS } });
 
+// Nur die Antwort für das zuletzt angefragte Kind gilt.
+let wanted = null;
 export async function loadProfile(accountId) {
   if (!accountId) return;
+  wanted = accountId;
   try {
     const prefs = await api.get(`/api/accounts/${accountId}/profile`);
+    if (wanted !== accountId) return;
     profile.accountId = accountId;
     profile.prefs = { ...DEFAULTS, ...prefs };
   } catch { /* Gestaltung ist Beiwerk */ }
 }
 
+/** Beim Abmelden: Gestaltung des bisherigen Kindes vergessen. */
+export function resetProfile() {
+  wanted = null;
+  profile.accountId = null;
+  profile.prefs = { ...DEFAULTS };
+}
+
 export async function saveProfile(accountId, change) {
   const prefs = await api.put(`/api/accounts/${accountId}/profile`, change);
+  wanted = accountId;
   profile.accountId = accountId;
   profile.prefs = { ...DEFAULTS, ...prefs };
   return prefs;

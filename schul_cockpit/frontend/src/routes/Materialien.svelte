@@ -1,10 +1,11 @@
 <script>
-  import { tick, untrack } from 'svelte';
+  import { onDestroy, tick, untrack } from 'svelte';
   import { api } from '../lib/api.js';
   import ActionLabel from '../lib/ActionLabel.svelte';
   import { subjectStyle } from '../lib/subjectStyle.js';
   import { uploadMaterial } from '../lib/materialUpload.js';
   import { forgetTodo } from '../lib/parentTodo.svelte.js';
+  import { localDay } from '../lib/format.js';
 
   let { accountId, initialSubject = '', taskId = null } = $props();
 
@@ -144,17 +145,24 @@
     return `${d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })} ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`;
   }
 
+  // Nach dem Verlassen der Seite fragt keine Schleife mehr nach; Läufe auf dem
+  // Server laufen weiter.
+  let alive = true;
+  onDestroy(() => { alive = false; clearInterval(timer); loadRequest++; });
+
   async function collectNow() {
     // Der Sammellauf dauert Minuten; anstoßen und nachfragen, bis er fertig ist.
     collecting = { state: 'running', seconds: 0 };
     const startedAt = Date.now();
     try {
       let state = await api.post(`${base}/sources/collect`);
-      while (state.state === 'running' && Date.now() - startedAt < 20 * 60 * 1000) {
+      while (alive && state.state === 'running' && Date.now() - startedAt < 20 * 60 * 1000) {
         collecting = { state: 'running', seconds: Math.round((Date.now() - startedAt) / 1000) };
         await new Promise((resolve) => setTimeout(resolve, 5000));
+        if (!alive) return;
         state = await api.get(`${base}/sources/collect`);
       }
+      if (!alive) return;
       collecting = state.state === 'done' ? { state: 'done', ...state.result } : { state: 'timeout' };
       await load(); await loadAuto();
     } catch (e) {
@@ -207,37 +215,67 @@
   let offset = $state(0);
   const PAGE = 300;
 
-  async function load(more = false) {
+  // Nur das zuletzt begonnene Laden gilt. `refresh` (das Nachladen, solange
+  // etwas gelesen wird) holt alle bisher geladenen Seiten neu, damit mit
+  // „Mehr laden“ Nachgeholtes nicht wieder verschwindet; der Server gibt
+  // höchstens 300 Einträge je Aufruf heraus.
+  let loadRequest = 0, loadsRunning = 0;
+  async function load(more = false, refresh = false) {
     if (!accountId) return;
-    const query = new URLSearchParams();
-    if (filterSubject) query.set('subject', filterSubject);
-    if (filterKind) query.set('kind', filterKind);
-    if (search.trim()) query.set('q', search.trim());
-    query.set('limit', String(PAGE));
-    query.set('offset', String(more ? offset + PAGE : 0));
-    if (!catalog.length) {
-      try {
-        catalog = (await api.get(`/api/accounts/${accountId}/subjects`)).subjects ?? [];
-      } catch {
-        catalog = [];
+    const id = accountId, ticket = ++loadRequest;
+    const current = () => alive && ticket === loadRequest && id === accountId;
+    const url = base;
+    const query = (from) => {
+      const q = new URLSearchParams();
+      if (filterSubject) q.set('subject', filterSubject);
+      if (filterKind) q.set('kind', filterKind);
+      if (search.trim()) q.set('q', search.trim());
+      q.set('limit', String(PAGE));
+      q.set('offset', String(from));
+      return q;
+    };
+    const froms = refresh ? Array.from({ length: Math.floor(offset / PAGE) + 1 }, (_, i) => i * PAGE) : [more ? offset + PAGE : 0];
+    loadsRunning += 1;
+    try {
+      if (!catalog.length) {
+        let list = [];
+        try {
+          list = (await api.get(`/api/accounts/${id}/subjects`)).subjects ?? [];
+        } catch {
+          list = [];
+        }
+        if (!current()) return;
+        catalog = list;
       }
+      try {
+        const pages = await Promise.all(froms.map((from) => api.get(`${url}?${query(from)}`)));
+        if (!current()) return;
+        const page = pages[pages.length - 1];
+        // Alles ist sichtbar, Buchseiten eingeschlossen; wer weiter unten sucht,
+        // lädt weiter, statt dass eine Grenze still abschneidet.
+        data = refresh ? { ...page, materials: pages.flatMap((p) => p.materials) }
+          : more && data ? { ...page, materials: [...data.materials, ...page.materials] } : page;
+        offset = page.offset;
+        error = null;
+      } catch (e) {
+        if (!current()) return;
+        error = e.message;
+      }
+      // Die Einkaufsliste darf die Seite nicht mitreißen, wenn sie ausfällt.
+      let sources = null;
+      try {
+        sources = await api.get(`${url}/sources`);
+      } catch {
+        sources = null;
+      }
+      if (current()) ledger = sources;
+    } finally {
+      loadsRunning -= 1;
     }
-    try {
-      const page = await api.get(`${base}?${query}`);
-      // Alles ist sichtbar, Buchseiten eingeschlossen; wer weiter unten sucht,
-      // lädt weiter, statt dass eine Grenze still abschneidet.
-      data = more && data ? { ...page, materials: [...data.materials, ...page.materials] } : page;
-      offset = page.offset;
-      error = null;
-    } catch (e) {
-      error = e.message;
-    }
-    // Die Einkaufsliste darf die Seite nicht mitreißen, wenn sie ausfällt.
-    try {
-      ledger = await api.get(`${base}/sources`);
-    } catch {
-      ledger = null;
-    }
+  }
+  // Das Nachladen im Takt: nie, solange ein anderes Laden läuft.
+  function poll() {
+    if (loadsRunning === 0) load(false, true);
   }
 
   // Zu einer Hausaufgabe: was schon dranhängt und was dazu passen könnte.
@@ -309,7 +347,7 @@
   // pull down or wonder whether it worked.
   $effect(() => {
     clearInterval(timer);
-    if (waiting) timer = setInterval(load, 4000);
+    if (waiting) timer = setInterval(poll, 4000);
     return () => clearInterval(timer);
   });
 
@@ -390,8 +428,8 @@
   }
 
   function dateOf(m) {
-    const value = m.document_date || m.created_at?.slice(0, 10);
-    return value ? new Date(value).toLocaleDateString('de-DE') : '';
+    const value = (m.document_date || localDay(m.created_at)).slice(0, 10);
+    return value ? new Date(`${value}T12:00:00`).toLocaleDateString('de-DE') : '';
   }
   // Welche Seite eines Buchs das ist: gedruckte Seitenzahlen zuerst, sonst die
   // erkannte Seite. Eine Doppelseite heißt „S. 48–49“.

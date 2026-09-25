@@ -4,7 +4,7 @@
   // Kein Formular. Eigene Aufgaben lassen sich dahinter bearbeiten.
   import { api, ApiError } from './api.js';
   import { subjectStyle } from './subjectStyle.js';
-  import { formatShortDate, isoToday, dueLabel, stripUntisMetadata } from './format.js';
+  import { formatShortDate, isoToday, dueLabel, stripUntisMetadata, givenDate } from './format.js';
   import SourceText from './SourceText.svelte';
   import TaskEditor from './TaskEditor.svelte';
   import ActionLabel from './ActionLabel.svelte';
@@ -23,8 +23,7 @@
   const given = $derived.by(() => {
     const m = (task.notes ?? '').match(/Gegeben am:?\s*(?:[A-Za-zÄÖÜäöü]{2,4}\.?\s*)?(\d{1,2})\.(\d{1,2})\.(\d{2,4})?/);
     if (!m) return null;
-    const year = m[3] ? (m[3].length === 2 ? `20${m[3]}` : m[3]) : (task.due_date ?? today).slice(0, 4);
-    return `${year}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    return givenDate(m[1], m[2], m[3], task.due_date ?? today);
   });
   const STATE_TEXT = {
     ready: 'Material liegt vor und ist gelesen',

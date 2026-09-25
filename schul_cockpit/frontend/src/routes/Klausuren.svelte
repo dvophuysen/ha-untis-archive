@@ -67,27 +67,35 @@
   // Eltern-Werkzeuge nicht beim Mitlesen und nicht, wenn das Kind das Gerät benutzt (D183).
   const canManage = $derived(actsAsParent(appState.me));
 
+  // Nur die letzte Antwort für dieses Kind gilt; das Archiv gehört zum Kind.
+  let request = 0, archiveFor = null;
   async function load() {
     if (!accountId) return;
+    const id = accountId, ticket = ++request;
+    const current = () => ticket === request && id === accountId;
     loading = true;
     error = null;
     try {
-      data = await api.get(`/api/accounts/${accountId}/exams/all`);
+      const d = await api.get(`/api/accounts/${id}/exams/all`);
+      if (current()) data = d;
     } catch (e) {
-      error = e.message;
+      if (current()) error = e.message;
     } finally {
-      loading = false;
+      if (current()) loading = false;
     }
   }
   $effect(() => { void accountId; load(); });
 
   async function openArchive() {
+    if (archiveFor !== accountId) { archive = null; archiveFor = accountId; }
     archiveOpen = !archiveOpen;
     if (!archiveOpen || archive) return;
+    const id = accountId;
     try {
-      archive = (await api.get(`/api/accounts/${accountId}/exams/archive`)).exams;
+      const list = (await api.get(`/api/accounts/${id}/exams/archive`)).exams;
+      if (id === accountId) archive = list;
     } catch (e) {
-      error = e.message;
+      if (id === accountId) error = e.message;
     }
   }
 

@@ -22,24 +22,29 @@
 
   const acc = $derived(activeAccount());
 
+  // Nur die letzte Antwort für das gewählte Kind gilt.
+  let request = 0;
   async function load() {
     if (!appState.activeAccountId) return;
+    const id = appState.activeAccountId, ticket = ++request;
+    const current = () => ticket === request && id === appState.activeAccountId;
     loading = true;
     error = null;
     try {
       const [d, e] = await Promise.all([
-        api.get(`/api/accounts/${appState.activeAccountId}/exams/diagnostic`),
-        api.get(`/api/accounts/${appState.activeAccountId}/calendar-entities`).catch(() => ({ available: false, entities: [] })),
+        api.get(`/api/accounts/${id}/exams/diagnostic`),
+        api.get(`/api/accounts/${id}/calendar-entities`).catch(() => ({ available: false, entities: [] })),
       ]);
+      if (!current()) return;
       diag = d;
       selectedEntity = d.entity_id ?? '';
       excludeText = (d.exclude_keywords ?? []).join(', ');
       entities = e.entities ?? [];
       entitiesAvailable = e.available !== false;
     } catch (err) {
-      error = err.message;
+      if (current()) error = err.message;
     } finally {
-      loading = false;
+      if (current()) loading = false;
     }
   }
 
