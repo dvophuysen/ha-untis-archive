@@ -18,6 +18,7 @@ from .. import exam_scope
 from .. import learning_plan as lp
 from .learning import access
 from .mentor import Task
+from ..rewards import acting_child
 
 router=APIRouter(prefix='/accounts/{account_id}/learning/mentor/exams',tags=['mentor-exams'])
 
@@ -203,7 +204,7 @@ def start(account_id:int,eid:int,user:CurrentUser=Depends(get_current_user)):
         c.execute('BEGIN IMMEDIATE');r=exam_row(c,account_id,eid,bool(user.is_admin or user.role=='parent'))
         if r['status']!='published':raise HTTPException(409,'Bitte zuerst prüfen und freigeben.')
         pack={'title':r['title'],'subject':r['subject'],'minutes':r['minutes'],'scope':json.loads(r['scope_json']),'tasks':json.loads(r['tasks_json'])}
-        c.execute('INSERT OR IGNORE INTO mentor_exam_attempts(account_id,exam_id,user_id,snapshot,active_since,started_at,is_test) VALUES(?,?,?,?,?,?,?)',(account_id,eid,user.id,json.dumps(pack,ensure_ascii=False),now_iso(),now_iso(),int(bool(user.is_admin or user.role=='parent'))))
+        c.execute('INSERT OR IGNORE INTO mentor_exam_attempts(account_id,exam_id,user_id,snapshot,active_since,started_at,is_test) VALUES(?,?,?,?,?,?,?)',(account_id,eid,user.id,json.dumps(pack,ensure_ascii=False),now_iso(),now_iso(),int(not acting_child(user))))
         row=c.execute('SELECT * FROM mentor_exam_attempts WHERE exam_id=? AND user_id=?',(eid,user.id)).fetchone()
         return attempt_view(dict(row))
 

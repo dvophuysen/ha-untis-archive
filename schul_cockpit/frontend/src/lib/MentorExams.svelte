@@ -2,11 +2,13 @@
   import {onMount} from 'svelte';
   import {formatShortDate} from './format.js';
   import {api} from './api.js';
+  import PracticePaper from './PracticePaper.svelte';
+  import {view} from './viewMode.svelte.js';
   let {accountId,subjects=[],canManage=false,demo=false,initialSubject='',initialTopic='',onBusy=()=>{}}= $props();
   const base=$derived(`/api/accounts/${accountId}/learning/mentor/exams`);
   let data=$state(null),error=$state(''),busy=$state(false),draft=$state(null),attempt=$state(null);
   let subject=$state(''),scope=$state(''),confirmed=$state(false),minutes=$state(45),index=$state(0),answers=$state({}),reviewed=$state(false);
-  let editingDraft=$state(false);
+  let editingDraft=$state(false),paper=$state(null);
   let period=$state('school_year'),fromDate=$state(''),topicPlan=$state(null),topicChoices=$state([]),selfCheck=$state(null);
   const chosenScope=$derived([...topicChoices.filter(g=>g.selected).map(g=>g.title.trim()),...scope.split('\n').map(x=>x.trim()).filter(Boolean)]);
   function clearTopics(){topicPlan=null;topicChoices=[];}
@@ -27,8 +29,11 @@
 {#if error}<p role="alert" class="notice">{error}</p>{/if}
 {#if busy}<p role="status">Wird gespeichert oder vorbereitet …</p>{/if}
 {#if selfCheck}<section class="card"><h2>Selbstkontrolle: {selfCheck.title}</h2><p>Gehe die Aufgaben im Kopf oder auf Papier durch. Öffne die Lösung erst danach. Hier entstehen keine KI-Punkte und keine Lernnachweise. Das Öffnen der Lösungen wird vermerkt; eine anschließende Bearbeitung zählt als Übung mit bekannter Lösung.</p>{#each selfCheck.tasks as t,i}<h3>Aufgabe {i+1}</h3><p class="preserve">{t.prompt}</p><details><summary>Lösung und Kriterien zur Selbstkontrolle</summary><p class="preserve">{t.solution}</p><p>{t.criteria}</p></details>{/each}<button onclick={()=>selfCheck=null}>Selbstkontrolle schließen</button></section>
+{:else if paper}
+  <PracticePaper {accountId} attemptId={paper} onclose={async()=>{paper=null;attempt=null;await load();}}/>
 {:else if attempt}
   <header>{#if !attempt.read_only}<p>Direkt tippen oder auf Papier lösen und Fotos bei der jeweiligen Aufgabe anhängen. Nach der Abgabe bewertet der Assistent mit Punkten; unklare Antworten werden gekennzeichnet.</p>{/if}{#if attempt.read_only}<p class="notice">Echter Kinderverlauf · nur ansehen. Antworten und Zeitstand werden nicht verändert.</p>{/if}<h2>{attempt.exam.title}</h2><p>{attempt.exam.minutes} Minuten vorgesehen · {attempt.status==='active'?'Prüfungssimulation':'Abgegeben'}</p></header>
+  {#if attempt.status==='active'&&!attempt.read_only}<section class="card"><strong>Auf Papier gelöst?</strong><p class="muted">Alle beschriebenen Seiten fotografieren und in einem Schritt auswerten lassen. Die Ergebnisse zählen für das Raster der nächsten Arbeit in diesem Fach.</p><button disabled={busy} onclick={()=>act(async()=>{await save(true);paper=attempt.id;})}>Seiten fotografieren und auswerten</button></section>{/if}
   <nav aria-label="Aufgaben">{#each attempt.exam.tasks as t,i}<button class:chosen={i===index} disabled={busy} onclick={()=>act(()=>move(i))}>{i+1}{answers[String(i)]?' ✓':''}</button>{/each}</nav>
   <section class="card"><p class="muted">Aufgabe {index+1} von {attempt.exam.tasks.length} · {task.points} Punkte · etwa {task.minutes} Minuten</p><h3>{task.skill_title}</h3><p class="preserve">{task.prompt}</p>
     {#each photos.filter(p=>p.question_index===index) as p}<p><a href={`./${base.slice(1)}/attempts/${attempt.id}/photos/${p.id}`} target="_blank" rel="noreferrer">Angehängtes Foto öffnen</a></p>{/each}
@@ -54,7 +59,7 @@
 {:else}
   <h2>{demo?'Demo-Übungsklausuren':'Für eine Arbeit üben'}</h2>{#if canManage&&!demo}<p class="notice">Hier stehen echte Arbeiten und Kinderantworten. Neue Entwürfe und Freigaben werden im echten Lernbereich gespeichert.</p>{/if}<p>Wähle Fach und Themen selbst. Du brauchst keinen Termin im Kalender.</p>
   {#each data?.exams||[] as exam}<section class="card"><h3>{exam.title}</h3><p>{exam.subject} · {exam.minutes} Minuten · {exam.status==='published'?(exam.scope.child_created&&!exam.scope.parent_reviewed?'KI-Übung · noch nicht von Eltern geprüft':'Freigegeben'):'Entwurf · für das Kind noch nicht sichtbar'}</p><p>{exam.scope.topics.join(' · ')}</p>
-    {#if exam.status==='published'&&(!canManage||demo)}<button disabled={busy} onclick={()=>act(async()=>open(await api.post(`${base}/${exam.id}/start`)))}>Online / Foto bearbeiten</button>{/if}
+    {#if exam.status==='published'&&(!canManage||demo||view.mode==='child')}<button disabled={busy} onclick={()=>act(async()=>open(await api.post(`${base}/${exam.id}/start`)))}>Online / Foto bearbeiten</button>{/if}
     <a class="print-link" href={`./${base.slice(1)}/${exam.id}/print`} target="_blank" rel="noreferrer">Aufgaben drucken</a>
     {#if !canManage||demo}<button disabled={busy} onclick={()=>act(async()=>{selfCheck=await api.post(`${base}/${exam.id}/self-check`);})}>Selbstkontrolle ohne Punkte</button>{/if}
     {#if canManage}<button disabled={busy} onclick={()=>act(async()=>{draft=await api.get(`${base}/${exam.id}/review`);reviewed=false;editingDraft=false;})}>Aufgaben ansehen und freigeben</button>{/if}

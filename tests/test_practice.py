@@ -188,3 +188,29 @@ def test_parent_adopts_an_old_exam_as_measurement(paper):
         assert c.execute("SELECT COUNT(*) FROM topic_answers WHERE source='paper'").fetchone()[0] == 3
     child(state)
     assert client.post(f"{BASE}/adopt", json=body).status_code == 403
+
+
+def test_old_exam_on_paper_counts_for_the_next_exam(paper):
+    client, state, patch = paper
+    from backend.routers import mentor_exams as ex
+    client.app.include_router(ex.router, prefix="/api")
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("CREATE TABLE IF NOT EXISTS exam_dates(account_id INTEGER NOT NULL, exam_key TEXT NOT NULL, exam_date TEXT NOT NULL, PRIMARY KEY(account_id, exam_key))")
+        c.execute("INSERT INTO exam_dates VALUES(1,?, '2099-01-01')", (KEY,))
+        tasks = [{**TASK, "prompt": f"Alt {i}", "points": 4, "minutes": 5} for i in range(2)]
+        eid = c.execute("INSERT INTO mentor_exams(account_id,title,subject,scope_json,tasks_json,minutes,status,created_at) "
+                        "VALUES(1,'Alte Klausur','MATHEMATIK',?,?,30,'published','now')",
+                        (json.dumps({"topics": ["x"]}), json.dumps(tasks))).lastrowid
+    child(state)
+    a = client.post(f"/api/accounts/1/learning/mentor/exams/{eid}/start").json()
+    assert a["is_test"] == 0
+    client.post(f"{BASE}/attempts/{a['id']}/pages", files={"file": ("p.jpg", image(), "image/jpeg")})
+    seen = []
+    mock(patch, [{"tasks": [{"nr": 1, "points": 4, "rationale": "Passt.", "next_step": "Weiter.", "thema_nr": 2},
+                            {"nr": 2, "points": 2, "rationale": "Halb.", "next_step": "Üben.", "thema_nr": 9}]}], seen)
+    g = client.post(f"{BASE}/attempts/{a['id']}/grade", json={}).json()
+    assert g["status"] == "graded" and [t["titel"] for t in seen[0][1]["themen"]][1] == "Wertetabellen"
+    assert g["exam"]["tasks"][0]["skill_title"] == "Wertetabellen"
+    with closing(db.webapp_conn()) as c:
+        rows = [dict(r) for r in c.execute("SELECT topic_id, points FROM topic_answers")]
+    assert len(rows) == 1 and rows[0]["points"] == 4, "ohne gültiges Thema zählt die Aufgabe nicht"

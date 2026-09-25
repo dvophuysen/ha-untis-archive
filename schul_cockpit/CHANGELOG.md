@@ -1,3 +1,8 @@
+## 1.22.2
+
+- Alle Übungsklausuren unter „Lernen“ lassen sich jetzt auch auf Papier lösen: „Seiten fotografieren und auswerten“ nimmt alle Seiten auf einmal und wertet in einem Schritt aus. Steht im Fach eine Arbeit an, ordnet die Auswertung jede Aufgabe einem ihrer Themen zu, und das Ergebnis zählt für das Raster.
+- Kind am Elterngerät kann Übungsklausuren unter „Lernen“ selbst bearbeiten; das zählt wie am eigenen Gerät.
+
 ## 1.22.1
 
 - Eine vorhandene Übungsklausur lässt sich einmalig als Übungsarbeit zu einer Arbeit übernehmen (Eltern). Die Aufgaben bleiben, jede bekommt ein Thema der Arbeit; die Auswertung der fotografierten Seiten zählt als Lernstandsmessung des Kindes, auch wenn ein Elternteil die Seiten hochlädt.
