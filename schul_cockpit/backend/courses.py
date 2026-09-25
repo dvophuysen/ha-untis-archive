@@ -11,6 +11,8 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from .db import history_conn, webapp_conn
+# Der Tag in Berlin, nicht im Container (UTC): kurz vor Mitternacht sonst schon morgen.
+from .learning import today_local
 from .request_cache import memo
 
 
@@ -67,7 +69,7 @@ def visible_subject_ids(account_id: int, *, days_back: int = 365) -> set | None:
     hidden = hidden_keys(account_id)
     if not hidden:
         return None
-    horizon = (date.today() - timedelta(days=days_back)).isoformat()
+    horizon = (today_local() - timedelta(days=days_back)).isoformat()
     hconn = history_conn()
     try:
         rows = hconn.execute(
@@ -90,8 +92,8 @@ def visible_subject_ids(account_id: int, *, days_back: int = 365) -> set | None:
 def list_courses(account_id: int, *, days_back: int = 120) -> list[dict]:
     """Distinct (subject, teacher) courses in the kid's recent timetable,
     with occurrence count and hidden flag."""
-    horizon = (date.today() - timedelta(days=days_back)).isoformat()
-    ahead = (date.today() + timedelta(days=14)).isoformat()
+    horizon = (today_local() - timedelta(days=days_back)).isoformat()
+    ahead = (today_local() + timedelta(days=14)).isoformat()
     hconn = history_conn()
     try:
         rows = hconn.execute(

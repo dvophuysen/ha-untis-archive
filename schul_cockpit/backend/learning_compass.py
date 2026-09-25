@@ -100,13 +100,16 @@ def _topics(c, account_id: int, keys: list[str]) -> list[dict]:
         f"WHERE account_id=? AND stale=0 AND exam_key IN ({marks}) ORDER BY position, id", (account_id, *keys))]
 
 
-def _school_days(lessons: list[dict], first: date, last: date) -> list[date]:
-    """Schultage wie beim Vokabelpensum: bekannte Tage mit Unterricht, jenseits
-    des bekannten Stundenplans Montag bis Freitag."""
+def _school_days(lessons: list[dict], first: date, last: date, account_id: int | None = None) -> list[date]:
+    """Schultage wie beim Plan: bekannte Tage mit Unterricht, jenseits des
+    bekannten Stundenplans Montag bis Freitag ohne Ferien und Feiertage (A13)."""
+    from .schoolday import project
     known = {d for l in lessons if rewards._held(l) and (d := _day(l.get("date"))) and first <= d <= last}
     horizon = max((_day(l.get("date")) for l in lessons if _day(l.get("date"))), default=first - timedelta(days=1))
-    rest = (first + timedelta(days=i) for i in range(max(0, (last - first).days + 1)))
-    return sorted(known | {d for d in rest if d > horizon and d.weekday() < 5})
+    if account_id is None:
+        rest = (first + timedelta(days=i) for i in range(max(0, (last - first).days + 1)))
+        return sorted(known | {d for d in rest if d > horizon and d.weekday() < 5})
+    return project(account_id, known, first, last, horizon)
 
 
 # ------------------------------------------------------------------ Raster
@@ -191,8 +194,18 @@ def sure_moments(answers: list[dict]) -> tuple[dict[str, str], str | None]:
     wann das Thema zum ersten Mal vorbereitet war (I und II sicher)."""
     cells: dict[str, str] = {}
     ready_at = None
-    for i, a in enumerate(answers):
-        row = practice.row_of(answers[: i + 1])
+    # Eine Zelle hängt nur an ihren letzten RECENT zählenden Antworten (ohne
+    # Hilfe, mit Punkten). Statt das Raster nach jeder Antwort aus allen
+    # bisherigen neu zu rechnen (quadratisch), führt die Schleife diese
+    # Fenster je Bereich mit; row_of liefert daraus dieselben Zustände.
+    windows: dict[int, list[dict]] = {}
+    for a in answers:
+        if a.get("help_used") or not practice.ratio_of(a):
+            continue  # ändert keine Zelle: der Stand ist derselbe wie zuvor
+        window = windows.setdefault(a.get("afb") or 1, [])
+        window.append(a)
+        del window[:-practice.RECENT]
+        row = practice.row_of([x for w in windows.values() for x in w])
         for k, c in row["cells"].items():
             if k not in cells and practice.is_sure(c) and not c.get("implied"):
                 cells[k] = a["created_at"]
@@ -445,16 +458,23 @@ def _recent_probe(c, account_id: int, ids: list[int], day: date) -> bool:
 
 
 async def build(account_id: int, user, now: datetime | None = None) -> dict:
+    # Nur der Kalender wartet auf Home Assistant. Alles danach rechnet
+    # synchron (auf dem Gerät Sekunden, D200) und läuft im Threadpool, damit
+    # die Ereignisschleife derweil andere Anfragen bedient.
+    now = now or rewards.now_local()
+    calendar = await _calendar(account_id, now.date())
+    return await asyncio.to_thread(_build_sync, account_id, user, now, calendar)
+
+
+def _build_sync(account_id: int, user, now: datetime, calendar: dict) -> dict:
     # Raster, Pensum und Stundenplan fragen Plan, Ausblick und Kompass je mehrfach:
     # einmal je Aufruf rechnen (request_cache).
     with request_cache.scope():
-        return await _build(account_id, user, now)
+        return _build(account_id, user, now, calendar)
 
 
-async def _build(account_id: int, user, now: datetime | None) -> dict:
-    now = now or rewards.now_local()
+def _build(account_id: int, user, now: datetime, calendar: dict) -> dict:
     day = now.date()
-    calendar = await _calendar(account_id, day)
     lessons = rewards._lessons(account_id, day - timedelta(days=LESSON_DAYS), day + timedelta(days=HORIZON))
     plan = study_plan.today(account_id, user, now)
     try:
@@ -463,7 +483,7 @@ async def _build(account_id: int, user, now: datetime | None) -> dict:
     except Exception:
         LOG.debug("Vokabelpensum nicht lesbar", exc_info=True)
         pensum = []
-    school = _school_days(lessons, day, day + timedelta(days=HORIZON))
+    school = _school_days(lessons, day, day + timedelta(days=HORIZON), account_id)
 
     with closing(webapp_conn()) as c:
         future = _remembered(c, account_id, day, day + timedelta(days=HORIZON))

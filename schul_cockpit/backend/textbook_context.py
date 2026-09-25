@@ -133,13 +133,111 @@ async def fetch_pages(account_id:int,book,credentials,pages:list[int],use_cache:
     return {"shots":ordered,"status":status,"stage":stage,"detail":detail,"seen":seen}
 
 
+# Ein Aufruf nimmt höchstens so viele Seiten mit: zwei Bilder à zwei Seiten.
+SENT_PAGES=4
+
+
 def _image_parts(shots):
     parts=[]
     blobs=[image for _,image in shots]
-    for i in range(0,min(len(blobs),4),2):
+    for i in range(0,min(len(blobs),SENT_PAGES),2):
         blob=_join(blobs[i:i+2])
         parts.append({"type":"image_url","image_url":{"url":"data:image/jpeg;base64,"+base64.b64encode(blob).decode(),"detail":"high"}})
     return parts
+
+
+# Der Chat wartet höchstens so lange auf den Browser (A11). Der Fernzugriff
+# kappt eine Anfrage nach 100 Sekunden, und danach kommt noch der Modellaufruf.
+# Was bis dahin nicht da ist, holt der Abruf weiter und legt es in den Bestand;
+# der nächste Zug hat es ohne Wartezeit.
+CHAT_WAIT=45.0
+# Das Zeitbudget des Abrufs selbst, der im Hintergrund zu Ende läuft.
+FETCH_BUDGET=150.0
+# Eine Seite, die nicht zu liefern war, versucht der Chat so lange nicht erneut.
+MISS_HOURS=6
+BUDGET_NOTE="Zeitbudget erreicht"
+# Ein Abruf je Kind und Buch zugleich; ein zweiter Zug wartet auf denselben.
+_FETCHES:dict[tuple,tuple]={}  # (Konto, Buch) -> (Task, Seiten)
+
+
+def _misses(account_id:int,book_id:int,pages:list[int]) -> set[int]:
+    if not pages:return set()
+    marks=",".join("?"*len(pages))
+    try:
+        with closing(webapp_conn()) as c:
+            return {r[0] for r in c.execute(f"SELECT page FROM digital_textbook_misses WHERE account_id=? AND book_id=? AND until>? AND page IN ({marks})",
+                                             (account_id,book_id,_now(),*pages))}
+    except Exception:
+        return set()
+
+
+def _remember_misses(account_id:int,book_id:int,pages:list[int],reason:str|None) -> None:
+    if not pages:return
+    until=(datetime.now(timezone.utc)+timedelta(hours=MISS_HOURS)).isoformat()
+    try:
+        with closing(webapp_conn()) as c,c:
+            c.execute("BEGIN IMMEDIATE")
+            for p in pages:
+                c.execute("INSERT INTO digital_textbook_misses(account_id,book_id,page,reason,until) VALUES(?,?,?,?,?) "
+                          "ON CONFLICT(account_id,book_id,page) DO UPDATE SET reason=excluded.reason,until=excluded.until",
+                          (account_id,book_id,p,(reason or "")[:200],until))
+    except Exception:
+        _LOGGER.warning("Nicht lieferbare Buchseiten für Konto %s nicht vermerkt",account_id)
+
+
+def forget_misses(account_id:int,book_id:int) -> None:
+    """Nach einem erfolgreichen Seitentest der Eltern gilt das Buch wieder als erreichbar."""
+    try:
+        with closing(webapp_conn()) as c:
+            c.execute("DELETE FROM digital_textbook_misses WHERE account_id=? AND book_id=?",(account_id,book_id))
+    except Exception:
+        _LOGGER.debug("Vermerk nicht lieferbarer Seiten nicht gelöscht",exc_info=True)
+
+
+async def _fetch_into_stock(account_id:int,book,credentials,subject:str,pages:list[int]) -> dict:
+    """Holt die Seiten, legt jede lesbare in den Bestand und vermerkt, was nicht
+    zu liefern war. Läuft zu Ende, auch wenn der Chat nicht mehr wartet."""
+    from .source_collector import store_page
+    result=await fetch_pages(account_id,book,credentials,pages,budget=FETCH_BUDGET)
+    got={};blank=[]
+    for p,image in result["shots"]:
+        if p is None:continue
+        if looks_blank(image):blank.append(p);continue
+        got[p]=image
+        try: store_page(account_id,book,p,image,subject)
+        except Exception: _LOGGER.warning("Buchseite %s konnte nicht abgelegt werden",p)
+    # Nicht mehr erreicht, weil die Zeit um war, ist kein Fehlschlag (vgl. D112).
+    timed_out=(result.get("detail") or "")==BUDGET_NOTE
+    failed=[p for p in pages if p not in got and (p in blank or not timed_out)]
+    _remember_misses(account_id,book["id"],failed,result.get("stage") or result.get("detail") or result.get("status"))
+    return {**result,"got":got}
+
+
+def _fetch_task(account_id:int,book,credentials,subject:str,pages:list[int]) -> asyncio.Task:
+    """Der laufende Abruf für diese Seiten oder ein neuer. Läuft für das Buch
+    schon einer mit anderen Seiten, muss der Aufrufer erst dessen Ende abwarten
+    (running_for); zwei Browser für dasselbe Buch starten nie."""
+    key=(account_id,book["id"])
+    running=_FETCHES.get(key)
+    if running and not running[0].done():
+        return running[0]
+    task=asyncio.get_running_loop().create_task(_fetch_into_stock(account_id,book,credentials,subject,pages))
+    _FETCHES[key]=(task,set(pages))
+
+    def done(t,key=key):
+        if (_FETCHES.get(key) or (None,))[0] is t:_FETCHES.pop(key,None)
+        if not t.cancelled() and t.exception():
+            _LOGGER.warning("Buchseiten-Abruf für Konto %s gescheitert: %s",key[0],type(t.exception()).__name__)
+    task.add_done_callback(done)
+    return task
+
+
+def _running_other(account_id:int,book_id:int,pages:list[int]) -> asyncio.Task|None:
+    """Ein laufender Abruf desselben Buchs, der diese Seiten nicht umfasst."""
+    running=_FETCHES.get((account_id,book_id))
+    if running and not running[0].done() and not set(pages)<=running[1]:
+        return running[0]
+    return None
 
 
 async def homework_page_images(account_id:int,subject:str,task_text:str):
@@ -149,28 +247,55 @@ async def homework_page_images(account_id:int,subject:str,task_text:str):
     if not book or not credentials:return [],{"status":"not_configured","pages":pages}
     # Zuerst der Bestand: Was der Sammellauf schon abgelegt hat, kommt ohne
     # Browser und ohne Wartezeit. Nur der Rest wird jetzt geholt.
-    from .source_collector import stored_pages, store_page
+    from .source_collector import stored_pages
     kept=stored_pages(account_id,subject,pages)
     missing=[p for p in pages if p not in kept]
-    if missing:
-        result=await fetch_pages(account_id,book,credentials,missing)
-        for p,image in result["shots"]:
-            if p is not None and not looks_blank(image):
-                kept[p]=image
-                try: store_page(account_id,book,p,image,subject)
-                except Exception: _LOGGER.warning("Buchseite %s konnte nicht abgelegt werden",p)
-        stage=result["stage"];detail=result["detail"];fallback=[s for s in result["shots"] if s[0] is None]
-    else:
-        stage=None;detail=None;fallback=[]
+    # Was vor Kurzem nicht zu liefern war, startet keinen Browser (A11).
+    known_miss=_misses(account_id,book["id"],missing)
+    todo=[p for p in missing if p not in known_miss]
+    stage=None;detail=None;fallback=[];waiting=False
+    if todo:
+        loop=asyncio.get_running_loop();deadline=loop.time()+CHAT_WAIT;result=None
+        other=_running_other(account_id,book["id"],todo)
+        if other is not None:
+            # Erst den Abruf anderer Seiten dieses Buchs zu Ende kommen lassen.
+            try:
+                await asyncio.wait_for(asyncio.shield(other),max(0.0,deadline-loop.time()))
+            except asyncio.TimeoutError:
+                waiting=True
+            kept.update(stored_pages(account_id,subject,todo))
+        rest=[p for p in todo if p not in kept]
+        if rest and not waiting:
+            task=_fetch_task(account_id,book,credentials,subject,rest)
+            try:
+                result=await asyncio.wait_for(asyncio.shield(task),max(0.0,deadline-loop.time()))
+            except asyncio.TimeoutError:
+                waiting=True
+        if result is not None:
+            kept.update({p:image for p,image in result.get("got",{}).items() if p in pages})
+            stage=result.get("stage");detail=result.get("detail");fallback=[s for s in result.get("shots",[]) if s[0] is None]
+        # Ein zweiter Zug hat womöglich auf einen Abruf anderer Seiten gewartet.
+        if any(p not in kept for p in todo):
+            kept.update({p:image for p,image in stored_pages(account_id,subject,[p for p in todo if p not in kept]).items()})
+    elif known_miss:
+        stage="Seitenabruf";detail="Vor Kurzem nicht lieferbar"
     ordered=[(p,kept[p]) for p in pages if p in kept]
-    if ordered: status="loaded" if len(ordered)==len(pages) else "partial"
+    if ordered: status="loaded" if len(ordered)==len(pages) and len(ordered)<=SENT_PAGES else "partial"
     elif fallback: ordered=fallback[:1];status="open_page"
+    elif waiting: status="wird_geholt"
     else: status="viewer_error"
-    shots=ordered
+    # Gemeldet wird, was wirklich im Aufruf steckt: höchstens SENT_PAGES Seiten.
+    shots=ordered[:SENT_PAGES]
     context={"status":status,"book":book["title"],"pages":pages}
+    if waiting:
+        context["hinweis"]="Die übrigen Buchseiten werden gerade abgerufen und liegen ab der nächsten Nachricht bei."
+        stage=stage or "Seitenabruf läuft"
     delivered=[p for p,_ in shots if p is not None]
     if delivered:context["delivered_pages"]=delivered
-    missing=[p for p in pages if p not in delivered]
+    # Was gerade noch geholt wird, fehlt nicht: Dafür soll kein Foto verlangt werden.
+    pending=[p for p in todo if p not in kept] if waiting else []
+    if pending:context["pending_pages"]=pending
+    missing=[p for p in pages if p not in delivered and p not in pending]
     if missing and status!="viewer_error":context["missing_pages"]=missing
     if stage:context["stage"]=stage
     if detail:context["detail"]=detail
@@ -191,7 +316,10 @@ async def test_page(account_id:int,book_id:int,page:int) -> dict:
     try:
         from .source_collector import record_access
         if shots and shots[0][0] is not None:
-            record_access(account_id,book["title"],"blank" if looks_blank(shots[0][1]) else "readable",page=page)
+            readable=not looks_blank(shots[0][1])
+            record_access(account_id,book["title"],"readable" if readable else "blank",page=page)
+            # Die Eltern haben das Buch gerade erreicht: Der Chat darf es wieder versuchen.
+            if readable:forget_misses(account_id,book["id"])
         elif delivery["status"]=="viewer_error":
             record_access(account_id,book["title"],"viewer_error",page=page,detail=delivery["detail"])
     except Exception: _LOGGER.warning("Zugriffsnachweis für Konto %s nicht gespeichert",account_id)

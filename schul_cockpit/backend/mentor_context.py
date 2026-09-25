@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta
 from .db import history_conn, webapp_conn
 from .courses import hidden_keys, lesson_is_hidden
 from .learning import today_local, now_iso
+from .request_cache import memo
 
 
 def fingerprint(value):
@@ -119,6 +120,20 @@ def snapshot(account_id, include_previous=False, include_all_homework=False):
                 since=start,lessons=lessons,homework=homework,tasks=tasks,reviews=reviews,recent=recent,errors=errors,truncated=clipped,read_at=now_iso())
 
 
+@memo(shallow=True)
+def _snapshot_once(account_id):
+    return snapshot(account_id)
+
+
+def shared_snapshot(account_id):
+    """snapshot() einmal je Aufruf (request_cache.scope): Der Mentor-Überblick
+    las ihn zweimal, selbst und über den Plan. Stunden und Aufgaben teilen sich
+    die Leser, die sie nicht verändern; die oberste Ebene und die Fehlerliste
+    (an die der Plan Warnungen hängt) bekommt jeder neu. Ohne scope() wie snapshot()."""
+    s=_snapshot_once(account_id)
+    return {**s,'errors':list(s['errors'])}
+
+
 # Fächer, in denen eine Übungsaufgabe am Handy nichts zu suchen hat: Bewegung
 # lässt sich so nicht nachholen, und die Verfügungsstunde ist kein Lernfach.
 NO_PRACTICE=('sport','schwimm','pause','klassenrat','verfügungs','verfuegungs','klassenlehrer','klassenstunde')
@@ -157,7 +172,28 @@ def candidates(s):
     return out[:12]
 
 
-def context(account_id,session):
+def stable_version(subject,goal,source,lessons):
+    """Woran sich zeigt, dass eine Antwort des Mentors fachlich überholt ist (A8).
+
+    Der Zug liest den Kontext vor dem Modellaufruf und danach noch einmal; weicht
+    dieser Stand ab, wird die Antwort verworfen (409), damit keine Aufgabe und
+    keine Einschätzung zu einem geänderten Auftrag gespeichert wird. Gezählt wird
+    nur, was die Antwort entwerten kann: Fach, Ziel, Auftrag (Hausaufgabe mit
+    Wortlaut, Stunde, Thema) und die Stundentexte. Nicht dazu gehören
+    Zeitstempel, Erledigt-Haken, die Auswertung eines gerade hochgeladenen
+    Fotos, Material, andere Verläufe und Belege: Die ändern sich im Hintergrund,
+    ohne dass die Antwort falsch wird, und kosteten bisher einen bezahlten Zug."""
+    src={k:v for k,v in (source or {}).items() if k not in ('loesung','situation','missed','missed_minutes')}
+    task=src.get('task')
+    if isinstance(task,dict):src['task']={k:task.get(k) for k in ('id','title','notes')}
+    return fingerprint(dict(subject=subject,goal=goal,source=src,
+                            lessons=[[r.get('id'),r.get('date'),r.get('text')] for r in lessons if (r.get('text') or '').strip()]))
+
+
+def context(account_id,session,version_only=False):
+    """Kontext eines Mentor-Zugs, dazu sein stabiler Stand (stable_version) und
+    der Schnappschuss. version_only liest nur, was der Stand braucht: für den
+    zweiten Blick nach dem Modellaufruf."""
     s=snapshot(account_id);subject=session['subject']
     lessons=[r for r in s['lessons'] if same_subject(r.get('subject_name'),subject)][:18]
     source=json.loads(session.get('source_json') or '{}')
@@ -172,7 +208,7 @@ def context(account_id,session):
         # Eintragungen des Kindes getrennt, damit die Antworten des Kindes nicht
         # als Buchinhalt gelten (D98, D123).
         chosen=source.get('solution') or {}
-        if chosen.get('confirmed'):
+        if chosen.get('confirmed') and not version_only:
             from .materials import detail, pupil_only
             page=detail(account_id,chosen['material_id']) or {}
             if page:
@@ -188,11 +224,13 @@ def context(account_id,session):
         situation=source.get('situation')
         source={'lesson_id':focus['id'],'date':focus['date'],'text':focus['text'],'missed':bool(focus.get('catch_up_open')),'missed_minutes':focus.get('missed_minutes')} if focus else {'unavailable':True}
         if situation:source['situation']=situation
-        if focus:
+        if focus and not version_only:
             # Nachholen arbeitet am Stoff der versäumten Stunde: die Stellen, die
             # der Untis-Text nennt, liegen als Material vor und gehören nach vorn.
             with closing(webapp_conn()) as c:
                 lesson_materials=[r[0] for r in c.execute("SELECT DISTINCT material_id FROM source_links WHERE account_id=? AND entry_kind='lesson' AND entry_id=? AND material_id IS NOT NULL",(account_id,focus['id']))]
+    version=stable_version(subject,session['goal'],source,lessons)
+    if version_only:return None,version,s
     with closing(webapp_conn()) as c:
         msgs=[dict(r) for r in c.execute('SELECT role,text,payload FROM mentor_messages WHERE session_id=? ORDER BY id DESC LIMIT 8',(session['id'],))][::-1]
         for m in msgs: m.pop('payload',None)
@@ -224,10 +262,71 @@ def context(account_id,session):
         item['feedback'].append({k:lesson.get(k) for k in ('id','date','rating','note')})
     state['consolidated_topics']=list(consolidated.values())
     if chosen_pages:state['eingebunden']=chosen_materials(account_id,chosen_pages)
-    version=fingerprint(state)
     state.update(messages=msgs,summary=session['summary'],phase=session['phase'],current_task=json.loads(session['current_task']) if session['current_task'] else None,
                  help_count=session['help_count'],task_help=bool(session['task_help']),read_at=s['read_at'])
     return state,version,s
+
+
+# Der ganze Aufruf (Anweisung und Kontext) darf 48 000 Byte haben, sonst bricht
+# ai_gateway mit 413 ab. Gekürzt wurde bisher nur der Unterricht; lange
+# Kontrollen, eine gelöste Seite mit Volltext oder viele eingebundene Seiten
+# liefen darüber (A9). Ziel mit Luft für den Bildaufbau-Hinweis des Gateways.
+CONTEXT_BUDGET=44000
+
+
+def _size(ctx,fixed):
+    return fixed+len(json.dumps(ctx,ensure_ascii=False).encode())
+
+
+def fit_context(ctx,instruction,budget=CONTEXT_BUDGET):
+    """Kürzt den Kontext nach Vorrang, bis Anweisung und Kontext ins Budget
+    passen. Ein Kontext, der schon passt, bleibt Byte für Byte gleich: Das
+    Prompt-Caching (D149) und die Antworten hängen daran. Reihenfolge: ältere
+    Nachrichten, der Volltext neben der gedruckten Seite (derselbe Inhalt),
+    der Bestand einer Abfrage, eingebundene Seiten, Material, ältere Stunden,
+    zuletzt die ältesten Nachrichten selbst. Gibt die gekürzten Teile zurück."""
+    fixed=len(instruction.encode())
+    if _size(ctx,fixed)<=budget:return []
+    done=[]
+
+    def over():return _size(ctx,fixed)>budget
+
+    msgs=ctx.get('messages') or []
+    for limit in (1200,400):
+        for m in msgs[:-2]:
+            if len(m.get('text') or '')>limit:m['text']=m['text'][:limit]+' …'
+        done.append(f'nachrichten:{limit}')
+        if not over():return done
+    loesung=(ctx.get('source') or {}).get('loesung')
+    if isinstance(loesung,dict) and loesung.get('gedruckte_seite') and loesung.get('volltext'):
+        loesung.pop('volltext');done.append('volltext')
+        if not over():return done
+    quiz=ctx.get('abfrage')
+    if isinstance(quiz,dict) and len(quiz.get('bestand') or [])>30:
+        items=quiz['bestand'];keep=[x for x in items if x.get('state') in ('falsch','offen')]
+        rest=[x for x in items if x not in keep][-max(0,30-len(keep)):] if len(keep)<30 else []
+        quiz['bestand']=[x for x in items if x in keep or x in rest];quiz['gekuerzt']=True;done.append('abfrage')
+        if not over():return done
+    for limit in (1500,700):
+        for page in ctx.get('eingebunden') or []:
+            if len(page.get('text') or '')>limit:page['text']=page['text'][:limit];page['gekuerzt']=True
+        done.append(f'eingebunden:{limit}')
+        if not over():return done
+    sheet=ctx.get('arbeitsblatt')
+    if isinstance(sheet,dict) and len(sheet.get('text') or '')>2000:
+        sheet['text']=sheet['text'][:2000];sheet['gekuerzt']=True;done.append('arbeitsblatt')
+        if not over():return done
+    for item in ctx.get('materials') or []:
+        if len(item.get('inhalt') or '')>800:item['inhalt']=item['inhalt'][:800]
+    done.append('material')
+    if not over():return done
+    for key in ('consolidated_topics','lessons'):
+        while over() and len(ctx.get(key) or [])>3:ctx[key].pop()
+        done.append(key)
+    if not over():return done
+    while over() and len(msgs)>2:msgs.pop(0)
+    done.append('verlauf')
+    return done
 
 
 # Mehrere eingebundene Seiten sollen den Kontext nicht sprengen: Der ganze

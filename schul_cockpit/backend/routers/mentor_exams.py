@@ -23,6 +23,9 @@ from .mentor import Task
 from ..rewards import acting_child
 
 router=APIRouter(prefix='/accounts/{account_id}/learning/mentor/exams',tags=['mentor-exams'])
+# Ein Bildspeicher für alle Fotos von Übungsklausuren und Übungsarbeiten
+# (mentor_exam_photos): beide Wege prüfen dieselbe Grenze, die größere.
+PHOTO_QUOTA=200*1024*1024
 
 class ExamTask(Task):
     points:int=Field(ge=1,le=20)
@@ -108,7 +111,8 @@ async def scope_plan(account_id:int,body:exam_scope.ScopeRequest,user:CurrentUse
 @router.post('')
 async def generate(account_id:int,body:Generate,user:CurrentUser=Depends(get_current_user)):
     access(user,account_id,write=True,parent=body.demo);s=demo_data.snapshot() if body.demo else mc.snapshot(account_id)
-    child_created=not (user.is_admin or user.role=='parent')
+    # Das Kind am Elterngerät erstellt wie auf dem eigenen (D175, D183).
+    child_created=acting_child(user)
     if not s['profile'] or not s['profile']['ai_enabled']:raise HTTPException(403,'KI im Lernrahmen aktivieren.')
     if any(not x.strip() or len(x)>250 for x in body.scope):raise HTTPException(422,'Bitte kurze, konkrete Themen angeben.')
     if len(set(x.strip().casefold() for x in body.scope))!=len(body.scope):raise HTTPException(422,'Bitte doppelte Themen entfernen.')
@@ -299,7 +303,7 @@ async def grade_next(account_id:int,aid:int,user:CurrentUser=Depends(get_current
         feedback=json.loads(r['feedback_json'] or '{}');pack=json.loads(r['snapshot']);answers=json.loads(r['answers_json'])
         remaining=[i for i in range(len(pack['tasks'])) if str(i) not in feedback]
         if not remaining:
-            status=_finish(c,account_id,aid,pack,answers,feedback,user.role=='child' and not r['is_test'])
+            status=_finish(c,account_id,aid,pack,answers,feedback,acting_child(user) and not r['is_test'])
             c.execute('UPDATE mentor_exam_attempts SET feedback_json=?,status=?,version=version+1 WHERE id=?',(json.dumps(feedback,ensure_ascii=False),status,aid))
             return shown(attempt_row(c,account_id,aid,user),user)
         i=remaining[0];task=pack['tasks'][i];answer=answers.get(str(i),'')
@@ -328,7 +332,7 @@ async def grade_next(account_id:int,aid:int,user:CurrentUser=Depends(get_current
             exposure=c.execute('SELECT created_at FROM mentor_exam_exposures WHERE account_id=? AND exam_id=? AND user_id=?',(account_id,r['exam_id'],user.id)).fetchone()
             helped=bool(exposure and exposure[0]<=(r['submitted_at'] or now_iso()))
             feedback[str(i)]={**result,'solution_seen':helped}
-            status=_finish(c,account_id,aid,pack,answers,feedback,user.role=='child' and not r['is_test'])
+            status=_finish(c,account_id,aid,pack,answers,feedback,acting_child(user) and not r['is_test'])
             c.execute('UPDATE mentor_exam_attempts SET feedback_json=?,status=?,version=version+1 WHERE id=?',(json.dumps(feedback,ensure_ascii=False),status,aid))
             return shown(attempt_row(c,account_id,aid,user),user)
     finally:
@@ -344,7 +348,7 @@ class ReviewIn(InputModel):
 def resolve_review(account_id:int,aid:int,body:ReviewIn,user:CurrentUser=Depends(get_current_user)):
     """Eltern tragen die Punkte der unsicher bewerteten Aufgaben ein; erst dann
     zählt die Übungsklausur und das Kind sieht sie (D202)."""
-    access(user,account_id)
+    access(user,account_id,write=True)  # Schreibrecht und kein Testmodus (B12)
     from ..view_mode import acts_as_parent
     if not acts_as_parent(user):raise HTTPException(403,'Nur in der Elternansicht verfügbar')
     with closing(webapp_conn()) as c,c:
@@ -375,6 +379,14 @@ def review_items(account_id:int)->list[dict]:
     return out
 
 
+def _photo_jpeg(blob):
+    from PIL import Image,ImageOps
+    img=Image.open(io.BytesIO(blob))
+    if img.width*img.height>50_000_000:raise ValueError()
+    img=ImageOps.exif_transpose(img).convert('RGB');img.thumbnail((1600,1600))
+    out=io.BytesIO();img.save(out,format='JPEG',quality=85);return out.getvalue()
+
+
 @router.post('/attempts/{aid}/photos/{question_index}')
 async def upload_photo(account_id:int,aid:int,question_index:int,file:UploadFile=File(...),user:CurrentUser=Depends(get_current_user)):
     access(user,account_id,write=True)
@@ -384,11 +396,8 @@ async def upload_photo(account_id:int,aid:int,question_index:int,file:UploadFile
     if len(blob)>20*1024*1024:raise HTTPException(413,'Bitte ein kleineres Bild verwenden.')
     original=blob
     try:
-        from PIL import Image,ImageOps
-        img=Image.open(io.BytesIO(blob))
-        if img.width*img.height>50_000_000:raise ValueError()
-        img=ImageOps.exif_transpose(img).convert('RGB');img.thumbnail((1600,1600))
-        out=io.BytesIO();img.save(out,format='JPEG',quality=85);blob=out.getvalue()
+        # Dekodieren bis 50 Megapixel im Threadpool, nicht in der Ereignisschleife.
+        blob=await asyncio.to_thread(_photo_jpeg,blob)
     except Exception:raise HTTPException(422,'Das Foto konnte nicht gelesen werden.') from None
     with closing(webapp_conn()) as c,c:
         c.execute('BEGIN IMMEDIATE');r=attempt_row(c,account_id,aid,user)
@@ -396,7 +405,7 @@ async def upload_photo(account_id:int,aid:int,question_index:int,file:UploadFile
         count=c.execute('SELECT COUNT(*) FROM mentor_exam_photos WHERE attempt_id=? AND question_index=?',(aid,question_index)).fetchone()[0]
         if count>=2:raise HTTPException(413,'Bitte höchstens zwei Fotos pro Aufgabe.')
         total=c.execute('SELECT COALESCE(SUM(length(file_bytes)),0) FROM mentor_exam_photos WHERE account_id=?',(account_id,)).fetchone()[0]
-        if total+len(blob)>100*1024*1024:raise HTTPException(413,'Der Bildspeicher ist voll.')
+        if total+len(blob)>PHOTO_QUOTA:raise HTTPException(413,'Der Bildspeicher ist voll.')
         cur=c.execute('INSERT OR IGNORE INTO mentor_exam_photos(account_id,attempt_id,question_index,mime_type,file_bytes,sha256,created_at) VALUES(?,?,?,?,?,?,?)',(account_id,aid,question_index,'image/jpeg',blob,mc.fingerprint(base64.b64encode(blob).decode()),now_iso()))
         photo_id=cur.lastrowid if cur.rowcount else None
     if photo_id:

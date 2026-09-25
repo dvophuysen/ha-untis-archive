@@ -280,11 +280,11 @@ def _lesson_step(account_id: int, day: date) -> dict | None:
 
 def school_days(account_id: int, first: date, last: date) -> list[date]:
     """Schultage im Zeitraum. Der Stundenplan reicht nur ein, zwei Wochen voraus:
-    dahinter zählen Montag bis Freitag (wie im Vokabelpensum)."""
+    dahinter zählen Montag bis Freitag ohne Ferien und Feiertage (A13)."""
+    from .schoolday import project
     known = set(rewards.school_days(account_id, first, last))
     horizon = max(known) if known else first - timedelta(days=1)
-    rest = (first + timedelta(days=i) for i in range((last - first).days + 1))
-    return sorted(known | {d for d in rest if d > horizon and d.weekday() < 5})
+    return project(account_id, known, first, last, horizon)
 
 
 @memo

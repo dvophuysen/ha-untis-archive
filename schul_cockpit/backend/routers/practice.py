@@ -21,9 +21,9 @@ from .. import practice as pr
 from ..grading_consensus import settle
 from ..auth import CurrentUser, get_current_user
 from ..db import webapp_conn
-from ..learning import InputModel, now_iso
+from ..learning import InputModel, now_iso, today_local
 from .learning import access
-from .mentor_exams import ExamTask, attempt_row, attempt_view
+from .mentor_exams import PHOTO_QUOTA, ExamTask, attempt_row, attempt_view
 
 _LOG = logging.getLogger("schul_cockpit.practice")
 
@@ -285,6 +285,10 @@ def paper_view(account_id: int, aid: int, user) -> dict:
     view["label"] = pr.FORMATS.get(snap.get("format") or "", {}).get("label", "Übungsarbeit")
     view["pages"] = pages
     view["read_only"] = r["user_id"] != user.id and not ((user.is_admin or user.role == "parent") and not r["is_test"])
+    # Beim Mitlesen weist der Server jeden Schreibzugriff ab (D175): dann auch nichts anbieten.
+    from ..view_mode import current
+    if current.get() == "mirror":
+        view["read_only"] = True
     return view
 
 
@@ -325,7 +329,7 @@ async def reopen_for_grading(account_id: int, aid: int, body: RegradeIn | None =
 
 
 def reopen(account_id: int, aid: int, user) -> None:
-    access(user, account_id)
+    access(user, account_id, write=True)  # Schreibrecht und kein Testmodus (B12)
     from ..view_mode import acts_as_parent
     if not acts_as_parent(user):
         raise HTTPException(403, "Nur in der Elternansicht verfügbar")
@@ -344,7 +348,7 @@ def reopen(account_id: int, aid: int, user) -> None:
 
 def new_results(account_id: int, days: int = 14) -> list[dict]:
     """Ausgewertete Übungsarbeiten, die das Kind noch nicht geöffnet hat (D201)."""
-    since = (date.today() - timedelta(days=days)).isoformat()
+    since = (today_local() - timedelta(days=days)).isoformat()
     with closing(webapp_conn()) as c:
         rows = [dict(r) for r in c.execute(
             "SELECT a.id,a.snapshot,a.feedback_json,a.submitted_at,e.paper_format,e.subject FROM mentor_exam_attempts a "
@@ -375,6 +379,19 @@ def print_paper(account_id: int, aid: int, space: str = "lines", user: CurrentUs
     return HTMLResponse(sheet(exam, tasks, code=f"Ü{r['id']}", space="none" if space == "none" else "lines"), headers={"Cache-Control": "private, no-store"})
 
 
+def _page_jpeg(blob: bytes) -> bytes:
+    """Eine fotografierte Seite als JPEG bis 2400 Pixel, aufrecht gedreht."""
+    from PIL import Image, ImageOps
+    img = Image.open(io.BytesIO(blob))
+    if img.width * img.height > 50_000_000:
+        raise ValueError()
+    img = ImageOps.exif_transpose(img).convert("RGB")
+    img.thumbnail((2400, 2400))
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=85)
+    return out.getvalue()
+
+
 @router.post("/attempts/{aid}/pages")
 async def upload_page(account_id: int, aid: int, file: UploadFile = File(...), user: CurrentUser = Depends(get_current_user)):
     access(user, account_id, write=True)
@@ -383,15 +400,8 @@ async def upload_page(account_id: int, aid: int, file: UploadFile = File(...), u
         raise HTTPException(413, "Bitte ein kleineres Bild verwenden.")
     original = blob
     try:
-        from PIL import Image, ImageOps
-        img = Image.open(io.BytesIO(blob))
-        if img.width * img.height > 50_000_000:
-            raise ValueError()
-        img = ImageOps.exif_transpose(img).convert("RGB")
-        img.thumbnail((2400, 2400))
-        out = io.BytesIO()
-        img.save(out, format="JPEG", quality=85)
-        blob = out.getvalue()
+        # Dekodieren bis 50 Megapixel im Threadpool, nicht in der Ereignisschleife.
+        blob = await asyncio.to_thread(_page_jpeg, blob)
     except Exception:
         raise HTTPException(422, "Das Foto konnte nicht gelesen werden.") from None
     with closing(webapp_conn()) as c, c:
@@ -403,7 +413,7 @@ async def upload_page(account_id: int, aid: int, file: UploadFile = File(...), u
         if count >= MAX_PAGES:
             raise HTTPException(413, f"Bitte höchstens {MAX_PAGES} Seiten je Arbeit.")
         total = c.execute("SELECT COALESCE(SUM(length(file_bytes)),0) FROM mentor_exam_photos WHERE account_id=?", (account_id,)).fetchone()[0]
-        if total + len(blob) > 200 * 1024 * 1024:
+        if total + len(blob) > PHOTO_QUOTA:
             raise HTTPException(413, "Der Bildspeicher ist voll.")
         cur = c.execute(
             "INSERT OR IGNORE INTO mentor_exam_photos(account_id,attempt_id,question_index,mime_type,file_bytes,sha256,created_at) VALUES(?,?,?,?,?,?,?)",
@@ -488,7 +498,7 @@ class ReviewIn(InputModel):
 def resolve_review(account_id: int, aid: int, body: ReviewIn, user: CurrentUser = Depends(get_current_user)):
     """Eltern tragen die Punkte der unsicher gelesenen Aufgaben ein; erst dann
     zählt die Arbeit und das Kind sieht sie (D202)."""
-    access(user, account_id)
+    access(user, account_id, write=True)  # Schreibrecht und kein Testmodus (B12)
     from ..view_mode import acts_as_parent
     if not acts_as_parent(user):
         raise HTTPException(403, "Nur in der Elternansicht verfügbar")
