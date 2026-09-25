@@ -517,6 +517,7 @@ def test_unsure_exam_grading_is_held_for_the_parents_and_never_counts(setup):
     pending={'pending':True}
     assert r['feedback']=={'0':pending,'1':pending,'2':pending,'check':{'per_task':True,'passes':3,'open':[3]}},'Kind sieht keine Punkte'
     assert client.get(B+f"/exams/attempts/{a['id']}").json()['feedback']==r['feedback']
+    assert client.post(B+f'/exams/{eid}/start').json()['feedback']==r['feedback'],'auch beim erneuten Öffnen'
     with closing(db.webapp_conn()) as c:assert c.execute('SELECT COUNT(*) FROM mentor_evidence').fetchone()[0]==0
     assert client.post(B+f"/exams/attempts/{a['id']}/review",json={'points':{'2':3}}).status_code==403,'Kind prüft nicht selbst'
     state.user=parent
