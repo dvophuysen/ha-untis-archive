@@ -477,3 +477,14 @@ details[open] > summary::after { transform: rotate(90deg); }
 .st-wackelt { background: var(--st-wackelt); }
 .st-sitzt { background: var(--st-sitzt); }
 .st-gefestigt { background: var(--st-gefestigt); }
+
+/* Wer benutzt das Gerät (D175): Rahmen und Band je Zustand. */
+.mode-band { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); margin: 0 var(--sp-4) var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-xs); font-weight: 700; }
+.mode-band button { min-height: 32px; padding: 2px 10px; font-size: var(--fs-xs); font-weight: 700; background: transparent; border-color: currentColor; color: inherit; }
+.mode-band.mirror { background: #dbe7fd; color: #1e40af; }
+.mode-band.child { background: color-mix(in oklab, var(--st-sitzt) 18%, var(--bg-card)); color: var(--fg); }
+.mode-band.test { background: repeating-linear-gradient(135deg, #fed7aa 0 10px, #ffedd5 10px 20px); color: #7c2d12; }
+@media (prefers-color-scheme: dark) { .mode-band.mirror { background: #1e2c4d; color: #bcd0ff; } }
+body[data-view-mode="mirror"] { box-shadow: inset 0 0 0 4px #2563eb; }
+body[data-view-mode="child"] { box-shadow: inset 0 0 0 4px var(--st-sitzt); }
+body[data-view-mode="test"] { box-shadow: inset 0 0 0 4px #c2410c; }

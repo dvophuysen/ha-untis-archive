@@ -1,6 +1,8 @@
 <script>
   import ActionLabel from './lib/ActionLabel.svelte';
   import Icon from './lib/Icon.svelte';
+  import DeviceSheet from './lib/DeviceSheet.svelte';
+  import { view, setViewMode, touchViewMode, expireViewMode } from './lib/viewMode.svelte.js';
   import { onMount } from 'svelte';
   import { appState, loadMe, setActiveAccount, activeAccount } from './lib/store.svelte.js';
   import Today from './routes/Today.svelte';
@@ -91,11 +93,21 @@
     const handler = () => (route = parseHash());
     window.addEventListener('hashchange', handler);
     // Nutzungszeit für den Elternbericht: aktives Kind und aktuelle Ansicht.
+    // Mitlesen und Testmodus sind keine Nutzung durch das Kind (D175).
     const stopPing = startUsagePing(() =>
-      appState.me && appState.activeAccountId ? { accountId: appState.activeAccountId, view: route.name } : null);
+      appState.me && appState.activeAccountId && !['mirror', 'test'].includes(view.mode) ? { accountId: appState.activeAccountId, view: route.name } : null);
+    // Kindmodus am Elterngerät endet nach 30 Minuten ohne Nutzung.
+    const expire = () => { if (expireViewMode()) navigate(isParent ? 'overview' : 'today'); };
+    const touch = () => touchViewMode();
+    const expTimer = setInterval(expire, 60000);
+    document.addEventListener('visibilitychange', expire);
+    document.addEventListener('pointerdown', touch, { passive: true });
     return () => {
       window.removeEventListener('hashchange', handler);
       stopPing();
+      clearInterval(expTimer);
+      document.removeEventListener('visibilitychange', expire);
+      document.removeEventListener('pointerdown', touch);
     };
   });
 
@@ -110,7 +122,7 @@
     defaultLandingApplied = true;
     if (
       hadEmptyInitialHash &&
-      (appState.me.is_admin || appState.me.role === 'parent') &&
+      (appState.me.is_admin || appState.me.role === 'parent') && view.mode === 'parent' &&
       route.name === 'today'
     ) {
       navigate('overview');
@@ -118,6 +130,15 @@
   });
 
   const acc = $derived(activeAccount());
+  const isParent = $derived(!!(appState.me?.is_admin || appState.me?.role === 'parent'));
+  // Eigene Elternansicht nur im Zustand „Ich“; sonst sieht das Gerät aus wie beim Kind.
+  const parentView = $derived(isParent && view.mode === 'parent');
+  let deviceSheet = $state(false);
+  $effect(() => {
+    document.body.dataset.viewMode = isParent ? view.mode : 'own';
+    // Ein Kind kann keinen Elternzustand haben; ein alter Wert bleibt wirkungslos.
+    if (appState.me && !isParent && view.mode !== 'parent') setViewMode('parent');
+  });
 
   // Übersicht-Tab nur für Eltern mit mind. zwei verlinkten Kindern. Bei
   // einem Kind ist „Heute" der natürliche Einstieg, das Dashboard wäre
@@ -133,7 +154,7 @@
       { name: 'learning', icon: 'lernen', label: 'Lernen' },
       { name: 'more', icon: 'mehr', label: 'Übersichten' },
     ];
-    if (appState.me?.is_admin || appState.me?.role === 'parent') {
+    if (parentView) {
       items.unshift({ name: 'overview', icon: 'familie', label: 'Familie' });
     }
     return items;
@@ -147,7 +168,7 @@
   <header class="top-bar">
     <div class="col" style="gap: 0">
       <h1>Schul-Cockpit</h1>
-      {#if appState.me && appState.me.accounts.length > 1}
+      {#if parentView && appState.me && appState.me.accounts.length > 1}
         <select
           class="top-meta"
           style="border:none; background:transparent; padding:0; min-height: auto; font-size:0.85rem;"
@@ -163,17 +184,28 @@
       {/if}
     </div>
     <div class="row gap-sm">
-      {#if appState.me?.is_admin}
+      {#if appState.me?.is_admin && parentView}
         <button class="ghost" onclick={() => navigate('setup')} title="Setup" aria-label="Setup"><Icon name="werkzeug" /></button>
       {/if}
-      {#if acc}
+      {#if acc && (!isParent || parentView)}
         <button class="ghost" onclick={() => navigate('settings')} title="Einstellungen" aria-label="Einstellungen"><Icon name="einstellungen" /></button>
       {/if}
       {#if appState.me?.auth_source === 'pin'}
         <button class="ghost" onclick={logout} title="Abmelden" aria-label="Abmelden"><Icon name="abmelden" /></button>
       {/if}
+      {#if isParent}
+        <button class="ghost device-btn" onclick={() => (deviceSheet = true)} title="Wer benutzt das Gerät?" aria-label="Wer benutzt das Gerät?"><Icon name="ich" /></button>
+      {/if}
     </div>
   </header>
+  {#if isParent && view.mode !== 'parent'}
+    <div class="mode-band {view.mode}" role="status">
+      <span>{view.mode === 'mirror' ? `Du siehst die App von ${acc?.name ?? 'deinem Kind'} · nur lesen` : view.mode === 'child' ? `${acc?.name ?? 'Kind'} am Elterngerät` : 'Testmodus · Änderungen werden beim Beenden zurückgenommen'}</span>
+      {#if view.mode === 'mirror'}<button onclick={() => { setViewMode('parent'); navigate('overview'); }}>Zurück zu mir</button>
+      {:else}<button onclick={() => (deviceSheet = true)}>{view.mode === 'test' ? 'Beenden' : 'Wechseln'}</button>{/if}
+    </div>
+  {/if}
+  {#if deviceSheet}<DeviceSheet onclose={() => (deviceSheet = false)} {navigate} />{/if}
 
   <!-- Verwaiste Kind-Verlinkung: der Link zeigt auf eine account_id, die
        es in der Untis-Archiv-DB nicht (mehr) gibt — typischerweise nach
@@ -199,7 +231,7 @@
     </div>
   {/if}
 
-  {#if appState.me?.demo_mode}
+  {#if appState.me?.demo_mode && view.mode !== 'test'}
     <div
       style="background: var(--substitution); color: #fff; padding: 0.5rem 1rem; font-size: 0.85rem; display:flex; justify-content:space-between; align-items:center; gap:0.5rem;"
     >

@@ -11,6 +11,7 @@
   import ParentReportSettings from '../lib/ParentReportSettings.svelte';
   import { api } from '../lib/api.js';
   import { setActiveAccount } from '../lib/store.svelte.js';
+  import { setViewMode } from '../lib/viewMode.svelte.js';
   import { jumpHash } from '../lib/jump.js';
 
   let data = $state(null);
@@ -43,6 +44,8 @@
   function open(kid, target) {
     if (!target) return;
     setActiveAccount(kid.account_id);
+    // Von der Familienkarte aus liest man mit (D175); schreiben geht über „Ich“.
+    setViewMode('mirror');
     window.location.hash = jumpHash(target);
   }
 

@@ -3,6 +3,7 @@ from contextlib import closing
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field, StrictBool
+from ..audit import log as audit_log
 from ..auth import CurrentUser, get_current_user
 from ..db import webapp_conn
 from ..learning import InputModel, today_local, now_iso
@@ -57,8 +58,17 @@ def put_packing(account_id: int, school_day: date, body: PackingIn, user: Curren
             raise HTTPException(409, 'Dieser Punkt wurde inzwischen geändert. Bitte die Packliste neu laden.')
         # Repeated confirmation does not manufacture another success or timestamp.
         if row is None or bool(row['done']) != body.done:
+            before = dict(conn.execute('SELECT * FROM packing_items WHERE account_id=? AND school_day=? AND item_key=?',
+                                       (account_id, school_day.isoformat(), body.item_key)).fetchone() or {}) or None
             conn.execute('INSERT INTO packing_items(account_id,school_day,item_key,done,revision,updated_at,confirmed_by) VALUES(?,?,?,?,?,?,?) '
                          'ON CONFLICT(account_id,school_day,item_key) DO UPDATE SET done=excluded.done,revision=excluded.revision,updated_at=excluded.updated_at,confirmed_by=excluded.confirmed_by',
                          (account_id, school_day.isoformat(), body.item_key, int(body.done), revision + 1, now_iso(), user.id))
+            after = dict(conn.execute('SELECT * FROM packing_items WHERE account_id=? AND school_day=? AND item_key=?',
+                                      (account_id, school_day.isoformat(), body.item_key)).fetchone())
+            # Protokoll wie bei Aufgaben: Der Testmodus nimmt es beim Beenden zurück (D175).
+            audit_log(conn, user_id=user.id, account_id=account_id, op_type='update' if before else 'insert',
+                      target_kind='packing', target_id=None,
+                      label=f"Tasche {school_day.isoformat()}: {body.item_key} {'drin' if body.done else 'raus'}",
+                      before=before, after=after)
         result = view(account_id, school_day, items, fingerprint, conn, schedule)
     return dict(**result, can_write=True)

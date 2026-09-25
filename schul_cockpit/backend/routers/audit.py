@@ -129,6 +129,17 @@ def _revert_entry(conn, entry: dict) -> None:
             conn.execute(f"UPDATE account_settings SET {sets} WHERE account_id = ?", params)
         return
 
+    if kind == "packing":
+        key = (after or before)
+        where = "account_id = ? AND school_day = ? AND item_key = ?"
+        params = (key["account_id"], key["school_day"], key["item_key"])
+        if op == "insert" or not before:
+            conn.execute(f"DELETE FROM packing_items WHERE {where}", params)
+        else:
+            conn.execute(f"UPDATE packing_items SET done = ?, revision = revision + 1, updated_at = ?, confirmed_by = ? WHERE {where}",
+                         (before["done"], before["updated_at"], before.get("confirmed_by"), *params))
+        return
+
     raise HTTPException(status_code=400, detail=f"Revert nicht unterstützt für {kind}/{op}")
 
 

@@ -160,6 +160,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Schul-Cockpit", lifespan=lifespan)
 
 
+from . import view_mode as _view_mode  # noqa: E402
+
+# Mitlesen, Kind am Elterngerät, Testmodus (D175).
+app.middleware("http")(_view_mode.middleware)
+
+
 @app.middleware("http")
 async def slide_pin_cookie(request: Request, call_next):
     """Refresh the PIN session cookie on every successful authenticated

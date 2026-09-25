@@ -1,3 +1,11 @@
+## 1.19.0
+
+- Elterngeräte: Ein Tipp auf das Personen-Symbol oben rechts fragt „Wer benutzt das Gerät?“. Zur Wahl stehen die eigene Elternansicht, „ansehen“ für jedes Kind (nur lesen) und „benutzt das Gerät“, wenn ein Kind schnell das Handy oder iPad der Eltern nimmt. Kein PIN.
+- Beim Mitlesen ist die App blau umrandet, oben steht „nur lesen“. Nichts lässt sich ändern; der Server lehnt jeden Schreibversuch ab. Die Bausteine der Familienkarte öffnen die Kinderansicht jetzt in diesem Modus.
+- Kind am Elterngerät: grün umrandet, alles zählt als Handeln des Kindes. Nach 30 Minuten ohne Nutzung und am nächsten Tag steht das Gerät wieder auf der Elternansicht.
+- Testmodus für das Entwicklerkonto: orange umrandet. Änderungen an Aufgaben, Rückmeldungen, Tasche und Einstellungen werden beim Beenden zurückgenommen; Lernbegleiter, Vokabeln und Material sind in diesem Modus gesperrt, damit keine Lerngeschichte entsteht.
+- Das Packen der Tasche steht jetzt im Änderungsprotokoll.
+
 ## 1.18.0
 
 - Neue Startseite nach dem Schultag: vor, in und nach der Schule, bestimmt aus dem echten Stundenplan. Oben steht eine Karte für das, was gerade dran ist: morgens die erste Stunde mit Raumwechsel und Schulschluss, in der Schule die laufende und die nächste Stunde, danach die nächste Aufgabe mit „Erledigt“, „Hilfe holen“ und der geschätzten Zeit bis zur Freizeit.

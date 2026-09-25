@@ -4,6 +4,8 @@
 // When the page is loaded at https://ha.local/api/hassio_ingress/abc/,
 // fetch('api/health') resolves to https://ha.local/api/hassio_ingress/abc/api/health.
 
+import { viewHeader } from './viewMode.svelte.js';
+
 export function joinUrl(path) {
   return path.startsWith('/') ? `.${path}` : `./${path}`;
 }
@@ -14,6 +16,9 @@ async function request(method, path, body) {
   // Set-Cookie from the login response, so the next /api/me 401s and the
   // login screen just reappears ("button does nothing").
   const opts = { method, headers: {}, credentials: 'include' };
+  // Mitlesen, Kind am Elterngerät, Testmodus (D175).
+  const mode = viewHeader();
+  if (mode) opts.headers['x-view-mode'] = mode;
   if (body !== undefined) {
     if (body instanceof FormData) {
       opts.body = body;
