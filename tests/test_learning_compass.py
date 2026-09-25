@@ -196,3 +196,23 @@ def test_endpoint_is_light_and_read_only_for_mirror(env, compass, monkeypatch):
     assert d["can_write"] and not d["can_manage"] and d["next_exam"]["exam_key"] == "ma"
     assert set(d) >= {"plan", "exams", "strengths", "gaps", "extra", "history", "sessions", "past_exams", "archived_sessions"}
     assert client.get("/api/accounts/2/learning/compass").status_code == 403
+
+
+def test_vocab_test_from_homework_is_a_date_and_the_trainer_follows_the_plan(compass, monkeypatch):
+    """D190: Ein Vokabeltest aus einer Hausaufgabe steht unter „Deine Arbeiten“,
+    der Vokabelbereich kommt direkt nach der Pflicht."""
+    import sys, types, backend
+    when = MON + timedelta(days=4)
+    stub = types.SimpleNamespace(
+        _homework_tests=lambda a, d: [{"exam_key": "task:9", "date": when, "only_vocab": True, "subject": "LATEIN",
+                                        "unit": ("u2", "Lektion 2"), "unit_ref": "Lektion 2", "task_id": 9}],
+        daily=lambda a, d: [{"subject": "LATEIN", "unit": "u2", "unit_label": "Lektion 2", "target": 16, "practiced": 3,
+                             "done": False, "href": "#/vokabeln/LATEIN?unit=u2", "exam_key": "task:9",
+                             "exam_date": when.isoformat(), "open": 49, "why": "Test am Freitag."}])
+    monkeypatch.setitem(sys.modules, "backend.vocab_pensum", stub)
+    monkeypatch.setattr(backend, "vocab_pensum", stub, raising=False)
+    d = compass()
+    test = next(e for e in d["exams"] if e["exam_key"] == "task:9")
+    assert test["kind"] == "vokabeltest" and test["subject"] == "Latein" and test["vocab"]["target"] == 16
+    assert "49" in test["verdict_text"] and test["title"] == "Vokabeltest Lektion 2"
+    assert d["vocab"][0]["unit"] == "Lektion 2" and d["vocab"][0]["practiced"] == 3

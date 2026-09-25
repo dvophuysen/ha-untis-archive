@@ -55,7 +55,7 @@ const {chromium}=require('playwright-core');const http=require('http'),fs=requir
  await page.goto('http://127.0.0.1:4183/#/learning');
  await page.getByRole('heading',{name:'Heute Pflicht'}).waitFor().catch(dump);
  // Reihenfolge: Wo stehe ich, Pflicht, Arbeiten, Stärken/Baustellen, Extra, Verlauf, Weitermachen.
- assert.deepEqual(await page.$$eval('[data-section]',els=>els.map(e=>e.dataset.section)),['kompass','pflicht','arbeiten','staerken','extra','verlauf','weiter']);
+ assert.deepEqual(await page.$$eval('[data-section]',els=>els.map(e=>e.dataset.section)),['kompass','pflicht','vokabeln','arbeiten','staerken','extra','verlauf','weiter']);
  const kompass=page.locator('#k-kompass');
  assert.match(await kompass.innerText(),/Nächste Arbeit · Mathematik · Mi 30\.09\. · noch 2 Schultage/);
  assert.match(await kompass.innerText(),/1 von 2 Themen sicher/);

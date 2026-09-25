@@ -306,6 +306,18 @@ async def rolling(account_id: int, today: date, now: datetime, *, start: date | 
         exams_by_day.setdefault(d, []).append({
             "exam_key": e.get("exam_key"), "subject": subject_label(e.get("subject_name") or e.get("title") or ""),
             "kind": family_board.exam_kind(e.get("title")), "ready": ready, "total": total})
+    # Vokabeltests aus Hausaufgaben sind Termine wie Arbeiten (D187, D190).
+    try:
+        from . import vocab_pensum
+        for t in vocab_pensum._homework_tests(account_id, today):
+            d = t["date"].isoformat()
+            if first <= t["date"] <= last:
+                exams_by_day.setdefault(d, []).append({
+                    "exam_key": t["exam_key"], "subject": subject_label(t["subject"]),
+                    "kind": family_board.exam_kind("Vokabeltest"), "ready": 0, "total": 0,
+                    "title": f"Vokabeltest {t['unit'][1] if t['unit'] else t['unit_ref']}"})
+    except Exception:
+        pass
     tasks = _tasks(account_id, day_list[0], day_list[-1])
 
     days = []

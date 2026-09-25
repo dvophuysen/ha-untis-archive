@@ -138,7 +138,7 @@
 
     <section class="sec" id="k-pflicht" data-section="pflicht">
       <h3>Heute Pflicht <small>{plan.total ? `${plan.done} von ${plan.total}` : 'heute frei'}</small></h3>
-      {#if plan.engpass}<p class="hint">Es wird eng bis zur nächsten Arbeit, deshalb steht auch heute etwas an.</p>{/if}
+      {#if plan.outlook}<p class="hint">{plan.outlook}</p>{/if}
       <div class="list">
         {#each plan.steps as s (s.key)}
           <div class="step" class:done={s.done}>
@@ -153,6 +153,22 @@
         <summary>Wie der Plan entsteht</summary>
         {#each data.plan_explain as p}<p>{p}</p>{/each}
       </details>
+    </section>
+
+    <section class="sec" id="k-vokabeln" data-section="vokabeln">
+      <h3>Vokabeln <small>{(data.vocab ?? []).length ? 'dein Pensum heute' : 'Trainer'}</small></h3>
+      <div class="list">
+        {#each data.vocab ?? [] as v}
+          <a class="vocab-row" href={v.href}>
+            <span class="body"><strong>{subj(v.subject).name}{v.unit ? `: ${v.unit}` : ''}</strong>
+              <small>{v.why}</small>
+              <span class="vbar" role="img" aria-label={`${v.practiced ?? 0} von ${v.target} Wörtern`}><i style:width={`${Math.min(100, Math.round((v.practiced ?? 0) / Math.max(1, v.target) * 100))}%`}></i></span>
+            </span>
+            <span class="vcount">{v.done ? '✓' : `${v.practiced ?? 0}/${v.target}`}</span>
+          </a>
+        {/each}
+        <a class="vocab-row trainer" href="#/vokabeln"><span class="body"><strong>🔤 Zum Vokabeltrainer</strong><small>Alle Lektionen, Test auf Papier</small></span><span class="vcount">›</span></a>
+      </div>
     </section>
 
     <section class="sec" id="k-arbeiten" data-section="arbeiten">
@@ -385,4 +401,11 @@
   .earlier { margin-top: var(--sp-2); }
   .earlier summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--accent); }
   .past { border-bottom: 1px solid var(--border); }
+  .vocab-row{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3);min-height:44px;color:var(--fg);text-decoration:none}
+  .vocab-row+.vocab-row{border-top:1px solid var(--border)}
+  .vocab-row .body{display:grid;gap:3px;min-width:0}
+  .vocab-row small{color:var(--fg-muted);font-size:var(--fs-xs)}
+  .vbar{display:block;height:6px;border-radius:var(--r-pill);background:var(--bg-elevated);overflow:hidden;max-width:220px}
+  .vbar i{display:block;height:100%;background:var(--accent)}
+  .vcount{font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent);white-space:nowrap}
 </style>

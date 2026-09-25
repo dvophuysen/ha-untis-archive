@@ -1,3 +1,9 @@
+## 1.25.4
+
+- Lernen: Der Vokabelbereich steht wieder da, direkt nach „Heute Pflicht“, mit dem Pensum je Sprache (heute x von y Wörtern) und dem Weg in den Vokabeltrainer.
+- Vokabeltests, die nur in einer Hausaufgabe stehen, erscheinen als Termin unter „Deine Arbeiten“ und im Überblick der Woche, mit den noch offenen Wörtern.
+- Der Hinweis über „Heute Pflicht“ nennt die echten Zahlen aller nahen Prüfungen statt eines festen Satzes.
+
 ## 1.25.3
 
 - Der Vokabelschritt im Lernplan heißt wieder richtig, zum Beispiel „Vokabeln Latein: Lektion 2 · 16 Wörter“, statt die interne Kennung zu zeigen.

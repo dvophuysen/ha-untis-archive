@@ -504,6 +504,35 @@ async def build(account_id: int, user, now: datetime | None = None) -> dict:
         sessions, archived = session_lists(c, account_id, day)
         profile = c.execute("SELECT ai_enabled FROM learning_profiles WHERE account_id=? AND active=1", (account_id,)).fetchone()
 
+    # Vokabeltests, die nur in einer Hausaufgabe stehen, sind Termine wie Arbeiten (D187, D190).
+    try:
+        from . import vocab_pensum
+        homework_tests = vocab_pensum._homework_tests(account_id, day)
+    except Exception:
+        LOG.debug("Vokabeltests aus Hausaufgaben nicht lesbar", exc_info=True)
+        homework_tests = []
+    known = {e["exam_key"] for e in upcoming}
+    for t in homework_tests:
+        if t["exam_key"] in known:
+            continue
+        mine = [p for p in pensum if p.get("exam_key") == t["exam_key"]]
+        if mine:
+            p = mine[0]
+            vocab = {"unit": p.get("unit_label") or p.get("unit"), "target": p.get("target"), "practiced": p.get("practiced"),
+                     "done": bool(p.get("done")), "href": p.get("href"), "missing": False, "open": p.get("open")}
+            verdict_text = (f"{p.get('open')} von den Wörtern sitzen noch nicht. Bis zum Test sollen alle sitzen, "
+                            f"heute {p.get('target')}." if p.get("open") else "Alle Wörter sitzen. Bis zum Test wiederholen.")
+        else:
+            vocab = {"missing": True, "unit": t["unit"][1] if t["unit"] else t["unit_ref"], "href": None}
+            verdict_text = f"„{t['unit_ref']}“ ist noch nicht im Vokabeltrainer."
+        left = sum(1 for d in school if day <= d < t["date"])
+        upcoming.append({"exam_key": t["exam_key"], "subject": subject_label(t["subject"]),
+                         "title": f"Vokabeltest {vocab['unit']}", "date": t["date"].isoformat(), "day_label": _de(t["date"]),
+                         "days": (t["date"] - day).days, "school_days_left": left, "kind": "vokabeltest",
+                         "ready": 0, "total": 0, "raster": [], "afb_names": {str(a): n for a, n in AFB_NAMES.items()},
+                         "stage": None, "path": [], "verdict": "eng" if left <= 2 and not vocab.get("missing") and vocab.get("open") else "",
+                         "verdict_text": verdict_text, "vocab": vocab, "topics_missing": False})
+    upcoming.sort(key=lambda e: (e["date"], e["exam_key"]))
     next_exam = next((e for e in upcoming if e["total"]), None) or next((e for e in upcoming if e["vocab"]), None)
     calm = None
     if not next_exam:
@@ -528,6 +557,10 @@ async def build(account_id: int, user, now: datetime | None = None) -> dict:
         "speech": bool(ai.transcribe_url()),
         "next_exam": next_exam,
         "calm": calm,
+        # Der Vokabeltrainer direkt nach der Pflicht (D190): Pensum je Sprache und der Weg in den Trainer.
+        "vocab": [{"subject": p.get("subject"), "unit": p.get("unit_label") or p.get("unit"), "target": p.get("target"),
+                   "practiced": p.get("practiced"), "done": bool(p.get("done")), "href": p.get("href"), "why": p.get("why"),
+                   "exam_date": p.get("exam_date")} for p in pensum],
         "plan": plan,
         "plan_explain": [
             "Jeden Morgen entsteht der Plan neu: aus dem, was je Thema noch fehlt, und den Lerntagen bis zur Arbeit.",
