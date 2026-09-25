@@ -104,7 +104,10 @@ def topics(account_id: int, exam_key: str) -> list[dict]:
         rows = [dict(r) for r in c.execute(
             "SELECT * FROM exam_topics WHERE account_id=? AND exam_key=? AND stale=0 ORDER BY position,id",
             (account_id, exam_key))]
-    return [public(r) for r in rows if not is_vocab_topic(r)]
+    # Von Eltern abgewählte Themen zählen nicht für die Arbeit (D199).
+    from .exam_meta import excluded_refs
+    off = set(excluded_refs(account_id, exam_key))
+    return [public(r) for r in rows if not is_vocab_topic(r) and f"topic:{r['id']}" not in off]
 
 
 def raster(account_id: int, exam_key: str, until: str | None = None) -> dict:

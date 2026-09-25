@@ -9,20 +9,23 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  async function run(role){
   const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Europe/Berlin',serviceWorkers:'block'});const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.clock.install({time:new Date('2026-09-25T15:00:00+02:00')});
-  let off=[];let verdict=null;let note='',topics=[{id:5,title:'Simple past',origin:'assumed',stage:'neu',stale:0,places:[],self_view:null}];const posted=[];
+  let off=[],pins=[];let verdict=null;let note='',topics=[{id:5,title:'Simple past',origin:'assumed',stage:'neu',stale:0,places:[],self_view:null}];const posted=[];
   await page.route('**/api/**',async route=>{const req=route.request(),url=new URL(req.url()),u=url.pathname;let body={};
    if(u==='/api/me')body={accounts:[{id:1,name:'Beispielkind'}],role,is_admin:false};
    else if(u.endsWith('/exams/all'))body={upcoming:[{exam_key:'k1',date:'2026-10-01',subject_name:'ENGLISCH',title:'Sprechprüfung Englisch Jg.6 (Klausur)',oral:true,note,topics,references:[{key:'topic:5',label:'Simple past · Vergangenheit',kind:'topic',checked:!off.includes('topic:5')},{key:'vocab:u1',label:'Vokabeln Unit 1',kind:'vocab',checked:!off.includes('vocab:u1')}],
-     oral_sims:[{id:7,session_id:60,created_at:'2026-09-25T15:00:00',topic_title:'Meine Familie',full:false,reliable:true,scores:[{criterion:'wortschatz',label:'Wortschatz',score:3},{criterion:'grammatik',label:'Grammatik',score:2}],weak_spots:[{label:'has statt have'}],verdict:null}],stages:{neu:topics.length},sources:{notice:false},scope:{since:'2026-08-01',parts:1,topics:[]}}],past:[],archived_count:0};
+     materials:[{id:31,label:'Buch S. 20',title:'Seite',kind:'book_page',day:'2026-09-20',image:false,pinned:false}],oral_sims:[{id:7,session_id:60,created_at:'2026-09-25T15:00:00',topic_title:'Meine Familie',full:false,reliable:true,scores:[{criterion:'wortschatz',label:'Wortschatz',score:3},{criterion:'grammatik',label:'Grammatik',score:2}],weak_spots:[{label:'has statt have'}],verdict:null}],stages:{neu:topics.length},sources:{notice:false},scope:{since:'2026-08-01',parts:1,topics:[]}},
+     {exam_key:'k2',date:'2026-10-05',subject_name:'MATHEMATIK',title:'Mathearbeit',oral:false,note:'',sources:{notice:false},scope:{since:'2026-08-01',parts:2,topics:[]},
+      topics:[{id:51,title:'Brüche kürzen',origin:'assumed',stage:'neu',stale:0,excluded:off.includes('topic:51'),places:[],self_view:null},{id:52,title:'Brüche addieren',origin:'assumed',stage:'neu',stale:0,excluded:off.includes('topic:52'),places:[],self_view:null}],
+      materials:[{id:41,label:'Arbeitsblatt Brüche',title:'Arbeitsblatt',kind:'worksheet',day:'2026-09-22',image:false,pinned:pins.includes(41)}]}],past:[],archived_count:0};
    else if(u.endsWith('/oral-sims/7/verdict')){verdict=req.postDataJSON().verdict;body={ok:true};}
-   else if(u.endsWith('/exams/note')){const b=req.postDataJSON();note=b.note;if(b.excluded_refs)off=b.excluded_refs;posted.push(['note',b]);body={oral:true,note};}
+   else if(u.endsWith('/exams/note')){const b=req.postDataJSON();note=b.note;if(b.excluded_refs)off=b.excluded_refs;if(b.pinned_materials)pins=b.pinned_materials;posted.push(['note',b]);body={oral:true,note};}
    else if(u.endsWith('/exams/topics')&&req.method()==='POST'){const b=req.postDataJSON();posted.push(['topic',b]);const t={id:10+topics.length,title:b.title,detail:b.detail,origin:'manual',stage:'neu',stale:0,places:[],self_view:null};topics=[...topics.map(x=>x.origin==='assumed'?{...x,stale:1}:x),t];body=t;}
    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
   });
   await page.goto('http://127.0.0.1:4181/#/klausuren');
   await page.getByText('Sprechprüfung',{exact:true}).first().waitFor({timeout:8000}).catch(async e=>{console.log('ERRORS',errors,'BODY',await page.locator('body').innerText());throw e;});
   assert.equal(await page.getByText('ablegen',{exact:true}).count(),0,'kein rätselhaftes Ablegen');
-  return {page,errors,posted,get note(){return note;},get off(){return off;},get verdict(){return verdict;}};
+  return {page,errors,posted,get note(){return note;},get off(){return off;},get pins(){return pins;},get verdict(){return verdict;}};
  }
  // Eltern: direkt eintragen.
  const p=await run('parent');
@@ -41,6 +44,15 @@ const fs=require('fs');const http=require('http');const path=require('path');con
  assert.deepEqual(p.posted[1][1],{exam_key:'k1',subject:'ENGLISCH',title:'Meine Familie',detail:'Personen beschreiben'});
  await p.page.getByText(/2 Sprechthemen eingetragen/).waitFor();
  assert.equal(await p.page.getByText('Übungsarbeit wie in echt').count(),0,'kein Papierweg bei der Sprechprüfung');
+ /* D199: schriftliche Arbeit – Stoff abwählen, Material anheften */
+ const k2=p.page.locator('[data-section="arbeit-k2"]');
+ await k2.getByRole('button',{name:'Themen eintragen'}).click();
+ await k2.getByText('Stoff für diese Arbeit').waitFor();
+ await k2.getByRole('checkbox',{name:'Brüche addieren'}).uncheck();
+ await k2.getByRole('checkbox',{name:/Arbeitsblatt Brüche/}).check();
+ await k2.getByRole('button',{name:'Speichern',exact:true}).click();await k2.getByText('Gespeichert.').waitFor();
+ assert.deepEqual(p.off,['topic:52']);assert.deepEqual(p.pins,[41]);
+ await k2.getByText('Angeheftet zum Üben: Arbeitsblatt Brüche').waitFor();
  await p.page.setViewportSize({width:320,height:800});assert.equal(await p.page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'overflow 320');
  assert.deepEqual(p.errors,[]);
  // Kind: liest die Hinweise, kein Eingabefeld.

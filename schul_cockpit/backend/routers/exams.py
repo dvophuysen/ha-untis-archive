@@ -285,6 +285,9 @@ async def exams_all(
             meta = exam_meta.get(account_id, e["exam_key"]) if e.get("exam_key") else {}
             e["oral"] = bool(meta.get("oral")) or exam_meta.is_oral_title(e.get("title"))
             e["note"] = meta.get("note") or ""
+            if e.get("exam_key"):
+                # Material zum Anheften, für jede Arbeit (D199).
+                e["materials"] = exam_meta.material_choices(account_id, e["exam_key"], e.get("subject_name"))
             if e["oral"] and e.get("exam_key"):
                 from .. import oral_exam
                 e["references"] = oral_exam.references(account_id, e["exam_key"], e.get("subject_name"))
@@ -391,6 +394,8 @@ class NoteIn(BaseModel):
     note: str = Field(default="", max_length=exam_meta.NOTE_MAX)
     # Abgewählte Referenzen der Sprechprobe (D194); None lässt sie, wie sie sind.
     excluded_refs: list[str] | None = Field(default=None, max_length=200)
+    # Angeheftetes Material zum Üben (D199); None lässt es, wie es ist.
+    pinned_materials: list[int] | None = Field(default=None, max_length=40)
 
 
 class VerdictIn(BaseModel):
@@ -404,6 +409,8 @@ def set_note(account_id: int, body: NoteIn, user: CurrentUser = Depends(get_curr
     _require_parent(user)
     if body.excluded_refs is not None:
         exam_meta.set_excluded_refs(account_id, body.exam_key, [k[:80] for k in body.excluded_refs])
+    if body.pinned_materials is not None:
+        exam_meta.set_pinned(account_id, body.exam_key, body.pinned_materials)
     return exam_meta.set_note(account_id, body.exam_key, body.note)
 
 

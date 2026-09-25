@@ -31,9 +31,24 @@
   // Abgewählte Referenzen der Sprechprobe je Arbeit (D194); ungesehen gilt der Stand vom Server.
   let refsOff = $state({});
   function refChecked(e, r) { return refsOff[e.exam_key] ? !refsOff[e.exam_key].includes(r.key) : r.checked; }
+  // Abgewählt ist, was bisher abgewählt war: Referenzen der Sprechprobe und Themen der Arbeit teilen sich die Liste (D199).
+  function offNow(e) {
+    return [...(e.references || []).filter((x) => !x.checked).map((x) => x.key),
+            ...(e.topics || []).filter((t) => t.excluded).map((t) => `topic:${t.id}`)];
+  }
   function toggleRef(e, r) {
-    const now = refsOff[e.exam_key] ?? (e.references || []).filter((x) => !x.checked).map((x) => x.key);
+    const now = refsOff[e.exam_key] ?? offNow(e);
     refsOff[e.exam_key] = now.includes(r.key) ? now.filter((k) => k !== r.key) : [...now, r.key];
+  }
+  function countedTopics(e) {
+    return (e.topics || []).filter((t) => !t.stale && !t.vocab).map((t) => ({ key: `topic:${t.id}`, label: t.title, checked: !t.excluded }));
+  }
+  // Angeheftetes Material je Arbeit (D199).
+  let pinDraft = $state({});
+  function pinnedNow(e) { return pinDraft[e.exam_key] ?? (e.materials || []).filter((x) => x.pinned).map((x) => x.id); }
+  function togglePin(e, m) {
+    const now = pinnedNow(e);
+    pinDraft[e.exam_key] = now.includes(m.id) ? now.filter((x) => x !== m.id) : [...now, m.id];
   }
   function oralUrl(e, t = null) {
     return `#/learning?oral=${encodeURIComponent(e.exam_key)}${t ? `&topic_id=${t.id}` : ''}`;
@@ -127,7 +142,7 @@
     return august ? 'seit Schuljahresbeginn' : `seit der letzten Arbeit am ${formatShortDate(s.since)}`;
   }
   function liveTopics(e) {
-    return (e.topics || []).filter((t) => !t.stale);
+    return (e.topics || []).filter((t) => !t.stale && !t.excluded);
   }
   function materialUrl(e) {
     return `#/materialien/${encodeURIComponent(e.subject_name ?? '')}`;
@@ -254,11 +269,14 @@
     try {
       const text = noteDraft[exam.exam_key] ?? exam.note ?? '';
       const refs = refsOff[exam.exam_key];
-      if (text !== (exam.note || '') || refs) {
-        const r = await api.post(`/api/accounts/${accountId}/exams/note`, { exam_key: exam.exam_key, note: text, ...(refs ? { excluded_refs: refs } : {}) });
+      const pins = pinDraft[exam.exam_key];
+      if (text !== (exam.note || '') || refs || pins) {
+        const r = await api.post(`/api/accounts/${accountId}/exams/note`, {
+          exam_key: exam.exam_key, note: text, ...(refs ? { excluded_refs: refs } : {}), ...(pins ? { pinned_materials: pins } : {}),
+        });
         exam.note = r.note;
-        if (refs) exam.references = (exam.references || []).map((x) => ({ ...x, checked: !refs.includes(x.key) }));
         delete refsOff[exam.exam_key];
+        delete pinDraft[exam.exam_key];
       }
       // Eine Zeile je Thema; „Thema: Hinweis“ trennt den Hinweis ab.
       const lines = (linesDraft[exam.exam_key] || '').split('\n').map((l) => l.trim()).filter((l) => l.length >= 2);
@@ -275,7 +293,8 @@
         }
       }
       linesDraft[exam.exam_key] = '';
-      if (lines.length) await load();
+      // Themen, Referenzen und Material neu laden: Plan, Raster und Karte richten sich danach.
+      await load();
       noteSaved = exam.exam_key;
       data = { ...data };
     } catch (e) {
@@ -399,6 +418,30 @@
                   <small class="dim">Eine Zeile je Thema, ein Hinweis nach Doppelpunkt, z. B. „Meine Familie: Personen beschreiben“.{#if e.oral} Sobald eigene Sprechthemen da sind, tritt der Stoff aus dem Unterricht zurück.{/if}</small>
                   <textarea rows="3" bind:value={() => linesDraft[e.exam_key] ?? '', (v) => (linesDraft[e.exam_key] = v)}></textarea>
                 </label>
+                {#if !e.oral && countedTopics(e).length}
+                  <fieldset class="refs">
+                    <legend><strong>Stoff für diese Arbeit</strong></legend>
+                    <small class="dim">Abgewählte Themen zählen nicht: kein Schritt im Lernplan, keine Aufgabe in Übungsarbeiten. Ihr Lernstand bleibt erhalten.</small>
+                    {#each countedTopics(e) as r (r.key)}
+                      <label class="ref"><input type="checkbox" checked={refChecked(e, r)} onchange={() => toggleRef(e, r)} /> {r.label}</label>
+                    {/each}
+                  </fieldset>
+                {/if}
+                {#if e.materials?.length}
+                  <fieldset class="refs">
+                    <legend><strong>Material zum Üben anheften</strong></legend>
+                    <small class="dim">Angeheftetes nimmt der Lernbegleiter gezielt dran, Übungsarbeiten bauen Aufgaben daraus, Abbildungen darauf können mitgedruckt werden.</small>
+                    <div class="pins">
+                      {#each e.materials as m (m.id)}
+                        <label class="pin" class:on={pinnedNow(e).includes(m.id)}>
+                          <input type="checkbox" checked={pinnedNow(e).includes(m.id)} onchange={() => togglePin(e, m)} />
+                          {#if m.image}<img src={`./api/accounts/${accountId}/materials/${m.id}/thumb`} alt="" loading="lazy" />{:else}<span class="doc" aria-hidden="true">📄</span>{/if}
+                          <span>{m.label}<small class="dim">{m.day ? formatShortDate(m.day) : ''}</small></span>
+                        </label>
+                      {/each}
+                    </div>
+                  </fieldset>
+                {/if}
                 {#if e.oral && e.references?.length}
                   <fieldset class="refs">
                     <legend><strong>Aus dem Unterricht als Maßstab</strong></legend>
@@ -415,6 +458,9 @@
               </div>
             {:else if e.note}
               <p class="exam-note"><b>Hinweise:</b> {e.note}</p>
+            {/if}
+            {#if (e.materials || []).some((m) => m.pinned)}
+              <p class="dim pinned-line">Angeheftet zum Üben: {(e.materials || []).filter((m) => m.pinned).map((m) => m.label).join(' · ')}</p>
             {/if}
             {#if e.oral}
               <p class="lead">Sprechprüfung: Geübt wird in Sprechproben mit dem Lernbegleiter als Prüfer, per Sprechknopf. Am Ende jeder Probe gibt es eine Bewertung nach sechs Kriterien und höchstens drei Baustellen, die die nächste Probe gezielt nachprüft. Kein Einstiegstest und keine Übungsarbeit auf Papier.</p>
@@ -650,6 +696,12 @@
   .note-box textarea { width: 100%; box-sizing: border-box; font: inherit; }
   .refs { border: 0; padding: 0; margin: 0; display: grid; gap: 0.3rem; min-width: 0; }
   .ref { display: flex; gap: 0.4rem; align-items: flex-start; overflow-wrap: anywhere; }
+  .pins { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.4rem; }
+  .pin { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem; align-items: start; padding: 0.35rem; border: 1px solid var(--border); border-radius: var(--r-sm); overflow-wrap: anywhere; font-size: 0.85rem; }
+  .pin.on { border-color: var(--accent); }
+  .pin img, .pin .doc { grid-column: 1 / -1; width: 100%; height: 90px; object-fit: cover; border-radius: 4px; background: #fff; display: block; text-align: center; font-size: 2rem; }
+  .pin small { display: block; }
+  .pinned-line { margin: 0 0 0.6rem; overflow-wrap: anywhere; }
   .sims { display: grid; gap: 0.5rem; margin: 0 0 0.8rem; }
   .sim { padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--r-sm); display: grid; gap: 0.25rem; }
   .sim-head { display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }

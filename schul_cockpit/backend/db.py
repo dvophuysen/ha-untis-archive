@@ -1194,3 +1194,6 @@ CREATE TABLE IF NOT EXISTS material_figure_scans (
  material_id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL, scanned_at TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0, error TEXT
 );
 """))
+
+# Material je Arbeit (D199): von Eltern angeheftet.
+_MIGRATIONS.append(("exam_meta_002_pinned", "ALTER TABLE exam_meta ADD COLUMN pinned_json TEXT NOT NULL DEFAULT '[]'"))

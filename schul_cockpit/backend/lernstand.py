@@ -787,9 +787,12 @@ def topics_for(account_id: int, exam_key: str, subject: str | None, with_materia
         answered = {r[0] for r in c.execute(
             "SELECT DISTINCT topic_id FROM topic_answers WHERE account_id=?", (account_id,))}
     day = today_local()
+    from .exam_meta import excluded_refs
+    off = set(excluded_refs(account_id, exam_key))
     out = []
     for row in rows:
         item = public(row)
+        item["excluded"] = f"topic:{row['id']}" in off
         item["check_due"] = bool(row["next_check"] and row["next_check"] <= day.isoformat() and row["stage"] == "sitzt")
         if with_material and subject:
             item["material"] = place_status(account_id, subject, item["places"])
@@ -855,15 +858,29 @@ def context_for(account_id: int, topic_id: int, session_id: int | None = None) -
         # kein einziges Material vorlag (D96).
         "material_fehlt": not material,
         # Abbildungen der Seiten zum Thema, mit Beschreibung; eine Aufgabe darf eine davon zeigen (D198).
-        "abbildungen": _figures(account_id, topic["subject"], places),
+        "abbildungen": _figures(account_id, topic["subject"], places, topic["exam_key"]),
+        # Von Eltern an die Arbeit geheftetes Material: gezielt damit üben (D199).
+        "material_eltern": _pinned(account_id, topic["exam_key"]),
         **_exam_form(account_id, topic["exam_key"]),
     }
 
 
-def _figures(account_id: int, subject: str, places: list[dict]) -> list[dict]:
+def _pinned(account_id: int, exam_key: str) -> list[dict]:
     try:
-        from .page_figures import for_places
-        return [{k: f[k] for k in ("id", "kind", "caption", "beschreibung", "seite")} for f in for_places(account_id, subject, places)]
+        from .exam_meta import pinned_context
+        return pinned_context(account_id, exam_key, 3000)
+    except Exception:
+        LOG.debug("Angeheftetes Material nicht lesbar", exc_info=True)
+        return []
+
+
+def _figures(account_id: int, subject: str, places: list[dict], exam_key: str | None = None) -> list[dict]:
+    try:
+        from .exam_meta import pinned
+        from .page_figures import for_materials, for_places
+        found = for_materials(account_id, pinned(account_id, exam_key), limit=6) if exam_key else []
+        found += [f for f in for_places(account_id, subject, places) if f["id"] not in {x["id"] for x in found}]
+        return [{k: f[k] for k in ("id", "kind", "caption", "beschreibung", "seite")} for f in found[:10]]
     except Exception:
         LOG.debug("Abbildungen zum Thema nicht lesbar", exc_info=True)
         return []

@@ -193,7 +193,7 @@ def done_on(account_id: int, exam_key: str, topic_id: int | None, first: str, la
 
 # ------------------------------------------------------------------ Prüfer
 
-def pictures(account_id: int, subject: str | None, limit: int = 12) -> list[dict]:
+def pictures(account_id: int, subject: str | None, limit: int = 12, prefer: list[int] | None = None) -> list[dict]:
     """Bilder für die Bildbeschreibung: Fotos, Zeichnungen, Comics und Karten aus
     den abgelegten Seiten des Fachs, mit Beschreibung (D198)."""
     if not subject:
@@ -201,7 +201,7 @@ def pictures(account_id: int, subject: str | None, limit: int = 12) -> list[dict
     try:
         from .page_figures import PICTURE_KINDS, for_subject
         return [{"id": f["id"], "beschreibung": f["beschreibung"], "seite": f["seite"]}
-                for f in for_subject(account_id, subject, PICTURE_KINDS, limit)]
+                for f in for_subject(account_id, subject, PICTURE_KINDS, limit, prefer=prefer)]
     except Exception:
         LOG.debug("Bilder für die Sprechprobe nicht lesbar", exc_info=True)
         return []
@@ -224,7 +224,7 @@ def structure(account_id: int, exam_key: str) -> list[dict]:
 
 def context(account_id: int, source: dict, subject: str, grade) -> dict:
     """Was der Prüfer in jedem Zug weiß."""
-    from .exam_meta import get
+    from .exam_meta import get, pinned, pinned_context
     key = source.get("exam_key") or ""
     meta = get(account_id, key)
     topics, layout = spoken_topics(account_id, key), structure(account_id, key)
@@ -238,7 +238,8 @@ def context(account_id: int, source: dict, subject: str, grade) -> dict:
         "niveau": level_for(grade),
         "unterricht": reference_context(account_id, key, subject),
         "baustellen_letztes_mal": open_weak_spots(account_id, key),
-        "bilder": pictures(account_id, subject),
+        "bilder": pictures(account_id, subject, prefer=pinned(account_id, key)),
+        "material_eltern": pinned_context(account_id, key, 2500),
         "bild_gezeigt": source.get("bild"),
         "antworten_bis_zum_abrunden": FULL_TURNS if source.get("full") else TOPIC_TURNS,
     }

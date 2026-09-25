@@ -370,6 +370,22 @@ def one(account_id: int, material_id: int, user: CurrentUser = Depends(get_curre
     return found
 
 
+@router.get("/{material_id}/thumb")
+def thumbnail(account_id: int, material_id: int, user: CurrentUser = Depends(get_current_user)) -> Response:
+    """Ein kleines Vorschaubild für Auswahllisten (D199)."""
+    access(user, account_id)
+    import io
+    from PIL import Image
+    row = store.file_of(account_id, material_id)
+    if not row or not row["file_bytes"] or not (row["mime_type"] or "").startswith("image/"):
+        raise HTTPException(404, "Kein Bild hinterlegt.")
+    img = Image.open(io.BytesIO(row["file_bytes"])).convert("RGB")
+    img.thumbnail((320, 320))
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=75)
+    return Response(out.getvalue(), media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
 @router.get("/{material_id}/file")
 def download(account_id: int, material_id: int, user: CurrentUser = Depends(get_current_user)) -> Response:
     access(user, account_id)
