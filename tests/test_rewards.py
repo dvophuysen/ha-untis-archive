@@ -145,3 +145,64 @@ def test_after_the_weekend_friday_is_only_rescued(world):
     finish(fri, 1, mon)
     rewards.evaluate(1, at(mon, 7, 20))
     assert kinds() == {fri.isoformat(): "rescued"}
+
+
+# ------------------------------------------------------- Stufe C (D181)
+
+def _answer(tid, afb, points, day, fmt=None, attempt=None, most=4):
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO topic_answers(account_id,topic_id,session_id,result,afb,points,max_points,paper_format,attempt_id,created_at) "
+                  "VALUES(1,?,?,?,?,?,?,?,?,?)", (tid, -(attempt or 1), "correct" if points / most >= .8 else "partial",
+                                                  afb, points, most, fmt, attempt, f"{day.isoformat()}T15:00:00+02:00"))
+
+
+def test_twelve_badges_with_learning_counts(world):
+    from backend import lernstand
+    assert len(rewards.BADGES) == 12 and len({b[0] for b in rewards.BADGES}) == 12
+    assert all(len(b[4]) == 5 and list(b[4]) == sorted(b[4]) for b in rewards.BADGES)
+    a = lernstand.add_manual(1, "cal:ma", "Mathematik", "Brüche")["id"]
+    b = lernstand.add_manual(1, "cal:ma", "Mathematik", "Dezimalzahlen")["id"]
+    lernstand.add_manual(1, "cal:ma", "Mathematik", "Vokabeln Unit 1")   # Vokabelthemen haben kein Raster
+    before = START - timedelta(days=3)
+    _answer(a, 1, 4, before); _answer(a, 1, 4, before)                 # vor dem Start sicher geworden: zählt nicht
+    d1, d2 = START + timedelta(days=1), START + timedelta(days=2)
+    _answer(a, 2, 4, d1, "probe", 7); _answer(b, 1, 4, d1, "probe", 7); _answer(b, 2, 4, d1, "probe", 7)
+    _answer(a, 2, 3.5, d2, "kurz", 8); _answer(b, 1, 4, d2, "kurz", 8); _answer(b, 2, 4, d2, "kurz", 8)
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("CREATE TABLE IF NOT EXISTS exam_dates(account_id INTEGER NOT NULL, exam_key TEXT NOT NULL, exam_date TEXT NOT NULL, PRIMARY KEY(account_id, exam_key))")
+        c.execute("INSERT INTO exam_dates VALUES(1,'cal:ma',?)", ((START + timedelta(days=3)).isoformat(),))
+        c.execute("INSERT INTO exam_dates VALUES(1,'cal:de',?)", ((START + timedelta(days=30)).isoformat(),))   # noch nicht gewesen
+        c.execute("INSERT INTO reward_events VALUES(1,'extra','vocab:x',?,'t')", (d1.isoformat(),))
+        c.execute("INSERT INTO reward_events VALUES(1,'extra','practice:9',?,'t')", (d2.isoformat(),))
+    s = rewards.summary(1, at(START + timedelta(days=4), 18))
+    value = {x["key"]: x["value"] for x in s["badges"]}
+    assert value["probearbeit"] == 1, "je Arbeitsversuch einmal, nur Probearbeiten"
+    assert value["aufsteiger"] == 3, "a/II, b/I, b/II wurden ab dem Start sicher"
+    assert value["zielniveau"] == 1 and value["extrameile"] == 2
+    assert {n["key"] for n in s["new_badges"]} >= {"probearbeit", "zielniveau"}
+
+
+def test_extra_mile_only_beyond_the_pensum_and_only_for_the_child(world, monkeypatch):
+    from backend import reward_extras, vocab_pensum
+    items = [{"target": 10, "done": True}]
+    practiced = set(range(15))
+    monkeypatch.setattr(vocab_pensum, "daily", lambda account, day: items)
+    monkeypatch.setattr(vocab_pensum, "practiced", lambda account, day, ids=None: practiced)
+    assert not reward_extras.note_extra_vocab(1, KID, START)
+    practiced.update(range(15, 20))
+    assert not reward_extras.note_extra_vocab(1, PARENT, START)
+    items[0]["done"] = False
+    assert not reward_extras.note_extra_vocab(1, KID, START), "offene Pflicht: nichts extra"
+    items[0]["done"] = True
+    assert reward_extras.note_extra_vocab(1, KID, START)
+    assert not reward_extras.note_extra_vocab(1, KID, START), "einmal je Tag"
+    # Übungsarbeit: an einem Tag ohne Unterricht extra, an einem Schultag nicht.
+    school(world, START, 1)
+    # Eine im Lernplan vorgesehene Übungsarbeit ist Pflicht, keine Extrameile (D180).
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO study_plan_days VALUES(1,?,?,'t')",
+                  (START.isoformat(), '[{"kind": "paper", "exam_key": "k1", "key": "p"}]'))
+    assert not reward_extras.note_extra_practice(1, 5, "k1", KID, START)
+    assert reward_extras.note_extra_practice(1, 6, None, KID, START + timedelta(days=5))
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT COUNT(*) FROM reward_events WHERE kind='extra'").fetchone()[0] == 2

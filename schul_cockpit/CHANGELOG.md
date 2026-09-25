@@ -1,3 +1,14 @@
+## 1.23.0
+
+- Neu auf Heute: Lernen. Die App plant jeden Tag selbst, was du für deine nächsten Arbeiten üben solltest, höchstens zwei Schritte, am Wochenende nur, wenn es knapp wird. Ohne anstehende Arbeit gibt es trotzdem eine kleine tägliche Pflicht, zum Beispiel Vokabeln.
+- Nach der Schule vier Ringe: Aufgaben, Lernen, Tasche, Feedback. „Geschafft“ heißt jetzt: alle vier erledigt. Retten und die Wochenendregel gelten auch für Lernen.
+- „Los“ startet die passende Übungsarbeit oder das Gespräch mit dem Lernbegleiter; eine heute schon angefangene Arbeit geht wieder auf.
+- Die Karte oben zeigt die Aufgabe kurz wie in der Liste und öffnet beim Antippen das Aufgabendetail. Die Schätzung „Freizeit in ca. … Min.“ ist weg.
+- Vokabeln: Tagespensum, das bis zum Test ansteigt (10 bis 40 Wörter, Wochenende frei außer bei Zeitnot), im Trainer als „Heute: x von y Wörtern“.
+- Vokabeltest auf Papier: Blatt je Einheit drucken, Seiten fotografieren, in einem Schritt auswerten; richtig und falsch zählen im Trainer.
+- Vier neue Abzeichen: Probearbeit, Aufsteiger, Zielniveau, Extrameile. Freiwilliges zählt nie statt Pflicht.
+- Eltern sehen auf der Familienkarte „Lernen heute: 1 von 2“, nur zur Information.
+
 ## 1.22.2
 
 - Alle Übungsklausuren unter „Lernen“ lassen sich jetzt auch auf Papier lösen: „Seiten fotografieren und auswerten“ nimmt alle Seiten auf einmal und wertet in einem Schritt aus. Steht im Fach eine Arbeit an, ordnet die Auswertung jede Aufgabe einem ihrer Themen zu, und das Ergebnis zählt für das Raster.

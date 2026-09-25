@@ -230,7 +230,9 @@ def replay(attempts: list[dict]) -> dict:
             "unscoped": any(not a.get('unit_scope') and a['result'] != 'unclear' for a in attempts)}
 
 
-def word_states(c, account_id: int, word_ids: list[int]) -> dict[int, dict]:
+def word_states(c, account_id: int, word_ids: list[int], before: str | None = None) -> dict[int, dict]:
+    """Stufe je Wort. ``before`` (ISO-Datum) liest den Stand vor diesem Tag, etwa
+    für das Tagespensum, das über den Tag gleich bleiben soll (D181)."""
     if not word_ids:
         return {}
     aliases = {r['word_id']: r['canonical_id'] for r in c.execute(
@@ -240,8 +242,9 @@ def word_states(c, account_id: int, word_ids: list[int]) -> dict[int, dict]:
     marks = ",".join("?" * len(source_ids))
     rows = [dict(r) for r in c.execute(
         f"SELECT word_id,stage,result,seconds,created_at,unit_scope FROM vocab_attempts a WHERE account_id=? AND word_id IN ({marks}) "
-        "AND COALESCE((SELECT excluded FROM vocab_attempt_reviews r WHERE r.attempt_id=a.id ORDER BY r.id DESC LIMIT 1),0)=0 ORDER BY created_at,id",
-        (account_id, *source_ids))]
+        "AND COALESCE((SELECT excluded FROM vocab_attempt_reviews r WHERE r.attempt_id=a.id ORDER BY r.id DESC LIMIT 1),0)=0"
+        + (" AND created_at<?" if before else "") + " ORDER BY created_at,id",
+        (account_id, *source_ids, *([before] if before else [])))]
     grouped: dict[tuple[int, int], list[dict]] = {}
     for r in rows:
         grouped.setdefault((aliases.get(r["word_id"], r["word_id"]), r["stage"]), []).append(r)

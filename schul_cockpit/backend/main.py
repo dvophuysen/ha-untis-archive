@@ -59,6 +59,7 @@ from .routers import (
     week_review as week_review_router,
     usage as usage_router,
     vocab as vocab_router,
+    vocab_daily as vocab_daily_router,
 )
 from .sync_worker import background_sync_loop
 from .mentor_worker import background_loop as mentor_loop
@@ -208,6 +209,7 @@ app.include_router(health.router, prefix=API)
 app.include_router(learning.router, prefix=API)
 app.include_router(mentor.router, prefix=API)
 app.include_router(vocab_router.router, prefix=API)
+app.include_router(vocab_daily_router.router, prefix=API)
 app.include_router(materials_router.router, prefix=API)
 app.include_router(calendars_router.router, prefix=API)
 app.include_router(mentor_exams.router, prefix=API)
