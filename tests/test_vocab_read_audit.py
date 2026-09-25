@@ -30,3 +30,20 @@ def test_source_audit_is_account_scoped_and_read_only(env):
         assert c.execute('SELECT analysis_state FROM materials WHERE id=900').fetchone()[0] == 'pending'
 
 
+
+
+def test_recent_activity_is_readable_before_an_update(env):
+    """Vor einem Update: War in den letzten Minuten jemand in der App, Kind oder Eltern?"""
+    from backend.routers import read_access as r
+    from backend import usage_report
+    client, state, patch = env
+    client.app.include_router(r.router, prefix='/api')
+    patch.setattr(r, 'SETTINGS', db.SETTINGS)
+    patch.setenv('LEARNING_READ_TOKEN', 'a' * 48)
+    patch.setenv('LEARNING_READ_ACCOUNTS', '1')
+    usage_report.record_ping(1, 'child', 'today', 60, True)
+    usage_report.record_ping(2, 'child', 'today', 60, True)
+    rows = client.get('/api/integration/learning/usage_days?account_id=1',
+                      headers={'X-Learning-Read-Key': 'a' * 48}).json()['rows']
+    assert [(x['account_id'], x['actor'], x['opens']) for x in rows] == [(1, 'child', 1)]
+    assert rows[0]['last_at'] and 'views_json' not in rows[0]

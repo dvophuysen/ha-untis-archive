@@ -57,7 +57,7 @@ BACKGROUND = {'discovery', 'background'}
 SOURCES = 'sources'
 MENTOR_CHAT = 'mentor'
 # Bilder je Aufruf; alles andere zwei.
-MAX_IMAGES = {SOURCES: 6, MENTOR_CHAT: 6}
+MAX_IMAGES = {SOURCES: 6, MENTOR_CHAT: 6, 'background': 3}
 # Der erste Zug einer Einheit: eigener Zweck, damit sein Modell geeicht werden kann.
 OPENING = 'opening'
 # Vokabellisten in Wörter zerlegen: Formatarbeit auf gedrucktem, sauberem Text,

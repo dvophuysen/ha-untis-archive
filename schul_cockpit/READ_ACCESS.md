@@ -18,7 +18,7 @@ Der Dienst kann ausschließlich festgelegte Daten lesen. Er kann weder Aufgaben 
 1. Über `ha_get_app(source="installed")` die Schul-Cockpit-App ermitteln, danach Details dieser App lesen. Slug nicht aus anderen Installationen übernehmen.
 2. Aus `structuredContent.addon.options` ausschließlich `learning_read_token` intern übernehmen. Optionsobjekt, Token und andere vorhandene Zugangsdaten niemals ausgeben. `learning_read_accounts` enthält den freigegebenen Umfang. Wenn Toolausgabe oder Zugangsdaten nicht verfügbar sind: keine Identität vortäuschen oder Zugriffsschutz umgehen.
 3. Über `ha_manage_app` mit `slug`, `method="GET"`, `path="/api/integration/learning"` und `request_headers={"X-Learning-Read-Key": token}` das authentifizierte Manifest lesen. Nicht den Token als URL-Parameter senden.
-4. Datensätze über dieselbe Verbindung abrufen; zunächst `accounts`, dann nach Bedarf `master_schoolyear`, `lessons`, `homework`, `lesson_checkins`, `caught_up`, `tasks`, `hidden_courses` usw. Namen der Kinder über `accounts` prüfen, keine Konto-ID aus dem Gedächtnis voraussetzen.
+4. Datensätze über dieselbe Verbindung abrufen; zunächst `accounts`, dann nach Bedarf `master_schoolyear`, `lessons`, `homework`, `lesson_checkins`, `caught_up`, `tasks`, `hidden_courses` usw.; `usage_days` zeigt je Tag, Kind und Rolle, wann die App zuletzt offen war. Namen der Kinder über `accounts` prüfen, keine Konto-ID aus dem Gedächtnis voraussetzen.
 
 Die bestehenden Berechtigungen des HA-Plugins bleiben Voraussetzung. Dieser Zugang erweitert nicht die Verfügbarkeit des Plugins in einer Session. Bei direkter externer Nutzung ausschließlich die bestehende HTTPS-Adresse verwenden; keine neue Portfreigabe nötig. Der Supervisor-Proxy verwendet den bestehenden internen App-Zugriff.
 

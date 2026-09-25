@@ -1,3 +1,8 @@
+## 1.14.5
+
+- Fotos werden schärfer gelesen: Eine Heftseite geht jetzt in bis zu drei überlappenden Streifen zur Auswertung, jeder in voller Auflösung. Bisher verkleinerte der Anbieter die ganze Seite auf rund 60 %, und kleine Brüche am unteren Rand galten als „unscharf“, obwohl das Foto scharf war. Kosten je Seite steigen um Bruchteile eines Cents.
+- Lesezugang: Die Nutzungstage (wann die App heute zuletzt offen war, Kind oder Eltern) sind abrufbar. Vor einem Update wird damit geprüft, ob gerade jemand lernt.
+
 ## 1.14.4
 
 - Gegenlesen nur noch bei echten Zweifeln. Nicht mehr vorgelegt werden: gedruckte Lücken im Lückentext, die als „[…]“ gelesen waren; Seiten mit Eintragungen des Kindes, deren Gesamtsicherheit nur wegen der Handschrift niedriger ist; Bildnachweise, Fußnotenzeichen und Ähnliches; einzelne Wörter im Fließtext, für die die Lesung eine plausible Lesart nennt. Zahlen (Seiten, Brüche, Jahreszahlen) und einzelne Wörter auf Vokabellisten bleiben ein Zweifel.

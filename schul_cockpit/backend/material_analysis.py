@@ -7,6 +7,7 @@ still open. Fields a human corrected are never overwritten.
 from __future__ import annotations
 
 import base64
+import io
 import json
 import logging
 import re
@@ -247,13 +248,49 @@ def _context(conn, account_id: int, row) -> dict:
             "bekannte_buchteile": list(store.BOOK_PARTS)}
 
 
+# Der Anbieter verkleinert ein Bild im Modus „high“, bis die kurze Seite 768
+# Pixel misst. Eine ganze Heftseite kam so mit rund 60 % ihrer Auflösung an, und
+# kleine Brüche am unteren Rand galten als „unscharf“, obwohl das Foto scharf
+# war (D168). Deshalb geht ein hohes Foto in überlappenden Streifen hinein, jeder
+# höchstens so hoch, dass er unverkleinert ankommt.
+STRIP_SIDE = 760
+STRIP_OVERLAP = 60
+MAX_STRIPS = 3
+
+
+def strips(blob: bytes) -> list[bytes]:
+    """Das Foto als Streifen von oben nach unten, mit Überlappung. Ein kleines
+    Foto bleibt ein Bild."""
+    from PIL import Image, ImageOps
+    image = ImageOps.exif_transpose(Image.open(io.BytesIO(blob))).convert("RGB")
+    if min(image.size) <= STRIP_SIDE:
+        return [blob]
+    count = min(MAX_STRIPS, -(-(image.height - STRIP_OVERLAP) // (STRIP_SIDE - STRIP_OVERLAP)))
+    if count <= 1:
+        return [blob]
+    step = (image.height - STRIP_OVERLAP) / count
+    out = []
+    for i in range(count):
+        top = int(i * step)
+        bottom = image.height if i == count - 1 else int(top + step + STRIP_OVERLAP)
+        buffer = io.BytesIO()
+        image.crop((0, top, image.width, bottom)).save(buffer, format="JPEG", quality=90)
+        out.append(buffer.getvalue())
+    return out
+
+
 def _parts(row) -> tuple[list[dict], str]:
     """Images for a photo or scan, extracted text for a digital notebook."""
     blob = row["file_bytes"]
     if row["mime_type"] != "application/pdf":
+        try:
+            pieces = strips(blob)
+        except Exception:
+            pieces = [blob]
+        mime = row["mime_type"] if len(pieces) == 1 else "image/jpeg"
         return ([{"type": "image_url", "image_url": {
-            "url": f"data:{row['mime_type']};base64," + base64.b64encode(blob).decode(),
-            "detail": "high"}}], "")
+            "url": f"data:{mime};base64," + base64.b64encode(piece).decode(), "detail": "high"}}
+            for piece in pieces], "")
     text = (row["content_text"] or "").strip() or store.pdf_text(blob)
     if len(text) >= 200:
         return [], text
@@ -379,6 +416,9 @@ async def extract(account_id: int, row, tier: str | None = None, effort: str | N
     images, text = _parts(row)
     if not images and not text:
         raise ValueError("kein lesbarer Inhalt")
+    if len(images) > 1 and row["mime_type"] != "application/pdf":
+        context["ansicht"] = (f"Die Bilder sind {len(images)} Streifen EINER Seite, von oben nach unten, mit etwas "
+                              "Überlappung. Gib die Seite als ein Ganzes wieder und jede Zeile aus der Überlappung nur einmal.")
     if text:
         context["dokumenttext"] = text[:20000]
     raw, _, key = await ai.complete(

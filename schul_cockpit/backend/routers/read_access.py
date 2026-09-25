@@ -59,6 +59,10 @@ dataset('book_chapters','app','id account_id book_title number title kind level 
 
 # Original evidence and learning history for a non-mutating vocabulary audit.
 # Explicit allowlists: never expose users, sessions, provider tokens or options.
+# Wann die App zuletzt offen war, je Tag, Kind und Rolle (Herzschlag jede
+# Minute, nur Tagessummen): Vor einem Update wird damit geprüft, ob gerade
+# jemand lernt. Keine Ansichten, keine Sitzungen.
+dataset('usage_days','app','account_id day actor first_at last_at opens active_seconds','day','last_at')
 dataset('materials','app','id account_id kind subject_name title summary content_text source_label source_page printed_pages page_check origin filename mime_type verified hidden analysis_state analysis_model analysis_version analysis_error created_at updated_at','created_at','updated_at')
 dataset('vocab_words','app','id account_id subject material_id source_label page unit section box position foreign_word plain meanings_json grammar forms_json example hidden created_at','created_at')
 dataset('vocab_attempts','app','id account_id word_id stage direction answer result spoken seconds edits created_at','created_at')
