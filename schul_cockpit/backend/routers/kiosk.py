@@ -28,6 +28,7 @@ from ..pin_auth import (
     create_session,
     verify_pin,
 )
+from ..view_mode import is_parent_role
 from .dashboard import _dashboard_for_account
 
 router = APIRouter()
@@ -99,10 +100,13 @@ async def kiosk_dashboard(request: Request) -> HTMLResponse:
             f"{'' if len(stale) == 1 else 'en'} zeigt ins Leere — "
             "im Setup der App reparieren.</div>"
         )
+    # Der Kiosk ist auch das Gerät der Kinder (altes iPad, Anmeldung per PIN).
+    # Die Beobachtungen für Eltern („Mitlernen“, „schwer“) sehen nur Eltern.
+    parent = is_parent_role(user)
     body = (
         warn
         + "<div class='dash'>"
-        + "".join(_render_kid(k) for k in kids)
+        + "".join(_render_kid(k, parent=parent) for k in kids)
         + "</div>"
     )
     return HTMLResponse(
@@ -195,13 +199,13 @@ def kiosk_login_submit(
 # ---------- Rendering ----------------------------------------------------
 
 
-def _render_kid(kid: dict) -> str:
+def _render_kid(kid: dict, *, parent: bool = True) -> str:
     return (
         '<section class="kid">'
         + _render_head(kid)
         + _render_now(kid)
-        + _render_exams(kid)
-        + _render_support(kid)
+        + _render_exams(kid, parent=parent)
+        + (_render_support(kid) if parent else "")
         + _render_tasks(kid)
         + _render_plan(kid)
         + _render_feedback(kid)
@@ -247,7 +251,7 @@ def _exam_when_phrase(ex: dict) -> str:
     return f"{d.day:02d}.{d.month:02d}. · in {days} Tagen"
 
 
-def _render_exams(kid: dict) -> str:
+def _render_exams(kid: dict, *, parent: bool = True) -> str:
     exams = kid.get("exams") or []
     head = (
         "<h3>Klausuren"
@@ -263,7 +267,7 @@ def _render_exams(kid: dict) -> str:
         when = _exam_when_phrase(ex)
         comp = ex.get("comprehension") or {}
         hard = comp.get("hard", 0)
-        hard_part = f" · {hard} schwer" if hard > 0 else ""
+        hard_part = f" · {hard} schwer" if hard > 0 and parent else ""
         rows.append(
             "<div class='row'>"
             f"{dot}"

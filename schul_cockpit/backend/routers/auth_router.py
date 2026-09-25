@@ -102,16 +102,21 @@ def logout(request: Request, response: Response) -> dict:
 def admin_set_pin(
     user_id: int,
     body: PinIn,
+    request: Request,
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
+    """PIN setzen oder ändern; hebt eine Sperre auf. Die bisherigen
+    Anmeldungen dieses Nutzers enden. Ändert ein Admin die eigene PIN über
+    seine PIN-Anmeldung, bleibt dieses Gerät angemeldet."""
     require_admin(user)
+    keep = request.cookies.get(SESSION_COOKIE) if user.id == user_id and user.auth_source == "pin" else None
     conn = webapp_conn()
     try:
         exists = conn.execute("SELECT 1 FROM users WHERE id = ?", (user_id,)).fetchone()
         if not exists:
             raise HTTPException(status_code=404, detail="user not found")
         try:
-            set_pin(conn, user_id, body.pin)
+            set_pin(conn, user_id, body.pin, keep_token=keep)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
     finally:

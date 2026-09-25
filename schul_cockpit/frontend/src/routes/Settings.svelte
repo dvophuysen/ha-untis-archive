@@ -307,7 +307,12 @@
       const resp = await fetch('./api/admin/backup/restore', { method: 'POST', body: fd, credentials: 'include' });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data.detail || `Fehler ${resp.status}`);
-      restoreMsg = { ok: true, text: 'Wiederhergestellt. Bitte das Add-on in Home Assistant neu starten, damit alles sauber geladen wird.' };
+      if (data.restarting) {
+        // Das Add-on startet neu und setzt das Backup dabei ein.
+        restoreMsg = { ok: true, text: 'Backup geprüft. Die App startet jetzt neu und übernimmt es dabei; in etwa einer Minute neu laden. Zeigt sie danach noch den alten Stand, das Add-on in Home Assistant neu starten.' };
+        return;
+      }
+      restoreMsg = { ok: true, text: 'Backup geprüft. Bitte das Add-on in Home Assistant neu starten; erst dabei wird es eingesetzt.' };
       await loadBackupStatus();
     } catch (e) {
       restoreMsg = { ok: false, text: e.message };

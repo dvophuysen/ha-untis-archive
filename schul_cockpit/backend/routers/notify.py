@@ -14,11 +14,12 @@ import json
 import secrets
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from ..auth import CurrentUser, assert_account_access, get_current_user, require_admin
 from ..config import SETTINGS
 from ..db import history_conn, webapp_conn
+from ..learning import today_local
 from ..queries import upcoming_exams
 
 router = APIRouter()
@@ -110,8 +111,26 @@ def rotate_notify_token(
 
 # ---- Public, token-protected summary endpoint ---------------------------
 
+def token_matches(stored: str | None, given: str | None) -> bool:
+    """Zeitkonstanter Vergleich. ``compare_digest`` auf str wirft bei
+    Nicht-ASCII einen TypeError (500 statt 401), deshalb als Bytes."""
+    if not stored or not given:
+        return False
+    return secrets.compare_digest(stored.encode("utf-8"), given.encode("utf-8"))
+
+
+def given_token(query: str | None, header: str | None) -> str | None:
+    """Das Token aus der Kopfzeile ``X-Notify-Token`` oder, wie bisher für
+    bestehende HA-Automationen, aus ``?token=``."""
+    # Direkt aufgerufen (Tests, andere Module) stehen hier FastAPI-Voreinstellungen.
+    header = header.strip() if isinstance(header, str) else ""
+    query = query if isinstance(query, str) else None
+    return header or query
+
+
 def _now_hhmm() -> int:
-    n = datetime.now()
+    from zoneinfo import ZoneInfo
+    n = datetime.now(ZoneInfo("Europe/Berlin"))
     return n.hour * 100 + n.minute
 
 
@@ -126,7 +145,8 @@ def _deep_link(path: str, account_id: int) -> str:
 @router.get("/notify/{account_id}/summary")
 def notify_summary(
     account_id: int,
-    token: str = Query(..., description="Per-account notify_token"),
+    token: str | None = Query(default=None, description="Per-account notify_token"),
+    x_notify_token: str | None = Header(default=None),
 ) -> dict:
     conn = webapp_conn()
     try:
@@ -136,11 +156,11 @@ def notify_summary(
         ).fetchone()
     finally:
         conn.close()
-    if not row or not row["notify_token"] or not secrets.compare_digest(row["notify_token"], token):
+    if not row or not token_matches(row["notify_token"], given_token(token, x_notify_token)):
         # Don't leak whether the account exists.
         raise HTTPException(status_code=401, detail="invalid token")
 
-    today = date.today()
+    today = today_local()
     today_iso = today.isoformat()
     tomorrow_iso = (today + timedelta(days=1)).isoformat()
     now_hhmm = _now_hhmm()
@@ -255,8 +275,8 @@ def notify_summary(
         absent_rows = hconn.execute(
             "SELECT id FROM lessons WHERE account_id = ? AND was_absent = 1 "
             "AND (code IS NULL OR LOWER(code) != 'cancelled') "
-            "AND date >= date('now', '-120 days') AND date <= date('now')",
-            (account_id,),
+            "AND date >= ? AND date <= ?",
+            (account_id, (today - timedelta(days=120)).isoformat(), today_iso),
         ).fetchall()
     finally:
         hconn.close()

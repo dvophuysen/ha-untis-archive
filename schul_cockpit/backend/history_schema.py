@@ -127,5 +127,12 @@ def assert_compatible(history_db_path: str) -> None:
                 "Bitte UNTIS-Archive-Integration aktualisieren. Details: "
                 + "; ".join(missing)
             )
+    except sqlite3.Error as exc:
+        # „file is not a database“, gesperrt, beschädigt: wie ein unpassendes
+        # Schema melden. Bis 1.31 fiel der Start darüber und das Add-on lief
+        # in eine Neustartschleife.
+        raise SchemaMismatch(
+            f"history.db ist nicht lesbar ({history_db_path}): {exc}"
+        ) from exc
     finally:
         conn.close()

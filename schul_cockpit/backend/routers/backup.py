@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 from datetime import datetime, timezone
@@ -13,12 +14,13 @@ from starlette.background import BackgroundTask
 from ..auth import CurrentUser, get_current_user, require_admin
 import asyncio
 
-from ..backup import backup_now, backup_state, make_combined_zip, restore_from_file, status
+from ..backup import backup_now, backup_state, make_combined_zip, stage_restore, status
 from ..db import history_conn
 from ..supervisor_client import SupervisorError, get_supervisor
 from ..webclip import build_webclip, external_url_or_none
 
 router = APIRouter()
+LOG = logging.getLogger("schul_cockpit.backup")
 
 
 @router.get("/admin/backup/status")
@@ -67,11 +69,45 @@ async def backup_download(user: CurrentUser = Depends(get_current_user)):
     )
 
 
+# Zeit, bis der Neustart ausgelöst wird: Die Antwort muss vorher beim Browser sein.
+RESTART_DELAY = 2.0
+_RESTARTS: set[asyncio.Task] = set()
+
+
+async def _restart_self() -> None:
+    """Das Add-on über den Supervisor neu starten (/addons/self/restart). Der
+    Supervisor beendet dabei diesen Prozess, deshalb erst nach der Antwort."""
+    import httpx
+    from ..config import SETTINGS
+    await asyncio.sleep(RESTART_DELAY)
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(f"{SETTINGS.supervisor_url}/addons/self/restart",
+                                     headers={"Authorization": f"Bearer {SETTINGS.supervisor_token}"})
+        if resp.status_code >= 400:
+            LOG.error("Neustart nach dem Einspielen abgelehnt: %s; das Backup wartet auf den nächsten Start",
+                      resp.status_code)
+    except Exception:
+        LOG.warning("Neustart nach dem Einspielen nicht ausgelöst; das Backup wartet auf den nächsten Start",
+                    exc_info=True)
+
+
+def _schedule_restart() -> bool:
+    if not get_supervisor().available:
+        return False
+    task = asyncio.get_running_loop().create_task(_restart_self())
+    _RESTARTS.add(task)
+    task.add_done_callback(_RESTARTS.discard)
+    return True
+
+
 @router.post("/admin/backup/restore")
 async def backup_restore(
     user: CurrentUser = Depends(get_current_user),
     file: UploadFile = File(...),
 ) -> dict:
+    """Backup prüfen, zum Tausch ablegen und das Add-on neu starten. Ohne
+    Supervisor bleibt es beim Hinweis, selbst neu zu starten."""
     require_admin(user)
     fd, tmp = tempfile.mkstemp(prefix="sc-restore-", suffix=".db")
     try:
@@ -80,17 +116,17 @@ async def backup_restore(
                 f.write(chunk)
         from pathlib import Path
         try:
-            info = restore_from_file(Path(tmp))
+            info = await asyncio.to_thread(stage_restore, Path(tmp))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
     finally:
-        # restore_from_file moves the temp file into place on success; only
-        # clean up if it's still around (validation failure path).
         if os.path.exists(tmp):
             os.unlink(tmp)
+    restarting = _schedule_restart()
     return {
         "ok": True,
-        "restart_required": True,
+        "restarting": restarting,
+        "restart_required": not restarting,
         **info,
     }
 

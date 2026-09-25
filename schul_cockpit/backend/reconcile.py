@@ -28,33 +28,27 @@ from .db import history_conn, webapp_conn
 
 _LOGGER = logging.getLogger("schul_cockpit.reconcile")
 
-# Tables in webapp.db that carry an account_id and must be remapped together.
-_ACCOUNT_TABLES = (
-    "packing_items", "reminder_settings", "reminder_deliveries", "afternoon_checks", "afternoon_app_deliveries", "digital_textbook_credentials", "digital_textbook_catalog",
-    "digital_textbook_pages", "digital_textbook_fetches", "digital_textbook_access", "source_links", "book_chapters", "entry_chapters", "source_claims",
-    "learning_day_preferences", "learning_plan_links", "learning_plan_blocks", "learning_skill_state",
-    "mentor_quality_runs", "mentor_settings", "mentor_ai_calls", "mentor_skills", "mentor_sessions",
-    "mentor_messages", "mentor_evidence", "mentor_reviews", "mentor_attachments",
-    "mentor_exam_exposures", "mentor_scope_plans", "mentor_jobs", "mentor_exams", "mentor_exam_attempts", "mentor_exam_photos",
-    "learning_profiles",
-    "learning_ai_usage",
-    "learning_discovery_settings",
-    "learning_discovery_items",
-    "learning_discovery_runs",
-    "user_account_links",
-    "account_todo_lists",
-    "account_settings",
-    "lesson_checkins",
-    "caught_up",
-    "tasks",
-    "audit_log",
-    # Ohne diese verlöre ein Kontowechsel die gewählten Telefone und damit
-    # stillschweigend die Erinnerung.
-    "reminder_app_targets",
-    "reminder_app_deliveries",
-    "day_closures",
-    "morning_app_deliveries",
-)
+# Tabellen, deren account_id nicht mitwandert: account_ref ist die Zuordnung
+# selbst und wird danach neu geschrieben.
+_NOT_REMAPPED = frozenset({"account_ref"})
+
+
+def account_tables(conn) -> list[str]:
+    """Alle Tabellen der webapp.db mit einer Spalte account_id. Bis 1.31 stand
+    hier eine feste Liste, in der 38 von 87 Tabellen fehlten (Vokabeln,
+    Material, Belohnungen, Antworten …): Nach einer Neueinrichtung der
+    Integration wären deren Zeilen beim alten Konto geblieben."""
+    names = [r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+    out = []
+    for name in names:
+        if name in _NOT_REMAPPED:
+            continue
+        cols = {r[1] for r in conn.execute(f'PRAGMA table_info("{name}")')}
+        if "account_id" in cols:
+            out.append(name)
+    return out
+
 
 # Tables carrying (account_id, lesson_id, untis_period_id) lesson references.
 _LESSON_TABLES = ("lesson_checkins", "caught_up", "tasks")
@@ -94,6 +88,10 @@ def _reconcile_accounts() -> None:
 
     conn = webapp_conn()
     try:
+        # Umnummerieren und Zuordnung in einer Transaktion: Scheitert etwas
+        # (etwa ein UNIQUE-Konflikt mit Altbeständen), bleibt alles beim Alten
+        # und der nächste Start versucht es erneut, statt halb umgezogen.
+        conn.execute("BEGIN IMMEDIATE")
         known = {
             r["entry_id"]: {"account_id": r["account_id"]}
             for r in conn.execute(
@@ -127,7 +125,10 @@ def _reconcile_accounts() -> None:
                 "  updated_at = excluded.updated_at",
                 (entry_id, info["account_id"], info["name"], now),
             )
+        conn.execute("COMMIT")
     finally:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
         conn.close()
 
 
@@ -138,18 +139,19 @@ def _apply_account_remaps(conn, remaps: list[tuple[int, int]]) -> None:
     clobber rows mid-flight.
     """
     OFFSET = 1_000_000
+    tables = account_tables(conn)
     # Phase 1: old -> old+OFFSET (temporary, collision-free space)
     for old, _new in remaps:
-        for table in _ACCOUNT_TABLES:
+        for table in tables:
             conn.execute(
-                f"UPDATE {table} SET account_id = account_id + ? WHERE account_id = ?",
+                f'UPDATE "{table}" SET account_id = account_id + ? WHERE account_id = ?',
                 (OFFSET, old),
             )
     # Phase 2: old+OFFSET -> new
     for old, new in remaps:
-        for table in _ACCOUNT_TABLES:
+        for table in tables:
             conn.execute(
-                f"UPDATE {table} SET account_id = ? WHERE account_id = ?",
+                f'UPDATE "{table}" SET account_id = ? WHERE account_id = ?',
                 (new, old + OFFSET),
             )
 

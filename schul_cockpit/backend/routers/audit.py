@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..auth import CurrentUser, get_current_user, require_admin
+from ..auth import CurrentUser, assert_account_access, get_current_user, require_admin
 from ..db import webapp_conn
 
 router = APIRouter()
+_LOG = logging.getLogger("schul_cockpit.audit")
 
 
 def _now() -> str:
@@ -86,11 +88,93 @@ def toggle_demo(
     return {"ok": True, "demo_mode": body.enabled}
 
 
+class RevertConflict(Exception):
+    """Der aktuelle Stand passt nicht mehr zum protokollierten Nachher."""
+
+
+CONFLICT_DETAIL = ("Das wurde inzwischen noch einmal geändert. Rückgängig machen würde die "
+                   "neuere Änderung überschreiben, deshalb bleibt es so.")
+GONE_DETAIL = "Den Eintrag gibt es nicht mehr, es gibt nichts zurückzunehmen."
+
+_ROW_TABLES = {"task": "tasks", "checkin": "lesson_checkins", "caught_up": "caught_up"}
+
+
+def _same(a, b) -> bool:
+    # Nach JSON zurückgelesen: 1 und 1.0 sind gleich, sonst wörtlich.
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool):
+        return float(a) == float(b)
+    return a == b
+
+
+def _check_columns(current, after: dict, cols) -> None:
+    if current is None:
+        raise RevertConflict(GONE_DETAIL)
+    for c in cols:
+        if c in current.keys() and not _same(current[c], after.get(c)):
+            raise RevertConflict(CONFLICT_DETAIL)
+
+
+def _newer_entry(conn, entry: dict) -> bool:
+    """Gibt es eine spätere, nicht zurückgenommene Änderung am selben Ziel?"""
+    if entry.get("target_id") is None:
+        return False
+    return conn.execute(
+        "SELECT 1 FROM audit_log WHERE target_kind = ? AND target_id = ? AND id > ? "
+        "AND reverted_at IS NULL LIMIT 1",
+        (entry["target_kind"], entry["target_id"], entry["id"]),
+    ).fetchone() is not None
+
+
+def _check_current(conn, entry: dict, before: dict | None, after: dict | None) -> None:
+    """Zurückgenommen wird nur, solange der aktuelle Stand dem Nachher des
+    Eintrags entspricht. Bis 1.31 überschrieb ein Rückgängig blind alles, was
+    danach geändert worden war."""
+    kind, op = entry["target_kind"], entry["op_type"]
+    if kind in _ROW_TABLES:
+        table = _ROW_TABLES[kind]
+        if op == "update" and before:
+            current = conn.execute(f"SELECT * FROM {table} WHERE id = ?", (before["id"],)).fetchone()
+            _check_columns(current, after or {}, [c for c in before if c != "id" and before.get(c) != (after or {}).get(c)])
+        elif op == "insert" and after:
+            if _newer_entry(conn, entry):
+                raise RevertConflict(CONFLICT_DETAIL)
+        elif op == "delete" and before:
+            clash = conn.execute(f"SELECT 1 FROM {table} WHERE id = ?", (before["id"],)).fetchone()
+            if clash is None and kind in ("checkin", "caught_up") and "lesson_id" in before:
+                clash = conn.execute(
+                    f"SELECT 1 FROM {table} WHERE account_id = ? AND lesson_id = ?",
+                    (before.get("account_id"), before.get("lesson_id")),
+                ).fetchone()
+            if clash is not None:
+                raise RevertConflict(CONFLICT_DETAIL)
+        return
+    if kind == "settings":
+        if op == "update" and before:
+            current = conn.execute("SELECT * FROM account_settings WHERE account_id = ?",
+                                   (before["account_id"],)).fetchone()
+            _check_columns(current, after or {}, [c for c in before if c != "account_id" and before.get(c) != (after or {}).get(c)])
+        elif op == "insert" and _newer_entry(conn, entry):
+            raise RevertConflict(CONFLICT_DETAIL)
+        return
+    if kind == "packing":
+        key = after or before
+        current = conn.execute(
+            "SELECT * FROM packing_items WHERE account_id = ? AND school_day = ? AND item_key = ?",
+            (key["account_id"], key["school_day"], key["item_key"]),
+        ).fetchone()
+        if op == "insert" or not before:
+            if current is not None and after and not _same(current["done"], after.get("done")):
+                raise RevertConflict(CONFLICT_DETAIL)
+        else:
+            _check_columns(current, after or {}, ["done"])
+
+
 def _revert_entry(conn, entry: dict) -> None:
     kind = entry["target_kind"]
     op = entry["op_type"]
     before = json.loads(entry["before_json"]) if entry["before_json"] else None
     after = json.loads(entry["after_json"]) if entry["after_json"] else None
+    _check_current(conn, entry, before, after)
 
     if kind == "task":
         if op == "insert":
@@ -164,6 +248,29 @@ def _update_columns(conn, table: str, before: dict, after: dict) -> None:
     conn.execute(f"UPDATE {table} SET {sets} WHERE {pk_col} = ?", params)
 
 
+def _revert_in_tx(conn, entry_id: int, user_id: int) -> str:
+    """Rücknahme und Vermerk in einer Transaktion. Liefert 'done',
+    'already' oder wirft (RevertConflict, HTTPException)."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        row = conn.execute(
+            "SELECT * FROM audit_log WHERE id = ? AND user_id = ?", (entry_id, user_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Audit-Eintrag nicht gefunden")
+        if row["reverted_at"]:
+            conn.execute("ROLLBACK")
+            return "already"
+        _revert_entry(conn, dict(row))
+        conn.execute("UPDATE audit_log SET reverted_at = ? WHERE id = ?", (_now(), entry_id))
+        conn.execute("COMMIT")
+        return "done"
+    except BaseException:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
+
+
 @router.post("/my-changes/{entry_id}/revert")
 def revert_entry(
     entry_id: int,
@@ -172,20 +279,21 @@ def revert_entry(
     conn = webapp_conn()
     try:
         row = conn.execute(
-            "SELECT * FROM audit_log WHERE id = ? AND user_id = ?",
+            "SELECT account_id FROM audit_log WHERE id = ? AND user_id = ?",
             (entry_id, user.id),
         ).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="Audit-Eintrag nicht gefunden")
-        if row["reverted_at"]:
-            return {"ok": True, "already_reverted": True}
-        _revert_entry(conn, dict(row))
-        conn.execute(
-            "UPDATE audit_log SET reverted_at = ? WHERE id = ?",
-            (_now(), entry_id),
-        )
+        if row["account_id"] is not None:
+            assert_account_access(user, row["account_id"])
+        try:
+            result = _revert_in_tx(conn, entry_id, user.id)
+        except RevertConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from None
     finally:
         conn.close()
+    if result == "already":
+        return {"ok": True, "already_reverted": True}
     return {"ok": True}
 
 
@@ -193,26 +301,29 @@ def revert_entry(
 def revert_all_demo(user: CurrentUser = Depends(get_current_user)) -> dict:
     """Undo every still-open demo-mode entry of the current user.
 
-    Iterates from newest to oldest so chained updates unwind correctly."""
+    Iterates from newest to oldest so chained updates unwind correctly. Jede
+    Rücknahme steht in einer eigenen Transaktion; was inzwischen anders
+    geändert wurde oder nicht zurückgeht, wird übersprungen und protokolliert,
+    der Rest läuft weiter (Testmodus verlassen, D175)."""
     conn = webapp_conn()
     try:
         rows = conn.execute(
-            "SELECT * FROM audit_log "
+            "SELECT id, account_id FROM audit_log "
             "WHERE user_id = ? AND demo_mode = 1 AND reverted_at IS NULL "
-            "ORDER BY created_at DESC",
+            "ORDER BY created_at DESC, id DESC",
             (user.id,),
         ).fetchall()
-        reverted = 0
+        reverted = skipped = 0
         for r in rows:
             try:
-                _revert_entry(conn, dict(r))
-                conn.execute(
-                    "UPDATE audit_log SET reverted_at = ? WHERE id = ?",
-                    (_now(), r["id"]),
-                )
-                reverted += 1
-            except Exception:
-                pass
+                if r["account_id"] is not None:
+                    assert_account_access(user, r["account_id"])
+                if _revert_in_tx(conn, r["id"], user.id) == "done":
+                    reverted += 1
+            except Exception as exc:
+                skipped += 1
+                _LOG.warning("Testmodus: Änderung %s nicht zurückgenommen: %s", r["id"],
+                             getattr(exc, "detail", None) or exc)
     finally:
         conn.close()
-    return {"ok": True, "reverted": reverted}
+    return {"ok": True, "reverted": reverted, "skipped": skipped}

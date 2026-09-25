@@ -11,7 +11,6 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .auth import from_ingress
 from .config import SETTINGS
 from .pin_auth import SESSION_COOKIE, SESSION_TTL_DAYS
 from .db import init_webapp_db
@@ -70,6 +69,32 @@ from .materials_worker import background_loop as materials_loop
 logging.basicConfig(level=getattr(logging, SETTINGS.log_level.upper(), logging.INFO))
 _LOGGER = logging.getLogger("schul_cockpit")
 
+import re as _re_mask  # noqa: E402
+
+_TOKEN_IN_QUERY = _re_mask.compile(r"([?&]token=)[^&\s\"]*", _re_mask.IGNORECASE)
+
+
+class MaskQueryTokens(logging.Filter):
+    """Mitteilungs-Token aus dem Zugriffslog von uvicorn tilgen. HA-Automationen
+    rufen /api/notify/… mit ?token= auf; das Add-on-Log zeigt jede Zeile im
+    HA-Protokoll. Das Log selbst bleibt, es dient der Diagnose."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            if isinstance(record.args, tuple) and record.args:
+                record.args = tuple(
+                    _TOKEN_IN_QUERY.sub(r"\1***", a) if isinstance(a, str) else a for a in record.args)
+            if isinstance(record.msg, str) and "token=" in record.msg.lower():
+                record.msg = _TOKEN_IN_QUERY.sub(r"\1***", record.msg)
+        except Exception:
+            pass
+        return True
+
+
+# uvicorn richtet seine Logger ein, bevor es die App lädt; ein Filter am Logger
+# bleibt danach bestehen.
+logging.getLogger("uvicorn.access").addFilter(MaskQueryTokens())
+
 _SCHEMA_OK: bool = False
 _SCHEMA_ERROR: str | None = None
 _BG_TASK: asyncio.Task | None = None
@@ -78,6 +103,10 @@ _BG_TASK: asyncio.Task | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _SCHEMA_OK, _SCHEMA_ERROR, _BG_TASK
+    # Ein eingespieltes Backup wird vor dem ersten Öffnen der Datenbank
+    # getauscht, nie im laufenden Betrieb (siehe backup.apply_pending_restore).
+    from .backup import apply_pending_restore
+    apply_pending_restore()
     init_webapp_db()
     try:
         assert_compatible(str(SETTINGS.history_db_path))
@@ -100,19 +129,23 @@ async def lifespan(app: FastAPI):
     except Exception:
         _LOGGER.warning("KI-Zugänge konnten nicht ermittelt werden", exc_info=True)
 
-    _BG_TASK = asyncio.create_task(background_sync_loop())
-    mentor_task = asyncio.create_task(mentor_loop())
-    materials_task = asyncio.create_task(materials_loop())
     from .textbook_catalog import scan_connected_accounts
-    textbook_scan_task = asyncio.create_task(scan_connected_accounts())
     from .reminders import loop as reminder_loop
-    reminder_task = asyncio.create_task(reminder_loop())
     from .backup import nightly_backup_loop
-    backup_task = asyncio.create_task(nightly_backup_loop())
     from .source_collector import background_loop as sources_loop
-    sources_task = asyncio.create_task(sources_loop())
     from .triggers import loop as triggers_loop
-    triggers_task = asyncio.create_task(triggers_loop())
+    _BG_TASK = _start("sync", background_sync_loop())
+    tasks = [
+        _BG_TASK,
+        _start("mentor", mentor_loop()),
+        _start("materials", materials_loop()),
+        # Läuft einmal durch und endet dann regulär.
+        _start("textbook_scan", scan_connected_accounts(), once=True),
+        _start("reminders", reminder_loop()),
+        _start("backup", nightly_backup_loop()),
+        _start("sources", sources_loop()),
+        _start("triggers", triggers_loop()),
+    ]
     # A process restart cannot leave a grading lease permanently stuck.
     from .db import webapp_conn
     with __import__("contextlib").closing(webapp_conn()) as c:
@@ -129,47 +162,34 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        textbook_scan_task.cancel()
-        try:
-            await textbook_scan_task
-        except asyncio.CancelledError:
-            pass
-        reminder_task.cancel()
-        try:
-            await reminder_task
-        except asyncio.CancelledError:
-            pass
-        backup_task.cancel()
-        try:
-            await backup_task
-        except asyncio.CancelledError:
-            pass
-        sources_task.cancel()
-        try:
-            await sources_task
-        except asyncio.CancelledError:
-            pass
-        triggers_task.cancel()
-        try:
-            await triggers_task
-        except asyncio.CancelledError:
-            pass
-        mentor_task.cancel()
-        try:
-            await mentor_task
-        except asyncio.CancelledError:
-            pass
-        materials_task.cancel()
-        try:
-            await materials_task
-        except asyncio.CancelledError:
-            pass
-        if _BG_TASK:
-            _BG_TASK.cancel()
-            try:
-                await _BG_TASK
-            except (asyncio.CancelledError, Exception):
-                pass
+        await _stop(tasks)
+
+
+def _start(name: str, coro, *, once: bool = False) -> asyncio.Task:
+    """Hintergrundschleife starten. Endet sie unerwartet, steht es im Log;
+    bis 1.31 verschwand eine abgestürzte Schleife still."""
+    task = asyncio.create_task(coro, name=f"sc:{name}")
+
+    def done(t: asyncio.Task) -> None:
+        if t.cancelled():
+            return
+        exc = t.exception()
+        if exc is not None:
+            _LOGGER.error("Hintergrundaufgabe %s abgebrochen", name, exc_info=exc)
+        elif not once:
+            _LOGGER.warning("Hintergrundaufgabe %s hat unerwartet geendet", name)
+
+    task.add_done_callback(done)
+    return task
+
+
+async def _stop(tasks: list[asyncio.Task]) -> None:
+    """Alle Schleifen beenden. Bis 1.31 wurde jede einzeln abgewartet, und
+    eine Schleife, die mit einem anderen Fehler endete, brach das
+    Herunterfahren für alle folgenden ab."""
+    for t in tasks:
+        t.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 app = FastAPI(title="Schul-Cockpit", lifespan=lifespan)
@@ -181,30 +201,43 @@ from . import view_mode as _view_mode  # noqa: E402
 app.middleware("http")(_view_mode.middleware)
 
 
+# Pfade, die ihr Cookie selbst setzen oder löschen (Anmelden, Abmelden).
+_OWN_COOKIE_PATHS = ("/api/auth/", "/kiosk/login")
+
+
+def _sets_session_cookie(response) -> bool:
+    prefix = f"{SESSION_COOKIE}="
+    return any(v.lstrip().startswith(prefix) for v in response.headers.getlist("set-cookie"))
+
+
 @app.middleware("http")
 async def slide_pin_cookie(request: Request, call_next):
     """Refresh the PIN session cookie on every successful authenticated
     request, so the kid stays logged in indefinitely as long as they keep
-    using the app. Skipped when the request authenticated via Ingress
-    headers (HA-internal access doesn't need our cookie), and skipped on
-    the auth routes themselves — login/logout set their own cookies and
-    must not be overwritten by stale incoming-cookie values."""
+    using the app.
+
+    Verlängert wird nur, was tatsächlich per PIN-Sitzung angemeldet war
+    (``request.state.auth_source`` aus auth.get_current_user, das auch der
+    Kiosk benutzt), und nur mit genau dem Token, das dabei gegolten hat. Bis
+    1.31 hängte die Middleware das eingehende Cookie an jede Antwort, auch an
+    POST /kiosk/login: Ein altes, ungültiges Cookie überschrieb dort das
+    frisch gesetzte, und die Anmeldung am Küchen-iPad lief ins Leere."""
     response = await call_next(request)
     path = request.url.path
     if path.startswith("/api/"):
         response.headers["Cache-Control"] = "private, no-store"
-    if path.startswith("/api/auth/"):
+    if path.startswith(_OWN_COOKIE_PATHS):
         return response
-    cookie = request.cookies.get(SESSION_COOKIE)
-    used_pin = cookie and not (request.headers.get("x-remote-user-id") and from_ingress(request))
-    if used_pin and 200 <= response.status_code < 400:
+    state = request.state
+    token = getattr(state, "pin_token", None) if getattr(state, "auth_source", None) == "pin" else None
+    if token and 200 <= response.status_code < 400 and not _sets_session_cookie(response):
         is_https = (
             request.url.scheme == "https"
             or (request.headers.get("x-forwarded-proto") or "").lower() == "https"
         )
         response.set_cookie(
             SESSION_COOKIE,
-            cookie,
+            token,
             max_age=SESSION_TTL_DAYS * 24 * 60 * 60,
             httponly=True,
             samesite="lax",
@@ -324,6 +357,18 @@ def frontend_file(root: Path, full_path: str) -> Path | None:
     return target
 
 
+def _is_api(full_path: str) -> bool:
+    """Unbekannte /api-Pfade bekommen 404 statt der App: Bis 1.31 antwortete
+    ein Tippfehler im Pfad mit index.html und Status 200, und das Frontend
+    scheiterte am JSON statt am Status. Die Seiten der App liegen hinter #/…"""
+    return full_path == "api" or full_path.startswith("api/")
+
+
+def _api_not_found():
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"detail": "Not Found"}, status_code=404, headers={"Cache-Control": "private, no-store"})
+
+
 if _FRONTEND_DIR and (_FRONTEND_DIR / "index.html").exists():
     if (_FRONTEND_DIR / "assets").exists():
         app.mount(
@@ -334,6 +379,8 @@ if _FRONTEND_DIR and (_FRONTEND_DIR / "index.html").exists():
 
     @app.get("/{full_path:path}")
     def spa(full_path: str, request: Request):
+        if _is_api(full_path):
+            return _api_not_found()
         target = frontend_file(_FRONTEND_DIR, full_path)
         if target is not None:
             name = target.name
@@ -358,6 +405,8 @@ else:
 
     @app.get("/{full_path:path}")
     def placeholder(full_path: str, request: Request):  # noqa: ARG001
+        if _is_api(full_path):
+            return _api_not_found()
         if _is_legacy_browser(request):
             return _RedirectResponse("/kiosk", status_code=302)
         return HTMLResponse(_PLACEHOLDER_HTML)

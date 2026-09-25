@@ -28,6 +28,9 @@
       await api.post(`/api/my-changes/${id}/revert`);
       await load();
       await loadMe();
+    } catch (e) {
+      // 409: inzwischen neuer geändert, das Rückgängig bleibt aus.
+      alert(e.message || 'Rückgängig machen hat nicht geklappt.');
     } finally {
       busy = false;
     }

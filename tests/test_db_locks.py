@@ -16,15 +16,15 @@ def test_session_is_written_at_most_every_few_minutes_and_a_lock_does_not_fail_i
         c.execute("INSERT INTO users(ha_user_id,display_name,role,is_admin,first_seen_at,last_seen_at) VALUES('k','Kind','child',0,'t','t')")
         uid = c.execute("SELECT id FROM users WHERE ha_user_id='k'").fetchone()[0]
         token, _ = pin_auth.create_session(c, uid)
-        first = c.execute("SELECT last_seen_at FROM sessions WHERE token=?", (token,)).fetchone()[0]
+        first = c.execute("SELECT last_seen_at FROM sessions WHERE token=?", (pin_auth.token_hash(token),)).fetchone()[0]
     with closing(db.webapp_conn()) as c, c:
         assert pin_auth.lookup_session(c, token) == uid
-        assert c.execute("SELECT last_seen_at FROM sessions WHERE token=?", (token,)).fetchone()[0] == first, "frisch: kein Schreiben"
+        assert c.execute("SELECT last_seen_at FROM sessions WHERE token=?", (pin_auth.token_hash(token),)).fetchone()[0] == first, "frisch: kein Schreiben"
         old = (pin_auth._utc_now() - timedelta(minutes=pin_auth.SEEN_EVERY + 1)).isoformat()
-        c.execute("UPDATE sessions SET last_seen_at=? WHERE token=?", (old, token))
+        c.execute("UPDATE sessions SET last_seen_at=? WHERE token=?", (old, pin_auth.token_hash(token)))
         assert pin_auth.lookup_session(c, token) == uid
-        assert c.execute("SELECT last_seen_at FROM sessions WHERE token=?", (token,)).fetchone()[0] > old
-        c.execute("UPDATE sessions SET last_seen_at=? WHERE token=?", (old, token))
+        assert c.execute("SELECT last_seen_at FROM sessions WHERE token=?", (pin_auth.token_hash(token),)).fetchone()[0] > old
+        c.execute("UPDATE sessions SET last_seen_at=? WHERE token=?", (old, pin_auth.token_hash(token)))
     # Ein anderer Schreiber hält die Datei: Die Anmeldung gilt trotzdem.
     blocker = sqlite3.connect(db.SETTINGS.webapp_db_path, isolation_level=None)
     blocker.execute("BEGIN IMMEDIATE")

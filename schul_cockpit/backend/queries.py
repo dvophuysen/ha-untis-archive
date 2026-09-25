@@ -145,15 +145,20 @@ def absences_for_account(
 def upcoming_exams(
     conn: sqlite3.Connection, account_id: int, *, days_ahead: int = 21
 ) -> list[dict[str, Any]]:
-    """Lessons in the next N days whose period_info_json contains an exam."""
+    """Lessons in the next N days whose period_info_json contains an exam.
+    „Heute“ ist der Tag in Deutschland; SQLites date('now') ist UTC und lag
+    bis 1.31 zwischen Mitternacht und zwei Uhr noch beim Vortag."""
+    from datetime import timedelta
+    from .learning import today_local
+    start = today_local()
     rows = conn.execute(
         "SELECT id, date, start_time, subject_untis_id, subject_name, "
         "period_info_json FROM lessons "
-        "WHERE account_id = ? AND date >= date('now') "
-        "AND date <= date('now', ?) "
+        "WHERE account_id = ? AND date >= ? "
+        "AND date <= ? "
         "AND period_info_json IS NOT NULL "
         "ORDER BY date, start_time",
-        (account_id, f"+{days_ahead} days"),
+        (account_id, start.isoformat(), (start + timedelta(days=days_ahead)).isoformat()),
     ).fetchall()
     exams = []
     for r in rows:
