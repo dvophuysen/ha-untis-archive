@@ -4,13 +4,16 @@
   import {api} from './api.js';
   import PracticePaper from './PracticePaper.svelte';
   import PrintSheet from './PrintSheet.svelte';
+  import TaskFeedback from './TaskFeedback.svelte';
+  import FeedbackSummary from './FeedbackSummary.svelte';
+  import ManualReview from './ManualReview.svelte';
   import {view,actsAsParent} from './viewMode.svelte.js';
   import {appState} from './store.svelte.js';
   let {accountId,subjects=[],canManage=false,demo=false,initialSubject='',initialTopic='',initialAttempt=null,onBusy=()=>{}}= $props();
   const base=$derived(`/api/accounts/${accountId}/learning/mentor/exams`);
   let data=$state(null),error=$state(''),busy=$state(false),draft=$state(null),attempt=$state(null);
   let subject=$state(''),scope=$state(''),confirmed=$state(false),minutes=$state(45),index=$state(0),answers=$state({}),reviewed=$state(false);
-  let editingDraft=$state(false),paper=$state(null),printing=$state(null);
+  let editingDraft=$state(false),paper=$state(null),printing=$state(null),manual=$state(false);
   let period=$state('school_year'),fromDate=$state(''),topicPlan=$state(null),topicChoices=$state([]),selfCheck=$state(null);
   const chosenScope=$derived([...topicChoices.filter(g=>g.selected).map(g=>g.title.trim()),...scope.split('\n').map(x=>x.trim()).filter(Boolean)]);
   function clearTopics(){topicPlan=null;topicChoices=[];}
@@ -48,7 +51,9 @@
 {:else if attempt}
   <header>{#if !attempt.read_only}<p>Direkt tippen oder auf Papier lösen und Fotos bei der jeweiligen Aufgabe anhängen. Nach der Abgabe bewertet der Assistent mit Punkten; unklare Antworten werden gekennzeichnet.</p>{/if}{#if attempt.read_only}<p class="notice">Echter Kinderverlauf · nur ansehen. Antworten und Zeitstand werden nicht verändert.</p>{/if}<h2>{attempt.exam.title}</h2><p>{attempt.exam.minutes} Minuten vorgesehen · {attempt.status==='active'?'Prüfungssimulation':'Abgegeben'}</p></header>
   {#if attempt.status==='active'&&!attempt.read_only}<section class="card"><strong>Auf Papier gelöst?</strong><p class="muted">Alle beschriebenen Seiten fotografieren und in einem Schritt auswerten lassen. Die Ergebnisse zählen für das Raster der nächsten Arbeit in diesem Fach.</p><button disabled={busy} onclick={()=>act(async()=>{await save(true);paper=attempt.id;})}>Seiten fotografieren und auswerten</button></section>{/if}
-  {#if attempt.status==='review'&&!parentView}
+  {#if manual&&parentView&&attempt.feedback.check?.per_task&&['graded','review'].includes(attempt.status)}
+    <ManualReview tasks={attempt.exam.tasks} feedback={attempt.feedback} base={`${base}/attempts/${attempt.id}`} onsaved={(r)=>{attempt=r;manual=false;index=0;}} oncancel={()=>manual=false}/>
+  {:else if attempt.status==='review'&&!parentView}
     <section class="card notice" role="status"><strong>Deine Arbeit ist abgegeben.</strong><p>Einige Aufgaben konnte die App auch nach mehreren Versuchen nicht sicher bewerten. Deine Eltern schauen sich die Auswertung an; danach siehst du hier deine Punkte. So bekommst du keine falschen Punkte, weder zu viele noch zu wenige.</p></section>
   {:else if attempt.status==='review'&&!attempt.feedback.check?.per_task}
     <section class="card notice"><strong>Prüfung nötig</strong><p>Diese Übungsklausur wurde auf Papier ausgewertet und wartet auf eure Prüfung.</p><button disabled={busy} onclick={()=>paper=attempt.id}>Prüfen</button></section>
@@ -66,7 +71,7 @@
         <label>Punkte nach eurer Prüfung<input type="number" inputmode="decimal" min="0" max={t.points} step="0.5" bind:value={reviewPoints[String(nr-1)]}/></label>
       </section>
     {/each}
-    <div class="actions"><button disabled={busy||!reviewReady} onclick={()=>act(saveReview)}>Punkte übernehmen</button><button disabled={busy} onclick={()=>act(rephotograph)}>Seiten neu fotografieren und neu auswerten</button></div>
+    <div class="actions"><button disabled={busy||!reviewReady} onclick={()=>act(saveReview)}>Punkte übernehmen</button><button disabled={busy} onclick={()=>manual=true}>Alle Aufgaben selbst prüfen</button><button disabled={busy} onclick={()=>act(rephotograph)}>Seiten neu fotografieren und neu auswerten</button></div>
   {:else}
   <nav aria-label="Aufgaben">{#each attempt.exam.tasks as t,i}<button class:chosen={i===index} disabled={busy} onclick={()=>act(()=>move(i))}>{i+1}{answers[String(i)]?' ✓':''}</button>{/each}</nav>
   <section class="card"><p class="muted">Aufgabe {index+1} von {attempt.exam.tasks.length} · {task.points} Punkte · etwa {task.minutes} Minuten</p><h3>{task.skill_title}</h3><p class="preserve">{task.prompt}</p>
@@ -79,11 +84,11 @@
     {:else}
       <h4>Deine Antwort</h4><p class="preserve">{answers[String(index)]||'Keine Antwort eingereicht.'}</p>
       {#if attempt.status!=='active'}<details><summary>Lösung und Kriterien</summary><p class="preserve">{task.solution}</p><p>{task.criteria}</p></details>{/if}
-      {#if feedback&&!feedback.pending}{#if feedback.solution_seen}<p class="notice">Lösungen waren vor der Abgabe geöffnet · Übung mit bekannter Lösung, kein Nachweis ohne Hilfe.</p>{/if}<h4>{feedback.uncertain?'Bewertung noch unklar':`${feedback.points} von ${task.points} Punkten · KI-Einschätzung`}</h4><p>{feedback.rationale}</p><p><strong>Nächster Schritt:</strong> {feedback.next_step}</p>{/if}
+      {#if feedback&&!feedback.pending}{#if feedback.solution_seen}<p class="notice">Lösungen waren vor der Abgabe geöffnet · Übung mit bekannter Lösung, kein Nachweis ohne Hilfe.</p>{/if}<h4>{feedback.uncertain?'Bewertung noch unklar':`${num(feedback.points)} von ${task.points} Punkten · ${feedback.checked_by_parent?'von deinen Eltern geprüft':'KI-Einschätzung'}`}</h4><TaskFeedback f={feedback} most={task.points}/>{/if}
       {#if attempt.status!=='graded'&&!attempt.read_only}<button disabled={busy} onclick={()=>act(async()=>{attempt=await api.post(`${base}/attempts/${attempt.id}/grade-next`);})}>Nächste Aufgabe auswerten ({gradedCount}/{attempt.exam.tasks.length})</button><p class="muted">Jede Aufgabe wird zweimal unabhängig bewertet. Es zählt erst, wenn alle Aufgaben sicher bewertet sind.</p>{:else if attempt.status==='graded'}<p>Alle Aufgaben ausgewertet. Vergleiche die Themen, bevor du dir eine Übung aussuchst.</p>{/if}
     {/if}
   </section>
-  {#if attempt.status==='graded'}<section class="card"><h3>Das große Ganze</h3>{#each attempt.exam.tasks as t,i}<button style="display:block;text-align:left;width:100%;margin:.5rem 0" onclick={()=>index=i}>{t.skill_title}: {attempt.feedback[String(i)]?.uncertain?'noch unklar':`${attempt.feedback[String(i)]?.points} / ${t.points} Punkte`}</button>{/each}<h4>Deine nächsten sinnvollen Schritte</h4><ul>{#each Object.entries(attempt.feedback).filter(([k])=>/^\d+$/.test(k)).sort((a,b)=>(a[1].points/attempt.exam.tasks[Number(a[0])].points)-(b[1].points/attempt.exam.tasks[Number(b[0])].points)).slice(0,3) as [i,f]}<li>{f.next_step}</li>{/each}</ul><p>{attempt.feedback.check?.resolved_by_parent?.length?`Aufgabe ${attempt.feedback.check.resolved_by_parent.join(', ')} von deinen Eltern geprüft, die übrigen zweimal unabhängig gleich bewertet.`:attempt.feedback.check?'Jede Aufgabe zweimal unabhängig gleich bewertet.':'KI-Einschätzungen zu den Aufgaben.'} Keine Schulnote.</p></section>{/if}
+  {#if attempt.status==='graded'}<FeedbackSummary overall={attempt.feedback.overall} losses={attempt.feedback.losses}/>{#if parentView&&attempt.feedback.check?.per_task}<div class="actions"><button disabled={busy} onclick={()=>manual=true}>Selbst prüfen</button></div>{/if}<section class="card"><h3>Das große Ganze</h3>{#each attempt.exam.tasks as t,i}<button style="display:block;text-align:left;width:100%;margin:.5rem 0" onclick={()=>index=i}>{t.skill_title}: {attempt.feedback[String(i)]?.uncertain?'noch unklar':`${attempt.feedback[String(i)]?.points} / ${t.points} Punkte`}</button>{/each}<h4>Deine nächsten sinnvollen Schritte</h4><ul>{#each Object.entries(attempt.feedback).filter(([k])=>/^\d+$/.test(k)).sort((a,b)=>(a[1].points/attempt.exam.tasks[Number(a[0])].points)-(b[1].points/attempt.exam.tasks[Number(b[0])].points)).slice(0,3) as [i,f]}<li>{f.next_step}</li>{/each}</ul><p>{attempt.feedback.check?.manual?'Von deinen Eltern geprüft.':attempt.feedback.check?.resolved_by_parent?.length?`Aufgabe ${attempt.feedback.check.resolved_by_parent.join(', ')} von deinen Eltern geprüft, die übrigen zweimal unabhängig gleich bewertet.`:attempt.feedback.check?'Jede Aufgabe zweimal unabhängig gleich bewertet.':'KI-Einschätzungen zu den Aufgaben.'} Keine Schulnote.</p></section>{/if}
   {/if}
   <button disabled={busy} onclick={()=>act(async()=>{await save(true);attempt=null;await load();})}>Zur Übersicht</button>
 {:else if draft}

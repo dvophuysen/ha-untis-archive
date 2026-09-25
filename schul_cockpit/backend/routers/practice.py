@@ -22,7 +22,7 @@ from ..grading_consensus import settle
 from ..auth import CurrentUser, get_current_user
 from ..db import webapp_conn
 from ..learning import InputModel, now_iso
-from ..feedback import Detail, Summary, INSTRUCTION as FEEDBACK_RULES, balance, for_child
+from ..feedback import Detail, Summary, INSTRUCTION as FEEDBACK_RULES, ManualIn, SuggestIn, apply_manual, balance, for_child
 from .learning import access
 from .mentor_exams import ExamTask, attempt_row, attempt_view
 
@@ -528,27 +528,6 @@ def resolve_review(account_id: int, aid: int, body: ReviewIn, user: CurrentUser 
     return paper_view(account_id, aid, user)
 
 
-class ManualTask(Detail):
-    points: float = Field(ge=0, le=20, multiple_of=0.5, allow_inf_nan=False)
-    rationale: str = Field(min_length=3, max_length=1200)
-    next_step: str = Field(min_length=3, max_length=400)
-    transcription: str = Field(default="", max_length=3000)
-
-
-class ManualOverall(Summary):
-    text: str = Field(default="", max_length=800)
-
-
-class ManualIn(InputModel):
-    # Bewertung jeder Aufgabe (Index ab 0 als Text), von Eltern geprüft (D207).
-    tasks: dict[str, ManualTask] = Field(max_length=pr.MAX_TASKS)
-    overall: ManualOverall = Field(default_factory=ManualOverall)
-
-
-class SuggestIn(InputModel):
-    hint: str = Field(default="", max_length=1000)
-
-
 def _parent_check(c, account_id: int, aid: int, user) -> tuple[dict, dict, list[dict], dict]:
     from ..view_mode import acts_as_parent
     if not acts_as_parent(user):
@@ -574,25 +553,10 @@ def manual_check(account_id: int, aid: int, body: ManualIn, user: CurrentUser = 
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
         r, snap, tasks, old = _parent_check(c, account_id, aid, user)
-        if set(body.tasks) != {str(i) for i in range(len(tasks))}:
-            raise HTTPException(422, "Bitte jede Aufgabe bewerten.")
-        feedback = {}
-        for i, t in enumerate(tasks):
-            x = body.tasks[str(i)]
-            if x.points > t["points"]:
-                raise HTTPException(422, f"Aufgabe {i + 1}: höchstens {t['points']} Punkte.")
-            before = old.get(str(i)) or {}
-            entry = {**x.model_dump(), "uncertain": False, "checked_by_parent": True,
-                     "solution_seen": bool(before.get("solution_seen"))}
-            if not entry["transcription"]:
-                entry["transcription"] = before.get("transcription", "")
-            feedback[str(i)] = balance(entry, t["points"])
-        o = body.overall
-        feedback["overall"] = {"text": o.text, "strengths": o.strengths, "focus": o.focus} if o.text or o.focus or o.strengths else None
-        feedback["check"] = {"passes": (old.get("check") or {}).get("passes", 1), "open": [], "manual": True}
-        feedback = {k: v for k, v in feedback.items() if v is not None}
-        prior = {k: v for k, v in old.items() if k != "_prior"}
-        feedback["_prior"] = ((old.get("_prior") or []) + [prior])[-3:]
+        try:
+            feedback = apply_manual(old, body, [t["points"] for t in tasks])
+        except ValueError as e:
+            raise HTTPException(422, str(e))
         topics = [x[0] for x in c.execute("SELECT DISTINCT topic_id FROM topic_answers WHERE account_id=? AND attempt_id=?", (account_id, aid))]
         c.execute("DELETE FROM topic_answers WHERE account_id=? AND attempt_id=?", (account_id, aid))
         for tid in topics:

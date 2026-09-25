@@ -3,6 +3,7 @@
   // einen KI-Vorschlag und passen ihn an. Gespeichert wird die vollständige
   // Rückmeldung, die das Kind danach sieht: Punkte, was richtig war, jeder
   // Abzug mit Grund und richtiger Lösung, volle Lösung, nächster Schritt.
+  import { untrack } from 'svelte';
   import { api } from './api.js';
 
   let { tasks, feedback = {}, base, onsaved = () => {}, oncancel = () => {} } = $props();
@@ -22,8 +23,9 @@
     };
   });
   const overallFrom = (o) => ({ text: o?.text || '', strengths: (o?.strengths || []).join('\n'), focus: (o?.focus || []).join('\n') });
-  let form = $state(fromFeedback(feedback));
-  let overall = $state(overallFrom(feedback?.overall));
+  // Das Formular startet mit der Bewertung beim Öffnen und gehört danach den Eltern.
+  let form = $state(untrack(() => fromFeedback(feedback)));
+  let overall = $state(untrack(() => overallFrom(feedback?.overall)));
   let hint = $state(''), busy = $state(''), error = $state(''), suggested = $state(false);
 
   const lines = (s) => s.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 3);

@@ -1,3 +1,9 @@
+## 1.33.0
+
+- Auch die Übungsklausur zeigt je Aufgabe, was Punkte gebracht hat, wo Punkte verloren gingen und wie es richtig gewesen wäre. Eltern können sie selbst prüfen, auf Wunsch mit einem KI-Vorschlag.
+- Beim Vokabeltest auf Papier steht bei jedem falschen Wort, was genau falsch war, dazu eine Merkhilfe; oben steht, woran es lag (etwa Rechtschreibung oder Artikel) und was als Nächstes geübt wird. Eltern können jedes Wort selbst entscheiden.
+- Beim Üben mit dem Mentor sagt die Rückmeldung zu einer Antwort jetzt immer, was stimmt, was fehlt und wie es zur vollständigen Antwort kommt.
+
 ## 1.32.0
 
 - Übungsarbeiten zeigen jetzt je Aufgabe, was Punkte gebracht hat, wo und warum Punkte verloren gingen und was dort hätte stehen müssen, dazu die volle Lösung und den nächsten Schritt.

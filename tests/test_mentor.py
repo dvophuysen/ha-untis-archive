@@ -541,6 +541,23 @@ def test_unsure_exam_grading_is_held_for_the_parents_and_never_counts(setup):
     with closing(db.webapp_conn()) as c:
         assert sorted(x[0] for x in c.execute('SELECT result FROM mentor_evidence'))==['partial','partial','partial']
     assert ex.review_items(1)==[] and client.post(B+f"/exams/attempts/{a['id']}/review",json={'points':{'2':1}}).status_code==409
+    # D207: Eltern prüfen auch eine fertige Übungsklausur selbst, mit KI-Vorschlag; die Nachweise folgen.
+    contexts=[]
+    rich={**exam_grade(6),'earned':[{'text':'Alles richtig','points':6}]}
+    mock(patch,[rich],contexts)
+    s=client.post(B+f"/exams/attempts/{a['id']}/manual/suggest",json={'hint':'Aufgabe 1 großzügig.'}).json()
+    assert len(contexts)==3 and contexts[0]['eltern_hinweis']=='Aufgabe 1 großzügig.' and contexts[0]['bisherige_bewertung']['punkte']==4.5
+    assert s['tasks']['0']['points']==6 and s['tasks']['0']['earned'][0]['points']==6
+    t=lambda p:{'points':p,'rationale':'Von uns geprüft.','next_step':'Weiter.','earned':[],'lost':[{'points':6-p,'kind':'unvollstaendig','why':'Teil fehlt.','fix':'So geht es.'}] if p<6 else [],'model':'Lösung.'}
+    done=client.post(B+f"/exams/attempts/{a['id']}/manual",json={'tasks':{'0':t(6),'1':t(3),'2':t(0)}}).json()
+    assert done['feedback']['check']=={'per_task':True,'passes':3,'open':[],'manual':True} and '_prior' not in done['feedback']
+    assert done['feedback']['losses']==[{'kind':'unvollstaendig','label':'Unvollständig','points':9}]
+    with closing(db.webapp_conn()) as c:
+        assert sorted(x[0] for x in c.execute('SELECT result FROM mentor_evidence'))==['correct','incorrect','partial']
+    child(state)
+    assert client.post(B+f"/exams/attempts/{a['id']}/manual",json={'tasks':{'0':t(6),'1':t(3),'2':t(0)}}).status_code==403
+    kid=client.get(B+f"/exams/attempts/{a['id']}").json()
+    assert kid['feedback']['1']['lost'][0]['fix']=='So geht es.' and '_prior' not in kid['feedback']
 
 
 def test_scope_merges_batches_without_losing_sources(setup):

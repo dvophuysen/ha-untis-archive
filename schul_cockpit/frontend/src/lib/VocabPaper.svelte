@@ -4,13 +4,14 @@
   // Auswertungen es gleich lesen; bleiben zu viele offen, prüfen die Eltern (D202).
   import { api } from './api.js';
   import PrintSheet from './PrintSheet.svelte';
+  import VocabManual from './VocabManual.svelte';
   import { actsAsParent } from './viewMode.svelte.js';
   import { appState } from './store.svelte.js';
 
   let { accountId, paperId, onclose = () => {} } = $props();
   const base = $derived(`/api/accounts/${accountId}/vocab/papers/${paperId}`);
   let p = $state(null), error = $state(''), busy = $state('');
-  let fileInput = $state(null), printing = $state(false);
+  let fileInput = $state(null), printing = $state(false), manual = $state(false);
 
   async function load() {
     try { p = await api.get(base); } catch (e) { error = e.message; }
@@ -62,7 +63,9 @@
       <h3>Vokabeltest · {p.unit_label || p.unit}</h3>
     </header>
 
-    {#if reviewing && !parentView}
+    {#if manual && parentView && (reviewing || graded)}
+      <VocabManual paper={p} {base} onsaved={(r) => { p = r; manual = false; }} oncancel={() => (manual = false)} />
+    {:else if reviewing && !parentView}
       <div class="notice review-wait" role="status">
         <strong>Dein Blatt ist abgegeben.</strong>
         <p>Einige Wörter konnte die App auch nach mehreren Versuchen nicht sicher lesen. Deine Eltern schauen sich die Auswertung an; danach siehst du hier dein Ergebnis. So zählt kein Wort falsch, weder für noch gegen dich.</p>
@@ -87,12 +90,20 @@
         {/each}
       </ol>
       <button class="primary" disabled={!!busy || !reviewReady} onclick={saveReview}>Übernehmen</button>
+      <button class="btn" disabled={!!busy} onclick={() => (manual = true)}>Alle Wörter selbst prüfen</button>
     {:else if graded}
       <div class="result">
         <strong class="big">{p.result.richtig} von {p.words.length} richtig</strong>
         {#if p.overall}<p>{p.overall}</p>{/if}
-        <p class="dim">{p.counts ? 'Richtig und falsch zählen im Trainer. ' : 'Dieses Blatt zählt nicht für den Lernstand. '}{p.check?.resolved_by_parent?.length ? 'Unsicher gelesene Wörter haben deine Eltern geprüft. ' : p.check ? 'Gezählt wird nur, was zwei unabhängige Auswertungen gleich lesen. ' : ''}Nicht sicher Gelesenes zählt nicht, weder für noch gegen dich.</p>
+        <p class="dim">{p.counts ? 'Richtig und falsch zählen im Trainer. ' : 'Dieses Blatt zählt nicht für den Lernstand. '}{p.check?.manual ? 'Von deinen Eltern geprüft. ' : p.check?.resolved_by_parent?.length ? 'Unsicher gelesene Wörter haben deine Eltern geprüft. ' : p.check ? 'Gezählt wird nur, was zwei unabhängige Auswertungen gleich lesen. ' : ''}Nicht sicher Gelesenes zählt nicht, weder für noch gegen dich.</p>
       </div>
+      {#if p.summary?.strengths?.length || p.losses?.length || p.summary?.focus?.length}
+        <div class="summary">
+          {#if p.summary?.strengths?.length}<div><strong>Das klappt schon</strong><ul>{#each p.summary.strengths as x, i (i)}<li>{x}</li>{/each}</ul></div>{/if}
+          {#if p.losses?.length}<div><strong>Daran lag es bei den falschen Wörtern</strong><ul>{#each p.losses as l (l.kind)}<li>{l.label}: {l.count} {l.count === 1 ? 'Wort' : 'Wörter'}</li>{/each}</ul></div>{/if}
+          {#if p.summary?.focus?.length}<div><strong>Das übst du als Nächstes</strong><ol>{#each p.summary.focus as x, i (i)}<li>{x}</li>{/each}</ol></div>{/if}
+        </div>
+      {/if}
       <ol class="words">
         {#each p.words as w (w.nr)}
           <li class={w.verdict}>
@@ -100,9 +111,11 @@
             <span class="q">{w.prompt}</span>
             <span class="v">{VERDICT[w.verdict] ?? ''}</span>
             <span class="a">{#if w.verdict === 'unklar'}Nicht sicher gelesen, zählt nicht · {/if}{#if w.verdict !== 'richtig'}Richtig: <b>{w.expected}</b>{/if}{#if w.read} · gelesen: „{w.read}“{/if}{#if w.note} · {w.note}{/if}{#if w.checked_by_parent} · von deinen Eltern geprüft{/if}</span>
+            {#if w.verdict === 'falsch' && w.tip}<span class="tip"><b>Merkhilfe:</b> {w.tip}</span>{/if}
           </li>
         {/each}
       </ol>
+      {#if parentView}<button class="btn" disabled={!!busy} onclick={() => (manual = true)}>Selbst prüfen</button>{/if}
       <button class="primary" onclick={onclose}>Fertig</button>
     {:else if p.read_only}
       <p class="notice">Dieses Blatt ist noch nicht ausgewertet.</p>
@@ -131,6 +144,9 @@
 
 <style>
   .vpaper{display:grid;gap:var(--sp-2)}
+  .summary{display:grid;gap:8px;padding:var(--sp-2);border:1px solid var(--border);border-radius:var(--r-md)}
+  .summary ul,.summary ol{margin:2px 0 0;padding-left:1.2em}
+  .tip{grid-column:1/-1;font-size:var(--fs-sm)}
   .back{justify-self:start;min-height:40px}
   header h3{margin:2px 0 0;font-size:var(--fs-md)}
   .dim{font-size:var(--fs-xs);color:var(--fg-muted)}
