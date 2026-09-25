@@ -1,10 +1,16 @@
 # Übergabe an die nächste Session
 
-Stand 24.09.2026. Live läuft Schul-Cockpit **1.16.1**. Keine Kindernamen,
+Stand 25.09.2026. Live läuft Schul-Cockpit **1.21.0**. Keine Kindernamen,
 PINs oder Schlüssel in diesem Dokument (D15/D68). Maßgeblicher Einstieg ist
 [README.md](README.md) in diesem Ordner; Einzelheiten zu jedem Release
 stehen im [CHANGELOG](../CHANGELOG.md), die Begründungen in
 [ENTSCHEIDUNGEN.md](ENTSCHEIDUNGEN.md).
+
+## UX-Überarbeitung 25.09.2026 (1.17.0 bis 1.21.0, D171 bis D177)
+
+- 1.17.0 Tempo und Tokens, eine Lernstand-Farbskala; 1.18.0 Startseite nach Phasen (vor, in, nach der Schule), Ringe, Tasche als Kacheln, Selbsteintragen per Text; 1.19.0 Geräterollen (Mitlesen, Kind am Elterngerät, Testmodus) über die Kopfzeile `X-View-Mode` (`view_mode.py`); 1.20.0 Serie mit Retten, acht Abzeichen, Jahresmedaille (`rewards.py`, Seite „Ich“), Zählung ab 25.09.2026 (`reward_config.start_day`); 1.21.0 Gestaltung je Kind (`profile_prefs`).
+- Offen: Abzeichen-Grenzen nach vier Wochen echter Nutzung prüfen (D173). „Vorbereitet“ wird nur beim Laden der Startseite des Kindes geprüft (`rewards.note_prepared` in `today.photo_requests`). Sonderabzeichen Klausurphase und Abitur sind beschrieben, aber nicht gebaut. Im Testmodus sind Tasche und Lernraum gesperrt (Demo-Sperre in `learning.access`), nur Aufgaben und Rückmeldungen werden zurückgenommen.
+- Nächste Entwürfe laut Nutzer: Woche als Tagesliste, Arbeiten als Drei-Schritte-Karte, ruhigere Wörter auf der Elternkarte, Textdurchgang. Erinnerungen bleiben zurückgestellt. `tests/subjects_browser.cjs` schlug schon vor dieser Arbeit fehl.
 
 ## Was läuft
 
