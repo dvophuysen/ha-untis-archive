@@ -1,11 +1,14 @@
 """Vokabelpensum des Tages und Vokabeltest auf Papier (D181).
 
 Das Pensum ist lesend. Der Papiertest: Blatt je Einheit drucken, von Hand
-ausfüllen, Seiten fotografieren, in einem KI-Aufruf auswerten. Richtig und
-falsch zählen im Trainer als Antwort mit Herkunft „paper“, unklar nicht.
+ausfüllen, Seiten fotografieren, zweimal unabhängig auswerten (D202). Ein Wort
+zählt nur, wenn zwei Auswertungen es gleich lesen; richtig und falsch zählen
+dann im Trainer als Antwort mit Herkunft „paper“, unklar nicht. Bleiben zu
+viele Wörter offen, prüfen die Eltern das Blatt, bevor irgendetwas zählt.
 """
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import random
@@ -20,6 +23,7 @@ from pydantic import Field, ValidationError
 
 from .. import ai_gateway as ai
 from .. import vocab, vocab_pensum
+from ..grading_consensus import majority
 from ..auth import CurrentUser, get_current_user
 from ..db import webapp_conn
 from ..learning import InputModel, now_iso, today_local
@@ -31,6 +35,8 @@ PAPER = "vocab_paper"
 MAX_PAGES = 4
 ai.MAX_IMAGES.setdefault(PAPER, MAX_PAGES)
 MIN_WORDS, MAX_WORDS = 10, 40
+# Mehr offene Wörter als 10 % oder als drei: Das Blatt wartet auf die Eltern (D202).
+HOLD_SHARE, HOLD_WORDS = 0.1, 3
 
 
 @router.get("/pensum")
@@ -89,7 +95,9 @@ def view(account_id: int, pid: int, user) -> dict:
         r = _row(c, account_id, pid, user)
         pages = [x[0] for x in c.execute("SELECT id FROM vocab_paper_pages WHERE paper_id=? ORDER BY id", (pid,))]
     items = json.loads(r["items_json"])
-    graded = r["status"] == "graded"
+    from ..view_mode import acts_as_parent
+    # Während die Eltern prüfen, sieht das Kind kein Ergebnis (D202).
+    graded = r["status"] == "graded" or (r["status"] == "review" and acts_as_parent(user))
     result = json.loads(r["result_json"] or "{}")
     lang = vocab.language_of(r["subject"]) or {"name": r["subject"]}
     words = []
@@ -101,7 +109,8 @@ def view(account_id: int, pid: int, user) -> dict:
     counted = {k: sum(1 for x in result.get("words", {}).values() if x.get("verdict") == k) for k in ("richtig", "falsch", "unklar")}
     return {"id": r["id"], "code": f"V{r['id']}", "subject": r["subject"], "unit": r["unit"], "unit_label": r["unit_label"],
             "direction": r["direction"], "language": lang["name"], "status": r["status"], "counts": bool(r["counts"]),
-            "pages": pages, "words": words, "overall": result.get("overall", ""), "result": counted if graded else None,
+            "pages": pages, "words": words, "overall": result.get("overall", "") if graded else "",
+            "result": counted if graded else None, "check": result.get("check") if graded else None,
             "read_only": r["user_id"] != user.id and not r["counts"], "created_at": r["created_at"]}
 
 
@@ -114,7 +123,7 @@ def papers(account_id: int, subject: str, user: CurrentUser = Depends(get_curren
             "SELECT id,unit,unit_label,status,result_json,created_at FROM vocab_papers WHERE account_id=? AND lower(subject)=lower(?) "
             "AND (user_id=? OR (? AND counts=1)) ORDER BY id DESC LIMIT 10", (account_id, subject, user.id, int(parent)))]
     for r in rows:
-        res = json.loads(r.pop("result_json") or "{}").get("words", {})
+        res = json.loads(r.pop("result_json") or "{}").get("words", {}) if r["status"] == "graded" else {}
         r["right"] = sum(1 for x in res.values() if x.get("verdict") == "richtig")
         r["total"] = len(res)
         r["code"] = f"V{r['id']}"
@@ -251,17 +260,62 @@ def _ai_enabled(account_id: int) -> bool:
     return bool(r and r[0])
 
 
+async def _grade_pass(account_id: int, instruction: str, context: dict, images: list, nrs: set[int],
+                      effort: str | None = None) -> PaperGrade | None:
+    """Ein Auswertungsdurchgang; ungültige Antworten zählen nicht als Durchgang (D202)."""
+    try:
+        raw, _, _ = await ai.complete(account_id, PAPER, instruction, context, images, max_output=8000, effort=effort)
+        g = PaperGrade.model_validate_json(raw)
+    except (ValueError, ValidationError, HTTPException):
+        return None
+    seen = {x.nr for x in g.words}
+    return g if len(seen) == len(g.words) and seen == nrs else None
+
+
+def consensus(passes: list[PaperGrade], items: list[dict]) -> tuple[dict[str, dict], list[int]]:
+    """Je Wort das Urteil, das mindestens zwei Durchgänge teilen (richtig oder
+    falsch). Unklar oder uneinig bleibt offen und zählt nicht (D202)."""
+    words, open_nrs = {}, []
+    for it in items:
+        nr = it["nr"]
+        xs = [{x.nr: x for x in g.words}[nr] for g in passes]
+        v = majority([x.verdict for x in xs])
+        if v:
+            words[str(nr)] = next(x for x in xs if x.verdict == v).model_dump(exclude={"nr"})
+        else:
+            best = next((x for x in xs if x.verdict != "unklar"), xs[0])
+            words[str(nr)] = {**best.model_dump(exclude={"nr"}), "verdict": "unklar", "votes": [x.verdict for x in xs]}
+            open_nrs.append(nr)
+    return words, open_nrs
+
+
+def _count(c, account_id: int, r: dict, items: list[dict], words: dict, user_id) -> list[int]:
+    """Sicher gelesene Wörter als Antworten im Trainer; offene zählen nicht."""
+    stamp, counted = now_iso(), []
+    for it in items:
+        x = words.get(str(it["nr"])) or {}
+        if x.get("verdict") not in ("richtig", "falsch"):
+            continue
+        c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,spoken,seconds,edits,"
+                  "created_at,unit_scope,user_id,source) VALUES(?,?,1,?,?,?,0,NULL,NULL,?,?,?,'paper')",
+                  (account_id, it["word_id"], r["direction"], (x.get("read") or "")[:300],
+                   "correct" if x["verdict"] == "richtig" else "incorrect", stamp, r["unit"] or None, user_id))
+        counted.append(it["word_id"])
+    return counted
+
+
 @router.post("/papers/{pid}/grade")
 async def grade_paper(account_id: int, pid: int, user: CurrentUser = Depends(get_current_user)):
-    """Alle Seiten in einem Aufruf auswerten: jedes Wort richtig, falsch oder
-    unklar. Richtig und falsch werden Antworten im Trainer, unklar nicht."""
+    """Alle Seiten zweimal unabhängig auswerten, bei Abweichung ein drittes Mal:
+    jedes Wort richtig, falsch oder unklar. Es zählt nur, worin zwei Durchgänge
+    übereinstimmen; bleiben zu viele Wörter offen, prüfen die Eltern (D202)."""
     access(user, account_id, write=True)
     if not _ai_enabled(account_id):
         raise HTTPException(403, "KI im Lernrahmen aktivieren.")
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
         r = _row(c, account_id, pid, user)
-        if r["status"] == "graded":
+        if r["status"] in ("graded", "review"):
             return view(account_id, pid, user)
         if r["status"] == "grading":
             raise HTTPException(409, "Das Blatt wird gerade ausgewertet. Bitte gleich neu laden.")
@@ -293,37 +347,86 @@ async def grade_paper(account_id: int, pid: int, user: CurrentUser = Depends(get
             "Im Zweifel unklar, nie raten. read gibt die gelesene Antwort wörtlich wieder, note kurz den Fehler. "
             "overall: ein bis zwei freundliche, sachliche Sätze an das Kind in der Du-Form, ohne Note. "
             "Genau eine Bewertung je Nummer. Nur JSON: " + json.dumps(PaperGrade.model_json_schema()))
-        raw, _, _ = await ai.complete(account_id, PAPER, instruction, context, images, max_output=8000)
-        try:
-            g = PaperGrade.model_validate_json(raw)
-            by_nr = {x.nr: x for x in g.words}
-            if len(by_nr) != len(g.words) or set(by_nr) != {it["nr"] for it in items}:
-                raise ValueError("coverage")
-        except (ValueError, ValidationError):
-            raise HTTPException(502, "Die Auswertung ist nicht verlässlich geworden. Bitte noch einmal auswerten.") from None
-        result = {"words": {str(n): x.model_dump(exclude={"nr"}) for n, x in by_nr.items()}, "overall": g.overall}
+        nrs = {it["nr"] for it in items}
+        passes = [g for g in await asyncio.gather(*[_grade_pass(account_id, instruction, context, images, nrs) for _ in range(2)]) if g]
+        if len(passes) < 2 or consensus(passes, items)[1]:
+            third = await _grade_pass(account_id, instruction, context, images, nrs, effort="medium")
+            if third:
+                passes.append(third)
+        if len(passes) < 2:
+            raise HTTPException(502, "Die Auswertung ist nicht verlässlich geworden. Bitte noch einmal auswerten.")
+        words, open_nrs = consensus(passes, items)
+        held = len(open_nrs) > min(HOLD_WORDS, HOLD_SHARE * len(items))
+        result = {"words": words, "overall": passes[0].overall,
+                  "check": {"passes": len(passes), "unsure": open_nrs, "held": held}}
         counted: list[int] = []
         with closing(webapp_conn()) as c, c:
             r = _row(c, account_id, pid, user)
-            if r["counts"]:
-                stamp = now_iso()
-                for it in items:
-                    x = by_nr[it["nr"]]
-                    if x.verdict == "unklar":
-                        continue
-                    c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,spoken,seconds,edits,"
-                              "created_at,unit_scope,user_id,source) VALUES(?,?,1,?,?,?,0,NULL,NULL,?,?,?,'paper')",
-                              (account_id, it["word_id"], r["direction"], x.read[:300],
-                               "correct" if x.verdict == "richtig" else "incorrect", stamp, r["unit"] or None, user.id))
-                    counted.append(it["word_id"])
-            c.execute("UPDATE vocab_papers SET status='graded',result_json=?,graded_at=? WHERE id=?",
-                      (json.dumps(result, ensure_ascii=False), now_iso(), pid))
-        if counted:
-            _reward(account_id, pid, counted, user)
+            # Zurückgehalten zählt nichts im Trainer, bis die Eltern die offenen Wörter geprüft haben.
+            if r["counts"] and not held:
+                counted = _count(c, account_id, r, items, words, user.id)
+            c.execute("UPDATE vocab_papers SET status=?,result_json=?,graded_at=? WHERE id=?",
+                      ("review" if held else "graded", json.dumps(result, ensure_ascii=False), now_iso(), pid))
+        # Die Mühe des Kindes zählt für die Belohnung auch, wenn die App schlecht lesen konnte;
+        # für den Lernstand zählt ein zurückgehaltenes Blatt erst nach der Prüfung.
+        done = counted or ([it["word_id"] for it in items if words[str(it["nr"])]["verdict"] != "unklar"] if held else [])
+        if done:
+            _reward(account_id, pid, done, user)
         return view(account_id, pid, user)
     finally:
         with closing(webapp_conn()) as c, c:
             c.execute("UPDATE vocab_papers SET status='active' WHERE id=? AND status='grading'", (pid,))
+
+
+class ReviewIn(InputModel):
+    # Urteil der Eltern je offenem Wort (Nummer als Text), auf dem Foto nachgesehen.
+    verdicts: dict[str, Literal["richtig", "falsch"]] = Field(default_factory=dict, max_length=MAX_WORDS)
+
+
+@router.post("/papers/{pid}/review")
+def resolve_review(account_id: int, pid: int, body: ReviewIn, user: CurrentUser = Depends(get_current_user)):
+    """Eltern entscheiden die unsicher gelesenen Wörter; erst dann zählt das
+    Blatt im Trainer und das Kind sieht sein Ergebnis (D202)."""
+    access(user, account_id)
+    from ..view_mode import acts_as_parent
+    if not acts_as_parent(user):
+        raise HTTPException(403, "Nur in der Elternansicht verfügbar")
+    with closing(webapp_conn()) as c, c:
+        c.execute("BEGIN IMMEDIATE")
+        r = _row(c, account_id, pid, user)
+        if r["status"] != "review":
+            raise HTTPException(409, "Dieses Blatt wartet nicht auf eine Prüfung.")
+        result = json.loads(r["result_json"] or "{}")
+        check = result.get("check") or {}
+        unsure = check.get("unsure", [])
+        missing = [nr for nr in unsure if str(nr) not in body.verdicts]
+        if missing:
+            raise HTTPException(422, f"Für Wort {', '.join(str(n) for n in missing)} fehlt richtig oder falsch.")
+        for nr in unsure:
+            w = result["words"][str(nr)]
+            w.update(verdict=body.verdicts[str(nr)], checked_by_parent=True)
+            w.pop("votes", None)
+        result["check"] = {**check, "unsure": [], "resolved_by_parent": unsure}
+        items = json.loads(r["items_json"])
+        if r["counts"]:
+            _count(c, account_id, r, items, result["words"], r["user_id"])
+        c.execute("UPDATE vocab_papers SET status='graded',result_json=? WHERE id=?",
+                  (json.dumps(result, ensure_ascii=False), pid))
+    return view(account_id, pid, user)
+
+
+def review_items(account_id: int) -> list[dict]:
+    """Blätter, die auf eine Prüfung durch die Eltern warten (für Erledigen, D202)."""
+    with closing(webapp_conn()) as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT id,subject,result_json FROM vocab_papers WHERE account_id=? AND status='review' AND counts=1 ORDER BY id",
+            (account_id,))]
+    out = []
+    for r in rows:
+        check = json.loads(r["result_json"] or "{}").get("check") or {}
+        out.append({"paper_id": r["id"], "code": f"V{r['id']}", "subject": r["subject"],
+                    "open": check.get("unsure", []), "passes": check.get("passes", 2)})
+    return out
 
 
 def _reward(account_id: int, pid: int, word_ids: list[int], user) -> None:

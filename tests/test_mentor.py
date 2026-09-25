@@ -200,8 +200,9 @@ def test_exam_fixed_version_secret_answers_and_resume(setup):
     mock(patch,[{'points':2.5,'rationale':'Teilweise erklärt.','next_step':'Begründung ergänzen.','uncertain':False}])
     for _ in range(3):
         r=client.post(base+f"/attempts/{a['id']}/grade-next");assert r.status_code==200,r.text
-    assert r.json()['status']=='graded' and len(r.json()['feedback'])==3
-    assert r.json()['feedback']['0']['points']==2.5
+    assert r.json()['status']=='graded' and sorted(k for k in r.json()['feedback'] if k.isdigit())==['0','1','2']
+    assert r.json()['feedback']['0']['points']==2.5 and r.json()['feedback']['0']['passes']==2
+    assert r.json()['feedback']['check']=={'per_task':True,'passes':2,'open':[]}
     assert client.post(base+f"/attempts/{a['id']}/grade-next").status_code==200
 
 
@@ -480,10 +481,65 @@ def test_known_solutions_are_not_independent_evidence(setup):
     client.put(B+f"/exams/attempts/{attempt['id']}",json={'version':0,'answers':{'0':'Richtige Antwort'}})
     client.post(B+f"/exams/attempts/{attempt['id']}/submit")
     mock(patch,[{'points':6,'rationale':'Richtig erklärt.','next_step':'Später erneut prüfen.','uncertain':False}])
-    graded=client.post(B+f"/exams/attempts/{attempt['id']}/grade-next")
-    assert graded.status_code==200,graded.text
+    for _ in range(3):
+        graded=client.post(B+f"/exams/attempts/{attempt['id']}/grade-next")
+        assert graded.status_code==200,graded.text
     assert graded.json()['feedback']['0']['solution_seen']
     with closing(db.webapp_conn()) as c:assert c.execute('SELECT help_used FROM mentor_evidence').fetchone()[0]==1
+
+
+def exam_grade(points,uncertain=False):
+    return {'points':points,'rationale':'Begründung.','next_step':'Weiter üben.','uncertain':uncertain,'transcription':'gelesen'}
+
+
+def test_unsure_exam_grading_is_held_for_the_parents_and_never_counts(setup):
+    """D202: Je Aufgabe zwei unabhängige Bewertungen, bei Abweichung eine dritte.
+    Bleibt eine Aufgabe offen, sieht das Kind keine Punkte, es entsteht kein
+    Lernnachweis, und die Eltern tragen die Punkte ein."""
+    client,state,patch=setup;parent=state.user
+    tasks=[{**TASK,'prompt':f'Aufgabe {i}','points':6,'minutes':5} for i in range(3)]
+    with closing(db.webapp_conn()) as c:
+        eid=c.execute("INSERT INTO mentor_exams(account_id,title,subject,scope_json,tasks_json,minutes,status,created_at) VALUES(1,'Kontrolle','Deutsch',?,?,15,'published','now')",(json.dumps({'topics':['Nominalisierung']}),json.dumps(tasks))).lastrowid
+    child(state)
+    a=client.post(B+f'/exams/{eid}/start').json()
+    client.put(B+f"/exams/attempts/{a['id']}",json={'version':0,'answers':{str(i):f'Antwort {i}' for i in range(3)}})
+    client.post(B+f"/exams/attempts/{a['id']}/submit")
+    contexts=[]
+    # Aufgabe 1: zwei einig. Aufgabe 2: 1 gegen 5, der dritte gibt 5. Aufgabe 3: dreimal unleserlich.
+    mock(patch,[exam_grade(4),exam_grade(5),exam_grade(1),exam_grade(5),exam_grade(5),exam_grade(0,True)],contexts)
+    r=client.post(B+f"/exams/attempts/{a['id']}/grade-next").json()
+    assert r['status']=='submitted' and r['feedback']=={'0':{'pending':True}} and len(contexts)==2,'Punkte erst, wenn alle feststehen'
+    with closing(db.webapp_conn()) as c:assert c.execute('SELECT COUNT(*) FROM mentor_evidence').fetchone()[0]==0
+    client.post(B+f"/exams/attempts/{a['id']}/grade-next")
+    assert len(contexts)==5
+    r=client.post(B+f"/exams/attempts/{a['id']}/grade-next").json()
+    assert len(contexts)==8 and r['status']=='review'
+    pending={'pending':True}
+    assert r['feedback']=={'0':pending,'1':pending,'2':pending,'check':{'per_task':True,'passes':3,'open':[3]}},'Kind sieht keine Punkte'
+    assert client.get(B+f"/exams/attempts/{a['id']}").json()['feedback']==r['feedback']
+    with closing(db.webapp_conn()) as c:assert c.execute('SELECT COUNT(*) FROM mentor_evidence').fetchone()[0]==0
+    assert client.post(B+f"/exams/attempts/{a['id']}/review",json={'points':{'2':3}}).status_code==403,'Kind prüft nicht selbst'
+    state.user=parent
+    seen=client.get(B+f"/exams/attempts/{a['id']}").json()
+    assert seen['feedback']['2']['uncertain'] and seen['feedback']['0']['points']==4.5
+    assert seen['feedback']['1']['points']==5 and seen['feedback']['1']['passes']==3
+    assert ex.review_items(1)==[{'attempt_id':a['id'],'subject':'Deutsch','title':'Kontrolle','open':[3],'passes':3}]
+    from backend.routers import practice as rp
+    assert rp.review_items(1)==[],'kein doppelter Eintrag bei den Übungsarbeiten'
+    from backend.parent_todo import exam_review_items
+    todo=exam_review_items(1,'Beispielkind')
+    assert todo[0]['title']=='Übungsklausur „Kontrolle“ von Beispielkind prüfen' and 'Aufgabe 3' in todo[0]['reason']
+    assert todo[0]['action']['page']=='learning' and todo[0]['action']['query']=={'exam_attempt':str(a['id'])}
+    assert client.post(B+f"/exams/attempts/{a['id']}/review",json={'points':{}}).status_code==422
+    assert client.post(B+f"/exams/attempts/{a['id']}/review",json={'points':{'2':7}}).status_code==422
+    done=client.post(B+f"/exams/attempts/{a['id']}/review",json={'points':{'2':2.5}})
+    assert done.status_code==200,done.text
+    done=done.json()
+    assert done['status']=='graded' and done['feedback']['2']['points']==2.5 and done['feedback']['2']['checked_by_parent']
+    assert done['feedback']['check']['resolved_by_parent']==[3]
+    with closing(db.webapp_conn()) as c:
+        assert sorted(x[0] for x in c.execute('SELECT result FROM mentor_evidence'))==['partial','partial','partial']
+    assert ex.review_items(1)==[] and client.post(B+f"/exams/attempts/{a['id']}/review",json={'points':{'2':1}}).status_code==409
 
 
 def test_scope_merges_batches_without_losing_sources(setup):

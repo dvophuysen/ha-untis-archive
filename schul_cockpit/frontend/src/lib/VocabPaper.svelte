@@ -1,9 +1,11 @@
 <script>
   // Vokabeltest auf Papier (D181): Blatt drucken, von Hand ausfüllen, Seiten
-  // fotografieren, in einem Schritt auswerten. Richtig und falsch zählen im
-  // Trainer, unklar Gelesenes zählt nicht.
+  // fotografieren, auswerten. Ein Wort zählt nur, wenn zwei unabhängige
+  // Auswertungen es gleich lesen; bleiben zu viele offen, prüfen die Eltern (D202).
   import { api } from './api.js';
   import PrintSheet from './PrintSheet.svelte';
+  import { actsAsParent } from './viewMode.svelte.js';
+  import { appState } from './store.svelte.js';
 
   let { accountId, paperId, onclose = () => {} } = $props();
   const base = $derived(`/api/accounts/${accountId}/vocab/papers/${paperId}`);
@@ -38,6 +40,16 @@
   const printUrl = $derived(`.${base}/print`);
   const graded = $derived(p?.status === 'graded');
   const VERDICT = { richtig: 'richtig', falsch: 'falsch', unklar: 'unklar' };
+  // Zurückgehalten (D202): zu viele Wörter auch nach drei Auswertungen nicht sicher gelesen.
+  const reviewing = $derived(p?.status === 'review');
+  const parentView = $derived(actsAsParent(appState.me));
+  const unsure = $derived(p?.check?.unsure ?? []);
+  let decided = $state({});
+  const reviewReady = $derived(unsure.every((nr) => decided[String(nr)]));
+  const saveReview = () => run('Wird gespeichert …', async () => {
+    p = await api.post(`${base}/review`, { verdicts: Object.fromEntries(unsure.map((nr) => [String(nr), decided[String(nr)]])) });
+    decided = {};
+  });
 </script>
 
 <section class="vpaper">
@@ -50,11 +62,36 @@
       <h3>Vokabeltest · {p.unit_label || p.unit}</h3>
     </header>
 
-    {#if graded}
+    {#if reviewing && !parentView}
+      <div class="notice review-wait" role="status">
+        <strong>Dein Blatt ist abgegeben.</strong>
+        <p>Einige Wörter konnte die App auch nach mehreren Versuchen nicht sicher lesen. Deine Eltern schauen sich die Auswertung an; danach siehst du hier dein Ergebnis. So zählt kein Wort falsch, weder für noch gegen dich.</p>
+      </div>
+      <button class="primary" onclick={onclose}>Fertig</button>
+    {:else if reviewing}
+      <div class="notice review-box">
+        <strong>Prüfung nötig: {unsure.length} {unsure.length === 1 ? 'Wort' : 'Wörter'}</strong>
+        <p>{unsure.length === 1 ? 'Dieses Wort ließ' : 'Diese Wörter ließen'} sich auch nach {p.check?.passes ?? 2} Auswertungen nicht sicher lesen. Bis ihr sie prüft, sieht das Kind kein Ergebnis, und nichts zählt im Trainer. Schaut auf den Fotos nach und entscheidet je Wort.</p>
+        {#if p.pages.length}<div class="pages">{#each p.pages as id, n (id)}<a href={pageUrl(id)} target="_blank" rel="noreferrer"><img class="thumb" src={pageUrl(id)} alt={`Seite ${n + 1}`} loading="lazy" /></a>{/each}</div>{/if}
+      </div>
+      <ol class="words">
+        {#each p.words.filter((w) => unsure.includes(w.nr)) as w (w.nr)}
+          <li class="unklar">
+            <span class="n">{w.nr}.</span>
+            <span class="q">{w.prompt}</span>
+            <span class="choice" role="group" aria-label={`Wort ${w.nr}`}>
+              {#each ['richtig', 'falsch'] as v (v)}<button class="ghost" class:chosen={decided[String(w.nr)] === v} aria-pressed={decided[String(w.nr)] === v} disabled={!!busy} onclick={() => (decided[String(w.nr)] = v)}>{v}</button>{/each}
+            </span>
+            <span class="a">Erwartet: <b>{w.expected}</b>{#if w.read} · gelesen: „{w.read}“{/if}</span>
+          </li>
+        {/each}
+      </ol>
+      <button class="primary" disabled={!!busy || !reviewReady} onclick={saveReview}>Übernehmen</button>
+    {:else if graded}
       <div class="result">
         <strong class="big">{p.result.richtig} von {p.words.length} richtig</strong>
         {#if p.overall}<p>{p.overall}</p>{/if}
-        <p class="dim">{p.counts ? 'Richtig und falsch zählen im Trainer. ' : 'Dieses Blatt zählt nicht für den Lernstand. '}Unklar Gelesenes zählt nicht, weder für noch gegen dich.</p>
+        <p class="dim">{p.counts ? 'Richtig und falsch zählen im Trainer. ' : 'Dieses Blatt zählt nicht für den Lernstand. '}{p.check?.resolved_by_parent?.length ? 'Unsicher gelesene Wörter haben deine Eltern geprüft. ' : p.check ? 'Gezählt wird nur, was zwei unabhängige Auswertungen gleich lesen. ' : ''}Nicht sicher Gelesenes zählt nicht, weder für noch gegen dich.</p>
       </div>
       <ol class="words">
         {#each p.words as w (w.nr)}
@@ -62,7 +99,7 @@
             <span class="n">{w.nr}.</span>
             <span class="q">{w.prompt}</span>
             <span class="v">{VERDICT[w.verdict] ?? ''}</span>
-            <span class="a">{#if w.verdict !== 'richtig'}Richtig: <b>{w.expected}</b>{/if}{#if w.read} · gelesen: „{w.read}“{/if}{#if w.note} · {w.note}{/if}</span>
+            <span class="a">{#if w.verdict === 'unklar'}Nicht sicher gelesen, zählt nicht · {/if}{#if w.verdict !== 'richtig'}Richtig: <b>{w.expected}</b>{/if}{#if w.read} · gelesen: „{w.read}“{/if}{#if w.note} · {w.note}{/if}{#if w.checked_by_parent} · von deinen Eltern geprüft{/if}</span>
           </li>
         {/each}
       </ol>
@@ -117,4 +154,10 @@
   .words .a{grid-column:2 / 4;font-size:var(--fs-xs);color:var(--fg-muted);overflow-wrap:anywhere}
   .words .a:empty{display:none}
   .notice{padding:var(--sp-2);background:var(--warm-soft);border-radius:var(--r-sm)}
+  .review-box,.review-wait{display:grid;gap:4px}
+  .review-box p,.review-wait p{margin:0}
+  .thumb{width:72px;height:96px;object-fit:cover;border-radius:var(--r-sm);border:1px solid var(--border)}
+  .choice{display:flex;gap:4px}
+  .choice button{min-height:36px;padding:2px 10px}
+  .choice .chosen{background:var(--accent);color:var(--accent-fg,#fff)}
 </style>

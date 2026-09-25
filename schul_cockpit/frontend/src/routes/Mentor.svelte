@@ -15,7 +15,7 @@
   let data=$state(null),running=$state(null),tab=$state('today'),error=$state(''),busy=$state(false);
   let subject=$state(''),goal=$state(''),evidence=$state(null),correction=$state('');
   let focusKey=$state('');
-  let demo=$state(false),examBusy=$state(false);
+  let demo=$state(false),examBusy=$state(false),examAttempt=$state(null);
   async function pauseRunning(){if(running?.status==='active'&&data?.can_write){try{await api.post(`${base}/sessions/${running.id}/pause`,{paused:true});}catch{/* egal */}}running=null;}
   async function switchMode(value){if(value===demo)return;await pauseRunning();demo=value;data=null;tab='today';subject='';goal='';await load();}
   async function load(){data=await api.get(`${base}?demo=${demo}`);}
@@ -32,6 +32,8 @@
     if(!data)await load();
     const q=queryOf(h);
     if(opensSession(q)){running=await openFromQuery(api,base,q,{demo});clearQuery();return;}
+    // Aus „Erledigen“: eine zurückgehaltene Übungsklausur prüfen (D202).
+    if(q.get('exam_attempt')){if(demo)await switchMode(false);tab='exams';examAttempt=Number(q.get('exam_attempt'));clearQuery();return;}
     if(q.get('subject')){subject=q.get('subject');goal=q.get('topic')||'';tab=q.get('mode')==='exam'?'exams':'today';}
     else if(q.get('goal')){const g=data.shared_plan?.goals.find(g=>g.key===q.get('goal')||g.previous_keys?.includes(q.get('goal')));if(g){focusKey=g.key;goal=g.title;subject=g.subject;if(g.session_id)await open({id:g.session_id});else tab='today';}}
   }
@@ -66,7 +68,7 @@
       {#if demo}<p class="notice">Demo-Antworten erzeugen keine Lernbeobachtungen oder Wiederholungen für das Kind.</p>{/if}<p>Hier zählt, was du an Aufgaben gezeigt hast. Eine richtige Antwort direkt nach einer Erklärung prüfen wir später noch einmal.</p>
       {#each data.progress as p}<section class="card"><span>{p.subject}</span><h2>{p.title}</h2><p>{p.label}</p><p>{p.attempts} Versuche · {p.variants} unterschiedliche Aufgaben selbstständig gelöst</p><button onclick={()=>act(async()=>{evidence=await api.get(`${base}/evidence/${p.id}`);})}>Antworten ansehen</button></section>{:else}<p>Deine Fortschritte erscheinen nach dem Üben. </p>{/each}
       {#if evidence}<section class="card"><h2>Die einzelnen Beobachtungen</h2>{#each evidence as e}<p class="preserve">{e.answer}</p><p>{e.rationale}</p><small>{formatShortDate(e.created_at.slice(0,10))} · {e.help_used?'mit Hilfe':'ohne angeforderten Hinweis'} · KI-Einschätzung</small>{#if data.can_manage&&!e.invalidated}<label>Was war an der Bewertung falsch?<input bind:value={correction}/></label><button disabled={busy||correction.length<3} onclick={()=>act(async()=>{await api.post(`${base}/evidence/${e.id}/invalidate`,{reason:correction});evidence=null;await load();})}>Bewertung zurücknehmen</button>{/if}<hr/>{/each}<button onclick={()=>evidence=null}>Schließen</button></section>{/if}
-    {:else}<MentorExams {accountId} {demo} subjects={data.subjects} canManage={data.can_manage} initialSubject={subject} initialTopic={goal} onBusy={v=>examBusy=v}/>{/if}
+    {:else}<MentorExams {accountId} {demo} subjects={data.subjects} canManage={data.can_manage} initialSubject={subject} initialTopic={goal} initialAttempt={examAttempt} onBusy={v=>examBusy=v}/>{/if}
     <!-- KI-Rahmen, Kosten und die Schalter des Lernbegleiters stehen unter „Einstellen“ (D183). -->
     {#if data.can_manage&&!demo}<section class="parents"><p class="muted">KI-Rahmen, Kosten und ob der Lernbegleiter läuft, stellst du unter „Einstellen“ ein.</p><div class="actions"><a class="button-link" href="#/einstellen?s=ki"><ActionLabel label="KI-Rahmen und Kosten" /></a><button onclick={onManage}>Lernrahmen, Materialien und eigene Übungen</button></div></section>{/if}
     {#if busy}<p role="status">Wird vorbereitet …</p>{/if}
