@@ -277,8 +277,14 @@ async def _dashboard_for_account(account_id: int, name: str, today: date) -> dic
 
     # Stundenplan-Raster und Tagesstreifen stehen nicht mehr auf der Startseite
     # (D166); der Plan liegt unter Übersichten → Woche.
+    try:
+        from .profile import read as read_profile
+        profile = read_profile(account_id)
+    except Exception:
+        profile = None
     return {
         "rewards": rewards_brief,
+        "profile": profile,
         "account_id": account_id,
         "name": name,
         "exams": exams_out,

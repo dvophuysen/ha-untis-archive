@@ -54,8 +54,9 @@
   --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.04);
 }
 
+/* Hell/Dunkel folgt dem Gerät, außer das Kind hat es fest gewählt (D176). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #111d25;
     --bg-card: #1b2b35;
     --bg-elevated: #273945;
@@ -81,6 +82,32 @@
     --st-sitzt: #3fb287;
     --st-gefestigt: #7fd3c4;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #111d25;
+  --bg-card: #1b2b35;
+  --bg-elevated: #273945;
+  --fg: #e6e9ed;
+  --fg-muted: #9ba8b5;
+  --fg-dim: #9aa9b8;
+  --accent: #8cdbcc;
+  --accent-soft: #203e3d;
+  --school-soft: #233448;
+  --learn-soft: #322e47;
+  --warm-soft: #3c3426;
+  --bad-soft: #45262a;
+  --accent-fg: #112d2b;
+  --border: #354650;
+  --bad-fg: #fca5a5;
+  --good-fg: #6ee7b7;
+  --warn-fg: #fcd34d;
+  --absent-fg: #fda4af;
+  --substitution-fg: #c4b5fd;
+  --st-neu: #46565f;
+  --st-angefangen: #c99a45;
+  --st-wackelt: #d9803a;
+  --st-sitzt: #3fb287;
+  --st-gefestigt: #7fd3c4;
 }
 
 *,
@@ -488,3 +515,52 @@ details[open] > summary::after { transform: rotate(90deg); }
 body[data-view-mode="mirror"] { box-shadow: inset 0 0 0 4px #2563eb; }
 body[data-view-mode="child"] { box-shadow: inset 0 0 0 4px var(--st-sitzt); }
 body[data-view-mode="test"] { box-shadow: inset 0 0 0 4px #c2410c; }
+
+/* Akzentfarbe je Kind (D176). Hell: weiße Schrift auf der Farbe, dunkel: dunkle. */
+:root[data-accent] { --accent-soft: color-mix(in oklab, var(--accent) 16%, var(--bg-card)); }
+:root[data-accent="petrol"] { --accent: #176b72; }
+:root[data-accent="kobalt"] { --accent: #3056d3; }
+:root[data-accent="glut"] { --accent: #c2410c; }
+:root[data-accent="beere"] { --accent: #b3265e; }
+:root[data-accent="wald"] { --accent: #2f7d32; }
+:root[data-accent="lila"] { --accent: #6b3fc4; }
+:root[data-accent="ozean"] { --accent: #0e7490; }
+:root[data-accent="sonne"] { --accent: #a16207; }
+:root[data-accent="graphit"] { --accent: #334155; }
+:root[data-accent="koralle"] { --accent: #be123c; }
+:root[data-accent="moos"] { --accent: #4d7c0f; }
+:root[data-accent="nacht"] { --accent: #1e3a8a; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-accent="petrol"] { --accent: #8cdbcc; }
+  :root:not([data-theme="light"])[data-accent="kobalt"] { --accent: #9db4ff; }
+  :root:not([data-theme="light"])[data-accent="glut"] { --accent: #fdba74; }
+  :root:not([data-theme="light"])[data-accent="beere"] { --accent: #f9a8d4; }
+  :root:not([data-theme="light"])[data-accent="wald"] { --accent: #86efac; }
+  :root:not([data-theme="light"])[data-accent="lila"] { --accent: #c4b5fd; }
+  :root:not([data-theme="light"])[data-accent="ozean"] { --accent: #67e8f9; }
+  :root:not([data-theme="light"])[data-accent="sonne"] { --accent: #fde047; }
+  :root:not([data-theme="light"])[data-accent="graphit"] { --accent: #cbd5e1; }
+  :root:not([data-theme="light"])[data-accent="koralle"] { --accent: #fda4af; }
+  :root:not([data-theme="light"])[data-accent="moos"] { --accent: #bef264; }
+  :root:not([data-theme="light"])[data-accent="nacht"] { --accent: #93c5fd; }
+}
+:root[data-theme="dark"][data-accent="petrol"] { --accent: #8cdbcc; }
+:root[data-theme="dark"][data-accent="kobalt"] { --accent: #9db4ff; }
+:root[data-theme="dark"][data-accent="glut"] { --accent: #fdba74; }
+:root[data-theme="dark"][data-accent="beere"] { --accent: #f9a8d4; }
+:root[data-theme="dark"][data-accent="wald"] { --accent: #86efac; }
+:root[data-theme="dark"][data-accent="lila"] { --accent: #c4b5fd; }
+:root[data-theme="dark"][data-accent="ozean"] { --accent: #67e8f9; }
+:root[data-theme="dark"][data-accent="sonne"] { --accent: #fde047; }
+:root[data-theme="dark"][data-accent="graphit"] { --accent: #cbd5e1; }
+:root[data-theme="dark"][data-accent="koralle"] { --accent: #fda4af; }
+:root[data-theme="dark"][data-accent="moos"] { --accent: #bef264; }
+:root[data-theme="dark"][data-accent="nacht"] { --accent: #93c5fd; }
+
+/* Kompakte Ansicht (D176): etwas kleinere Schrift und engere Karten. */
+:root[data-density="compact"] { --fs-md: 0.94rem; --fs-sm: 0.84rem; --fs-lg: 1.1rem; --fs-xl: 1.4rem; --sp-3: 10px; --sp-4: 13px; }
+:root[data-density="compact"] body { font-size: 15px; }
+:root[data-density="compact"] .card { padding: 0.65rem 0.75rem; }
+
+.top-bar .brand { display: flex; align-items: center; gap: var(--sp-2); }
+.top-bar .avatar { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--accent-fg); font-weight: 800; font-size: 0.8rem; flex: none; }

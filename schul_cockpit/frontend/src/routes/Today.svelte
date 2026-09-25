@@ -15,6 +15,7 @@
   import QuickAdd from '../lib/QuickAdd.svelte';
   import TaskRow from '../lib/TaskRow.svelte';
   import TaskDetail from '../lib/TaskDetail.svelte';
+  import { profile } from '../lib/profile.svelte.js';
 
   let { accountId } = $props();
   let data = $state(null), tasks = $state([]), plan = $state(null);
@@ -145,7 +146,7 @@
   const ringStyle = (d, n) => `background:conic-gradient(var(--accent) ${n ? Math.round(d / n * 100) : 0}%, var(--bg-elevated) 0)`;
 </script>
 
-{#if celebrate && !reduceMotion}<div class="confetti" aria-hidden="true">{#each confetti as c}<span style="left:{c.left}%;background:{c.hue};animation-delay:{c.delay}s;animation-duration:{c.dur}s"></span>{/each}</div>{/if}
+{#if celebrate && !reduceMotion && (profile.prefs.joy ?? 'konfetti') === 'konfetti'}<div class="confetti" aria-hidden="true">{#each confetti as c}<span style="left:{c.left}%;background:{c.hue};animation-delay:{c.delay}s;animation-duration:{c.dur}s"></span>{/each}</div>{/if}
 <header class="day-title"><h2>{weekday}</h2><p>{subtitle}</p></header>
 {#if error}<div class="error-box" role="alert">{error} Angezeigte Daten können veraltet sein.</div>{/if}
 <p class="save-message" role="status">{message}</p>
@@ -153,7 +154,7 @@
 {#if loading}<p class="muted">Lade deinen Tag …</p>{:else if data}
   <!-- Fokuskarte: das Anliegen des Moments. -->
   {#if done}
-    <section class="focus done-card">
+    <section class="focus done-card" class:still={profile.prefs.joy === 'still'}>
       <span class="big-ring" aria-hidden="true"><span>✓</span></span>
       <strong class="focus-big">Geschafft. Freizeit!</strong>
       <span>Alles für {dayWord(nextSchoolDay)} ist erledigt.</span>
@@ -314,6 +315,7 @@
   .on-accent-link{color:var(--accent-fg);font-weight:700;padding:10px 4px;min-height:44px;display:inline-flex;align-items:center}
   .focus-sub{background:rgba(255,255,255,.14);border-radius:var(--r-md);padding:var(--sp-2) var(--sp-3);font-size:var(--fs-sm);position:relative;z-index:1}
   .done-card{text-align:center;justify-items:center;animation:rise .45s}
+  .done-card.still{animation:none}
   .big-ring{width:84px;height:84px;border-radius:50%;background:var(--accent-fg);display:grid;place-items:center}
   .big-ring span{width:64px;height:64px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-size:1.8rem;font-weight:800}
   @keyframes rise{from{transform:translateY(8px);opacity:.4}to{transform:none;opacity:1}}

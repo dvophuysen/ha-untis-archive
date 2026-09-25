@@ -3,8 +3,15 @@
   import { api, ApiError } from '../lib/api.js';
   import ActionLabel from '../lib/ActionLabel.svelte';
   import { formatShortDate } from '../lib/format.js';
+  import { profile, saveProfile, COLORS, AVATARS, initials } from '../lib/profile.svelte.js';
 
-  let { accountId, name = '', canManage = false } = $props();
+  let { accountId, name = '', canManage = false, canStyle = true } = $props();
+  let styleMsg = $state('');
+  async function setStyle(change) {
+    styleMsg = '';
+    try { await saveProfile(accountId, change); } catch (e) { styleMsg = e instanceof ApiError ? e.message : 'Nicht gespeichert.'; }
+  }
+  const prefs = $derived(profile.accountId === accountId ? profile.prefs : null);
   let data = $state(null), error = $state(''), bonus = $state(''), saving = $state(false), saved = $state('');
   let request = 0;
   async function load() {
@@ -99,6 +106,23 @@
   {/if}
 {/if}
 
+{#if canStyle && prefs}
+  <h3>Gestalten</h3>
+  <section class="card style">
+    <span class="lbl">Farbe</span>
+    <div class="swatches">{#each COLORS as [key, hex, label] (key)}<button class="sw" style:background={hex} aria-label={label} aria-pressed={prefs.color === key} onclick={() => setStyle({ color: key })}></button>{/each}</div>
+    <span class="lbl">Profilbild</span>
+    <div class="avatars">{#each AVATARS as a (a)}<button aria-label={a || 'Initialen'} aria-pressed={prefs.avatar === a} onclick={() => setStyle({ avatar: a })}>{a || initials(name)}</button>{/each}</div>
+    <span class="lbl">Aussehen</span>
+    <div class="seg">{#each [['system', 'wie das Gerät'], ['light', 'hell'], ['dark', 'dunkel']] as [k, l] (k)}<button aria-pressed={prefs.theme === k} onclick={() => setStyle({ theme: k })}>{l}</button>{/each}</div>
+    <span class="lbl">Dichte</span>
+    <div class="seg">{#each [['normal', 'normal'], ['compact', 'kompakt']] as [k, l] (k)}<button aria-pressed={prefs.density === k} onclick={() => setStyle({ density: k })}>{l}</button>{/each}</div>
+    <span class="lbl">Wenn alles geschafft ist</span>
+    <div class="seg">{#each [['konfetti', 'Konfetti'], ['ring', 'nur Ring'], ['still', 'still']] as [k, l] (k)}<button aria-pressed={prefs.joy === k} onclick={() => setStyle({ joy: k })}>{l}</button>{/each}</div>
+    {#if styleMsg}<p class="error-box" role="alert">{styleMsg}</p>{/if}
+  </section>
+{/if}
+
 <h3>Mehr</h3>
 <div class="more">
   {#each [['subjects', 'Fächer'], ['klausuren', 'Arbeiten'], ['materialien', 'Materialien'], ['absences', 'Nachholen'], ['plan', 'Aufgaben und Wochenplanung']] as [target, label] (target)}
@@ -145,6 +169,17 @@
   .medal-card.bronze .disc{background:#b86b3b;border:0}.medal-card.silber .disc{background:#9aa6b2;border:0}.medal-card.gold .disc{background:#d4a017;border:0}
   .medal-card.running .disc{border-color:var(--accent);color:var(--accent)}
   .bonus label{font-size:var(--fs-sm)}.bonus .row{margin-top:4px}.bonus input{max-width:10rem}
+  .style{display:grid;gap:var(--sp-2)}
+  .lbl{font-size:var(--fs-xs);color:var(--fg-muted);font-weight:700;margin-top:var(--sp-1)}
+  .swatches{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:var(--sp-2)}
+  .sw{aspect-ratio:1;min-height:0;border-radius:50%;border:3px solid var(--bg-card);box-shadow:0 0 0 1px var(--border);padding:0}
+  .sw[aria-pressed="true"]{box-shadow:0 0 0 3px var(--fg)}
+  .avatars{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
+  .avatars button{aspect-ratio:1;min-height:0;padding:0;border-radius:50%;font-size:1.1rem;font-weight:800;background:var(--bg-elevated)}
+  .avatars button[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:1px}
+  .seg{display:flex;flex-wrap:wrap;gap:6px}
+  .seg button{min-height:36px;padding:4px 12px;border-radius:var(--r-pill);font-size:var(--fs-sm)}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
   .more{display:grid;gap:var(--sp-2)}
   .more a{display:flex;justify-content:space-between;align-items:center;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-3);min-height:52px;color:var(--fg)}
 </style>

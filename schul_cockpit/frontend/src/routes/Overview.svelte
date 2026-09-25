@@ -1,6 +1,7 @@
 <script>
   import StageLegend from '../lib/StageLegend.svelte';
   import StageBar from '../lib/StageBar.svelte';
+  import { COLORS, initials } from '../lib/profile.svelte.js';
   // Startseite der Eltern (D166): je Kind eine Karte. Oben der Status, dann was
   // jetzt offen ist, die Arbeiten chronologisch mit dem Lernstand ihrer Themen,
   // zuletzt was sich über Wochen abzeichnet. Jeder Baustein springt zum Kind in
@@ -91,7 +92,7 @@
       {@const b = kid.board}
       <section class="kid card" aria-label={`Stand von ${kid.name}`} data-status={b.status.level}>
         <header class="kid-head">
-          <h2>{kid.name}</h2>
+          <h2 class="kid-name">{#if kid.profile}<span class="kid-av" style:background={COLORS.find((c) => c[0] === kid.profile.color)?.[1] ?? 'var(--accent)'} aria-hidden="true">{kid.profile.avatar || initials(kid.name)}</span>{/if}{kid.name}</h2>
           <span class="pill {b.status.level}">{b.status.label}</span>
         </header>
         {#if b.status.level !== 'good' && b.status.reasons.length}
@@ -213,6 +214,8 @@
   .rw-new { background: var(--warm-soft); border-radius: var(--r-sm); padding: 4px 8px; font-size: var(--fs-xs); justify-self: start; }
   .kid-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 0.4rem; }
   .kid-head h2 { margin: 0; font-size: 1.1rem; }
+  .kid-name { display: flex; align-items: center; gap: 8px; }
+  .kid-av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: .8rem; font-weight: 800; }
   .plan { display: block; width: 100%; text-align: left; background: transparent; border: 0; padding: 0 0 6px; color: var(--fg); min-height: 0; }
   .plan .lbl { display: flex; justify-content: space-between; gap: 8px; font-size: 0.74rem; font-weight: 650; color: var(--fg-muted); margin: 4px 2px 2px; }
   .plan .lbl .dev, .plan .notes { color: var(--warn-fg); }

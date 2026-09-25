@@ -1,6 +1,7 @@
 <script>
   import Icon from './lib/Icon.svelte';
   import DeviceSheet from './lib/DeviceSheet.svelte';
+  import { profile, loadProfile, applyProfile, initials } from './lib/profile.svelte.js';
   import { view, setViewMode, touchViewMode, expireViewMode } from './lib/viewMode.svelte.js';
   import { onMount } from 'svelte';
   import { appState, loadMe, setActiveAccount, activeAccount } from './lib/store.svelte.js';
@@ -134,6 +135,9 @@
   // Eigene Elternansicht nur im Zustand „Ich“; sonst sieht das Gerät aus wie beim Kind.
   const parentView = $derived(isParent && view.mode === 'parent');
   let deviceSheet = $state(false);
+  // Gestaltung des Kindes (D176) laden und anwenden, außer in der eigenen Elternansicht.
+  $effect(() => { if (appState.activeAccountId && profile.accountId !== appState.activeAccountId) loadProfile(appState.activeAccountId); });
+  $effect(() => { applyProfile(!parentView && profile.accountId === appState.activeAccountId ? profile.prefs : null); });
   $effect(() => {
     document.body.dataset.viewMode = isParent ? view.mode : 'own';
     // Ein Kind kann keinen Elternzustand haben; ein alter Wert bleibt wirkungslos.
@@ -169,7 +173,10 @@
 <div class="app-shell">
   <header class="top-bar">
     <div class="col" style="gap: 0">
-      <h1>Schul-Cockpit</h1>
+      <div class="brand">
+        {#if acc && !parentView}<span class="avatar" aria-hidden="true">{profile.prefs.avatar || initials(acc.name)}</span>{/if}
+        <h1>Schul-Cockpit</h1>
+      </div>
       {#if parentView && appState.me && appState.me.accounts.length > 1}
         <select
           class="top-meta"
@@ -280,7 +287,7 @@
     {:else if route.name === 'overview'}
       <Overview {navigate} />
     {:else if route.name === 'ich' || route.name === 'more'}
-      <Ich accountId={appState.activeAccountId} name={acc?.name} canManage={parentView} />
+      <Ich accountId={appState.activeAccountId} name={acc?.name} canManage={parentView} canStyle={view.mode !== 'mirror'} />
     {:else if route.name === 'today'}
       <Today accountId={appState.activeAccountId} />
     {:else if route.name === 'plan' || route.name === 'tasks'}

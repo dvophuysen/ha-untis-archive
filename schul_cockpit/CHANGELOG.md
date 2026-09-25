@@ -1,3 +1,8 @@
+## 1.21.0
+
+- Gestalten auf der Seite „Ich“: zwölf Farben, Profilbild (Initialen oder ein Symbol), hell, dunkel oder wie das Gerät, normale oder kompakte Ansicht, und ob es beim Geschafft-Moment Konfetti gibt, nur den Ring oder gar nichts. Die Einstellung gehört dem Kind und gilt auf jedem Gerät, auch am Elterngerät im Kindmodus.
+- Das Profilbild steht oben neben dem Titel und auf der Familienkarte in der Farbe des Kindes.
+
 ## 1.20.0
 
 - Serie, Abzeichen und Jahresmedaille, gültig ab heute. Frühere Tage zählen nicht.

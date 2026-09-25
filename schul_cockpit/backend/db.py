@@ -1104,3 +1104,10 @@ CREATE TABLE IF NOT EXISTS reward_days (account_id INTEGER NOT NULL, school_day 
 CREATE TABLE IF NOT EXISTS reward_badges (account_id INTEGER NOT NULL, badge TEXT NOT NULL, level INTEGER NOT NULL,
  reached_at TEXT NOT NULL, PRIMARY KEY(account_id, badge, level));
 """))
+
+# Gestaltung je Kind (D176): Farbe, Profilbild, Hell oder Dunkel, Dichte, Freude.
+_MIGRATIONS.append(("profile_prefs_001", """
+CREATE TABLE IF NOT EXISTS profile_prefs (
+ account_id INTEGER PRIMARY KEY, color TEXT, avatar TEXT, theme TEXT, density TEXT, joy TEXT, updated_at TEXT NOT NULL
+);
+"""))
