@@ -393,6 +393,9 @@ async def grade_paper(account_id: int, aid: int, body: TypedAnswers, user: Curre
         if counts:
             from .. import rewards
             rewards.note(account_id, "practice", aid, user)
+            # Eine Übungsarbeit an einem Tag ohne Pflicht zählt für die Extrameile (D181).
+            from .. import reward_extras
+            reward_extras.note_extra_practice(account_id, aid, snap.get("exam_key"), user)
         return paper_view(account_id, aid, user)
     finally:
         with closing(webapp_conn()) as c, c:

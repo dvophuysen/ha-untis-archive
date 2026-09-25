@@ -149,6 +149,8 @@
   .total small{font-size:var(--fs-xs);color:var(--fg-muted)}
   h3{font-size:var(--fs-md);margin:var(--sp-4) 0 var(--sp-2)}
   .badges{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-2)}
+  /* Zwölf Abzeichen (D181): drei Reihen zu vier, sobald Platz ist. */
+  @media (min-width:560px){.badges{grid-template-columns:repeat(4,minmax(0,1fr))}}
   .badge-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-md);padding:var(--sp-2) 6px;display:grid;justify-items:center;gap:4px;text-align:center}
   .badge-card b{font-size:.78rem;line-height:1.2}.badge-card small{font-size:.66rem;color:var(--fg-muted)}
   .medal{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-size:1.25rem;background:var(--bg-elevated)}

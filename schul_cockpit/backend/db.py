@@ -1124,3 +1124,21 @@ ALTER TABLE mentor_exams ADD COLUMN exam_key TEXT;
 ALTER TABLE mentor_exams ADD COLUMN paper_format TEXT;
 CREATE INDEX IF NOT EXISTS idx_mentor_exams_key ON mentor_exams(account_id, exam_key);
 """))
+
+# Vokabeltest auf Papier (D181): gedrucktes Blatt je Einheit, Seiten als Fotos,
+# ein KI-Aufruf wertet jedes Wort. Richtig und falsch zählen im Trainer als
+# Antwort mit Herkunft „paper“; unklar Gelesenes zählt nicht.
+_MIGRATIONS.append(("vocab_paper_001", """
+ALTER TABLE vocab_attempts ADD COLUMN source TEXT;
+CREATE TABLE IF NOT EXISTS vocab_papers (
+ id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL, subject TEXT NOT NULL, unit TEXT NOT NULL,
+ unit_label TEXT NOT NULL DEFAULT '', section TEXT NOT NULL DEFAULT '', direction TEXT NOT NULL,
+ items_json TEXT NOT NULL, user_id INTEGER, counts INTEGER NOT NULL DEFAULT 1,
+ status TEXT NOT NULL DEFAULT 'active', result_json TEXT, created_at TEXT NOT NULL, graded_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_vocab_papers_account ON vocab_papers(account_id, subject, id);
+CREATE TABLE IF NOT EXISTS vocab_paper_pages (
+ id INTEGER PRIMARY KEY, paper_id INTEGER NOT NULL REFERENCES vocab_papers(id) ON DELETE CASCADE,
+ account_id INTEGER NOT NULL, file_bytes BLOB NOT NULL, created_at TEXT NOT NULL
+);
+"""))

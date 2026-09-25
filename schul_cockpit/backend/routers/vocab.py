@@ -202,6 +202,9 @@ async def attempts(account_id: int, body: vocab.AttemptIn, user: CurrentUser = D
         import time
         from .. import rewards
         rewards.note(account_id, 'vocab', f"{(result.get('word') or {}).get('id')}:{time.time_ns()}", user)
+        # Mehr als das Tagespensum zählt für die Extrameile (D181), nie statt Pflicht.
+        from .. import reward_extras
+        reward_extras.note_extra_vocab(account_id, user)
     return result
 
 

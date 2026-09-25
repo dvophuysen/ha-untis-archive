@@ -28,7 +28,7 @@ TEST_DETAIL = ("Im Testmodus geht das nicht, weil es die Lerngeschichte verände
 # Im Testmodus gesperrt: alles, was Lernverlauf, Material oder KI-Kosten erzeugt
 # und sich nicht sauber zurücknehmen lässt (D158).
 TEST_BLOCKED = re.compile(
-    r"^/api/accounts/\d+/(learning|materials|afternoon-check|textbooks|exams/|exam-progress|exam-overrides|practice)"
+    r"^/api/accounts/\d+/(learning|materials|afternoon-check|textbooks|exams/|exam-progress|exam-overrides|practice|vocab/)"
 )
 
 

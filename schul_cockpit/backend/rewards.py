@@ -37,6 +37,11 @@ BADGES = (
     ("ehrlich", "Ehrlich", "💬", "Stunden zurückgemeldet", (50, 300, 1000, 3000, 6000)),
     ("wortschatz", "Wortschatz", "🗣️", "Vokabeln geübt", (100, 1000, 5000, 15000, 40000)),
     ("vorbereitet", "Vorbereitet", "🎯", "vor einer Arbeit alle Themen angefangen", (1, 5, 15, 40, 80)),
+    # Stufe C (D181): gemessen an Übungsarbeiten und Raster, gezählt in reward_extras.
+    ("probearbeit", "Probearbeit", "📄", "Probearbeiten geschrieben und ausgewertet", (1, 5, 15, 40, 80)),
+    ("aufsteiger", "Aufsteiger", "📈", "Themen und Bereiche, die erstmals sicher wurden", (5, 25, 100, 250, 500)),
+    ("zielniveau", "Zielniveau", "🏁", "vor einer Arbeit alle Themen auf Zielniveau", (1, 3, 10, 25, 50)),
+    ("extrameile", "Extrameile", "➕", "freiwillig mehr geübt als das Pensum", (5, 20, 60, 150, 300)),
 )
 # Im Einführungsschuljahr sind die Jahresmedaillen leichter (D173).
 MEDAL_LIMITS = {"2026/27": (0.50, 0.65, 0.80)}
@@ -319,6 +324,8 @@ def summary(account_id: int, now: datetime | None = None) -> dict:
             "wortschatz": events.get("vocab", 0), "vorbereitet": events.get("prepared", 0),
             "fruehstarter": sum(1 for r in rows.values() if r["kind"] == "full" and r["bonus"]),
         }
+        from .reward_extras import counts as extra_counts
+        counts.update(extra_counts(account_id, start, today))
         badges, new = [], []
         for key, name, emoji, what, limits in BADGES:
             value = counts[key]

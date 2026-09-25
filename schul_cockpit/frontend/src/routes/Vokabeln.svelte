@@ -6,6 +6,7 @@
   import Speech from '../lib/Speech.svelte';
   import { answerClock } from '../lib/answerClock.js';
   import VocabProgress from '../lib/VocabProgress.svelte';
+  import VocabPaper from '../lib/VocabPaper.svelte';
   const clock = answerClock();
   import { subjectStyle } from '../lib/subjectStyle.js';
   import { appState } from '../lib/store.svelte.js';
@@ -61,6 +62,29 @@
     } catch (e) { error = e.message; }
   }
   $effect(() => { void accountId; void subject; polls = 0; load(); return () => clearTimeout(pollTimer); });
+
+  // Tagespensum (D181): wie viele Wörter heute dran sind und warum. Neu geladen
+  // beim Öffnen und nach jedem Durchgang, nicht nach jeder Antwort.
+  let pensum = $state([]);
+  async function loadPensum() {
+    try { pensum = (await api.get(`/api/accounts/${accountId}/vocab/pensum`)).items || []; } catch { pensum = []; }
+  }
+  $effect(() => { void accountId; loadPensum(); });
+  const pct = (e) => Math.min(100, Math.round((100 * e.practiced) / Math.max(1, e.target)));
+
+  // Vokabeltest auf Papier (D181).
+  let paperId = $state(null), paperCount = $state(20), papers = $state([]);
+  async function loadPapers() {
+    if (!subject) return;
+    try { papers = (await api.get(`/api/accounts/${accountId}/vocab/papers?subject=${encodeURIComponent(subject)}`)).papers; } catch { papers = []; }
+  }
+  $effect(() => { void accountId; void subject; loadPapers(); });
+  async function newPaper() {
+    busy = true; error = '';
+    try { paperId = (await api.post(`/api/accounts/${accountId}/vocab/papers`, { subject, unit, section, count: Number(paperCount) })).id; }
+    catch (e) { error = e.message; } finally { busy = false; }
+  }
+  function closePaper() { paperId = null; load(); loadPensum(); loadPapers(); }
   async function begin(s, d) {
     stage = s; direction = d; busy = true; error = ''; done = false; verdict = null; pending = null;
     tally = { correct: 0, wrong: 0, skipped: 0 };
@@ -98,7 +122,7 @@
   }
   function next(skip = false) {
     if (skip === true) tally.skipped++;
-    if (index + 1 >= cards.length) { done = true; load(); return; }
+    if (index + 1 >= cards.length) { done = true; load(); loadPensum(); return; }
     index += 1; show();
   }
   // Eltern: Probeläufe wieder auf Null setzen.
@@ -152,8 +176,22 @@
     <h1>{subject ? `${style.emoji} Vokabeln · ${langName}` : 'Vokabeln'}</h1>
   </header>
   {#if error}<p class="notice" role="alert">{error}</p>{/if}
+  {#if pensum.length && (!cards.length || done) && !paperId}
+    <section class="pensum" aria-label="Vokabeln heute">
+      {#each pensum as e (e.subject + e.unit)}
+        <a class="pensum-row" class:done={e.done} href={e.href}
+           onclick={() => { if (subject && e.subject.toLowerCase() === subject.toLowerCase()) chooseUnit(e.unit); }}>
+          <span class="pensum-head"><b>{e.done ? 'Heute geschafft' : 'Heute'}: {e.practiced} von {e.target} Wörtern</b><small>{e.unit_label}</small></span>
+          <span class="pensum-bar" role="progressbar" aria-valuemin="0" aria-valuemax={e.target} aria-valuenow={Math.min(e.practiced, e.target)}><span style:width={`${pct(e)}%`}></span></span>
+          <small class="pensum-why">{e.why}</small>
+        </a>
+      {/each}
+    </section>
+  {/if}
 
-  {#if !subject}
+  {#if paperId}
+    <section class="card"><VocabPaper {accountId} {paperId} onclose={closePaper} /></section>
+  {:else if !subject}
     {#if languages === null}
       <p role="status">Wird geladen …</p>
     {:else if !languages.length}
@@ -271,6 +309,21 @@
               <div class="actions"><button disabled={busy} onclick={() => begin(2, 'into')}>Schreibweise üben</button></div>
             </section>
           {/if}
+          <section class="card">
+            <h2>Test auf Papier</h2>
+            <p class="muted">Blatt drucken, von Hand ausfüllen, fotografieren. Die Auswertung zählt im Trainer mit.</p>
+            <div class="actions">
+              <label class="count">Wörter <select bind:value={paperCount}>{#each [10, 20, 30, 40] as n (n)}<option value={n}>{n}</option>{/each}</select></label>
+              <button disabled={busy} onclick={newPaper}>Blatt erstellen</button>
+            </div>
+            {#if papers.length}
+              <div class="actions">
+                {#each papers.slice(0, 3) as pp (pp.id)}
+                  <button class="ghost" onclick={() => (paperId = pp.id)}>Blatt {pp.code} · {pp.status === 'graded' ? `${pp.right} von ${pp.total} richtig` : 'offen'}</button>
+                {/each}
+              </div>
+            {/if}
+          </section>
           {#if canManage}
             <p class="muted"><button class="ghost" disabled={busy} onclick={resetAll}>Stand in {langName} zurücksetzen (Eltern)</button></p>
           {/if}
@@ -399,4 +452,13 @@
   .verdict.incorrect { background: var(--bad-soft); }
   .verdict p { margin: 0.2rem 0; }
   .result p { margin: 0.3rem 0; }
+  .pensum { display: grid; gap: var(--sp-2); margin: var(--sp-2) 0; }
+  .pensum-row { display: grid; gap: 4px; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); border: 1px solid var(--border); background: var(--bg-card); color: var(--fg); text-decoration: none; }
+  .pensum-head { display: flex; justify-content: space-between; gap: var(--sp-2); align-items: baseline; flex-wrap: wrap; font-size: var(--fs-sm); }
+  .pensum-head small, .pensum-why { font-size: var(--fs-xs); color: var(--fg-muted); }
+  .pensum-bar { height: 7px; border-radius: 4px; background: var(--border); overflow: hidden; }
+  .pensum-bar span { display: block; height: 100%; background: var(--accent); }
+  .pensum-row.done .pensum-bar span { background: var(--st-sitzt); }
+  .count { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-sm); }
+  .count select { min-height: 44px; font: inherit; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--bg-card); color: inherit; padding: 0 var(--sp-2); }
 </style>
