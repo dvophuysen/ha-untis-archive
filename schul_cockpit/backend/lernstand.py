@@ -358,64 +358,88 @@ def _lesson_days(account_id: int, lesson_ids: list[int]) -> set[str]:
 def ensure_assumed_topics(account_id: int, exam_key: str, subject: str | None, scope: dict | None) -> None:
     """Ohne offizielle Themenliste: die aus dem Unterricht erschlossenen Themen als
     Themen der Arbeit anlegen (origin assumed), mit den Stellen ihrer Stunden.
-    Liegt eine Themenliste vor, treten sie zurück (stale)."""
+    Liegt eine Themenliste vor, treten sie zurück (stale).
+
+    Erst wird ohne Sperre gelesen und geplant; geschrieben (mit Sperre) wird nur,
+    wenn sich etwas ändert. Jeder Aufruf von Lernen, Heute und Arbeiten läuft
+    hier durch, und die dauernde Schreibsperre stapelte sich (D200)."""
     if not subject or not scope or not scope.get("topics"):
+        return
+    with closing(webapp_conn()) as c:
+        ops = _assumed_ops(c, account_id, exam_key, subject, scope)
+    if not ops:
         return
     with closing(webapp_conn()) as c, c:
         c.execute("BEGIN IMMEDIATE")
-        has_notice = c.execute("SELECT 1 FROM exam_topics WHERE account_id=? AND exam_key=? AND origin='notice' AND stale=0 LIMIT 1",
-                               (account_id, exam_key)).fetchone()
-        # Bei einer Sprechprüfung ist der Stoff aus dem Unterricht Maßstab, kein
-        # eigenes Sprechthema: Die Themen werden angelegt, treten aber gleich zurück
-        # und stehen als Referenz zum Ankreuzen bereit (D193, D195).
-        from .exam_meta import oral
-        spoken = oral(account_id, exam_key)
-        if has_notice:
-            c.execute("UPDATE exam_topics SET stale=1,updated_at=? WHERE account_id=? AND exam_key=? AND origin='assumed' AND stale=0",
-                      (now_iso(), account_id, exam_key))
-            return
-        existing = {r[1].casefold(): (r[0], r[2]) for r in c.execute("SELECT id,title,origin FROM exam_topics WHERE account_id=? AND exam_key=?", (account_id, exam_key))}
         pos = c.execute("SELECT COALESCE(MAX(position),-1)+1 FROM exam_topics WHERE account_id=? AND exam_key=?", (account_id, exam_key)).fetchone()[0]
-        for t in scope["topics"]:
-            title = (t.get("title") or "").strip()
-            if not title:
-                continue
-            places: dict[str, set] = {}
-            lesson_ids = [int(x) for x in t.get("lesson_ids") or []]
-            if lesson_ids:
-                marks = ",".join("?" * len(lesson_ids))
-                rows = list(c.execute(f"SELECT part_label,page FROM source_links WHERE account_id=? AND entry_kind='lesson' AND entry_id IN ({marks}) AND page>0",
-                                      (account_id, *lesson_ids)))
-                # Viele Lehrkräfte nennen die Seiten in der Hausaufgabe, nicht im
-                # Stundentext: Hausaufgaben vom Tag einer Stunde des Themas zählen dazu.
-                days = _lesson_days(account_id, lesson_ids)
-                if days:
-                    dmarks = ",".join("?" * len(days))
-                    rows += list(c.execute(f"SELECT part_label,page FROM source_links WHERE account_id=? AND entry_kind='homework' AND lower(subject_name)=lower(?) "
-                                           f"AND entry_date IN ({dmarks}) AND page>0", (account_id, subject, *sorted(days))))
-                for r in rows:
-                    label = r[0] if r[0] and r[0] != "Unbekannte Quelle" else ""
-                    places.setdefault(label, set()).add(int(r[1]))
-            places_json = json.dumps([{"label": k, "pages": sorted(v)} for k, v in places.items()], ensure_ascii=False)
-            known = existing.get(title.casefold())
-            if known:
-                # Stellen angenommener Themen wachsen mit dem Unterricht nach.
-                if known[1] == "assumed":
-                    c.execute("UPDATE exam_topics SET places_json=?,updated_at=? WHERE id=? AND places_json!=?", (places_json, now_iso(), known[0], places_json))
-                continue
-            c.execute("INSERT OR IGNORE INTO exam_topics(account_id,subject,exam_key,position,title,detail,places_json,origin,created_at,updated_at) "
-                      "VALUES(?,?,?,?,?,?,?,'assumed',?,?)",
-                      (account_id, subject, exam_key, pos, title, (t.get("field") or "")[:400], places_json, now_iso(), now_iso()))
-            pos += 1
-            existing[title.casefold()] = (c.execute("SELECT last_insert_rowid()").fetchone()[0], "assumed")
-        if spoken:
-            c.execute("UPDATE exam_topics SET stale=1,updated_at=? WHERE account_id=? AND exam_key=? AND origin='assumed' AND stale=0",
-                      (now_iso(), account_id, exam_key))
-        # Angenommene Themen, die der Unterricht nicht mehr hergibt, ohne Antworten: weg.
-        titles = {(t.get("title") or "").strip().casefold() for t in scope["topics"]}
-        for r in c.execute("SELECT id,title FROM exam_topics WHERE account_id=? AND exam_key=? AND origin='assumed'", (account_id, exam_key)).fetchall():
-            if r[1].casefold() not in titles and not c.execute("SELECT 1 FROM topic_answers WHERE topic_id=? LIMIT 1", (r[0],)).fetchone():
-                c.execute("DELETE FROM exam_topics WHERE id=?", (r[0],))
+        for op in ops:
+            if op[0] == "stale":
+                c.execute("UPDATE exam_topics SET stale=1,updated_at=? WHERE account_id=? AND exam_key=? AND origin='assumed' AND stale=0",
+                          (now_iso(), account_id, exam_key))
+            elif op[0] == "places":
+                c.execute("UPDATE exam_topics SET places_json=?,updated_at=? WHERE id=? AND places_json!=?", (op[2], now_iso(), op[1], op[2]))
+            elif op[0] == "insert":
+                if c.execute("INSERT OR IGNORE INTO exam_topics(account_id,subject,exam_key,position,title,detail,places_json,origin,created_at,updated_at) "
+                             "VALUES(?,?,?,?,?,?,?,'assumed',?,?)",
+                             (account_id, subject, exam_key, pos, op[1], op[2], op[3], now_iso(), now_iso())).rowcount:
+                    pos += 1
+            elif op[0] == "delete":
+                c.execute("DELETE FROM exam_topics WHERE id=? AND NOT EXISTS(SELECT 1 FROM topic_answers WHERE topic_id=?)", (op[1], op[1]))
+
+
+def _assumed_ops(c, account_id: int, exam_key: str, subject: str, scope: dict) -> list[tuple]:
+    """Was ensure_assumed_topics ändern müsste, ohne zu schreiben."""
+    has_notice = c.execute("SELECT 1 FROM exam_topics WHERE account_id=? AND exam_key=? AND origin='notice' AND stale=0 LIMIT 1",
+                           (account_id, exam_key)).fetchone()
+    live_assumed = c.execute("SELECT 1 FROM exam_topics WHERE account_id=? AND exam_key=? AND origin='assumed' AND stale=0 LIMIT 1",
+                             (account_id, exam_key)).fetchone()
+    if has_notice:
+        return [("stale",)] if live_assumed else []
+    # Bei einer Sprechprüfung ist der Stoff aus dem Unterricht Maßstab, kein
+    # eigenes Sprechthema: Die Themen werden angelegt, treten aber gleich zurück
+    # und stehen als Referenz zum Ankreuzen bereit (D193, D195).
+    from .exam_meta import oral
+    spoken = oral(account_id, exam_key)
+    existing = {r[1].casefold(): (r[0], r[2], r[3]) for r in c.execute(
+        "SELECT id,title,origin,places_json FROM exam_topics WHERE account_id=? AND exam_key=?", (account_id, exam_key))}
+    ops: list[tuple] = []
+    for t in scope["topics"]:
+        title = (t.get("title") or "").strip()
+        if not title:
+            continue
+        places: dict[str, set] = {}
+        lesson_ids = [int(x) for x in t.get("lesson_ids") or []]
+        if lesson_ids:
+            marks = ",".join("?" * len(lesson_ids))
+            rows = list(c.execute(f"SELECT part_label,page FROM source_links WHERE account_id=? AND entry_kind='lesson' AND entry_id IN ({marks}) AND page>0",
+                                  (account_id, *lesson_ids)))
+            # Viele Lehrkräfte nennen die Seiten in der Hausaufgabe, nicht im
+            # Stundentext: Hausaufgaben vom Tag einer Stunde des Themas zählen dazu.
+            days = _lesson_days(account_id, lesson_ids)
+            if days:
+                dmarks = ",".join("?" * len(days))
+                rows += list(c.execute(f"SELECT part_label,page FROM source_links WHERE account_id=? AND entry_kind='homework' AND lower(subject_name)=lower(?) "
+                                       f"AND entry_date IN ({dmarks}) AND page>0", (account_id, subject, *sorted(days))))
+            for r in rows:
+                label = r[0] if r[0] and r[0] != "Unbekannte Quelle" else ""
+                places.setdefault(label, set()).add(int(r[1]))
+        places_json = json.dumps([{"label": k, "pages": sorted(v)} for k, v in places.items()], ensure_ascii=False)
+        known = existing.get(title.casefold())
+        if known:
+            # Stellen angenommener Themen wachsen mit dem Unterricht nach.
+            if known[1] == "assumed" and known[2] != places_json:
+                ops.append(("places", known[0], places_json))
+            continue
+        ops.append(("insert", title, (t.get("field") or "")[:400], places_json))
+        existing[title.casefold()] = (None, "assumed", places_json)
+    if spoken and (live_assumed or any(op[0] == "insert" for op in ops)):
+        ops.append(("stale",))
+    # Angenommene Themen, die der Unterricht nicht mehr hergibt, ohne Antworten: weg.
+    titles = {(t.get("title") or "").strip().casefold() for t in scope["topics"]}
+    for r in c.execute("SELECT id,title FROM exam_topics WHERE account_id=? AND exam_key=? AND origin='assumed'", (account_id, exam_key)).fetchall():
+        if r[1].casefold() not in titles and not c.execute("SELECT 1 FROM topic_answers WHERE topic_id=? LIMIT 1", (r[0],)).fetchone():
+            ops.append(("delete", r[0]))
+    return ops
 
 
 async def sync_notice(account_id: int, material_id: int) -> None:

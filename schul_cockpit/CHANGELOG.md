@@ -1,3 +1,7 @@
+## 1.28.1
+
+- Seltene Fehler beim Laden („database is locked“) behoben: Die App schreibt bei Seitenaufrufen nur noch, wenn sich wirklich etwas geändert hat, und doppelt angetippte Seiten werden nicht mehrfach geladen.
+
 ## 1.28.0
 
 - Gezeichnete Abbildungen: In Mathematik, Physik, Chemie und Technik kann der Lernbegleiter Aufgaben mit Schaltplan, Zahlenstrahl, Bruchstreifen, Funktionsgraph oder Wertetabelle stellen. Die App zeichnet sie selbst, sauber und richtig verschaltet; Übungsarbeiten drucken sie mit.

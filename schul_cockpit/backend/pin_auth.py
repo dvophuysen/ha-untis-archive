@@ -150,24 +150,40 @@ def create_session(conn: sqlite3.Connection, user_id: int) -> tuple[str, datetim
     return token, expires
 
 
+SEEN_EVERY = 5  # Minuten zwischen zwei Schreibzugriffen auf die Anmeldung
+
+
 def lookup_session(conn: sqlite3.Connection, token: str) -> int | None:
     row = conn.execute(
-        "SELECT user_id, expires_at FROM sessions WHERE token = ?", (token,)
+        "SELECT user_id, expires_at, last_seen_at FROM sessions WHERE token = ?", (token,)
     ).fetchone()
     if not row:
         return None
     if datetime.fromisoformat(row["expires_at"]) < _utc_now():
-        conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        try:
+            conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        except sqlite3.OperationalError:
+            pass  # beim nächsten Aufruf
         return None
     # Sliding expiration: every successful auth pushes the expiry forward
     # by another full TTL. As long as the kid opens the app at least once
     # within SESSION_TTL_DAYS, they stay logged in indefinitely.
-    new_expires = (_utc_now() + timedelta(days=SESSION_TTL_DAYS)).isoformat()
-    now = _utc_now().isoformat()
-    conn.execute(
-        "UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE token = ?",
-        (now, new_expires, token),
-    )
+    # Geschrieben wird höchstens alle SEEN_EVERY Minuten, und eine gesperrte
+    # Datenbank lässt die Anmeldung trotzdem gelten: Parallele Aufrufe einer
+    # Seite scheiterten sonst mit „database is locked“ (D200).
+    now_dt = _utc_now()
+    try:
+        seen = datetime.fromisoformat(row["last_seen_at"]) if row["last_seen_at"] else None
+    except ValueError:
+        seen = None
+    if seen is None or now_dt - seen >= timedelta(minutes=SEEN_EVERY):
+        try:
+            conn.execute(
+                "UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE token = ?",
+                (now_dt.isoformat(), (now_dt + timedelta(days=SESSION_TTL_DAYS)).isoformat(), token),
+            )
+        except sqlite3.OperationalError:
+            pass
     return row["user_id"]
 
 

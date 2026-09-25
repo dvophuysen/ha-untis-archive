@@ -122,12 +122,23 @@ def _has_table(c, name: str) -> bool:
     return bool(c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone())
 
 
+_DATES_READY: set[str] = set()  # Datenbankdateien, in denen die Tabelle sicher besteht
+
+
 def remember_exam(account_id: int, exam_key: str, exam_date: str) -> None:
     """Die Klausurseite merkt sich Datum je Schlüssel, damit der Einstieg den
     Termin kennt, ohne den Kalender erneut zu lesen."""
+    from .db import SETTINGS
     with closing(webapp_conn()) as c, c:
-        c.execute("CREATE TABLE IF NOT EXISTS exam_dates(account_id INTEGER NOT NULL, exam_key TEXT NOT NULL, exam_date TEXT NOT NULL, "
-                  "PRIMARY KEY(account_id, exam_key))")
+        if str(SETTINGS.webapp_db_path) not in _DATES_READY:
+            c.execute("CREATE TABLE IF NOT EXISTS exam_dates(account_id INTEGER NOT NULL, exam_key TEXT NOT NULL, exam_date TEXT NOT NULL, "
+                      "PRIMARY KEY(account_id, exam_key))")
+            _DATES_READY.add(str(SETTINGS.webapp_db_path))
+        # Erst lesen, nur bei Änderung schreiben: Jeder Seitenaufruf merkt sich alle
+        # Termine, und ein Schreibzugriff je Termin stapelte Sperren (D200).
+        known = c.execute("SELECT exam_date FROM exam_dates WHERE account_id=? AND exam_key=?", (account_id, exam_key)).fetchone()
+        if known and known[0] == exam_date:
+            return
         c.execute("INSERT INTO exam_dates(account_id,exam_key,exam_date) VALUES(?,?,?) ON CONFLICT(account_id,exam_key) DO UPDATE SET exam_date=excluded.exam_date",
                   (account_id, exam_key, exam_date))
 

@@ -57,8 +57,33 @@ export class ApiError extends Error {
   }
 }
 
+// Gleiche Leseaufrufe, die schon unterwegs sind, laufen nicht ein zweites Mal
+// los; wer später fragt, bekommt eine eigene Kopie derselben Antwort. Ein
+// Leseaufruf, der mit einem Serverfehler endet, wird einmal wiederholt. Beides
+// gegen gestapelte Aufrufe, wenn eine langsame Seite mehrfach angetippt wird (D200).
+const inflight = new Map();
+async function getOnce(path) {
+  try {
+    return await request('GET', path);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 500) {
+      await new Promise((r) => setTimeout(r, 700));
+      return request('GET', path);
+    }
+    throw e;
+  }
+}
+function get(path) {
+  const key = `${viewHeader() || ''} ${path}`;
+  const running = inflight.get(key);
+  if (running) return running.then((d) => (d === null ? d : structuredClone(d)));
+  const p = getOnce(path).finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
+}
+
 export const api = {
-  get: (p) => request('GET', p),
+  get,
   post: (p, body) => request('POST', p, body ?? {}),
   patch: (p, body) => request('PATCH', p, body ?? {}),
   put: (p, body) => request('PUT', p, body ?? {}),

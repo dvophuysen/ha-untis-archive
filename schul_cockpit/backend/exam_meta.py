@@ -24,7 +24,11 @@ def is_oral_title(title: str | None) -> bool:
 
 def remember(account_id: int, exam_key: str, title: str | None) -> None:
     """Titel und Art merken, damit Plan und Lernbegleiter sie ohne Kalender kennen."""
+    oral = int(is_oral_title(title))
     with closing(webapp_conn()) as c, c:
+        known = c.execute("SELECT title,oral FROM exam_meta WHERE account_id=? AND exam_key=?", (account_id, exam_key)).fetchone()
+        if known and known[0] == (title or "") and known[1] == oral:
+            return  # nichts Neues: keine Schreibsperre (D200)
         c.execute("INSERT INTO exam_meta(account_id,exam_key,title,oral,updated_at) VALUES(?,?,?,?,?) "
                   "ON CONFLICT(account_id,exam_key) DO UPDATE SET title=excluded.title,oral=excluded.oral "
                   "WHERE exam_meta.title IS NOT excluded.title OR exam_meta.oral IS NOT excluded.oral",
