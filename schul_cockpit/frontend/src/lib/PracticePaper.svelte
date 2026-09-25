@@ -86,7 +86,7 @@
     {:else if reviewing}
       <div class="notice review-box">
         <strong>Prüfung nötig: {openNrs.length === 1 ? `Aufgabe ${openNrs[0]}` : `Aufgaben ${openNrs.join(', ')}`}</strong>
-        <p>Diese Aufgaben ließen sich auch nach {a.feedback.check?.passes ?? 3} Auswertungen nicht sicher lesen. Bis ihr sie prüft, sieht das Kind keine Punkte, und nichts zählt für den Lernstand. Schaut auf den Fotos nach und tragt die Punkte ein, oder fotografiert die Seiten neu.</p>
+        <p>{openNrs.length === 1 ? 'Diese Aufgabe ließ' : 'Diese Aufgaben ließen'} sich {(a.feedback.check?.passes ?? 1) < 2 ? 'bei der früheren Auswertung' : `auch nach ${a.feedback.check.passes} Auswertungen`} nicht sicher lesen. Bis ihr sie prüft, sieht das Kind keine Punkte, und nichts zählt für den Lernstand. Schaut auf den Fotos nach und tragt die Punkte ein, oder fotografiert die Seiten neu.</p>
         {#if a.pages.length}
           <div class="pages review-pages">
             {#each a.pages as pid, n (pid)}<a href={photoUrl(pid)} target="_blank" rel="noreferrer"><img src={photoUrl(pid)} alt={`Seite ${n + 1}`} loading="lazy" /></a>{/each}

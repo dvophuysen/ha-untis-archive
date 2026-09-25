@@ -559,7 +559,8 @@ def review_items(account_id: int) -> list[dict]:
             "WHERE a.account_id=? AND a.status='review' AND a.is_test=0 ORDER BY a.id", (account_id,))]
     return [{"attempt_id": r["id"], "subject": r["subject"], "exam_key": r["exam_key"],
              "label": pr.FORMATS.get(r["paper_format"] or "", {}).get("label", "Übungsarbeit"),
-             "open": (json.loads(r["feedback_json"] or "{}").get("check") or {}).get("open", [])} for r in rows]
+             "open": (json.loads(r["feedback_json"] or "{}").get("check") or {}).get("open", []),
+             "passes": (json.loads(r["feedback_json"] or "{}").get("check") or {}).get("passes", 1)} for r in rows]
 
 
 @router.post("/attempts/{aid}/grade")

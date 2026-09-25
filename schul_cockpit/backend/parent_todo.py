@@ -155,7 +155,9 @@ def paper_review_items(account_id: int, name: str) -> list[dict]:
         which = f"Aufgabe {nums}" if len(r["open"]) == 1 else f"Aufgaben {nums}"
         out.append(item(f"paper-review:{r['attempt_id']}", "paper_review",
                         f"{r['label']} von {name} prüfen ({subject_label(r['subject'] or '') or r['subject']})",
-                        f"{which} ließen sich auch nach drei Auswertungen nicht sicher lesen. Bis zur Prüfung sieht {name} keine Punkte, "
+                        f"{which} {'ließ' if len(r['open']) == 1 else 'ließen'} sich "
+                        + ("bei der früheren Auswertung" if r.get("passes", 1) < 2 else f"auch nach {r['passes']} Auswertungen")
+                        + f" nicht sicher lesen. Bis zur Prüfung sieht {name} keine Punkte, "
                         "und nichts zählt für den Lernstand.",
                         action("Prüfen", "klausuren", exam=r["exam_key"], paper=r["attempt_id"])))
     return out

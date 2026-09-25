@@ -1,3 +1,7 @@
+## 1.29.1
+
+- Die Prüfaufgabe nennt jetzt genau, wie oft eine Arbeit ausgewertet wurde; bei früheren Arbeiten war es nur einmal.
+
 ## 1.29.0
 
 - Übungsarbeiten werden jetzt zweimal unabhängig ausgewertet, bei Abweichungen dreimal. Es zählt nur, worin die Auswertungen übereinstimmen.
