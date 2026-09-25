@@ -212,7 +212,7 @@ def store_chapters(account_id: int, title: str, chapters: list[Chapter]) -> int:
                      "belongs_to": chapter.belongs_to.strip() or None, "locked": 0})
     with closing(webapp_conn()) as conn, tx(conn):
         kept = [dict(r) for r in conn.execute(
-            "SELECT * FROM book_chapters WHERE account_id=? AND book_title=? AND locked=1", (account_id, title))]
+            "SELECT * FROM book_chapters WHERE account_id=? AND book_title=? AND (locked & 1)=1", (account_id, title))]
         # Die Kapitel werden neu angelegt und bekommen neue Nummern. Was
         # Stundeneinträge auf ein Kapitel zeigte, zog bis 1.31.2 ins Leere und
         # wurde nie neu zugeordnet; jetzt folgt es seinem Kapitel.
@@ -225,9 +225,10 @@ def store_chapters(account_id: int, title: str, chapters: list[Chapter]) -> int:
             match = next((r for r in rows if r["number"] == fixed["number"] and r["level"] == fixed["level"]
                           and (fixed["number"] or r["title"].casefold() == fixed["title"].casefold())), None)
             if match:
-                match.update(start_page=fixed["start_page"], end_page=fixed["end_page"], title=fixed["title"], locked=1)
+                # Bit 2 (von Hand gesetzte Endseite) bleibt mit erhalten.
+                match.update(start_page=fixed["start_page"], end_page=fixed["end_page"], title=fixed["title"], locked=fixed["locked"])
             else:
-                rows.append({k: fixed[k] for k in ("number", "title", "kind", "level", "start_page", "end_page", "belongs_to")} | {"locked": 1})
+                rows.append({k: fixed[k] for k in ("number", "title", "kind", "level", "start_page", "end_page", "belongs_to")} | {"locked": fixed["locked"]})
         ordered = sorted(rows, key=lambda c: (c["start_page"], c["level"]))
         conn.execute("DELETE FROM book_chapters WHERE account_id=? AND book_title=?", (account_id, title))
         for i, row in enumerate(ordered):

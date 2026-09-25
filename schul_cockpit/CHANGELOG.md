@@ -1,3 +1,52 @@
+## 1.32.0
+
+Überarbeitung nach einer vollständigen Durchsicht des Codes (D207). Nichts an Aussehen oder Abläufen ändert sich, außer wo es unten steht.
+
+Schneller
+- Die App startet schneller: Die Startseite lädt weniger als die Hälfte, Woche und Lernen werden im Hintergrund vorbereitet. Eltern laden beim Öffnen nicht mehr zuerst die Seite eines Kindes.
+- Vokabeltrainer, Abhaken, Mentor-Seite, Lernplan und Fächerliste antworten schneller. Kompass, Arbeiten, Fotos, PDF-Seiten und Belohnungsprüfung halten andere Anfragen nicht mehr auf.
+
+Daten und Kosten
+- Ein gestörter Abruf des IServ-Klausurplans löscht die gespeicherten Termine nicht mehr.
+- Dasselbe Material wird nicht mehr von mehreren Läufen gleichzeitig gelesen und doppelt bezahlt. Dauerhaft unlesbare Seiten werden nach fünf Fehlversuchen nicht mehr von selbst neu gelesen; „Neu auswerten“ geht weiter.
+- Die Abbildungserkennung bezahlt eine schwierige Seite nicht mehr alle zehn Minuten neu.
+- Eine KI-Abrechnung über der Vorab-Reservierung sperrt nicht mehr alle KI-Aufrufe, sie wird gebucht und angezeigt. Die Hochrechnung am Monatsanfang ist nicht mehr überhöht.
+- „War nur ein Test“ nimmt auch die Antworten zu Themen aus dem Lernstand, „zählt doch“ holt sie zurück; eine gelöschte Einheit nimmt ihre Antworten mit.
+- Nach einer Neueinrichtung der UNTIS-Integration ziehen alle Daten eines Kindes mit, auch Vokabeln, Material, Antworten und Belohnungen.
+- Datenbank-Updates laufen je Schritt vollständig oder gar nicht.
+
+Hausaufgaben und Tagesablauf
+- Hausaufgaben aus Home Assistant: Eine eigene Notiz löscht oder verdoppelt die Aufgabe nicht mehr; in HA abgehakt gilt auch bei laufender Uhr. Eine leere oder nicht geladene HA-Liste räumt keine offenen Aufgaben mehr weg.
+- Tagesabschluss, Morgen- und Nachmittagsmitteilung laufen auch ohne eingeschaltete Abend-Erinnerung, jede nach ihrem eigenen Schalter. Fehlende Heftfotos halten den Abend nicht mehr offen.
+- Ein Tag zählt als geschafft, auch wenn Eltern oder HA den letzten Punkt erledigen und niemand die App öffnet.
+- Abzeichen bleiben, wenn Stundenplan oder Lernstand kurz nicht lesbar sind; keine doppelte Feier mehr.
+- Belohnungen: Die Tasche zählt für heute und den nächsten Schultag, eine gelöschte eigene Aufgabe nicht für „Notiert“, Rückmeldungen erst nach der Stunde, „Weiß ich nicht“ nicht als geübtes Wort. „Entfällt“ setzen nur Eltern. Bisher Gesammeltes bleibt.
+- Eine Bewertung ohne Notiz löscht die Notiz der Stunde nicht mehr. Nachts erledigte Aufgaben zählen in die richtige Woche.
+- Papier-Vokabeltest: Eine durch Neustart abgebrochene Auswertung lässt sich nach zehn Minuten neu starten.
+
+Lernbegleiter
+- Ein Foto, das während einer Antwort gelesen wird, verwirft die bezahlte Antwort nicht mehr. Ein zweiter Tipp startet keinen zweiten Modellaufruf.
+- Lange Gespräche, Kontrollen mit viel Material und lange Sprechproben brechen nicht mehr mit „Zu viel Material“ ab.
+- Buchseiten im Chat: Der Chat wartet höchstens 45 Sekunden auf das Buch, eine nicht lieferbare Seite wird sechs Stunden lang nicht bei jeder Nachricht erneut geöffnet.
+- „Anderes Beispiel / Für heute fertig“ erscheinen nach zwei Hinweisen zur aktuellen Aufgabe; Zahlen oder Formeln als Antwort gelten nicht mehr als Müdigkeitszeichen. Antwort-Knöpfe verschwinden nicht mehr bei kurzen Auswahlantworten.
+- Ferien zählen im Lernplan und im Kompass nicht mehr als Lerntage.
+- Übungsklausuren und Lernkarten des Kindes am Elterngerät zählen als Nachweis; Eltern- und Testläufe weiterhin nicht.
+
+Sicherheit
+- Anmeldungen stehen nur noch als Hash in der Datenbank; ein Backup enthält keine übernehmbare Anmeldung. Bestehende Anmeldungen bleiben gültig.
+- PIN ändern meldet diesen Nutzer auf anderen Geräten ab. PIN-Fehlversuche verfallen nach 24 Stunden; ein neuer PIN hebt eine Sperre sofort auf.
+- Anmeldung am Küchen-iPad klappt auch mit einem alten Cookie im Browser.
+- /api/health zeigt ohne Admin keine Namen oder Pfade mehr. Das Mitteilungs-Token geht auch als Kopfzeile und steht nicht mehr im Log. Die Familienkarte ist nur für Eltern; am Kiosk sehen Kinder keine Elternhinweise. Konten mit reinem Lesezugriff ändern nichts mehr.
+- Rückgängig überschreibt keine neuere Änderung mehr und sagt, warum.
+- Backup einspielen: geprüft, beim Neustart eingesetzt, die App startet dafür selbst neu.
+
+Weitere Korrekturen
+- Beim Wechsel des Kindes zeigen und speichern Einstellungen, Kurse und Arbeiten nie mehr Daten des vorigen Kindes. Nach Abmelden und Anmelden eines anderen Kindes erscheint dessen Seite.
+- Nach einem Update lädt die App nicht mehr neu, solange etwas eingetippt ist oder der Lernbegleiter antwortet; eine fehlende Seite lädt einmal von selbst neu.
+- Die Familienkarte zeigt parallele Stunden. „Mehr laden“ in Materialien bleibt stehen. Die Nutzungszeit am Elterngerät zählt auch beim Schließen für das Kind.
+- Die zweite Seite einer Doppelseite passt wieder zur Hausaufgabe. Buchseiten nach einer gestörten Anmeldung werden später wieder geholt. Dateien mit Umlauten im Namen öffnen wieder. Stundeneinträge behalten ihre Kapitel, von Hand gesetzte Kapitelenden bleiben beim Neulesen.
+- Suche findet Umlaute und ß. Nach Mitternacht gilt überall das deutsche Datum. Eine unlesbare history.db lässt das Add-on starten und zeigt den Fehler.
+
 ## 1.31.2
 
 - Fotos, Seiten und Dateien öffnen jetzt innerhalb der App, mit einem Schließen-Knopf oben. Vorher landete man in der App vom Home-Bildschirm auf einer Seite ohne Weg zurück.

@@ -360,6 +360,13 @@ def test_a_corrected_chapter_keeps_its_pages_through_a_new_reading(env):
     latin = sources.ledger(1)["subjects"][0]
     assert {m["label"]: m["pages"] for m in latin["missing"]} == {"Begleitband": [70, 71, 72, 73, 74]}
     assert client.patch("/api/accounts/1/materials/sources/chapters/99999", json={"start_page": 5}).status_code == 404
+    # Eine von Hand gesetzte Endseite (locked=3) übersteht ein neues Lesen ebenso.
+    client.patch(f"/api/accounts/1/materials/sources/chapters/{by_number['12']['id']}", json={"end_page": 80})
+    assert {c["number"]: c for c in chapters_of(1, title)}["12"]["locked"] == 3
+    store_chapters(1, title, reading)
+    by_number = {c["number"]: c for c in chapters_of(1, title)}
+    assert (by_number["12"]["start_page"], by_number["12"]["end_page"], by_number["12"]["locked"]) == (75, 80, 3)
+    assert by_number["11"]["start_page"] == 70
 
 
 def test_the_tier_is_chosen_per_purpose_and_set_by_parents(env, monkeypatch):
