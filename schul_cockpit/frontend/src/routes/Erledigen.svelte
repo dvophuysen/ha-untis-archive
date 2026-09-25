@@ -3,6 +3,7 @@
   // gruppiert. Jede Zeile führt in die Elternansicht mit Schreibrecht, nie ins
   // Mitlesen: Dort scheiterte die Aktion.
   import ActionLabel from '../lib/ActionLabel.svelte';
+  import TodoSource from '../lib/TodoSource.svelte';
   import { appState, setActiveAccount } from '../lib/store.svelte.js';
   import { setViewMode } from '../lib/viewMode.svelte.js';
   import { jumpHash } from '../lib/jump.js';
@@ -37,7 +38,8 @@
     <section class="group" aria-label={`Offen für ${kid.name}`}>
       <h3>{kid.name}</h3>
       {#each kid.items as it (it.key)}
-        <button class="item" onclick={() => go(it, kid.account_id)}><span class="tx"><b>{it.title}</b><small>{it.reason}</small></span><span class="go"><ActionLabel label={it.action.label} /></span></button>
+        <button class="item" onclick={() => go(it, kid.account_id)}><span class="tx"><b>{it.title}</b><small>{it.reason_plain ?? it.reason}</small></span><span class="go"><ActionLabel label={it.action.label} /></span></button>
+        <TodoSource {it} />
       {/each}
     </section>
   {/each}

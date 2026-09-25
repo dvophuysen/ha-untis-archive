@@ -1180,3 +1180,13 @@ CREATE TABLE IF NOT EXISTS oral_sims (
 );
 CREATE INDEX IF NOT EXISTS idx_oral_sims_exam ON oral_sims(account_id, exam_key, id);
 """))
+
+# „Nicht nötig“ (D196): eine fehlende Stelle, die ein Elternteil gestrichen hat.
+# Für ein Blatt ohne Seite (page 0) gilt die Streichung bis `until`.
+_MIGRATIONS.append(("source_dismissed_001", """
+CREATE TABLE IF NOT EXISTS source_dismissed (
+ account_id INTEGER NOT NULL, subject_key TEXT NOT NULL, part_label TEXT NOT NULL, page INTEGER NOT NULL,
+ until TEXT NOT NULL DEFAULT '', dismissed_at TEXT NOT NULL, user_id INTEGER,
+ PRIMARY KEY(account_id, subject_key, part_label, page)
+);
+"""))

@@ -4,6 +4,7 @@
   import ActionLabel from '../lib/ActionLabel.svelte';
   import { subjectStyle } from '../lib/subjectStyle.js';
   import { uploadMaterial } from '../lib/materialUpload.js';
+  import { forgetTodo } from '../lib/parentTodo.svelte.js';
 
   let { accountId, initialSubject = '', taskId = null } = $props();
 
@@ -255,6 +256,16 @@
   async function detach(id) {
     await api.delete(`${base}/${id}/links?kind=task&target_id=${taskId}`);
     await loadForTask(); await load();
+  }
+
+  // „Nicht nötig“ (D196): eine Stelle streichen, sie kommt nicht wieder.
+  // Ein Blatt ohne Seite gilt bis zum Tag seiner Nennung; spätere Blätter bleiben.
+  let notNeeded = $state('');
+  async function dismissItem(subject, need, item) {
+    await api.post(`${base}/sources/dismiss`, { subject, label: need.label, page: item.page, until: item.page ? null : item.date });
+    notNeeded = '';
+    forgetTodo();
+    ledger = await api.get(`${base}/sources`);
   }
 
   async function act(fn) {
@@ -691,6 +702,18 @@
                     <button class="quiet" disabled={busy || uploading > 0} onclick={() => photoFor(subject.subject, need, item, true)} aria-label={`${need.label} ${item.label} fotografieren`}>📷</button>
                     <button class="quiet" disabled={busy || uploading > 0} onclick={() => photoFor(subject.subject, need, item, false)} aria-label={`Datei für ${need.label} ${item.label} wählen`}>📎</button>
                   </span>
+                  {#if data?.can_manage}
+                    {@const mark = `${subject.subject}|${need.label}|${item.page}|${item.entry_kind}|${item.entry_id}`}
+                    <span class="not-needed">
+                      {#if notNeeded === mark}
+                        Nicht nötig? Dieser Hinweis kommt nicht wieder.
+                        <button class="quiet" disabled={busy} onclick={() => act(() => dismissItem(subject.subject, need, item))}>Ja, streichen</button>
+                        <button class="quiet" disabled={busy} onclick={() => (notNeeded = '')}>Abbrechen</button>
+                      {:else}
+                        <button class="quiet" disabled={busy} onclick={() => (notNeeded = mark)}>Nicht nötig</button>
+                      {/if}
+                    </span>
+                  {/if}
                 </li>
               {/each}
             </ul>
@@ -1022,6 +1045,8 @@
   .checklist .entry{display:grid;min-width:0}
   .checklist .entry small{overflow-wrap:anywhere}
   .checklist .take{display:flex;gap:2px}
+  .checklist .not-needed{grid-column:2/-1;font-size:var(--fs-xs);color:var(--fg-muted)}
+  .checklist .not-needed button{font-size:var(--fs-xs);min-height:32px;padding:2px 8px}
   .checklist .take button{min-width:44px;min-height:44px;font-size:1.2rem}
   .wanted .foot{margin-top:12px}
 

@@ -9,6 +9,7 @@
   import { formatShortDate } from '../lib/format.js';
   import { todo, loadTodo, forgetTodo } from '../lib/parentTodo.svelte.js';
   import KidChips from '../lib/KidChips.svelte';
+  import TodoSource from '../lib/TodoSource.svelte';
   import { onMount } from 'svelte';
 
   const KINDS = [
@@ -103,7 +104,8 @@
   <section class="sug" aria-label="Vorgeschlagen">
     <h3>Vorgeschlagen: was gerade fehlt</h3>
     {#each suggestions as it (it.account_id + it.key)}
-      <button class="sug-item" onclick={() => useSuggestion(it)}><b>{it.title}</b><small>{it.name} · {it.reason}</small></button>
+      <button class="sug-item" onclick={() => useSuggestion(it)}><b>{it.title}</b><small>{it.name} · {it.reason_plain ?? it.reason}</small></button>
+      <TodoSource {it} />
     {/each}
   </section>
 {/if}

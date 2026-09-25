@@ -7,7 +7,9 @@ const act=(label,page,{args=[],section=null,query={}}={})=>({label,page,args,sec
 const todoBody={today:'2026-09-24',total:4,blocking:[],
   household:[{key:'opening',kind:'ai_opening',level:'todo',title:'Anfangsstand der KI-Kosten bestätigen',reason:'Vor der Verbrauchserfassung gab es schon Aufrufe.',action:act('KI-Rahmen öffnen','einstellen',{section:'ki'})}],
   kids:[{account_id:1,name:'Kind A',items:[
-    {key:'missing:m',kind:'missing_material',level:'todo',account_id:1,title:'Material für Mathematik fotografieren',reason:'3 Seiten fehlen für die Arbeit am Mo 28.09.: Arbeitsheft S. 12–14.',action:act('Scannen','scannen',{query:{acc:'1',art:'book_page',fach:'MATHEMATIK'}})},
+    {key:'missing:m',kind:'missing_material',level:'todo',account_id:1,title:'Material für Mathematik fotografieren',reason:'3 Seiten fehlen für die Arbeit am Mo 28.09.: Arbeitsheft S. 12–14. Aus: Hausaufgabe Mathematik vom 23.09.: „Arbeitsheft S. 12-14 bearbeiten“',reason_plain:'3 Seiten fehlen für die Arbeit am Mo 28.09.: Arbeitsheft S. 12–14.',
+     source:{label:'Hausaufgabe Mathematik vom 23.09.',quote:'Arbeitsheft S. 12-14 bearbeiten',href:'#/materialien?material=55'},dismiss:{subject:'MATHEMATIK',label:'Arbeitsheft',pages:[12,13,14],what:'Arbeitsheft S. 12–14'},
+     action:act('Scannen','scannen',{query:{acc:'1',art:'book_page',fach:'MATHEMATIK'}})},
     {key:'notice:m',kind:'notice_check',level:'todo',account_id:1,title:'Themenzettel Mathematik gegenlesen',reason:'Eine Seitenzahl auf dem Zettel kennt der Unterricht nicht.',action:act('Gegenlesen','materialien',{section:'gegenlesen',query:{material:'77'}})}]},
    {account_id:2,name:'Kind B',items:[
     {key:'calendar',kind:'calendar_assign',level:'todo',account_id:2,title:'1 Termin zuordnen',reason:'Bei „Kurs 7“ am Do 01.10. ist kein Fach erkannt.',action:act('Zuordnen','exams',{section:'zuordnen'})}]}]};
@@ -21,13 +23,15 @@ try {
 const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Europe/Berlin',serviceWorkers:'block'});
 page.setDefaultTimeout(6000);const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.log('PAGE ERROR',e.message);});
 await page.clock.install({time:new Date('2026-09-24T14:00:00+02:00')});
-const calls=[],uploads=[],puts=[];
+const calls=[],uploads=[],puts=[],dismissals=[];
 await page.route('**/api/**',async route=>{
   const req=route.request(),u=new URL(req.url()).pathname,m=req.method();let body={};
   calls.push({u,m,mode:req.headers()['x-view-mode']||''});
   if(u==='/api/me')body={id:1,role:'parent',is_admin:false,auth_source:'ingress',open_audit_count:2,accounts:[{id:1,name:'Kind A'},{id:2,name:'Kind B'}]};
   else if(u==='/api/parent/todo')body=todoBody;
   else if(u==='/api/dashboard')body={today:'2026-09-24',kids:[]};
+  else if(u.endsWith('/materials/sources/dismiss')&&m==='POST'){dismissals.push({u,body:req.postDataJSON(),mode:req.headers()['x-view-mode']||''});
+    todoBody.kids[0].items=todoBody.kids[0].items.filter(i=>i.key!=='missing:m');todoBody.total-=1;body={dismissed:[12,13,14]};}
   else if(u.endsWith('/materials')&&m==='POST'){const raw=req.postDataBuffer().toString('latin1');uploads.push({u,raw,mode:req.headers()['x-view-mode']||''});body={id:100+uploads.length};}
   else if(u.endsWith('/materials'))body={materials:[],kinds:[],can_manage:true,can_write:true,needs_check:0,retakes:[],pending_analysis:0,has_more:false,offset:0};
   else if(u.endsWith('/materials/sources'))body={books:[],missing:[]};
@@ -53,6 +57,10 @@ assert.equal(await page.locator('.top-bar button').count(),1,'only the profile b
 assert.equal(await page.getByRole('button',{name:'Einstellungen'}).count(),0);assert.equal(await page.getByRole('button',{name:'Setup'}).count(),0);
 const kidA=page.getByLabel('Offen für Kind A'),kidB=page.getByLabel('Offen für Kind B');
 await kidA.getByText('Material für Mathematik fotografieren').waitFor();await kidA.getByText('3 Seiten fehlen').waitFor();
+// Woher der Hinweis kommt (D196): eigene Zeile mit Zitat und Link, nicht doppelt im Satz.
+await kidA.getByText('Aus: Hausaufgabe Mathematik vom 23.09.').waitFor();await kidA.getByText('„Arbeitsheft S. 12-14 bearbeiten“').waitFor();
+assert.equal(await kidA.getByRole('link',{name:'Ansehen'}).getAttribute('href'),'#/materialien?material=55');
+assert(!(await kidA.locator('.item small').first().innerText()).includes('Aus:'),'source not repeated in the reason');
 await kidB.getByText('1 Termin zuordnen').waitFor();await page.getByLabel('Für die Familie').getByText('Anfangsstand der KI-Kosten bestätigen').waitFor();
 for(const width of [320,390,768]){await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'erledigen overflow '+width);}
 await shot('parent-erledigen.png');
@@ -107,6 +115,14 @@ await page.waitForFunction(()=>localStorage.getItem('activeAccountId')==='1');
 for(const width of [320,390,768]){await page.setViewportSize({width,height:900});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'einstellen overflow '+width);}
 await shot('parent-einstellen.png');
 await page.getByRole('button',{name:/Tagesbudget Lernzeit/}).click();assert.equal(await hash(),'#/settings?s=budget');
+// „Nicht nötig“ (D196): inline bestätigen, dann verschwindet der Punkt.
+await page.goto('http://127.0.0.1:4181/#/erledigen');await kidA.getByText('Material für Mathematik fotografieren').waitFor();
+await kidA.getByRole('button',{name:'Nicht nötig'}).click();
+await kidA.getByText('Dieser Hinweis kommt nicht wieder.',{exact:false}).waitFor();
+await kidA.getByRole('button',{name:'Ja, streichen'}).click();
+await kidA.getByText('Material für Mathematik fotografieren').waitFor({state:'detached'});
+assert.deepEqual(dismissals,[{u:'/api/accounts/1/materials/sources/dismiss',body:{subject:'MATHEMATIK',label:'Arbeitsheft',pages:[12,13,14]},mode:''}]);
+await kidA.getByText('Themenzettel Mathematik gegenlesen').waitFor();
 assert.deepEqual(errors,[]);
 // Kind am Elterngerät: Kinder-Leiste, keine Eltern-Werkzeuge, Elternseiten führen zu Heute.
 await page.evaluate(()=>localStorage.setItem('viewMode',JSON.stringify({mode:'child',at:Date.now(),day:'2026-09-24'})));
@@ -120,6 +136,6 @@ assert.equal(await page.locator('.nav-badge').count(),0);
 assert(!calls.some(c=>c.u==='/api/parent/todo'&&c.mode==='child'),'no parent list in child mode');
 assert(calls.filter(c=>c.u.startsWith('/api/accounts/')).every(c=>c.mode==='child'),'child header on every request');
 for(const target of ['einstellen','scannen','settings','overview']){await page.goto(`http://127.0.0.1:4181/#/${target}`);await page.waitForFunction(()=>location.hash==='#/today');}
-console.log('PASS: parent nav only, badge, Erledigen grouped per child with write jumps, Scannen with suggestion via material upload for two children, Einstellen per child and household with bonus time and AI budget, child mode without parent tools, 320/390/768 px');
+console.log('PASS: parent nav only, badge, Erledigen grouped per child with write jumps, source line and Nicht nötig, Scannen with suggestion via material upload for two children, Einstellen per child and household with bonus time and AI budget, child mode without parent tools, 320/390/768 px');
 }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exit(1)});

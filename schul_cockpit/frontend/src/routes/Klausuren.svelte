@@ -171,7 +171,8 @@
     if (!s || !s.total) return { tone: 'none', text: 'Noch keine Buchstelle genannt', action: null };
     const have = `${s.ready} von ${s.total} ${s.total === 1 ? 'Stelle' : 'Stellen'} da`;
     if (s.missing) {
-      const gaps = s.missing_items.map((m) => `${m.label} ${m.pages_label}`).join(' · ');
+      // Woher die Lücke kommt, damit niemand rätselt (D196).
+      const gaps = s.missing_items.map((m) => `${m.label} ${m.pages_label}${m.from?.[0] ? ` (aus ${m.from[0].label})` : ''}`).join(' · ');
       return { tone: 'bad', text: `${have} · fehlt ${gaps}`, action: { label: 'fotografieren', href: materialUrl(e) } };
     }
     if (s.pending) {
