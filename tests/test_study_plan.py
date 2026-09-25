@@ -171,16 +171,13 @@ def test_done_detection(world):
     assert not sp.mark_done(1, [step], MON)[0]["done"]
     answer(ids[0], 1, 3, when=at(MON, 15, 10))
     assert sp.mark_done(1, [step], MON)[0]["done"] and sp.open_count(1, MON) == 0
-    # Papier: eine heute ausgewertete Arbeit dieser Arbeit im Format des Schritts.
+    # Papier: eine heute ausgewertete Arbeit dieser Arbeit, gleich welches Format.
     paper = {"kind": "paper", "exam_key": "ma", "format": "kurz", "key": "paper:ma:kurz"}
     with closing(db.webapp_conn()) as c, c:
         eid = c.execute("INSERT INTO mentor_exams(account_id,title,subject,scope_json,tasks_json,minutes,created_at,status,exam_key,paper_format) "
                         "VALUES(1,'Ü','Mathematik','{}','[]',20,'t','published','ma','mix')").lastrowid
         aid = c.execute("INSERT INTO mentor_exam_attempts(account_id,exam_id,user_id,snapshot,started_at,status,is_test,submitted_at) "
                         "VALUES(1,?,2,'{}','t','graded',0,?)", (eid, at(MON, 16).isoformat())).lastrowid
-    assert not sp.mark_done(1, [paper], MON)[0]["done"], "anderes Format ersetzt den Schritt nicht"
-    with closing(db.webapp_conn()) as c, c:
-        c.execute("UPDATE mentor_exams SET paper_format='kurz' WHERE id=?", (eid,))
     assert sp.mark_done(1, [paper], MON)[0]["done"]
     assert not sp.mark_done(1, [paper], MON + timedelta(days=1))[0]["done"], "gestern ist nicht heute"
     with closing(db.webapp_conn()) as c, c:

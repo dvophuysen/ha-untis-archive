@@ -1,3 +1,8 @@
+## 1.23.1
+
+- Lernen: Ist für eine Arbeit noch gar nichts geübt, kommt zuerst der Einstiegstest, auch am letzten Tag davor. Jede heute ausgewertete Übungsarbeit zur Arbeit hakt den Papier-Schritt ab, gleich welche Art.
+- Fächer im Lernplan in normaler Schreibweise, ohne doppelten Punkt nach dem Datum.
+
 ## 1.23.0
 
 - Neu auf Heute: Lernen. Die App plant jeden Tag selbst, was du für deine nächsten Arbeiten üben solltest, höchstens zwei Schritte, am Wochenende nur, wenn es knapp wird. Ohne anstehende Arbeit gibt es trotzdem eine kleine tägliche Pflicht, zum Beispiel Vokabeln.

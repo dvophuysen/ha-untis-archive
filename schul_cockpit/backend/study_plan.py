@@ -119,7 +119,8 @@ def exam_step(account_id: int, exam: dict, day: date, school: list[date]) -> dic
     urgency = (1 - ready / total) / max(1, left)
     # Eng: weniger Schultage als offene Themen, oder die letzten zwei und nicht alles sicher.
     tight = bool(not_ready) and (left <= len(not_ready) or left <= 2)
-    subject, when = exam["subject"], _de(exam["exam_date"])
+    from .subject_names import label as subject_label
+    subject, when = subject_label(exam["subject"]) or exam["subject"], _de(exam["exam_date"])
     base = {"subject": subject, "exam_key": exam["exam_key"], "exam_date": exam["exam_date"], "topic_id": None,
             "level": None, "href": None, "urgency": round(urgency, 4), "tight": tight, "days_left": left}
 
@@ -127,21 +128,22 @@ def exam_step(account_id: int, exam: dict, day: date, school: list[date]) -> dic
         return {**base, "key": f"paper:{exam['exam_key']}:{fmt}", "kind": "paper", "format": fmt,
                 "title": title, "why": why, "topic_id": topic_id}
 
+    # Noch gar nichts gemessen: zuerst der Einstiegstest, auch am letzten Tag.
+    if all(cell["state"] == "offen" for t in rows for cell in t["cells"].values()):
+        return paper("einstieg", f"Einstiegstest {subject}", f"Zeigt, wo du für die Arbeit am {when} stehst.")
     if last:
         if all(t["cells"]["2"]["state"] == "bestaetigt" for t in rows):
             return None
-        return paper("mix", f"Mix {subject}", f"Die Arbeit ist am {when}. Ein kurzer Abschluss mit den schwächsten Themen.")
-    if all(cell["state"] == "offen" for t in rows for cell in t["cells"].values()):
-        return paper("einstieg", f"Einstiegstest {subject}", f"Zeigt, wo du für die Arbeit am {when} stehst.")
+        return paper("mix", f"Mix {subject}", f"Die Arbeit ist am {when}: ein kurzer Abschluss mit den schwächsten Themen.")
     with closing(webapp_conn()) as c:
         if not_ready:
             weak = sorted(not_ready, key=practice._weakness)[0]
             if _last_was_dialog(c, account_id, weak["id"]):
                 return paper("kurz", f"Kurztest {subject}: {weak['title']}",
-                             f"Im Gespräch geübt, jetzt zeigst du es auf Papier. Arbeit am {when}.", weak["id"])
+                             f"Im Gespräch geübt, jetzt zeigst du es auf Papier. Arbeit am {when}", weak["id"])
             return {**base, "key": f"dialog:{weak['id']}", "kind": "dialog", "format": None, "topic_id": weak["id"],
                     "title": f"{subject}: {weak['title']}", "href": f"#/learning?topic_id={weak['id']}",
-                    "why": f"Das Thema sitzt noch nicht sicher. Drei Aufgaben mit dem Lernbegleiter, Arbeit am {when}."}
+                    "why": f"Das Thema sitzt noch nicht sicher. Drei Aufgaben mit dem Lernbegleiter, Arbeit am {when}"}
         if _recent_probe(c, account_id, [t["id"] for t in rows], day):
             return None
     return paper("probe", f"Probearbeit {subject}", f"Alle Themen sitzen. Die Probearbeit zeigt, ob es auch wie in der echten Arbeit am {when} klappt.")
@@ -232,12 +234,14 @@ def ensure(account_id: int, day: date) -> list[dict]:
 # ----------------------------------------------------------------- Erledigt
 
 def _paper_done(c, account_id: int, s: dict, first: str, last: str) -> bool:
+    # Jede heute ausgewertete Übungsarbeit dieser Arbeit erledigt den Papier-Schritt,
+    # gleich welches Format: gemessen ist gemessen.
     return bool(c.execute(
         "SELECT 1 FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id "
-        "WHERE a.account_id=? AND e.exam_key=? AND e.paper_format=? AND a.status='graded' AND a.is_test=0 AND ("
+        "WHERE a.account_id=? AND e.exam_key=? AND a.status='graded' AND a.is_test=0 AND ("
         " EXISTS(SELECT 1 FROM topic_answers t WHERE t.attempt_id=a.id AND substr(t.created_at,1,10) BETWEEN ? AND ?)"
         " OR substr(a.submitted_at,1,10) BETWEEN ? AND ?) LIMIT 1",
-        (account_id, s["exam_key"], s["format"], first, last, first, last)).fetchone())
+        (account_id, s["exam_key"], first, last, first, last)).fetchone())
 
 
 def _dialog_done(c, account_id: int, s: dict, first: str, last: str) -> bool:
