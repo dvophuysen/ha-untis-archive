@@ -7,7 +7,7 @@
   import { appState } from '../lib/store.svelte.js';
   import { subjectStyle } from '../lib/subjectStyle.js';
   import PracticeRaster from '../lib/PracticeRaster.svelte';
-  import { view } from '../lib/viewMode.svelte.js';
+  import { view, actsAsParent } from '../lib/viewMode.svelte.js';
 
   let { accountId } = $props();
   const today = isoToday();
@@ -25,7 +25,8 @@
   let openKey = $state(query.get('exam') || jumped);
   let newTopic = $state({});
 
-  const canManage = $derived(!!(appState.me && (appState.me.is_admin || appState.me.role === 'parent')));
+  // Eltern-Werkzeuge nicht beim Mitlesen und nicht, wenn das Kind das Gerät benutzt (D183).
+  const canManage = $derived(actsAsParent(appState.me));
 
   async function load() {
     if (!accountId) return;

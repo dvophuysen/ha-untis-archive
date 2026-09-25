@@ -17,6 +17,7 @@
   import TaskDetail from '../lib/TaskDetail.svelte';
   import PracticePaper from '../lib/PracticePaper.svelte';
   import { profile } from '../lib/profile.svelte.js';
+  import { view } from '../lib/viewMode.svelte.js';
 
   let { accountId } = $props();
   let data = $state(null), tasks = $state([]), plan = $state(null);
@@ -330,10 +331,10 @@
         <h3>Fotos</h3>
         <div class="list pad">
           {#each data.retakes ?? [] as r (r.id)}
-            <p class="photo-request"><strong>{r.source_page ? `${r.source_label || 'Buch'} S. ${r.source_page}` : r.title}</strong>{#if r.spot} · „{r.spot}“{/if} <span class="muted">· {r.reason}</span> <a href="#/materialien?s=fotos">neu fotografieren</a></p>
+            <p class="photo-request"><strong>{r.source_page ? `${r.source_label || 'Buch'} S. ${r.source_page}` : r.title}</strong>{#if r.spot} · „{r.spot}“{/if} <span class="muted">· {r.reason}</span>{#if view.mode !== 'mirror'} <a href="#/materialien?s=fotos">neu fotografieren</a>{/if}</p>
           {/each}
           {#each data.photo_requests ?? [] as need}
-            <p class="photo-request"><strong>{need.subject}</strong> für die Arbeit am {formatShortDate(need.exam_date)}: {need.label} {need.pages_label} <a href="#/materialien">fotografieren</a></p>
+            <p class="photo-request"><strong>{need.subject}</strong> für die Arbeit am {formatShortDate(need.exam_date)}: {need.label} {need.pages_label}{#if view.mode !== 'mirror'} <a href="#/materialien">fotografieren</a>{/if}</p>
           {/each}
         </div>
       </section>
@@ -344,7 +345,7 @@
     <section class="sec"><QuickAdd {accountId} {day} lessons={[]} nextBySubject={data.next_by_subject ?? {}} {nextSchoolDay} onsaved={saved} /></section>
   {/if}
 
-  <details class="fold" open={done}>
+  <details class="fold" open={done} data-section="ohne-termin">
     <summary><h3>Wenn du magst</h3><small>{work.ahead.length + work.undated.length ? `${work.ahead.length + work.undated.length} für später · ` : ''}Üben</small></summary>
     {#each work.ahead as task (task.id)}<TaskRow {accountId} {task} onchange={() => saved()} onopen={t => editing = t} />{/each}
     {#each work.undated as task (task.id)}<TaskRow {accountId} {task} onchange={() => saved()} onopen={t => editing = t} />{/each}

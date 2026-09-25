@@ -8,6 +8,11 @@
   let busy = $state(false), error = $state('');
   const initials = (name) => (name || '?').split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase();
 
+  async function logout() {
+    try { await api.post('/api/auth/logout'); } catch (_) { /* egal */ }
+    onclose();
+    await loadMe();
+  }
   async function leaveTest() {
     // Beim Verlassen des Testmodus alles zurücknehmen, was dabei geändert wurde.
     await api.post('/api/my-changes/revert-all-demo');
@@ -35,7 +40,7 @@
     <h2>Wer benutzt das Gerät?</h2>
     <button class="opt" class:cur={view.mode === 'parent'} disabled={busy} onclick={() => choose('parent')}>
       <span class="pp me">{initials(appState.me?.display_name)}</span>
-      <span><b>Ich</b><small>Familie, Lernstand und Einstellungen</small></span>
+      <span><b>Ich</b><small>Familie, Erledigen, Scannen und Einstellen</small></span>
     </button>
     {#each appState.me?.accounts ?? [] as kid (kid.id)}
       <div class="kid">
@@ -52,10 +57,11 @@
     {#if appState.me?.is_admin}
       <button class="opt" class:cur={view.mode === 'test'} disabled={busy} onclick={() => choose('test')}>
         <span class="pp test">T</span>
-        <span><b>Testmodus</b><small>Änderungen werden beim Beenden zurückgenommen</small></span>
+        <span><b>Testmodus (Entwickler)</b><small>Kinderansicht mit echten Daten; Änderungen werden protokolliert und beim Beenden zurückgenommen. Nicht die Demo im Lernbegleiter.</small></span>
       </button>
     {/if}
     {#if error}<p class="error-box" role="alert">{error}</p>{/if}
+    {#if appState.me?.auth_source === 'pin'}<button class="ghost" disabled={busy} onclick={logout}>Abmelden</button>{/if}
     <button class="ghost close" onclick={onclose}>Schließen</button>
   </div>
 </div>

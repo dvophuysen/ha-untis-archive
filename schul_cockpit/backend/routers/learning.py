@@ -17,6 +17,7 @@ from pydantic import ValidationError
 
 from .. import ai_gateway
 from ..auth import CurrentUser, assert_account_access, get_current_user
+from ..view_mode import acts_as_parent
 from ..db import history_conn, webapp_conn
 from ..courses import hidden_keys, lesson_is_hidden
 from ..exams import resolve_exams
@@ -57,7 +58,8 @@ def access(user, account_id, *, write=False, parent=False):
             demo = conn.execute("SELECT demo_mode FROM users WHERE id=?", (user.id,)).fetchone()
         if demo and demo[0]:
             raise HTTPException(409, "Im Demo-Modus ist der Lernraum nur lesbar")
-    if parent and not (user.is_admin or user.role == "parent"):
+    # Beim Mitlesen und im Kindmodus gilt auch ein Elternteil als Kind (D183).
+    if parent and not acts_as_parent(user):
         raise HTTPException(403, "Diese Einstellung ist für Eltern vorgesehen")
     if write and not user.is_admin:
         with closing(webapp_conn()) as conn:
@@ -314,7 +316,7 @@ async def overview(account_id: int, user: CurrentUser = Depends(get_current_user
         "methods": METHODS,
         "method_guides": METHOD_GUIDES,
         "ai": ai_status(),
-        "can_manage": bool(can_write and (user.is_admin or user.role == "parent")),
+        "can_manage": bool(can_write and acts_as_parent(user)),
         "can_write": can_write,
         "today": {
             "date": day.isoformat(),
@@ -439,7 +441,7 @@ def detail(account_id: int, topic_id: int, user: CurrentUser = Depends(get_curre
                 (topic_id,),
             )
         ]
-        manage = user.is_admin or user.role == "parent"
+        manage = acts_as_parent(user)
         columns = (
             "a.*"
             if manage
@@ -467,7 +469,7 @@ def add_material(
     account_id: int, topic_id: int, body: MaterialIn, user: CurrentUser = Depends(get_current_user)
 ):
     access(user, account_id, write=True)
-    verified = body.verified and (user.is_admin or user.role == "parent")
+    verified = body.verified and acts_as_parent(user)
     with closing(webapp_conn()) as conn:
         topic_row(conn, account_id, topic_id)
         mid = conn.execute(

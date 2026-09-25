@@ -1,6 +1,6 @@
 <script>
   import { api } from '../lib/api.js';
-  import { loadMe } from '../lib/store.svelte.js';
+  import { loadMe, appState } from '../lib/store.svelte.js';
 
   let entries = $state([]);
   let loading = $state(true);
@@ -34,7 +34,7 @@
   }
 
   async function revertAllDemo() {
-    if (!confirm('Wirklich ALLE Demo-Änderungen zurücknehmen?')) return;
+    if (!confirm('Wirklich alle Änderungen aus dem Testmodus zurücknehmen?')) return;
     busy = true;
     try {
       const r = await api.post('/api/my-changes/revert-all-demo');
@@ -67,22 +67,24 @@
 </div>
 
 <div class="banner">
-  Hier siehst du jede Änderung, die <strong>du</strong> in der App gemacht hast — und kannst sie einzeln oder alle (im Demo-Modus) zurücknehmen.
+  Hier steht jede Änderung, die <strong>du</strong> in der App gemacht hast. Jede lässt sich einzeln zurücknehmen; Änderungen anderer stehen hier nicht.
 </div>
 
-<div class="row gap-sm" style="margin-bottom:0.5rem;">
+{#if appState.me?.is_admin}
+<div class="row gap-sm" style="margin-bottom:0.5rem; flex-wrap:wrap;">
   <button class:primary={demoOnly} onclick={() => (demoOnly = !demoOnly)}>
-    {demoOnly ? '✓ Nur Demo' : 'Nur Demo-Änderungen zeigen'}
+    {demoOnly ? '✓ Nur Testmodus' : 'Nur Änderungen aus dem Testmodus'}
   </button>
-  <button class="danger" onclick={revertAllDemo} disabled={busy}>Alle Demo-Änderungen rückgängig</button>
+  <button class="danger" onclick={revertAllDemo} disabled={busy}>Alle aus dem Testmodus zurücknehmen</button>
 </div>
+{/if}
 
 {#if error}<div class="error-box">{error}</div>{/if}
 
 {#if loading}
   <div class="empty"><span class="spinner"></span></div>
 {:else if entries.length === 0}
-  <div class="empty">Keine {demoOnly ? 'Demo-' : ''}Änderungen.</div>
+  <div class="empty">Keine {demoOnly ? 'Änderungen aus dem Testmodus' : 'Änderungen'}.</div>
 {:else}
   {#each entries as e (e.id)}
     <div class="card compact">
@@ -91,14 +93,14 @@
           <div>
             <span>{emoji(e.target_kind, e.op_type)}</span>
             <span style="font-weight:500;">{e.label ?? `${e.op_type} ${e.target_kind}`}</span>
-            {#if e.demo_mode}<span class="badge" style="background:var(--substitution); color:#fff; border-color:transparent;">DEMO</span>{/if}
+            {#if e.demo_mode}<span class="badge" style="background:var(--substitution); color:#fff; border-color:transparent;">Testmodus</span>{/if}
           </div>
           <div class="dim">{fmtTime(e.created_at)}</div>
         </div>
         {#if e.reverted_at}
           <span class="dim">↶ rückgängig</span>
         {:else}
-          <button class="ghost" disabled={busy} onclick={() => revertOne(e.id)}>↶</button>
+          <button class="ghost" disabled={busy} onclick={() => revertOne(e.id)} aria-label="Rückgängig machen" title="Rückgängig machen">↶</button>
         {/if}
       </div>
     </div>

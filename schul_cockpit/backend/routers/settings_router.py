@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from ..audit import log as audit_log, snapshot_settings
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..db import webapp_conn
+from ..view_mode import acts_as_parent
 from ..erlass import (
     ERLASS_DAILY_MIN,
     WEEKEND_MIN,
@@ -87,6 +88,10 @@ def patch_settings(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     assert_account_access(user, account_id)
+    # Tagesbudget und Klassenstufe setzen nur Eltern, nicht das Kind und nicht
+    # ein Elternteil im Kindmodus (D183).
+    if not acts_as_parent(user):
+        raise HTTPException(status_code=403, detail="Diese Einstellung ist für Eltern vorgesehen")
     if body.budget_overrides is not None:
         invalid = set(body.budget_overrides) - WEEKDAY_KEYS
         if invalid:

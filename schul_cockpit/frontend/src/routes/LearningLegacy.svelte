@@ -7,7 +7,8 @@
   let { accountId } = $props();
   const base = $derived(`/api/accounts/${accountId}/learning`);
   let data = $state(null), error = $state(''), message = $state(''), busy = $state(false);
-  let tab = $state('today'), detail = $state(null), lessons = $state(null);
+  // „Einstellen“ springt mit ?tab=manage direkt zu „Steuern“ (D183).
+  let tab = $state(new URLSearchParams(window.location.hash.split('?')[1] || '').get('tab') === 'manage' ? 'manage' : 'today'), detail = $state(null), lessons = $state(null);
   let discovery = $state(null), discoveryError = $state('');
   let year = $state(''), subject = $state('');
   let topicForm = $state(null), editingTopic = $state(null);

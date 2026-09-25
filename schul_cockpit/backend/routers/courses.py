@@ -24,7 +24,9 @@ def _now() -> str:
 
 
 def _require_parent(user: CurrentUser) -> None:
-    if not (user.is_admin or user.role == "parent"):
+    # Mitlesen und Kindmodus gelten als Kind (D183).
+    from ..view_mode import acts_as_parent
+    if not acts_as_parent(user):
         raise HTTPException(status_code=403, detail="Admin or parent only")
 
 

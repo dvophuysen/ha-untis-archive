@@ -3,6 +3,7 @@
   import { api } from '../lib/api.js';
   import ActionLabel from '../lib/ActionLabel.svelte';
   import { subjectStyle } from '../lib/subjectStyle.js';
+  import { uploadMaterial } from '../lib/materialUpload.js';
 
   let { accountId, initialSubject = '', taskId = null } = $props();
 
@@ -335,26 +336,25 @@
     uploading = list.length;
     message = null;
     for (const file of list) {
-      const body = new FormData();
-      body.append('file', file);
+      const fields = {};
       if (target?.replaces) {
         // Neues Foto derselben Seite: Art, Fach und Stelle übernimmt der Server (D165).
-        body.append('replaces', String(target.replaces));
+        fields.replaces = target.replaces;
       } else if (target) {
-        body.append('subject_name', target.subject);
-        body.append('source_label', target.label);
-        body.append('source_page', String(target.page));
-        if (!target.page && target.entry_kind === 'homework' && target.entry_id) body.append('homework_id', String(target.entry_id));
-        if (!target.page && target.entry_kind === 'lesson' && target.entry_id) body.append('lesson_id', String(target.entry_id));
+        fields.subject_name = target.subject;
+        fields.source_label = target.label;
+        fields.source_page = target.page;
+        if (!target.page && target.entry_kind === 'homework' && target.entry_id) fields.homework_id = target.entry_id;
+        if (!target.page && target.entry_kind === 'lesson' && target.entry_id) fields.lesson_id = target.entry_id;
       } else {
-        if (upload.subject || filterSubject) body.append('subject_name', upload.subject || filterSubject);
-        if (upload.kind) body.append('kind', upload.kind);
-        if (upload.part) body.append('source_label', upload.part);
-        if (upload.page) body.append('source_page', String(Number(upload.page)));
+        fields.subject_name = upload.subject || filterSubject;
+        fields.kind = upload.kind;
+        fields.source_label = upload.part;
+        if (upload.page) fields.source_page = Number(upload.page);
       }
-      if (taskId) body.append('task_id', String(taskId));
+      if (taskId) fields.task_id = taskId;
       try {
-        const saved = await api.post(base, body);
+        const saved = await uploadMaterial(accountId, file, fields);
         // Dieselbe Seite schon da oder das Foto unscharf: sofort sagen, nicht
         // erst nach der Lesung.
         if (saved?.duplicate_of) notices = [...notices, { id: saved.id, kind: 'duplicate', of: saved.duplicate_of }];
@@ -533,7 +533,7 @@
 {/if}
 
 {#if data?.can_manage && (data.materials ?? []).some((m) => m.needs_review)}
-  <div class="card review">
+  <div class="card review" data-section="gegenlesen">
     <strong>Bitte gegenlesen</strong>
     <p class="lead">Gezeigt wird nur, wo ich beim Lesen unsicher war — <mark>markiert</mark>, mit einer Zeile Zusammenhang.
       Sauber Gelesenes steht nicht hier, auch keine Themenliste und kein Inhaltsverzeichnis, die sich gegen den Unterricht als stimmig erweisen.</p>

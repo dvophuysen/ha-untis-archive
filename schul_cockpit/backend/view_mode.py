@@ -32,6 +32,22 @@ TEST_BLOCKED = re.compile(
 )
 
 
+def is_parent_role(user) -> bool:
+    return bool(getattr(user, "is_admin", False) or getattr(user, "role", None) == "parent")
+
+
+def acts_as_parent(user, mode: str | None = None) -> bool:
+    """Ob die Anfrage als Elternteil gilt (D183). Die Rolle allein reicht nicht:
+    Beim Mitlesen und wenn das Kind das Elterngerät benutzt, gilt der Nutzer
+    für die Eltern-Oberfläche und für Eltern-Einstellungen als Kind. Der
+    Testmodus bleibt beim Entwickler."""
+    if not is_parent_role(user):
+        return False
+    if mode is None:
+        mode = current.get()
+    return mode not in ("child", "mirror")
+
+
 def mode_of(request: Request) -> str | None:
     value = (request.headers.get(HEADER) or "").strip().lower()
     return value if value in MODES else None
