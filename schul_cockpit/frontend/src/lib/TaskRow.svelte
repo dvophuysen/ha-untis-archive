@@ -18,7 +18,10 @@
   );
   const isExam = $derived(task.task_type === 'exam_prep');
   const cleanNotes = $derived(stripUntisMetadata(task.notes));
-  const isDone = $derived(task.status === 'done');
+  // Sofort sichtbarer Haken (D177), ohne task.status vorzeitig zu ändern:
+  // Die Startseite sortiert erledigte Zeilen weg, ein Fehler wäre sonst unsichtbar.
+  let shown = $state(null);
+  const isDone = $derived(shown ?? task.status === 'done');
 
   // Stop the toggle click from bubbling into the body's "open detail" handler.
   async function toggle(ev) {
@@ -28,12 +31,14 @@
     busy = true;
     error = null;
     const newStatus = isDone ? 'open' : 'done';
-    // Keep the row visible until persistence succeeds (dashboard filters done rows).
+    shown = newStatus === 'done';
     try {
       await api.patch(`/api/tasks/${task.id}`, { status: newStatus });
       task.status = newStatus;
+      shown = null;
       onchange();
     } catch (e) {
+      shown = null;
       error = e instanceof ApiError ? e.message : 'Speichern fehlgeschlagen';
     } finally {
       busy = false;

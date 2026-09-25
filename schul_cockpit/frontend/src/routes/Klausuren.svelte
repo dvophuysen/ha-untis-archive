@@ -498,10 +498,10 @@
   .topic-why { font-size: 0.78rem; margin-top: 0.15rem; }
   .stage { font-size: 0.72rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; }
   .stage.neu { background: var(--bg); color: var(--fg-muted); }
-  .stage.angefangen { background: var(--bg); }
-  .stage.wackelt { background: var(--rating-2); color: #fff; border-color: transparent; }
-  .stage.sitzt { background: var(--rating-3); color: #fff; border-color: transparent; }
-  .stage.gefestigt { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+  .stage.angefangen { background: color-mix(in oklab, var(--st-angefangen) 30%, var(--bg-card)); border-color: transparent; }
+  .stage.wackelt { background: color-mix(in oklab, var(--st-wackelt) 30%, var(--bg-card)); border-color: transparent; }
+  .stage.sitzt { background: color-mix(in oklab, var(--st-sitzt) 30%, var(--bg-card)); border-color: transparent; }
+  .stage.gefestigt { background: color-mix(in oklab, var(--st-gefestigt) 30%, var(--bg-card)); border-color: transparent; }
   .missing { color: var(--bad-fg); font-weight: 600; }
   .add-topic { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
   .add-topic input { flex: 1; min-width: 0; font-size: 16px; padding: 0.45rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-elevated); color: inherit; }

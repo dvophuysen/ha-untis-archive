@@ -1,4 +1,6 @@
 <script>
+  import StageLegend from '../lib/StageLegend.svelte';
+  import StageBar from '../lib/StageBar.svelte';
   // Startseite der Eltern (D166): je Kind eine Karte. Oben der Status, dann was
   // jetzt offen ist, die Arbeiten chronologisch mit dem Lernstand ihrer Themen,
   // zuletzt was sich über Wochen abzeichnet. Jeder Baustein springt zum Kind in
@@ -136,9 +138,7 @@
             <button class="exam" onclick={() => open(kid, x.go)}>
               <span class="l1"><b>{examTitle(x)} {x.day}</b><span class="when" class:hot={x.days_until <= 7}>{inDays(x.days_until)}</span></span>
               {#if x.topics}
-                <span class="stack" role="img" aria-label={`Lernstand: ${stageText(x)}`}>
-                  {#each STAGES as [k] (k)}{#if x.stages[k]}<i class={k} style="flex:{x.stages[k]}"></i>{/if}{/each}
-                </span>
+                <span class="stack"><StageBar counts={x.stages} order={['sitzt', 'wackelt', 'angefangen', 'neu']} label={`Lernstand: ${stageText(x)}`} /></span>
               {/if}
               <span class="l3">
                 <span>{x.topics ? `${x.practiced} von ${x.topics} ${x.topics === 1 ? 'Thema' : 'Themen'} geübt` : 'Themen noch unbekannt'}</span>
@@ -176,22 +176,17 @@
       </section>
     {/each}
   </div>
-  <p class="legend" aria-hidden="true">
-    {#each STAGES as [k, label] (k)}<span><i class={k}></i>{label}</span>{/each}
-  </p>
+  <StageLegend stages={['sitzt', 'wackelt', 'angefangen', 'neu']} labels={{ neu: 'noch nicht geübt' }} />
   <ParentReportSettings />
 {/if}
 
 <style>
   .dash { display: grid; gap: 1rem; grid-template-columns: 1fr; align-items: start; }
   @media (min-width: 720px) { .dash { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  .kid, .legend { --s-sitzt: #059669; --s-wackelt: #d97706; --s-angefangen: #f59e0b; --s-neu: #cbd5e1; }
+  .kid, .legend { --s-sitzt: var(--st-sitzt); --s-wackelt: var(--st-wackelt); --s-angefangen: var(--st-angefangen); --s-neu: var(--st-neu); }
   .kid {
     --warn-bg: var(--warm-soft); --good-bg: color-mix(in srgb, var(--good-fg) 12%, var(--bg-card));
     padding: 0.8rem; display: flex; flex-direction: column; gap: 0.1rem; min-width: 0;
-  }
-  @media (prefers-color-scheme: dark) {
-    .kid, .legend { --s-sitzt: #34d399; --s-wackelt: #fbbf24; --s-angefangen: #fb923c; --s-neu: #475569; }
   }
   .kid-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 0.4rem; }
   .kid-head h2 { margin: 0; font-size: 1.1rem; }
@@ -251,7 +246,7 @@
   .l1 b { font-weight: 600; overflow-wrap: anywhere; }
   .when { font-size: 0.8rem; white-space: nowrap; }
   .when.hot { color: var(--bad-fg); font-weight: 650; }
-  .stack { display: flex; height: 8px; border-radius: 5px; overflow: hidden; background: var(--s-neu); gap: 2px; margin-top: 6px; }
+  .stack { display: grid; margin-top: 6px; }
   .stack i, .legend i { display: block; height: 100%; }
   .sitzt { background: var(--s-sitzt); } .wackelt { background: var(--s-wackelt); }
   .angefangen { background: var(--s-angefangen); } .neu { background: var(--s-neu); }

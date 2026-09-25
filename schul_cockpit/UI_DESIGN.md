@@ -1,3 +1,15 @@
+# Verbindliche UI-Regeln ab 1.17.0 (D171 bis D177)
+
+Diese Regeln gehen den älteren Abschnitten weiter unten vor, wo sie sich widersprechen.
+
+- **Tokens:** Schriftgrößen, Radien und Abstände nur über die Variablen in `style.css` (`--fs-*`, `--r-*`, `--sp-*`). Keine neuen Inline-Stile für Farben oder Größen.
+- **Lernstand:** eine Skala für alle Ansichten: `--st-neu`, `--st-angefangen`, `--st-wackelt`, `--st-sitzt`, `--st-gefestigt`, dazu `StageBar.svelte` und `StageLegend.svelte`. Rot (`--rating-1`, `--bad-fg`) nur für nachweisbar Überfälliges.
+- **Symbole:** Navigation und Aktionen als Strich-Symbole (`Icon.svelte`). Emoji nur für Fächer (`subjectStyle.js`).
+- **Ton:** Die App duzt und spricht nicht als „ich“; das tut nur der Lernbegleiter. Kurze Sätze, Verb vorne, keine Bedienungsanleitungen.
+- **Startseite:** Phasen vor, in und nach der Schule (D171). Das Layout bleibt, oben wechselt die Fokuskarte. Tasche für morgen erst nach Schulschluss.
+- **Navigation:** Kinder Heute, Woche, Lernen, Ich; Eltern zusätzlich Familie.
+- **Geräte:** Mitlesen, Kind am Elterngerät und Testmodus sind am Rahmen und an einem Band oben erkennbar (D175).
+
 # Verbindliche UI-Regeln ab 0.33.0
 
 Die App begleitet Kinder am Übergang zur weiterführenden Schule. Sie bietet Orientierung und fertige Checklisten, lässt Reihenfolge und freiwilliges Vorziehen aber beim Kind.

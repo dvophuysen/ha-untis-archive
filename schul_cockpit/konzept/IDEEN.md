@@ -41,7 +41,7 @@ Enthält Forschungsstand, Leitlinien und vier Vorschläge (Tagesabschluss mit We
 sichtbare eigene Verlässlichkeit, verabredete Stufen der Übergabe, Wochenrückblick statt
 täglicher Nachfrage) samt Reihenfolge und offenen Fragen. Teilweise beschlossen und gebaut: abgeleiteter Tagesabschluss (D32 bis D35), Frage nach der Schule (D69), Wochenrückblick (D72); der Rest ist nicht beschlossen.
 
-Gamification bleibt offen. Kandidaten: sichtbare fachliche Fortschritte, dauerhafte Gestaltungselemente, Wochenmarkierungen und verlässlicher Tagesabschluss. Nicht beschlossen: Punkte, Streaks, Belohnungstausch und Sammelwelt. Nachtfristen, Verlustdruck und Bildschirmzeitmaximierung passen nicht zur Vision.
+Entschieden am 25.09.2026 (D172, D173): Serie geschaffter Schultage mit Retten statt Joker, acht Abzeichen mit fünf Stufen, Jahresmedaille. Weiterhin nicht vorgesehen: Belohnungstausch, Sammelwelt, Familien-Belohnungen. Nachtfristen, Verlustdruck und Bildschirmzeitmaximierung passen nicht zur Vision.
 
 Erinnerungszeitpunkt und Häufigkeit mit den Nutzenden erproben; keine pauschal festgelegte Pushquote. Eine erledigte Handlung darf nicht erneut angemahnt werden. Bestehende HA-Automationen vor Ergänzungen prüfen.
 

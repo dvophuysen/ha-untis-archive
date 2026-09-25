@@ -24,7 +24,7 @@
     if (reset) { data = null; tasks = []; plan = null; editing = null; showHistory = false; showDone = false; message = ''; loading = true; }
     error = ''; planError = '';
     const results = await Promise.allSettled([
-      api.get(`/api/accounts/${id}/today`), api.get(`/api/accounts/${id}/tasks`), api.get(`/api/accounts/${id}/plan`),
+      api.get(`/api/accounts/${id}/today`), api.get(`/api/accounts/${id}/tasks?recent_done_days=14`), api.get(`/api/accounts/${id}/plan?compact=1`),
     ]);
     if (ticket !== request || id !== accountId) return;
     const [day, work, learning] = results;
@@ -39,7 +39,13 @@
   $effect(() => { void accountId; load(true); });
   onMount(() => {
     const tick = () => { const oldDay = isoTodayAt(now); now = new Date(); if (oldDay !== isoTodayAt(now)) load(); };
-    const resume = () => { if (!document.hidden) { now = new Date(); load(); } };
+    // Beim Zurückkehren feuern visibilitychange und focus oft beide; einmal
+    // neu laden genügt (D177).
+    let lastResume = 0;
+    const resume = () => {
+      if (document.hidden || Date.now() - lastResume < 3000) return;
+      lastResume = Date.now(); now = new Date(); load();
+    };
     const timer = setInterval(tick, 30000);
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('focus', resume);

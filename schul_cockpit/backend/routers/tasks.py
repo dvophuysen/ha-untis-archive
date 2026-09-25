@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import logging
 
@@ -87,6 +87,7 @@ def list_tasks(
     account_id: int,
     status: str | None = Query(default=None),
     only_open: bool = Query(default=False),
+    recent_done_days: int | None = Query(default=None, ge=0, le=365),
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     assert_account_access(user, account_id)
@@ -99,6 +100,12 @@ def list_tasks(
         params.append(status)
     elif only_open:
         sql += " AND status IN ('open', 'in_progress')"
+    elif recent_done_days is not None:
+        # Startseite (D177): offene Aufgaben und nur die zuletzt erledigten,
+        # nicht die ganze Historie des Schuljahrs.
+        since = (datetime.now(timezone.utc) - timedelta(days=recent_done_days)).isoformat()
+        sql += " AND (status != 'done' OR COALESCE(completed_at, updated_at, '') >= ?)"
+        params.append(since)
     sql += " ORDER BY (due_date IS NULL), due_date, due_time, id"
     conn = webapp_conn()
     try:

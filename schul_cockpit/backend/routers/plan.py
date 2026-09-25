@@ -1,12 +1,20 @@
 """Canonical daily and weekly plan, shared with the mentor."""
 import asyncio
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from ..auth import CurrentUser, assert_account_access, get_current_user
 from ..exams import resolve_exams
 from .. import learning_plan as lp
 router=APIRouter()
 @router.get('/accounts/{account_id}/plan')
-async def plan(account_id:int,user:CurrentUser=Depends(get_current_user)):
+async def plan_route(account_id:int,user:CurrentUser=Depends(get_current_user),compact:bool=Query(default=False)):
+    result=await plan(account_id,user)
+    if compact:
+        # Die Startseite zeigt nur den heutigen Vorschlag und die nächsten
+        # Arbeiten; der ganze Plan wiegt über 100 KB (D177).
+        return {k:result.get(k) for k in ('account_id','date','today','upcoming_exams','errors')}
+    return result
+
+async def plan(account_id:int,user:CurrentUser):
     assert_account_access(user,account_id)
     warnings=[]
     try:

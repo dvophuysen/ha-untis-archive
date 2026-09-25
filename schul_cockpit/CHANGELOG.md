@@ -1,3 +1,11 @@
+## 1.17.0
+
+- Schneller: Die Startseite lädt nur noch offene und in den letzten zwei Wochen erledigte Aufgaben und vom Lernplan nur den heutigen Vorschlag, statt jedes Mal über 200 KB. Beim Zurückkehren in die App lädt sie einmal statt zweimal neu.
+- Selten genutzte Seiten (Materialien, Einstellungen, Arbeiten, Vokabeln, Einrichtung und weitere) werden erst beim Öffnen geladen; das Startpaket ist etwa halb so groß. Einmal geladene Dateien kommen danach aus dem Zwischenspeicher des Geräts.
+- Abhaken zeigt den Haken sofort; klappt das Speichern nicht, verschwindet er wieder und der Fehler steht an der Aufgabe.
+- Eine Farbskala für den Lernstand in allen Ansichten: neu grau, angefangen hellgelb, wackelt orange, sitzt grün, gefestigt petrol. „Wackelt“ ist nirgends mehr rot; Rot bleibt Überfälligem vorbehalten.
+- Navigation und Kopfzeile mit einheitlichen Symbolen statt Emoji.
+
 ## 1.16.1
 
 - Startseite, Stundenplan: Der Hinweis „zusätzlich“ stand an Stunden, die nur später ins Archiv gekommen waren, bei vielen Tagen an jeder Stunde. Er entfällt.

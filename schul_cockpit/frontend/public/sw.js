@@ -1,7 +1,7 @@
 // Schul-Cockpit service worker.
 //
-// Strategy: network-first for *everything*, fall back to cache when
-// offline. Trades a tiny bit of LAN latency for never-stale UIs on
+// Strategy: network-first for pages, cache-first for hashed assets,
+// fall back to cache when offline. Trades a tiny bit of LAN latency for never-stale UIs on
 // iOS PWAs (which are notorious for serving cache-first forever).
 //
 // The cache name carries a build marker so a new add-on version invalidates
@@ -37,6 +37,21 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   // Account data and completion states must never be served from an old cache.
   if (/\/api(?:\/|$)/.test(new URL(req.url).pathname)) return;
+
+  // Dateien unter assets/ tragen einen Hash im Namen und ändern sich nie:
+  // aus dem Cache, sonst einmal holen (D177). Alles andere network-first.
+  if (/\/assets\/[^/]+$/.test(new URL(req.url).pathname)) {
+    event.respondWith(
+      caches.match(req).then((hit) => hit || fetch(req).then((resp) => {
+        if (resp && resp.ok && resp.type === 'basic') {
+          const clone = resp.clone();
+          caches.open(CACHE).then((c) => c.put(req, clone)).catch(() => null);
+        }
+        return resp;
+      })),
+    );
+    return;
+  }
 
   event.respondWith(
     fetch(req)

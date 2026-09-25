@@ -29,6 +29,28 @@
   --substitution-fg: #6d28d9;
   --radius: 18px;
   --radius-sm: 8px;
+  /* Tokens ab 1.17.0 (D176): nur diese Stufen verwenden. */
+  --fs-xs: 0.78rem;
+  --fs-sm: 0.88rem;
+  --fs-md: 1rem;
+  --fs-lg: 1.2rem;
+  --fs-xl: 1.6rem;
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-pill: 999px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  /* Eine Skala für den Lernstand in allen Ansichten (D176). Kein Rot:
+     Rot bleibt nachweisbar Überfälligem vorbehalten. */
+  --st-neu: #cfd8dd;
+  --st-angefangen: #f6c56b;
+  --st-wackelt: #e8913a;
+  --st-sitzt: #3aa37a;
+  --st-gefestigt: #176b72;
   --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.04);
 }
 
@@ -53,6 +75,11 @@
     --warn-fg: #fcd34d;
     --absent-fg: #fda4af;
     --substitution-fg: #c4b5fd;
+    --st-neu: #46565f;
+    --st-angefangen: #c99a45;
+    --st-wackelt: #d9803a;
+    --st-sitzt: #3fb287;
+    --st-gefestigt: #7fd3c4;
   }
 }
 
@@ -181,7 +208,7 @@ label, .field-label { display: block; font-size: 0.85rem; color: var(--fg-muted)
 }
 .bottom-nav button.active { color: var(--accent); font-weight: 650; }
 .bottom-nav button.active .icon { background: var(--accent-soft); }
-.bottom-nav button .icon { font-size: 1.3rem; line-height: 1; padding: 5px 16px; border-radius: 14px; }
+.bottom-nav button .icon { line-height: 1; padding: 4px 16px; border-radius: 14px; display: grid; place-items: center; }
 .bottom-nav button span:last-child {
   max-width: 100%;
   overflow: hidden;
@@ -443,3 +470,10 @@ details[open] > summary::after { transform: rotate(90deg); }
 .jump-target { animation: jump-target 1.8s ease-out; }
 @keyframes jump-target { 0%, 40% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 3px transparent; } }
 @media (prefers-reduced-motion: reduce) { .jump-target { animation: none; outline: 3px solid var(--accent); } }
+
+/* Lernstand-Stufen als Flächen, überall gleich (D176). */
+.st-neu { background: var(--st-neu); }
+.st-angefangen { background: var(--st-angefangen); }
+.st-wackelt { background: var(--st-wackelt); }
+.st-sitzt { background: var(--st-sitzt); }
+.st-gefestigt { background: var(--st-gefestigt); }

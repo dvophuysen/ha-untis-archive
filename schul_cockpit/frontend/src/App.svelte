@@ -1,24 +1,29 @@
 <script>
   import ActionLabel from './lib/ActionLabel.svelte';
+  import Icon from './lib/Icon.svelte';
   import { onMount } from 'svelte';
   import { appState, loadMe, setActiveAccount, activeAccount } from './lib/store.svelte.js';
   import Today from './routes/Today.svelte';
   import Overview from './routes/Overview.svelte';
-  import Plan from './routes/Plan.svelte';
   import Learning from './routes/Learning.svelte';
-  import Materialien from './routes/Materialien.svelte';
   import Week from './routes/Week.svelte';
   import Subjects from './routes/Subjects.svelte';
   import SubjectDetail from './routes/SubjectDetail.svelte';
-  import Absences from './routes/Absences.svelte';
-  import Klausuren from './routes/Klausuren.svelte';
-  import Vokabeln from './routes/Vokabeln.svelte';
-  import Setup from './routes/Setup.svelte';
-  import Settings from './routes/Settings.svelte';
-  import Courses from './routes/Courses.svelte';
-  import MyChanges from './routes/MyChanges.svelte';
   import Login from './routes/Login.svelte';
-  import ExamSetup from './routes/ExamSetup.svelte';
+  import Lazy from './lib/Lazy.svelte';
+  // Selten genutzte Seiten kommen erst beim Öffnen (D177).
+  const LAZY = {
+    Plan: () => import('./routes/Plan.svelte'),
+    Materialien: () => import('./routes/Materialien.svelte'),
+    Absences: () => import('./routes/Absences.svelte'),
+    Klausuren: () => import('./routes/Klausuren.svelte'),
+    Vokabeln: () => import('./routes/Vokabeln.svelte'),
+    Setup: () => import('./routes/Setup.svelte'),
+    Settings: () => import('./routes/Settings.svelte'),
+    Courses: () => import('./routes/Courses.svelte'),
+    MyChanges: () => import('./routes/MyChanges.svelte'),
+    ExamSetup: () => import('./routes/ExamSetup.svelte'),
+  };
   import { api } from './lib/api.js';
   import { startUsagePing } from './lib/usagePing.js';
   import { jumpTo, sectionParam } from './lib/jump.js';
@@ -124,12 +129,12 @@
   const activeTab = $derived(TAB_OF[route.name] ?? route.name);
   const navItems = $derived.by(() => {
     const items = [
-      { name: 'today', icon: '☀️', label: 'Heute' },
-      { name: 'learning', icon: '🌱', label: 'Lernen' },
-      { name: 'more', icon: '🧭', label: 'Übersichten' },
+      { name: 'today', icon: 'heute', label: 'Heute' },
+      { name: 'learning', icon: 'lernen', label: 'Lernen' },
+      { name: 'more', icon: 'mehr', label: 'Übersichten' },
     ];
     if (appState.me?.is_admin || appState.me?.role === 'parent') {
-      items.unshift({ name: 'overview', icon: '🏡', label: 'Familie' });
+      items.unshift({ name: 'overview', icon: 'familie', label: 'Familie' });
     }
     return items;
   });
@@ -159,13 +164,13 @@
     </div>
     <div class="row gap-sm">
       {#if appState.me?.is_admin}
-        <button class="ghost" onclick={() => navigate('setup')} title="Setup">⚙️</button>
+        <button class="ghost" onclick={() => navigate('setup')} title="Setup" aria-label="Setup"><Icon name="werkzeug" /></button>
       {/if}
       {#if acc}
-        <button class="ghost" onclick={() => navigate('settings')} title="Einstellungen">🛠</button>
+        <button class="ghost" onclick={() => navigate('settings')} title="Einstellungen" aria-label="Einstellungen"><Icon name="einstellungen" /></button>
       {/if}
       {#if appState.me?.auth_source === 'pin'}
-        <button class="ghost" onclick={logout} title="Abmelden">⏻</button>
+        <button class="ghost" onclick={logout} title="Abmelden" aria-label="Abmelden"><Icon name="abmelden" /></button>
       {/if}
     </div>
   </header>
@@ -229,15 +234,15 @@
         {/if}
       </div>
     {:else if route.name === 'setup'}
-      <Setup {navigate} />
+      <Lazy load={LAZY.Setup} {navigate} />
     {:else if route.name === 'settings'}
-      <Settings accountId={appState.activeAccountId} />
+      <Lazy load={LAZY.Settings} accountId={appState.activeAccountId} />
     {:else if route.name === 'exams'}
-      <ExamSetup />
+      <Lazy load={LAZY.ExamSetup} />
     {:else if route.name === 'courses'}
-      <Courses accountId={appState.activeAccountId} />
+      <Lazy load={LAZY.Courses} accountId={appState.activeAccountId} />
     {:else if route.name === 'changes'}
-      <MyChanges />
+      <Lazy load={LAZY.MyChanges} />
     {:else if route.name === 'overview'}
       <Overview {navigate} />
     {:else if route.name === 'more'}
@@ -250,12 +255,12 @@
     {:else if route.name === 'today'}
       <Today accountId={appState.activeAccountId} />
     {:else if route.name === 'plan' || route.name === 'tasks'}
-      <Plan accountId={appState.activeAccountId} />
+      <Lazy load={LAZY.Plan} accountId={appState.activeAccountId} />
     {:else if route.name === 'week'}
       <Week accountId={appState.activeAccountId} />
     {:else if route.name === 'materialien'}
       {#key `${appState.activeAccountId}:${(route.args ?? []).join('/')}`}
-        <Materialien accountId={appState.activeAccountId}
+        <Lazy load={LAZY.Materialien} accountId={appState.activeAccountId}
                      initialSubject={decodeURIComponent(route.args?.[0] ?? '')}
                      taskId={Number(route.args?.[1]) || null} />
       {/key}
@@ -264,15 +269,15 @@
         <Learning accountId={appState.activeAccountId} />
       {/key}
     {:else if route.name === 'klausuren'}
-      <Klausuren accountId={appState.activeAccountId} />
+      <Lazy load={LAZY.Klausuren} accountId={appState.activeAccountId} />
     {:else if route.name === 'vokabeln'}
       {#key `${appState.activeAccountId}:${(route.args ?? []).join('/')}`}
-        <Vokabeln accountId={appState.activeAccountId}
+        <Lazy load={LAZY.Vokabeln} accountId={appState.activeAccountId}
                   subject={decodeURIComponent(route.args?.[0] ?? '')}
                   initialUnit={decodeURIComponent((window.location.hash.split('?')[1] ? new URLSearchParams(window.location.hash.split('?')[1]).get('unit') : '') ?? '')} />
       {/key}
     {:else if route.name === 'absences'}
-      <Absences accountId={appState.activeAccountId} />
+      <Lazy load={LAZY.Absences} accountId={appState.activeAccountId} />
     {:else if route.name === 'subjects'}
       <Subjects accountId={appState.activeAccountId} {navigate} />
     {:else if route.name === 'subject'}
@@ -290,7 +295,7 @@
           aria-current={activeTab === item.name ? 'page' : undefined}
           onclick={() => navigate(item.name)}
         >
-          <span class="icon" aria-hidden="true">{item.icon}</span><span>{item.label}</span>
+          <span class="icon"><Icon name={item.icon} /></span><span>{item.label}</span>
         </button>
       {/each}
     </nav>

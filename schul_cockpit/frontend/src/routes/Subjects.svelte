@@ -1,5 +1,6 @@
 <script>
   import ActionLabel from '../lib/ActionLabel.svelte';
+  import StageLegend from '../lib/StageLegend.svelte';
   import { subjectStyle } from '../lib/subjectStyle.js';
   import { api } from '../lib/api.js';
   import { formatShortDate } from '../lib/format.js';
@@ -131,7 +132,7 @@
       </section>
     {/each}
   </div>
-  {#if measured}<div class="legend"><span><i class="stage-gefestigt"></i>gefestigt</span><span><i class="stage-sitzt"></i>sitzt</span><span><i class="stage-wackelt"></i>wackelt</span><span><i class="stage-angefangen"></i>angefangen</span><span><i class="stage-neu"></i>neu</span></div>{/if}
+  {#if measured}<StageLegend stages={['gefestigt', 'sitzt', 'wackelt', 'angefangen', 'neu']} />{/if}
   {#if assessedOnly}<div class="legend"><span>Selbsteinschätzung:</span><span><i class="good"></i>verstanden</span><span><i class="partial"></i>teilweise</span><span><i class="difficult"></i>schwierig</span><span><i class="unknown"></i>offen</span></div>{/if}
 {/if}
 <style>
@@ -140,7 +141,7 @@
   .subject-row{display:grid;grid-template-columns:minmax(0,1fr) 72px 18px;gap:10px;align-items:center;width:100%;padding:12px 0;border:0;border-radius:0;background:transparent;text-align:left;color:var(--fg);min-height:76px}
   .subject-copy{display:grid;gap:5px;min-width:0}.subject-name{font-size:1rem;font-weight:600;overflow-wrap:anywhere}.subject-copy small,.trend small{font-size:.75rem;color:var(--fg-muted)}
   .subject-bar{display:flex;height:6px;border-radius:4px;overflow:hidden;background:var(--border)}.good{background:var(--rating-3)}.partial{background:var(--rating-2)}.difficult{background:var(--rating-1)}.unknown{background:var(--cancelled)}
-  .stage-gefestigt{background:var(--rating-3)}.stage-sitzt{background:var(--rating-3);opacity:.6}.stage-wackelt{background:var(--rating-1)}.stage-angefangen{background:var(--rating-2)}.stage-neu{background:var(--cancelled)}
+  .stage-gefestigt{background:var(--st-gefestigt)}.stage-sitzt{background:var(--st-sitzt)}.stage-wackelt{background:var(--st-wackelt)}.stage-angefangen{background:var(--st-angefangen)}.stage-neu{background:var(--st-neu)}
   .trend{text-align:center;display:grid;gap:2px;justify-items:center;color:var(--accent)}.trend svg{width:72px;height:26px}.trend-text{color:var(--good-fg)!important;font-weight:600}.trend-down .trend-text{color:var(--bad-fg)!important}.chevron{color:var(--accent);transition:transform .15s}.chevron.opened{transform:rotate(90deg)}
   .subject-panel{padding:0 0 10px}.panel-head{font-size:.95rem;margin:8px 0 4px}.topic{padding:10px 0;border-top:1px solid var(--border)}h3{font-size:.95rem;margin:0 0 4px;overflow-wrap:anywhere}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:middle}.topic-state{font-size:.8rem;color:var(--fg-muted);margin:0 0 2px}.topic-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.topic-actions a,.history-link{display:inline-flex;align-items:center;min-height:44px;padding:6px 0;color:var(--accent)}.history-link{border:0;background:transparent}
   details{font-size:.8rem;color:var(--fg-muted)}summary{cursor:pointer;padding:10px 0;min-height:44px}.observation{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin:6px 0}.legend{display:flex;flex-wrap:wrap;gap:8px 12px;margin:10px 2px;font-size:.75rem;color:var(--fg-muted)}.legend span{display:inline-flex;align-items:center;gap:5px}.legend i{width:7px;height:7px;border-radius:50%}
