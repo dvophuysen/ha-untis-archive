@@ -197,17 +197,23 @@ def cards(account_id: int, subject: str, unit: str, stage: int = 1, direction: s
 
 
 @router.post('/attempts')
-async def attempts(account_id: int, body: vocab.AttemptIn, user: CurrentUser = Depends(get_current_user)):
+async def attempts(account_id: int, body: vocab.AttemptIn, background: BackgroundTasks,
+                   user: CurrentUser = Depends(get_current_user)):
     access(user, account_id, write=True)
     from ..vocab_semantic import submit
     result = await submit(account_id, body, user_id=user.id)
     if result.get('result') != 'unclear':
-        import time
         from .. import rewards
-        rewards.note(account_id, 'vocab', f"{(result.get('word') or {}).get('id')}:{time.time_ns()}", user)
-        # Mehr als das Tagespensum zählt für die Extrameile (D181), nie statt Pflicht.
-        from .. import reward_extras
-        reward_extras.note_extra_vocab(account_id, user)
+        from ..learning import today_local
+        # „Wortschatz“ zählt ein geübtes Wort einmal am Tag; „Weiß ich nicht“
+        # ist eine Handlung des Tages, aber kein geübtes Wort. Die Prüfung
+        # läuft nach der Antwort (rewards.note_later), das Kind wartet nicht.
+        word_id = (result.get('word') or {}).get('id')
+        if body.gave_up:
+            rewards.note_later(background, account_id, None, None, user)
+        else:
+            rewards.note_later(background, account_id, 'vocab', f"{word_id}:{today_local().isoformat()}", user,
+                               extra_vocab=True)
     return result
 
 

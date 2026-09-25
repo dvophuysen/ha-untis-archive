@@ -191,11 +191,16 @@ def _is_due(state: dict, day: date) -> bool:
 def practiced(account_id: int, day: date, word_ids: list[int] | None = None) -> set[int]:
     """Verschiedene Wörter, die das Kind an diesem Tag geübt hat (richtig oder
     falsch, Rückfragen nicht). Eltern zählen nur als „Kind am Elterngerät“; das
-    hält die Belohnung mit fest (reward_events, D175)."""
+    hält die Belohnung mit fest (reward_events, D175).
+
+    „Weiß ich nicht“ im Trainer (falsch ohne Antwort) zählt nicht als geübt:
+    Wer das Wort danach noch einmal beantwortet, hat es geübt, auch falsch. Ein
+    leeres Feld im Papiertest ist dagegen eine geschriebene Antwort."""
     with closing(webapp_conn()) as c:
         rows = c.execute(
             "SELECT a.word_id,a.user_id,u.role FROM vocab_attempts a LEFT JOIN users u ON u.id=a.user_id "
             "WHERE a.account_id=? AND substr(a.created_at,1,10)=? AND a.result!='unclear' "
+            "AND NOT (a.result='incorrect' AND TRIM(COALESCE(a.answer,''))='' AND COALESCE(a.source,'')!='paper') "
             "AND COALESCE((SELECT excluded FROM vocab_attempt_reviews r WHERE r.attempt_id=a.id ORDER BY r.id DESC LIMIT 1),0)=0",
             (account_id, day.isoformat())).fetchall()
         noted = {r[0].split(":", 1)[0] for r in c.execute(

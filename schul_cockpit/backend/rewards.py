@@ -16,6 +16,7 @@ er hält die Serie, zählt aber halb.
 from __future__ import annotations
 
 import logging
+import threading
 from contextlib import closing
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
@@ -94,17 +95,22 @@ def acting_child(user) -> bool:
 
 
 @memo(shallow=True)  # die Stunden liest jeder Aufrufer nur
-def _lessons(account_id: int, first: date, last: date) -> list[dict]:
+def _lessons_read(account_id: int, first: date, last: date) -> list[dict]:
+    """Die Stunden oder eine Ausnahme, wenn der Stundenplan nicht lesbar ist."""
     from .courses import hidden_keys, lesson_is_hidden
     from .queries import lessons_in_range
+    with closing(history_conn()) as c:
+        rows = lessons_in_range(c, account_id, first.isoformat(), last.isoformat())
+    hidden = hidden_keys(account_id)
+    return [l for l in rows if not lesson_is_hidden(l, hidden)]
+
+
+def _lessons(account_id: int, first: date, last: date) -> list[dict]:
     try:
-        with closing(history_conn()) as c:
-            rows = lessons_in_range(c, account_id, first.isoformat(), last.isoformat())
-        hidden = hidden_keys(account_id)
+        return _lessons_read(account_id, first, last)
     except Exception:
         LOG.debug("Stundenplan für Konto %s nicht lesbar", account_id, exc_info=True)
         return []
-    return [l for l in rows if not lesson_is_hidden(l, hidden)]
 
 
 def _held(l: dict) -> bool:
@@ -129,17 +135,23 @@ def _first_start(account_id: int, day: date) -> datetime | None:
 
 # ------------------------------------------------------------------- Erfassen
 
-def note(account_id: int, kind: str, ref: str | int, user, when: datetime | None = None) -> None:
+def note(account_id: int, kind: str | None, ref: str | int | None, user, when: datetime | None = None,
+         *, acting: bool | None = None) -> None:
     """Eine Handlung des Kindes festhalten und den Tag neu prüfen.
 
-    kind: task, note, feedback, bag, vocab. Jede Handlung zählt einmal (ref)."""
-    if not acting_child(user):
+    kind: task, note, feedback, bag, vocab. Jede Handlung zählt einmal (ref).
+    Ohne ``kind`` zählt nur, dass das Kind heute etwas getan hat (kein
+    Ereignis für ein Abzeichen). ``acting`` trägt die Entscheidung
+    „handelt das Kind“ in einen Hintergrundlauf, der die Ansicht der Anfrage
+    nicht mehr kennt (note_later)."""
+    if not (acting_child(user) if acting is None else acting):
         return
     when = when or now_local()
     try:
         with closing(webapp_conn()) as c, c:
-            c.execute("INSERT OR IGNORE INTO reward_events(account_id,kind,ref,day,created_at) VALUES(?,?,?,?,?)",
-                      (account_id, kind, str(ref), when.date().isoformat(), when.isoformat()))
+            if kind:
+                c.execute("INSERT OR IGNORE INTO reward_events(account_id,kind,ref,day,created_at) VALUES(?,?,?,?,?)",
+                          (account_id, kind, str(ref), when.date().isoformat(), when.isoformat()))
             c.execute("INSERT OR IGNORE INTO reward_activity(account_id,day,first_at) VALUES(?,?,?)",
                       (account_id, when.date().isoformat(), when.isoformat()))
         _freeze_plan(account_id, when.date())
@@ -147,6 +159,67 @@ def note(account_id: int, kind: str, ref: str | int, user, when: datetime | None
     except Exception:
         # Belohnung ist Beiwerk: Sie darf nie eine Handlung des Kindes scheitern lassen.
         LOG.warning("Belohnung für Konto %s nicht erfasst", account_id, exc_info=True)
+
+
+def note_later(background, account_id: int, kind: str | None, ref: str | int | None, user,
+               *, extra_vocab: bool = False) -> None:
+    """Wie ``note``, aber nach der Antwort (FastAPI-BackgroundTasks). Die
+    Prüfung des Tages (Lernplan, Tasche, Stundenplan, Pensum) kostet je Aufruf
+    spürbar Zeit und hielt in ``async``-Endpunkten die ganze App an. Ob das Kind
+    handelt, entscheidet die Anfrage selbst; der Hintergrundlauf bekommt einen
+    leeren Kontext, also keinen Merkzettel und keine Ansicht der Anfrage."""
+    if not acting_child(user):
+        return
+    background.add_task(_note_isolated, account_id, kind, ref, user, now_local(), extra_vocab)
+
+
+def _note_isolated(account_id: int, kind, ref, user, when: datetime, extra_vocab: bool) -> None:
+    import contextvars
+    contextvars.Context().run(_note_now, account_id, kind, ref, user, when, extra_vocab)
+
+
+# Eine Prüfung nach der anderen, wie zuvor im Event-Loop: Schnelle Antworten
+# im Trainer sollen nicht mehrere Lernpläne gleichzeitig einfrieren.
+_BACKGROUND = threading.Lock()
+
+
+def _note_now(account_id: int, kind, ref, user, when: datetime, extra_vocab: bool) -> None:
+    try:
+        with _BACKGROUND:
+            note(account_id, kind, ref, user, when, acting=True)
+            if extra_vocab:
+                # Mehr als das Tagespensum zählt für die Extrameile (D181), nie statt Pflicht.
+                from .reward_extras import note_extra_vocab
+                note_extra_vocab(account_id, user, when.date(), acting=True)
+    except Exception:
+        LOG.warning("Belohnung für Konto %s nicht erfasst", account_id, exc_info=True)
+
+
+def forget_note(account_id: int, task_id: int) -> bool:
+    """Eine selbst angelegte Aufgabe ist gelöscht: ihr „Notiert“-Ereignis fällt
+    weg, damit Anlegen und Löschen nicht hochzählt. Eine schon erreichte Stufe
+    bleibt: Würde sie ohne das Ereignis fallen, gilt es als verbraucht und
+    bleibt stehen (nichts wird rückwirkend genommen)."""
+    try:
+        start = start_day().isoformat()  # vor der Sperre: legt beim ersten Mal selbst an
+        with closing(webapp_conn()) as c, c:
+            c.execute("BEGIN IMMEDIATE")
+            if not c.execute("SELECT 1 FROM reward_events WHERE account_id=? AND kind='note' AND ref=?",
+                             (account_id, str(task_id))).fetchone():
+                return False
+            count = c.execute("SELECT COUNT(*) FROM reward_events WHERE account_id=? AND kind='note' AND day>=?",
+                              (account_id, start)).fetchone()[0]
+            level = c.execute("SELECT COALESCE(MAX(level),0) FROM reward_badges WHERE account_id=? AND badge='notiert'",
+                              (account_id,)).fetchone()[0]
+            limits = next(b[4] for b in BADGES if b[0] == "notiert")
+            if level and count - 1 < limits[level - 1]:
+                return False
+            c.execute("DELETE FROM reward_events WHERE account_id=? AND kind='note' AND ref=?",
+                      (account_id, str(task_id)))
+        return True
+    except Exception:
+        LOG.warning("Notiert-Ereignis für Konto %s nicht entfernt", account_id, exc_info=True)
+        return False
 
 
 def _freeze_plan(account_id: int, day: date) -> None:
@@ -196,8 +269,21 @@ def note_prepared(account_id: int, exams: list[dict], today: date | None = None)
 
 # ------------------------------------------------------------------- Bewerten
 
-def _next_school_day(account_id: int, after: date) -> date | None:
-    days = school_days(account_id, after + timedelta(days=1), after + timedelta(days=21))
+# Wie weit der nächste Schultag gesucht wird. Drei Wochen reichen fast immer;
+# nach langen Ferien (sechs Wochen und mehr) fand sich bis 1.31 keiner, und der
+# letzte Schultag davor ließ sich nicht mehr nachholen. Die weite Suche gilt nur
+# fürs Nachholen (``far``); was an einem Tag selbst erledigt sein muss
+# (day_state), bleibt bei drei Wochen, sonst verlangte der letzte Tag vor den
+# Sommerferien eine Tasche, die sich so weit vorher gar nicht packen lässt.
+NEXT_SCHOOL_DAY_NEAR = 21
+NEXT_SCHOOL_DAY_FAR = 60
+
+
+def _next_school_day(account_id: int, after: date, far: bool = False) -> date | None:
+    days = school_days(account_id, after + timedelta(days=1), after + timedelta(days=NEXT_SCHOOL_DAY_NEAR))
+    if not days and far:
+        days = school_days(account_id, after + timedelta(days=NEXT_SCHOOL_DAY_NEAR + 1),
+                           after + timedelta(days=NEXT_SCHOOL_DAY_FAR))
     return days[0] if days else None
 
 
@@ -270,7 +356,7 @@ def evaluate(account_id: int, now: datetime | None = None) -> None:
         prev = past[-1]
         if prev.isoformat() in done:
             return
-        nxt = _next_school_day(account_id, prev)
+        nxt = _next_school_day(account_id, prev, far=True)
         # Wochenende und Ferien (D178): Der letzte Schultag davor zählt voll, wenn
         # bis zum Abend vor dem nächsten Schultag alles erledigt ist. Erst danach,
         # am Morgen vor der ersten Stunde, ist es ein Retten.
@@ -309,7 +395,18 @@ def summary(account_id: int, now: datetime | None = None) -> dict:
     today = now.date()
     start = start_day()
     evaluate(account_id, now)
+    # Ist der Stundenplan nicht lesbar, sind Serie und geschaffte Tage
+    # unbekannt, nicht null: keine Rücknahme, keine neue Stufe (sonst folgte
+    # beim nächsten Lesen eine zweite Feier).
     days = school_days(account_id, start, today)
+    unknown: set[str] = set()
+    if not days:
+        # Leer heißt entweder „noch kein Schultag“ oder „nicht lesbar“.
+        try:
+            _lessons_read(account_id, start, today)
+        except Exception:
+            LOG.warning("Stundenplan für Konto %s nicht lesbar, Serie unbekannt", account_id, exc_info=True)
+            unknown = {"geschafft", "dranbleiber"}
     with closing(webapp_conn()) as c, c:
         rows = {r["school_day"]: dict(r) for r in c.execute(
             "SELECT * FROM reward_days WHERE account_id=? AND school_day>=?", (account_id, start.isoformat()))}
@@ -350,20 +447,27 @@ def summary(account_id: int, now: datetime | None = None) -> dict:
             "fruehstarter": sum(1 for r in rows.values() if r["kind"] == "full" and r["bonus"]),
         }
         from .reward_extras import counts as extra_counts
-        counts.update(extra_counts(account_id, start, today))
+        extra = extra_counts(account_id, start, today)
+        unknown |= {k for k, v in extra.items() if v is None}
+        counts.update({k: v for k, v in extra.items() if v is not None})
         badges, new = [], []
         for key, name, emoji, what, limits in BADGES:
-            value = counts[key]
-            level = _level(value, limits)
+            if key in unknown:
+                # Quelle ausgefallen: die gespeicherte Stufe zeigen, nichts ändern.
+                level = max((lv for (k, lv) in stored if k == key), default=0)
+                value = max(counts.get(key) or 0, limits[level - 1] if level else 0)
+            else:
+                value = counts[key]
+                level = _level(value, limits)
             # Fällt die Grundlage weg (eine Auswertung zurückgehalten oder
             # korrigiert), wird eine gespeicherte Stufe zurückgenommen (D203).
-            gone = [lv for (k, lv) in stored if k == key and lv > level]
+            gone = [lv for (k, lv) in stored if k == key and lv > level] if key not in unknown else []
             if gone:
                 c.execute(f"DELETE FROM reward_badges WHERE account_id=? AND badge=? AND level IN ({','.join('?' * len(gone))})",
                           (account_id, key, *gone))
                 LOG.info("Abzeichen %s Stufe %s für Konto %s zurückgenommen", key, gone, account_id)
             for lv in range(1, level + 1):
-                if (key, lv) not in stored:
+                if (key, lv) not in stored and key not in unknown:
                     c.execute("INSERT OR IGNORE INTO reward_badges(account_id,badge,level,reached_at) VALUES(?,?,?,?)",
                               (account_id, key, lv, now.isoformat()))
                     new.append({"key": key, "name": name, "emoji": emoji, "level": LEVELS[lv - 1]})
@@ -442,7 +546,7 @@ def _rescuable(account_id: int, day: date, days: list[date], now: datetime) -> b
     later = [d for d in days if d > day]
     if later and later[0] < now.date():
         return False
-    nxt = _next_school_day(account_id, day)
+    nxt = _next_school_day(account_id, day, far=True)
     first = _first_start(account_id, nxt) if nxt else None
     return bool(first and now < first and day < now.date())
 

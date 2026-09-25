@@ -28,20 +28,36 @@ class CaughtUpIn(BaseModel):
     note: str | None = None
 
 
-def _period_id_or_404(account_id: int, lesson_id: int) -> int | None:
-    """Verify the lesson belongs to the account and return its stable
-    Untis period id (for durable referencing)."""
+def _lesson_or_404(account_id: int, lesson_id: int) -> dict:
+    """Verify the lesson belongs to the account and return it (stable Untis
+    period id for durable referencing, date and end for „vorbei?“)."""
     conn = history_conn()
     try:
         row = conn.execute(
-            "SELECT untis_period_id FROM lessons WHERE id = ? AND account_id = ?",
+            "SELECT * FROM lessons WHERE id = ? AND account_id = ?",
             (lesson_id, account_id),
         ).fetchone()
     finally:
         conn.close()
     if row is None:
         raise HTTPException(status_code=404, detail="Lesson not found for this account")
-    return row["untis_period_id"]
+    return dict(row)
+
+
+def _period_id_or_404(account_id: int, lesson_id: int) -> int | None:
+    return _lesson_or_404(account_id, lesson_id).get("untis_period_id")
+
+
+def _lesson_over(lesson: dict) -> bool:
+    """Ist die Stunde vorbei? Dieselbe Regel wie die Wochenansicht
+    (week_rolling._ended). Ohne Datum gilt sie als vorbei (alter Stand)."""
+    day = lesson.get("date")
+    if not day:
+        return True
+    from ..learning import today_local
+    from ..rewards import now_local
+    from ..week_rolling import _ended
+    return _ended(lesson, str(day)[:10], today_local(), now_local())
 
 
 @router.post("/accounts/{account_id}/lessons/{lesson_id}/checkin")
@@ -52,8 +68,14 @@ def post_checkin(
     user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     assert_account_access(user, account_id)
-    period_id = _period_id_or_404(account_id, lesson_id)
+    lesson = _lesson_or_404(account_id, lesson_id)
+    period_id = lesson.get("untis_period_id")
     now = datetime.now(timezone.utc).isoformat()
+    # Die Notiz ändert nur, wer sie mitschickt: eine Anfrage nur mit Notiz
+    # (auch leer, zum Löschen) oder eine Bewertung mit Notiz. Eine Bewertung
+    # ohne Notiz (fehlt oder null) ließ bis 1.31 eine vorhandene Notiz
+    # verschwinden.
+    keep_note = "note" not in body.model_fields_set or (body.note is None and body.rating is not None)
     conn = webapp_conn()
     try:
         before = snapshot_checkin(conn, account_id, lesson_id)
@@ -64,7 +86,7 @@ def post_checkin(
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(account_id, lesson_id) DO UPDATE SET "
             "  rating = COALESCE(excluded.rating, lesson_checkins.rating), "
-            "  note = excluded.note, "
+            + ("  note = lesson_checkins.note, " if keep_note else "  note = excluded.note, ") +
             "  user_id = excluded.user_id, "
             "  untis_period_id = excluded.untis_period_id, "
             "  updated_at = excluded.updated_at",
@@ -85,9 +107,12 @@ def post_checkin(
     finally:
         conn.close()
     if after and after["rating"] is not None:
-        # Jede Rückmeldung zählt gleich, egal welches Gesicht (D173).
+        # Jede Rückmeldung zählt gleich, egal welches Gesicht (D173). Eine
+        # Stunde, die noch nicht vorbei ist, zählt nicht: Die Bewertung wird
+        # gespeichert, ein Ereignis gibt es erst für eine gehaltene Stunde.
         from .. import rewards
-        rewards.note(account_id, "feedback", lesson_id, user)
+        if _lesson_over(lesson):
+            rewards.note(account_id, "feedback", lesson_id, user)
     return {"ok": True, "lesson_id": lesson_id, "rating": after["rating"], "note": after["note"]}
 
 

@@ -24,9 +24,14 @@ def week(
 ) -> dict:
     assert_account_access(user, account_id)
     if start:
-        start_date = datetime.strptime(start, "%Y-%m-%d").date()
+        try:
+            start_date = datetime.strptime(start, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="start muss ein Datum JJJJ-MM-TT sein") from None
     else:
-        start_date = _monday_of(date.today())
+        # Deutscher Kalendertag, nicht der des Servers (UTC im Container).
+        from ..learning import today_local
+        start_date = _monday_of(today_local())
     start_date = _monday_of(start_date)
     end_date = start_date + timedelta(days=6)
 

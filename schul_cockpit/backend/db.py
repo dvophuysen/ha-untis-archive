@@ -1306,3 +1306,18 @@ WHERE opening_confirmed=0 AND EXISTS (
  SELECT 1 FROM mentor_ai_calls c WHERE c.month=mentor_ai_config.opening_month
  AND c.status='settled' AND c.charged_micro>c.reserved_micro);
 """))
+
+# Dedup-Schlüssel der HA-Aufgaben (opt_day): die Beschreibung, wie HA sie
+# zuletzt geliefert hat. Nur der Abgleich schreibt sie; `notes` gehört dem
+# Nutzer. Vorbelegt mit dem heutigen Text, der erste Abgleich zieht den
+# HA-Stand nach. Zwei Schritte, damit die Vorbelegung auch läuft, wenn die
+# Spalte schon existiert.
+_MIGRATIONS.append(("opt_day_tasks_ha_description", "ALTER TABLE tasks ADD COLUMN ha_description TEXT"))
+_MIGRATIONS.append(("opt_day_tasks_ha_description_fill",
+                    "UPDATE tasks SET ha_description = notes "
+                    "WHERE source = 'ha_todo' AND ha_uid IS NOT NULL AND ha_description IS NULL"))
+
+# Papier-Vokabeltest (opt_day): Beginn der Auswertung. Eine Auswertung, die ein
+# Neustart abgebrochen hat, hing sonst für immer auf „grading“.
+_MIGRATIONS.append(("opt_day_vocab_papers_grading_started",
+                    "ALTER TABLE vocab_papers ADD COLUMN grading_started_at TEXT"))

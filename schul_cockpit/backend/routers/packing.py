@@ -75,6 +75,23 @@ def put_packing(account_id: int, school_day: date, body: PackingIn, user: Curren
     from .. import rewards
     if body.done:
         rewards.note(account_id, 'pack', f'{school_day.isoformat()}:{body.item_key}', user)
-    if result.get('status') == 'packed':
+    if result.get('status') == 'packed' and bag_counts(account_id, school_day):
         rewards.note(account_id, 'bag', school_day.isoformat(), user)
     return dict(**result, can_write=True)
+
+
+def bag_counts(account_id, school_day, today=None):
+    """„Packprofi“ zählt die Tasche für heute oder den nächsten Schultag, gepackt
+    an dem Tag selbst oder davor ab dem letzten Schultag. Abhaken für andere Tage
+    bleibt möglich, nur ohne Ereignis; sonst ließen sich 30 Tage im Voraus und
+    rückwirkend Taschen sammeln."""
+    today = today or today_local()
+    if school_day == today:
+        return True
+    if school_day < today:
+        return False
+    from .. import rewards
+    try:
+        return rewards._next_school_day(account_id, today) == school_day
+    except Exception:
+        return False

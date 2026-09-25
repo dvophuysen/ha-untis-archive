@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import logging
 from contextlib import closing
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from . import day_close
 from .db import webapp_conn
@@ -21,6 +22,7 @@ from .lernstand import LABELS, PROGRESS
 from .subject_names import label as subject_label
 
 LOG = logging.getLogger("schul_cockpit.week_review")
+BERLIN = ZoneInfo("Europe/Berlin")
 STAGE_WORD = {"neu": "neu", "angefangen": "angefangen", "wackelt": "wackelt", "sitzt": "sitzt", "gefestigt": "gefestigt"}
 
 
@@ -31,6 +33,32 @@ def week_bounds(day: date) -> tuple[date, date]:
 
 def _has(c, table: str) -> bool:
     return bool(c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone())
+
+
+def local_day(stamp: str | None) -> str | None:
+    """Der Kalendertag eines Zeitstempels in Deutschland. ``tasks.completed_at``
+    ist UTC; die ersten zehn Zeichen sind zwischen Mitternacht und zwei Uhr
+    der Vortag. Ohne Zeitzone gilt der Stempel als deutsche Zeit."""
+    if not stamp:
+        return None
+    try:
+        parsed = datetime.fromisoformat(stamp)
+    except ValueError:
+        return stamp[:10]
+    if parsed.tzinfo is None:
+        return parsed.date().isoformat()
+    return parsed.astimezone(BERLIN).date().isoformat()
+
+
+def done_between(c, account_id: int, first: str, last: str) -> int:
+    """Erledigte Aufgaben mit deutschem Erledigt-Tag in [first, last]. Die
+    Abfrage nimmt einen Tag Rand, der Tag selbst wird hier umgerechnet."""
+    lo = (date.fromisoformat(first) - timedelta(days=1)).isoformat()
+    hi = (date.fromisoformat(last) + timedelta(days=1)).isoformat()
+    rows = c.execute(
+        "SELECT completed_at FROM tasks WHERE account_id=? AND status='done' "
+        "AND substr(completed_at,1,10) BETWEEN ? AND ?", (account_id, lo, hi)).fetchall()
+    return sum(1 for (stamp,) in rows if first <= (local_day(stamp) or "") <= last)
 
 
 def _short(day: str) -> str:
@@ -63,9 +91,7 @@ async def review(account_id: int, today: date | None = None) -> dict:
         unit_subjects = [r[0] for r in c.execute(
             "SELECT DISTINCT subject FROM mentor_sessions WHERE account_id=? AND is_test=0 AND is_demo=0 "
             f"AND id IN ({active}) ORDER BY subject", (account_id, account_id, s, e))]
-        homework_done = c.execute(
-            "SELECT COUNT(*) FROM tasks WHERE account_id=? AND status='done' AND substr(completed_at,1,10) BETWEEN ? AND ?",
-            (account_id, s, e)).fetchone()[0]
+        homework_done = done_between(c, account_id, s, e)
         overdue = c.execute(
             "SELECT COUNT(*) FROM tasks WHERE account_id=? AND status IN ('open','in_progress') AND due_date IS NOT NULL AND due_date<?",
             (account_id, today.isoformat())).fetchone()[0]

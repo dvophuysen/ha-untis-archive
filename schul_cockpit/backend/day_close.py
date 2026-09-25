@@ -21,6 +21,8 @@ from .queries import lessons_in_range
 
 # Kein Knopfdruck, sondern der Stand der Dinge.
 BY_WORK = "erledigt"
+# Was den Abend offen hält: Aufgaben, Tasche, Rückmeldungen.
+CLOSING_COUNTS = ("homework", "material", "feedback")
 
 
 def reminded(conn, account_id: int, day: str) -> bool:
@@ -48,8 +50,12 @@ def record_if_clear(account_id: int, day: str, counts: dict, now: datetime) -> d
     Später am Abend kann wieder etwas auflaufen — eine nachgetragene Aufgabe,
     eine neue Stunde. Das macht den Moment nicht ungeschehen, in dem das Kind
     fertig war.
+
+    Gezählt werden nur die drei Zahlen oben. Weitere Einträge in ``counts``
+    (etwa Heftseiten für eine Arbeit) gehören in die Erinnerung, nicht in den
+    Abschluss; bis 1.31 hielt ein fehlendes Foto den Abend offen.
     """
-    if any(counts.values()):
+    if any(counts.get(k) for k in CLOSING_COUNTS):
         return None
     with closing(webapp_conn()) as conn, conn:
         conn.execute("BEGIN IMMEDIATE")

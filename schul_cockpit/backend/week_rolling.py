@@ -244,9 +244,9 @@ def review(account_id: int, first: str, last: str, lessons: list[dict]) -> dict:
     held = [l for l in lessons if not l.get("is_cancelled") and not l.get("was_absent")]
     rated = sum(1 for l in held if (l.get("checkin") or {}).get("rating"))
     with closing(webapp_conn()) as c:
-        homework = c.execute(
-            "SELECT COUNT(*) FROM tasks WHERE account_id=? AND status='done' "
-            "AND substr(completed_at,1,10) BETWEEN ? AND ?", (account_id, first, last)).fetchone()[0]
+        # completed_at ist UTC; gezählt wird der deutsche Erledigt-Tag.
+        from .week_review import done_between
+        homework = done_between(c, account_id, first, last)
         vocab = {"attempts": 0, "correct": 0}
         try:
             row = c.execute("SELECT COUNT(*), COALESCE(SUM(result='correct'),0) FROM vocab_attempts "
