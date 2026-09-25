@@ -364,6 +364,8 @@ def test_speaking_exam_plans_simulations_with_a_one_day_buffer(world):
     import json as _json
     from backend import exam_meta
     ids = exam("en", "Englisch", MON + timedelta(days=3), ["Meine Familie", "Hobbys"])
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("UPDATE exam_topics SET origin='manual' WHERE exam_key='en'")  # von Eltern eingetragene Sprechthemen
     exam_meta.remember(1, "en", "Sprechprüfung Englisch")
     p = next(p for p in sp.plans(1, MON) if p["exam_key"] == "en")
     assert [(x["kind"], x["format"], x["topic_id"]) for x in p["sequence"]] == [("oral", "einstieg", None)]

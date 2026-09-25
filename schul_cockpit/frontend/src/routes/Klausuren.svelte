@@ -142,10 +142,11 @@
     const n = liveTopics(e).length;
     if (e.oral) {
       const own = liveTopics(e).filter((t) => t.origin === 'manual').length;
+      const layout = e.sources?.notice ? ' · Ablauf laut Zettel der Lehrkraft' : '';
       return {
         tone: own ? 'ok' : 'warn',
-        text: own ? `Sprechprüfung · ${own} ${own === 1 ? 'Sprechthema' : 'Sprechthemen'} eingetragen`
-          : 'Sprechprüfung · noch keine Sprechthemen eingetragen; geübt wird in Gesamtproben, der Stoff aus dem Unterricht ist Maßstab',
+        text: own ? `Sprechprüfung${layout} · ${own} ${own === 1 ? 'Sprechthema' : 'Sprechthemen'} eingetragen`
+          : `Sprechprüfung${layout} · noch keine Sprechthemen eingetragen; geübt wird in Gesamtproben, der Stoff aus dem Unterricht ist Maßstab`,
         action: { label: canManage ? 'eintragen' : 'ansehen', open: true },
       };
     }
@@ -419,7 +420,7 @@
               <p class="lead">Sprechprüfung: Geübt wird in Sprechproben mit dem Lernbegleiter als Prüfer, per Sprechknopf. Am Ende jeder Probe gibt es eine Bewertung nach sechs Kriterien und höchstens drei Baustellen, die die nächste Probe gezielt nachprüft. Kein Einstiegstest und keine Übungsarbeit auf Papier.</p>
               <div class="row" style="gap:0.5rem; flex-wrap:wrap; margin-bottom:0.6rem;">
                 <a class="point-go" href={oralUrl(e)}>🎤 {e.oral_sims?.some((x) => x.reliable) ? 'Gesamtprobe' : 'Einstiegstest Sprechprüfung'}</a>
-                {#each topics.filter((t) => !t.vocab) as t (t.id)}<a class="point-go" href={oralUrl(e, t)}>🎤 {t.title}</a>{/each}
+                {#each topics.filter((t) => t.origin === 'manual') as t (t.id)}<a class="point-go" href={oralUrl(e, t)}>🎤 {t.title}</a>{/each}
               </div>
               {#if e.oral_sims?.length}
                 <div class="sims" aria-label="Sprechproben">

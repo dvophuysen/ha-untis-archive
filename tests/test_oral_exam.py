@@ -140,3 +140,19 @@ def test_speech_is_transcribed_verbatim_in_a_simulation():
 
 def test_level_by_grade():
     assert oral_exam.level_for("6").startswith("GER A1+") and oral_exam.level_for(8).startswith("GER A2") and oral_exam.level_for("10").startswith("GER B1")
+
+
+def test_teacher_handout_is_the_exam_structure_not_speaking_topics(setup):
+    """D195: Bei einer Sprechprüfung beschreibt der Zettel der Lehrkraft den Ablauf
+    (Interview, Monologue, Dialogue); Sprechproben je Thema gibt es nur für
+    eingetragene Sprechthemen."""
+    topic = world()
+    with closing(db.webapp_conn()) as c, c:
+        for i, (title, detail) in enumerate([("Interview", "Fragen zu einem bekannten Thema."), ("Monologue", "Bildbeschreibung.")]):
+            c.execute("INSERT INTO exam_topics(account_id,subject,exam_key,position,title,detail,origin,created_at,updated_at) "
+                      "VALUES(1,'ENGLISCH',?,?,?,?,'notice','t','t')", (KEY, 5 + i, title, detail))
+    assert [t["id"] for t in oral_exam.spoken_topics(1, KEY)] == [topic]
+    ctx = oral_exam.context(1, {"exam_key": KEY, "full": True}, "ENGLISCH", 6)
+    assert [p["punkt"] for p in ctx["pruefungsaufbau"]] == ["Interview", "Monologue"] and len(ctx["alle_sprechthemen"]) == 1
+    assert all(r["kind"] != "topic" or "Interview" not in r["label"] for r in oral_exam.references(1, KEY, "ENGLISCH"))
+    assert "Teil für Teil" in oral_exam.ORAL_RULE

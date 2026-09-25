@@ -1,3 +1,7 @@
+## 1.27.1
+
+- Sprechprüfung: Der Zettel der Lehrkraft gilt als Ablauf der Prüfung. Die Gesamtprobe folgt ihm Teil für Teil (Interview, Monologue, Dialogue), statt jeden Punkt des Zettels als eigenes Sprechthema zu üben.
+
 ## 1.27.0
 
 - Sprechproben für Sprechprüfungen: Der Lernbegleiter ist Prüfer und spricht nur Englisch (bzw. die Fremdsprache), du antwortest mit dem Sprechknopf, was du sagst, geht direkt ab, und die Fragen werden vorgelesen.

@@ -186,7 +186,8 @@ def exam_plan(account_id: int, exam: dict, day: date, school: list[date]) -> dic
         if not oral_exam.measured(account_id, exam["exam_key"]):
             seq.append(oral_step(exam, subject, when))
             rows = []
-        for t in rows:
+        own = {t["id"] for t in oral_exam.spoken_topics(account_id, exam["exam_key"])}
+        for t in [t for t in rows if t["id"] in own]:
             if not oral_exam.topic_ready(account_id, exam["exam_key"], t["id"]):
                 seq.append({**base, "key": f"oral:{exam['exam_key']}:{t['id']}", "kind": "oral", "format": None, "topic_id": t["id"],
                             "title": f"Sprechprobe {subject}: {t['title']}", "href": f"#/learning?oral={q}&topic_id={t['id']}",

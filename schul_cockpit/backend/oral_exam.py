@@ -71,7 +71,7 @@ def references(account_id: int, exam_key: str, subject: str | None) -> list[dict
     off = set(excluded_refs(account_id, exam_key))
     out = []
     with closing(webapp_conn()) as c:
-        for r in c.execute("SELECT id,title,detail FROM exam_topics WHERE account_id=? AND exam_key=? AND origin IN ('assumed','notice') "
+        for r in c.execute("SELECT id,title,detail FROM exam_topics WHERE account_id=? AND exam_key=? AND origin='assumed' "
                            "ORDER BY position,id", (account_id, exam_key)):
             label = r["title"] + (f" · {r['detail']}" if r["detail"] and r["detail"] != r["title"] else "")
             out.append({"key": f"topic:{r['id']}", "label": label[:160], "kind": "topic"})
@@ -193,19 +193,34 @@ def done_on(account_id: int, exam_key: str, topic_id: int | None, first: str, la
 
 # ------------------------------------------------------------------ Prüfer
 
+def spoken_topics(account_id: int, exam_key: str) -> list[dict]:
+    """Die Sprechthemen: von Eltern eingetragen. Der Zettel der Lehrkraft
+    beschreibt bei einer Sprechprüfung den Ablauf, keine Themen (D195)."""
+    with closing(webapp_conn()) as c:
+        return [dict(r) for r in c.execute(
+            "SELECT id,title,detail FROM exam_topics WHERE account_id=? AND exam_key=? AND stale=0 AND origin='manual' "
+            "ORDER BY position,id", (account_id, exam_key))]
+
+
+def structure(account_id: int, exam_key: str) -> list[dict]:
+    """Aufbau und Ablauf der Prüfung laut Zettel der Lehrkraft (Teile, Bewertung, Organisation)."""
+    with closing(webapp_conn()) as c:
+        return [{"punkt": r[0], "inhalt": r[1]} for r in c.execute(
+            "SELECT title,detail FROM exam_topics WHERE account_id=? AND exam_key=? AND stale=0 AND origin='notice' "
+            "ORDER BY position,id", (account_id, exam_key))]
+
 def context(account_id: int, source: dict, subject: str, grade) -> dict:
     """Was der Prüfer in jedem Zug weiß."""
     from .exam_meta import get
     key = source.get("exam_key") or ""
     meta = get(account_id, key)
-    with closing(webapp_conn()) as c:
-        topics = [dict(r) for r in c.execute(
-            "SELECT id,title,detail FROM exam_topics WHERE account_id=? AND exam_key=? AND stale=0 ORDER BY position,id", (account_id, key))]
+    topics, layout = spoken_topics(account_id, key), structure(account_id, key)
     this = next((t for t in topics if t["id"] == source.get("topic_id")), None)
     return {
-        "art": "Gesamtprobe über alle Sprechthemen, wie die echte Prüfung" if source.get("full") else "Themenprobe",
+        "art": "Gesamtprobe wie die echte Prüfung, Teil für Teil nach oral.pruefungsaufbau" if source.get("full") else "Themenprobe",
         "thema": {"titel": this["title"], "hinweis": this["detail"]} if this else None,
         "alle_sprechthemen": [{"titel": t["title"], "hinweis": t["detail"]} for t in topics],
+        "pruefungsaufbau": layout,
         "hinweise_eltern": meta.get("note") or "",
         "niveau": level_for(grade),
         "unterricht": reference_context(account_id, key, subject),
@@ -216,7 +231,10 @@ def context(account_id: int, source: dict, subject: str, grade) -> dict:
 
 ORAL_RULE = (
     "SPRECHPROBE: Du bist der Prüfer einer mündlichen Prüfung in der Fremdsprache (oral.art, oral.thema, "
-    "oral.hinweise_eltern). Sprich ausschließlich in der Fremdsprache, freundlich und natürlich, in kurzen Sätzen auf "
+    "oral.hinweise_eltern). Steht in oral.pruefungsaufbau der Ablauf laut Lehrkraft (etwa Interview, Monologue, "
+    "Dialogue), folgst du ihm in der Gesamtprobe Teil für Teil und kündigst jeden Teil kurz an; eine Bildbeschreibung "
+    "ohne Bild ersetzt du durch ein Bild, das du in zwei, drei einfachen Sätzen beschreibst und das Kind weiter "
+    "beschreiben und deuten lässt; im Dialogue spielst du den Partner. Sprich ausschließlich in der Fremdsprache, freundlich und natürlich, in kurzen Sätzen auf "
     "dem Niveau oral.niveau und mit Wörtern aus oral.unterricht. Jeder Zug: höchstens eine kurze Reaktion auf das "
     "Gesagte und genau eine Frage oder ein Sprechanlass (erzählen, beschreiben, begründen, nachfragen, Rollenspiel). "
     "Korrigiere während der Probe nicht und bewerte nicht, wie in einer echten Prüfung; die Bewertung kommt am Ende "

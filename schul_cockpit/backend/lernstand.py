@@ -864,6 +864,8 @@ def _exam_form(account_id: int, exam_key: str) -> dict:
     meta = get(account_id, exam_key)
     out = {}
     if meta["oral"]:
+        from .oral_exam import structure
+        out["pruefungsaufbau"] = structure(account_id, exam_key)
         out["pruefungsform"] = (
             "Sprechprüfung, keine schriftliche Arbeit. Übe das Sprechen in der Fremdsprache wie in der mündlichen "
             "Prüfung: Stelle Fragen oder kleine Sprechanlässe zum Thema, auf die das Kind in ganzen Sätzen in der "
