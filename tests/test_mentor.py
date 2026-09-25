@@ -644,8 +644,11 @@ def test_homework_chat_stays_open_until_the_task_is_ticked(setup):
     assert [x['id'] for x in client.get(B).json()['sessions']]==[s['id']]
     # The tick on the homework files it away; removing the tick brings it back.
     with closing(db.webapp_conn()) as c:c.execute("UPDATE tasks SET status='done' WHERE id=?",(tid,))
-    listed={x['id']:x for x in client.get(B).json()['sessions']}
-    assert listed[s['id']]['task_done'] is True
+    # Archiv nach der Arbeit (D182): abgehakte Hilfe steht im Archiv, nicht mehr in der Liste.
+    d=client.get(B).json()
+    assert s['id'] not in [x['id'] for x in d['sessions']]
+    listed={x['id']:x for x in d['archived_sessions']}
+    assert listed[s['id']]['task_done'] is True and listed[s['id']]['archive_reason']=='Hausaufgabe erledigt'
     assert client.get(B+f"/sessions/{s['id']}").json()['task_done'] is True
     with closing(db.webapp_conn()) as c:c.execute("UPDATE tasks SET status='open' WHERE id=?",(tid,))
     assert client.get(B).json()['sessions'][0]['task_done'] is False

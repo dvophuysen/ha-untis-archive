@@ -1,3 +1,8 @@
+## 1.23.2
+
+- Lernen räumt sich selbst auf: Einheiten zu einer geschriebenen Arbeit wandern am Tag danach ins Archiv, Hausaufgabenhilfe, sobald die Aufgabe abgehakt ist (sonst drei Tage nach dem Fälligkeitstag), alles andere nach 14 Tagen ohne Aktivität.
+- Das Archiv steht unter „Weitermachen“ ganz unten. Nichts wird gelöscht; „Wieder aufnehmen“ holt eine Einheit zurück. Wird eine Arbeit verschoben, kommt ihre Einheit von selbst zurück.
+
 ## 1.23.1
 
 - Lernen: Ist für eine Arbeit noch gar nichts geübt, kommt zuerst der Einstiegstest, auch am letzten Tag davor. Jede heute ausgewertete Übungsarbeit zur Arbeit hakt den Papier-Schritt ab, gleich welche Art.
