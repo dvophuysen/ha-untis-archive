@@ -131,10 +131,23 @@ async def _today(account_id: int, user) -> dict:
         lesson["checkin"] = checkins_by_lesson.get(lesson["id"])
         lesson["caught_up"] = lesson["id"] in caught_up_lessons
 
+    # Vergessene Rückmeldungen der Tage davor bleiben stehen, bis sie
+    # nachgeholt sind (D210), wie überfällige Hausaufgaben.
+    backlog: list[dict] = []
+    try:
+        from .. import rewards
+        shown = date.fromisoformat(carry_block["date"]) if carry_block else today_date
+        for lesson in rewards.feedback_backlog(account_id, shown - timedelta(days=1), rewards.now_local()):
+            backlog.append({**lesson, "checkin": None, "caught_up": False})
+    except Exception:
+        import logging
+        logging.getLogger("schul_cockpit.today").warning("Offene Rückmeldungen für Konto %s nicht lesbar", account_id, exc_info=True)
+
     return {
         "date": today_iso,
         "lessons": enriched,
         "carry_lessons": carry_block,
+        "feedback_backlog": backlog,
         "summary": {
             "unrated_lessons": unrated,
             "upcoming_exams_7d": len(exams),

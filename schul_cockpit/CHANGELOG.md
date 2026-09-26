@@ -1,3 +1,8 @@
+## 1.36.0
+
+- Vergessene Rückmeldungen zu Stunden verfallen nicht mehr, genau wie Hausaufgaben: Auf „Heute“ stehen unter den Stunden des Tages alle noch nicht bewerteten Stunden der Vortage unter „Noch nachholen“, nach Tagen geordnet, und lassen sich dort bewerten. Der Feedback-Ring schließt sich erst, wenn alles nachgeholt ist, auf „Heute“ und auf der Familienkarte.
+- Ein Tag gilt erst als geschafft und der Abend als abgeschlossen, wenn auch keine Rückmeldung mehr offen ist, wie bei überfälligen Hausaufgaben. Eingefordert wird ab Beginn der Zählung (Serie und Abzeichen); ausgefallene Stunden, Stunden ohne das Kind und ausgeblendete Kurse zählen nie.
+
 ## 1.35.1
 
 - Familienkarte: Was die Ringe schon zeigen, steht nicht mehr zusätzlich als Zeile darunter (Tasche, Stunden ohne Rückmeldung, Aufgaben bis morgen). Überfällige Aufgaben, Aufgaben ohne Termin, Fotos und Arbeiten bleiben als Zeilen.

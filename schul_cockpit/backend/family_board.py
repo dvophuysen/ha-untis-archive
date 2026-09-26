@@ -241,7 +241,20 @@ def rings(account_id: int, today: date, now: datetime) -> dict:
                 f"SELECT lesson_id FROM lesson_checkins WHERE account_id=? AND rating IS NOT NULL "
                 f"AND lesson_id IN ({','.join('?' * len(ids))})", (account_id, *ids))}
     open_fb = sum(1 for g in ended if any(l["id"] not in rated for l in g))
-    out["feedback"] = {"done": len(ended) - open_fb, "total": len(ended)}
+    # Vergessene Rückmeldungen der Tage davor bleiben offen, bis sie nachgeholt
+    # sind (D210), wie überfällige Aufgaben.
+    try:
+        from .rewards import feedback_backlog
+        older = [l for l in feedback_backlog(account_id, ref - timedelta(days=1), now)]
+    except Exception:
+        _LOG.warning("Offene Rückmeldungen für Konto %s nicht lesbar", account_id, exc_info=True)
+        older = []
+    by_day: dict[str, list[dict]] = {}
+    for l in older:
+        by_day.setdefault(l["date"], []).append(l)
+    backlog = sum(len(_merged(day)) for day in by_day.values())
+    ended_total, open_fb = len(ended) + backlog, open_fb + backlog
+    out["feedback"] = {"done": ended_total - open_fb, "total": ended_total, "backlog": backlog}
     return out
 
 

@@ -26,18 +26,13 @@ def snapshot(account, now, morning=False, photos=True):
     zählt; ihr Lesen fragt den Arbeitenkalender ab."""
     target = now.date() if morning else now.date() + timedelta(days=1)
     items, fingerprint, schedule = packing_plan(account, target)
-    _, _, today_schedule = packing_plan(account, now.date())
     with closing(webapp_conn()) as c:
         bag = view(account, target, items, fingerprint, c, schedule)
         homework = c.execute("SELECT COUNT(*) FROM tasks WHERE account_id=? AND status IN ('open','in_progress') "
                              "AND due_date IS NOT NULL AND due_date<=?", (account, target.isoformat())).fetchone()[0]
-        ratings = {r['lesson_id'] for r in c.execute('SELECT lesson_id FROM lesson_checkins WHERE account_id=? AND rating IS NOT NULL', (account,))}
-    feedback = 0
-    for lesson in today_schedule:
-        end = lesson.get('end_hhmm')
-        if (end and end <= now.strftime('%H:%M') and not lesson.get('is_cancelled')
-                and not lesson.get('was_absent') and lesson.get('id') not in ratings):
-            feedback += 1
+    # Alle offenen Rückmeldungen, auch vergessene der Vortage (D210).
+    from .rewards import feedback_backlog
+    feedback = len(feedback_backlog(account, now.date(), now))
     return dict(homework=homework, material=len(items)-bag['confirmed_count'], feedback=feedback,
                 photos=photo_count(account, now) if photos else 0)
 

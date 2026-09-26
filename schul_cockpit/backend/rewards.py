@@ -336,15 +336,29 @@ def _bag_packed(c, account_id: int, day: date) -> bool:
     return all(i["key"] in done for i in items)
 
 
-def _feedback_open(c, account_id: int, day: date, now: datetime) -> int:
-    lessons = [l for l in _lessons(account_id, day, day) if _held(l)]
-    ended = [l for l in lessons if day < now.date() or (_minutes(l.get("end_time")) or 0) <= now.hour * 60 + now.minute]
+def feedback_backlog(account_id: int, until: date, now: datetime) -> list[dict]:
+    """Beendete Stunden ohne Rückmeldung vom Beginn der Zählung bis ``until``.
+
+    Wie eine überfällige Hausaufgabe verfällt eine vergessene Rückmeldung
+    nicht: Sie bleibt stehen, bis sie nachgeholt ist (D210). Ausgefallene
+    Stunden, Stunden ohne das Kind und ausgeblendete Kurse zählen nicht."""
+    # Der Tag selbst zählt immer, die Tage davor erst ab Beginn der Zählung:
+    # Stunden aus der Zeit davor wurden nie eingefordert.
+    first = min(until, start_day())
+    today, clock = now.date().isoformat(), now.hour * 60 + now.minute
+    ended = [l for l in _lessons(account_id, first, until) if _held(l)
+             and (l["date"] < today or (l["date"] == today and (_minutes(l.get("end_time")) or 0) <= clock))]
     if not ended:
-        return 0
-    rated = {r["lesson_id"] for r in c.execute(
-        f"SELECT lesson_id FROM lesson_checkins WHERE account_id=? AND rating IS NOT NULL AND lesson_id IN ({','.join('?' * len(ended))})",
-        (account_id, *[l["id"] for l in ended]))}
-    return sum(1 for l in ended if l["id"] not in rated)
+        return []
+    with closing(webapp_conn()) as c:
+        rated = {r["lesson_id"] for r in c.execute(
+            f"SELECT lesson_id FROM lesson_checkins WHERE account_id=? AND rating IS NOT NULL "
+            f"AND lesson_id IN ({','.join('?' * len(ended))})", (account_id, *[l["id"] for l in ended]))}
+    return [l for l in ended if l["id"] not in rated]
+
+
+def _feedback_open(c, account_id: int, day: date, now: datetime) -> int:
+    return len(feedback_backlog(account_id, day, now))
 
 
 def day_state(account_id: int, day: date, now: datetime) -> dict:

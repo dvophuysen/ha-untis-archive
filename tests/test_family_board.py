@@ -260,19 +260,45 @@ def test_on_the_weekend_the_rings_show_the_friday_state(env, monkeypatch):
     saturday = fb.rings(1, date(2026, 9, 26), datetime(2026, 9, 26, 10, 0))
     assert saturday["carry_day"] == "2026-09-25" and saturday["next_school_day"] == "2026-09-28"
     # Die Doppelstunde ist bewertet (eine Zeile), die Stunde um 11:30 nicht.
-    assert saturday["feedback"] == {"done": 1, "total": 2}
+    assert saturday["feedback"] == {"done": 1, "total": 2, "backlog": 0}
     assert saturday["tasks"] == {"done": 1, "total": 2}
     # Am Schultag selbst zählen nur die schon beendeten Stunden.
     friday = fb.rings(1, date(2026, 9, 25), datetime(2026, 9, 25, 10, 0))
-    assert friday["carry_day"] is None and friday["feedback"] == {"done": 1, "total": 1}
+    assert friday["carry_day"] is None and friday["feedback"] == {"done": 1, "total": 1, "backlog": 0}
+
+
+def test_forgotten_feedback_stays_open_until_it_is_caught_up(env):
+    """D210: Wie eine überfällige Hausaufgabe bleibt eine vergessene Rückmeldung
+    stehen, bis sie nachgeholt ist; erst dann schließt der Ring. Vor Beginn der
+    Zählung wird nichts eingefordert."""
+    from backend import rewards
+    lessons([(51, "2026-09-23", 800, 845, None), (52, "2026-09-24", 800, 845, None),
+             (53, "2026-09-24", 850, 935, None), (54, "2026-09-25", 800, 845, None),
+             (55, "2026-09-24", 1000, 1045, "cancelled")])
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT OR REPLACE INTO reward_config(id,start_day) VALUES(1,'2026-09-24')")
+    now = datetime(2026, 9, 25, 14, 0)
+    # Mittwoch liegt vor der Zählung, der ausgefallene Donnerstag zählt nie.
+    assert [l["id"] for l in rewards.feedback_backlog(1, date(2026, 9, 25), now)] == [52, 53, 54]
+    friday = fb.rings(1, date(2026, 9, 25), now)
+    assert friday["feedback"] == {"done": 0, "total": 2, "backlog": 1}  # Donnerstag als Doppelstunde
+    assert rewards.day_state(1, date(2026, 9, 25), now)["feedback_open"] == 3
+    with closing(db.webapp_conn()) as c, c:
+        for lid in (52, 53, 54):
+            c.execute("INSERT INTO lesson_checkins(account_id,lesson_id,user_id,rating,created_at,updated_at) VALUES(1,?,1,2,'now','now')", (lid,))
+    assert rewards.feedback_backlog(1, date(2026, 9, 25), now) == []
+    assert fb.rings(1, date(2026, 9, 25), now)["feedback"] == {"done": 1, "total": 1, "backlog": 0}
 
 
 def test_the_today_page_brings_the_last_school_day_on_a_free_day(env, monkeypatch):
     client, state, patch = env
     from backend.routers import today as today_routes
-    lessons([(41, "2026-09-25", 800, 845, None), (42, "2026-09-28", 800, 845, None)])
+    from backend import rewards
+    lessons([(41, "2026-09-25", 800, 845, None), (42, "2026-09-28", 800, 845, None), (43, "2026-09-24", 800, 845, None)])
     with closing(db.webapp_conn()) as c, c:
         c.execute("INSERT INTO lesson_checkins(account_id,lesson_id,user_id,rating,created_at,updated_at) VALUES(1,41,1,2,'now','now')")
+        c.execute("INSERT OR REPLACE INTO reward_config(id,start_day) VALUES(1,'2026-09-21')")
+    monkeypatch.setattr(rewards, "now_local", lambda: datetime(2026, 9, 26, 10, 0, tzinfo=rewards.TZ))
     monkeypatch.setattr(today_routes, "today_local", lambda: date(2026, 9, 26))
     client.app.include_router(today_routes.router, prefix="/api")
     body = client.get("/api/accounts/1/today").json()
@@ -280,6 +306,8 @@ def test_the_today_page_brings_the_last_school_day_on_a_free_day(env, monkeypatc
     carry = body["carry_lessons"]
     assert carry["date"] == "2026-09-25" and [l["id"] for l in carry["lessons"]] == [41]
     assert carry["lessons"][0]["checkin"]["rating"] == 2
+    # Die vergessene Stunde vom Donnerstag steht zum Nachholen darunter (D210).
+    assert [l["id"] for l in body["feedback_backlog"]] == [43]
     # An einem Schultag gibt es keinen Übertrag.
     monkeypatch.setattr(today_routes, "today_local", lambda: date(2026, 9, 25))
     assert client.get("/api/accounts/1/today").json()["carry_lessons"] is None

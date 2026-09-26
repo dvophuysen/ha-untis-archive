@@ -82,7 +82,16 @@
   const fbNow = $derived(carryLessons ? new Date(`${carryLessons.date}T23:59:00`) : now);
   const fbTitle = $derived(carryLessons ? `Stunden vom ${WEEKDAYS[new Date(carryLessons.date + 'T12:00:00').getDay()]}` : 'Stunden von heute');
   const endedLessons = $derived(mergeLessons(fbLessons.filter(l => held(l) && lessonOver(l, fbNow))));
-  const feedbackOpen = $derived(endedLessons.filter(g => g.lessons.some(l => l.checkin?.rating == null)).length);
+  const dayFeedbackOpen = $derived(endedLessons.filter(g => g.lessons.some(l => l.checkin?.rating == null)).length);
+  // Vergessene Rückmeldungen der Vortage bleiben stehen, bis sie nachgeholt sind (D210).
+  const backlogDays = $derived.by(() => {
+    const byDay = new Map();
+    for (const l of data?.feedback_backlog ?? []) (byDay.get(l.date) ?? byDay.set(l.date, []).get(l.date)).push(l);
+    return [...byDay].sort(([a], [b]) => b.localeCompare(a)).map(([date, lessons]) => ({ date, lessons, count: mergeLessons(lessons).length }));
+  });
+  const backlogCount = $derived(backlogDays.reduce((n, d) => n + d.count, 0));
+  const feedbackOpen = $derived(dayFeedbackOpen + backlogCount);
+  const feedbackTotal = $derived(endedLessons.length + backlogCount);
   const notedToday = $derived(tasks.filter(t => t.source === 'manual' && localDay(t.created_at) === day && t.status !== 'done'));
   // Lernen (D180): der eingefrorene Pflichtplan des Tages, erledigt live geprüft.
   const study = $derived(data?.study_plan ?? null);
@@ -300,7 +309,7 @@
       { key: 's-aufgaben', label: 'Aufgaben', icon: '📚', done: ringTasks.length - openTasks.length, total: ringTasks.length, full: !openTasks.length, text: `${ringTasks.length - openTasks.length} von ${ringTasks.length}` },
       { key: 's-lernen', label: 'Lernen', icon: '🧠', done: learnSteps.length - learnOpen, total: learnSteps.length, full: !learnOpen, text: learnSteps.length ? `${learnSteps.length - learnOpen} von ${learnSteps.length}` : 'frei' },
       { key: 's-tasche', label: 'Tasche', icon: '🎒', done: bag?.done ?? 0, total: bag?.total ?? 0, full: !!bag?.packed, text: bag ? `${bag.done} von ${bag.total}` : '…' },
-      { key: 's-stunden', label: 'Feedback', icon: '💬', done: endedLessons.length - feedbackOpen, total: endedLessons.length, full: !feedbackOpen, text: `${endedLessons.length - feedbackOpen} von ${endedLessons.length}` },
+      { key: 's-stunden', label: 'Feedback', icon: '💬', done: feedbackTotal - feedbackOpen, total: feedbackTotal, full: !feedbackOpen, text: `${feedbackTotal - feedbackOpen} von ${feedbackTotal}` },
     ]} />
   {/if}
 
@@ -370,10 +379,19 @@
       {#if finished['s-tasche']}<button class="fold-head" onclick={() => setOpen('s-tasche', folded('s-tasche'))} aria-expanded={!folded('s-tasche')}><span>✓ Tasche für {WEEKDAYS[new Date(nextSchoolDay + 'T12:00:00').getDay()]}</span><small>{bag?.packed ? 'alles drin' : 'antippen, wenn drin'} {folded('s-tasche') ? '▸' : '▾'}</small></button>{:else}<h3>Tasche für {WEEKDAYS[new Date(nextSchoolDay + 'T12:00:00').getDay()]} <small>{bag?.packed ? 'alles drin' : 'antippen, wenn drin'}</small></h3>{/if}
       <div class:hidden-fold={folded('s-tasche')}><PackingChecklist {accountId} schoolDay={nextSchoolDay} variant="grid" onstatus={(s) => (bag = s)} /></div>
     </section>
-    {#if endedLessons.length || fbLessons.length}
+    {#if endedLessons.length || fbLessons.length || backlogCount}
       <section class="sec" id="s-stunden" data-section="rueckmelden">
-        {#if finished['s-stunden']}<button class="fold-head" onclick={() => setOpen('s-stunden', folded('s-stunden'))} aria-expanded={!folded('s-stunden')}><span>✓ {fbTitle}</span><small>{endedLessons.length - feedbackOpen} von {endedLessons.length} {folded('s-stunden') ? '▸' : '▾'}</small></button>{:else}<h3>{fbTitle} <small>{endedLessons.length - feedbackOpen} von {endedLessons.length}</small></h3>{/if}
-        {#if !folded('s-stunden')}<DaySchedule {accountId} lessons={fbLessons} now={fbNow} live={false} onsaved={() => saved('Rückmeldung gespeichert.')} />{/if}
+        {#if finished['s-stunden']}<button class="fold-head" onclick={() => setOpen('s-stunden', folded('s-stunden'))} aria-expanded={!folded('s-stunden')}><span>✓ {fbTitle}</span><small>{feedbackTotal - feedbackOpen} von {feedbackTotal} {folded('s-stunden') ? '▸' : '▾'}</small></button>{:else}<h3>{fbTitle} <small>{endedLessons.length - dayFeedbackOpen} von {endedLessons.length}</small></h3>{/if}
+        {#if !folded('s-stunden')}
+          {#if fbLessons.length}<DaySchedule {accountId} lessons={fbLessons} now={fbNow} live={false} onsaved={() => saved('Rückmeldung gespeichert.')} />{/if}
+          {#if backlogCount}
+            <h4 class="backlog-head" data-section="nachholen">Noch nachholen <small>{backlogCount} {backlogCount === 1 ? 'Stunde' : 'Stunden'}</small></h4>
+            {#each backlogDays as d (d.date)}
+              <p class="backlog-day">{formatShortDate(d.date)}</p>
+              <DaySchedule {accountId} lessons={d.lessons} now={new Date(`${d.date}T23:59:00`)} live={false} onsaved={() => saved('Rückmeldung nachgeholt.')} />
+            {/each}
+          {/if}
+        {/if}
       </section>
     {/if}
     {#if data.retakes?.length || data.photo_requests?.length}
@@ -463,6 +481,8 @@
   .gains b{font-size:var(--fs-md)}
   .new-badge{background:var(--accent-fg);color:var(--accent);border-radius:var(--r-pill);padding:6px 12px;font-weight:700;font-size:var(--fs-xs)}
   .sec{margin-top:var(--sp-4)}
+  .backlog-head{margin:var(--sp-3) 0 var(--sp-1);font-size:var(--fs-md)}.backlog-head small{font-weight:600;color:var(--fg-muted);font-size:var(--fs-xs)}
+  .backlog-day{margin:var(--sp-2) 0 2px;font-size:var(--fs-xs);color:var(--fg-muted);font-weight:700}
   .fold-head{width:100%;display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);min-height:44px;padding:var(--sp-2) var(--sp-3);background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-md);color:var(--fg);font-weight:700;font-size:var(--fs-md);text-align:left;margin-bottom:var(--sp-2)}
   .fold-head span{color:var(--good-fg, var(--fg))}
   .fold-head small{font-weight:600;color:var(--fg-muted);font-size:var(--fs-xs);white-space:nowrap}
