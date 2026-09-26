@@ -1115,7 +1115,7 @@ def looks_blank(blob: bytes, threshold: float = 0.04) -> bool:
     try:
         image = Image.open(io.BytesIO(blob)).convert("L")
         image.thumbnail((240, 240))
-        pixels = list(image.getdata())
+        pixels = list(image.get_flattened_data() if hasattr(image, "get_flattened_data") else image.getdata())
     except Exception:
         return False
     if not pixels:

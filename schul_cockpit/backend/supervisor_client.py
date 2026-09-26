@@ -8,6 +8,7 @@ token, no .env to manage.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 import httpx
@@ -156,6 +157,12 @@ class SupervisorClient:
         Uses the Core REST endpoint GET /calendars/<entity>?start&end, which
         works for ICS subscription calendars (e.g. an iServ exam calendar).
         """
+        # Familienkarte, Erledigen und Arbeiten fragen denselben Kalender oft
+        # kurz hintereinander; eine Minute lang genügt die letzte Antwort.
+        key = (entity_id, start, end)
+        hit = _CALENDAR_CACHE.get(key)
+        if hit and time.monotonic() - hit[0] < CALENDAR_CACHE_SECONDS:
+            return [dict(e) for e in hit[1]]
         url = f"{self._base}/calendars/{entity_id}"
         params = {"start": start, "end": end}
         async with httpx.AsyncClient(timeout=20.0) as client:
@@ -165,8 +172,15 @@ class SupervisorClient:
                 f"GET /calendars/{entity_id} failed: {resp.status_code} {resp.text[:200]}"
             )
         data = resp.json()
-        return data if isinstance(data, list) else []
+        events = data if isinstance(data, list) else []
+        if len(_CALENDAR_CACHE) > 64:
+            _CALENDAR_CACHE.clear()
+        _CALENDAR_CACHE[key] = (time.monotonic(), events)
+        return [dict(e) for e in events]
 
+
+CALENDAR_CACHE_SECONDS = 60
+_CALENDAR_CACHE: dict[tuple[str, str, str], tuple[float, list]] = {}
 
 _CLIENT: SupervisorClient | None = None
 

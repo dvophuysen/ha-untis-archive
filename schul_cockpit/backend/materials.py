@@ -143,7 +143,7 @@ def fingerprint(image) -> tuple[str, float]:
     from PIL import ImageFilter, ImageStat
     grey = image.convert("L")
     small = grey.resize((8, 8))
-    pixels = list(small.getdata())
+    pixels = list(small.get_flattened_data() if hasattr(small, "get_flattened_data") else small.getdata())
     mean = sum(pixels) / len(pixels)
     bits = "".join("1" if p > mean else "0" for p in pixels)
     probe = grey.copy()

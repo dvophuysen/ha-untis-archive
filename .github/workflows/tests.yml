@@ -48,6 +48,15 @@ jobs:
       - name: Unit-Tests
         run: node --test src/lib/*.test.js
       - run: npm run build
+      - name: Browser-Tests
+        # Die Tests in tests/*_browser.cjs laufen gegen den gebauten Stand mit
+        # künstlichen API-Antworten; playwright-core bringt den Browser mit.
+        working-directory: .
+        run: |
+          npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/pw" playwright-core@1.56.1
+          npx --yes playwright@1.56.1 install --with-deps chromium
+          export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
+          for f in tests/*_browser.cjs; do echo "== $f"; node "$f"; done
 
   component:
     name: HA-Komponente

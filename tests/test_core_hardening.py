@@ -363,3 +363,17 @@ def test_restore_endpoint_restarts_through_the_supervisor_when_it_can(env, monke
         r = tc.post("/api/admin/backup/restore", files={"file": ("b.zip", z.read_bytes(), "application/zip")}).json()
     assert r["restarting"] is True and r["restart_required"] is False
     assert backup.pending_path().exists()
+
+
+def test_slow_requests_are_logged_without_query(monkeypatch, caplog):
+    """Messen statt schätzen: Server-Timing je Antwort, langsame API-Aufrufe
+    im Log, ohne Query (dort kann ein Token stehen)."""
+    import logging
+    from fastapi.testclient import TestClient
+    from backend import main
+    monkeypatch.setattr(main, "SLOW_MS", 0)
+    with TestClient(main.app) as client, caplog.at_level(logging.INFO, logger="schul_cockpit"):
+        r = client.get("/api/health?token=geheim")
+    assert r.headers["server-timing"].startswith("app;dur=")
+    lines = [m for m in caplog.messages if m.startswith("langsam:")]
+    assert lines and "/api/health" in lines[-1] and "geheim" not in lines[-1]

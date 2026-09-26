@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -199,6 +200,23 @@ from . import view_mode as _view_mode  # noqa: E402
 
 # Mitlesen, Kind am Elterngerät, Testmodus (D175).
 app.middleware("http")(_view_mode.middleware)
+
+# Ladezeiten messen statt schätzen: Jede Antwort trägt ihre Dauer im Kopf
+# Server-Timing (sichtbar in den Entwicklerwerkzeugen), und was länger als
+# SLOW_MS braucht, steht mit Pfad (ohne Query, also ohne Token) im Add-on-Log
+# unter „langsam:“; ha_addon_log.py --grep langsam wertet es aus.
+SLOW_MS = 500
+
+
+@app.middleware("http")
+async def measure(request: Request, call_next):
+    started = time.perf_counter()
+    response = await call_next(request)
+    ms = (time.perf_counter() - started) * 1000
+    response.headers["Server-Timing"] = f"app;dur={ms:.0f}"
+    if ms >= SLOW_MS and request.url.path.startswith("/api/"):
+        _LOGGER.info("langsam: %s %s %.0f ms (%s)", request.method, request.url.path, ms, response.status_code)
+    return response
 
 
 # Pfade, die ihr Cookie selbst setzen oder löschen (Anmelden, Abmelden).
