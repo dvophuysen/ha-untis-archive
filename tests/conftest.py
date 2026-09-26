@@ -17,6 +17,6 @@ def _solutions_checked(request, monkeypatch):
         return
     from backend import solution_check
 
-    async def ok(account_id, subject, tasks, flagged):
+    async def ok(account_id, subject, tasks, flagged, rewrite=False):
         return {i: solution_check.Checked(nr=i + 1, eigene_loesung="geprüft", ok=True) for i in range(len(tasks))}
     monkeypatch.setattr(solution_check, "_check", ok)

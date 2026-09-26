@@ -1,3 +1,10 @@
+## 1.42.0
+
+- Probearbeit als Generalprobe: Sie bekommt die Abschnitte des Schulbuchs zu den Themen der Arbeit, die Seiten mit Übungen im Stil einer Arbeit (Check-up, vermischte Aufgaben) und die Themenliste der Lehrkraft. Jeder Abschnitt kommt vor, größere Abschnitte mit mehr Punkten. Die Aufgaben verteilen sich nach dem Umfang der Themen im Buch, jedes Thema mindestens zweimal, über alle drei Anforderungsbereiche.
+- Übungsarbeiten entstehen verlässlicher: Findet die Prüfung einen Fehler in der Aufgabe selbst (etwa eine Abbildung, die nicht zu den Termen passt, oder Teilpunkte, die nicht aufgehen), berichtigt sie jetzt auch den Aufgabentext oder lässt die Abbildung weg, in bis zu zwei Runden. Vorher wurde die ganze Arbeit verworfen.
+- Gezeichnete Graphen werden gegen die Terme der Aufgabe nachgerechnet.
+- Behoben: Eine Musterlösung mit offener Klammer brachte das Erstellen zum Absturz (Fehler 500).
+
 ## 1.41.1
 
 - „Lernen anpassen“: Ein Einstiegstest, den die App nachträglich als Sprechprüfung erkannt hat, lässt sich jetzt streichen. Vorher kam „Dieser Schritt steht nicht im Plan“, weil der Schritt in der festgehaltenen Liste noch als schriftlicher Einstiegstest stand. Er wird auch nicht mehr doppelt zum Hinzufügen angeboten, und das Protokoll nennt ihn so, wie er angezeigt wurde.

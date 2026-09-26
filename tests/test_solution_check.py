@@ -140,7 +140,9 @@ def test_mismatched_part_points_are_a_hint_not_a_stop(monkeypatch):
     calls = fake_checker(monkeypatch, {"tasks": [{"nr": 1, "eigene_loesung": "…", "ok": True}]})
     out = run(sc.assure(1, "Mathematik", [odd]))
     assert out[0]["geprueft"]["berichtigt"] is False and len(calls) == 1
-    assert "Teilpunkte" in calls[0]["aufgaben"][0]["rechnerpruefung"][0]
+    # Das Lesen der Teilpunkte irrt manchmal („2 statt 7“); als „irrt nicht“ darf
+    # es den Prüfer nicht fehlleiten (D220). Er zählt selbst nach.
+    assert calls[0]["aufgaben"][0]["rechnerpruefung"] == []
 
 
 def test_the_calculator_checks_fraction_chains_and_ignores_what_it_cannot_read():
@@ -163,3 +165,49 @@ def test_the_calculator_checks_fraction_chains_and_ignores_what_it_cannot_read()
         assert sc.arith_issues({"prompt": "", "solution": text, "criteria": ""}) == [], text
     assert sc.arith_issues({"prompt": "Stimmt 3/4 = 6/9?", "solution": "3/4 = 6/9 stimmt nicht, 3/4 = 9/12.", "criteria": ""}) == []
     assert sc.arith_issues({"prompt": "", "solution": "Die 80 Euro minus 12: 80 − 12 = 58 Euro.", "criteria": ""})[0]["rechnung"] == "80 − 12 = 58"
+
+
+GRAPH = {"prompt": "Ergänze die Tabelle für T1(x) = 3x - 2 und T2(x) = 0,5x + 3 und lies den Schnittpunkt ab.",
+         "solution": "S(2|4), also x = 2", "criteria": "1 P Tabelle; 1 P S(2|4); 1 P x = 2", "points": 3,
+         "figur": {"type": "funktionsgraph", "x_min": -2, "x_max": 5, "y_min": -6, "y_max": 10,
+                   "funktionen": [{"term": "3x-2", "beschriftung": "T1"}, {"term": "0,5x+3", "beschriftung": "T2"}]},
+         "figur_text": "Zwei Geraden"}
+
+
+def test_a_drawn_graph_must_show_the_terms_of_the_task():
+    """D220: Die Zeichnung zeigte andere Geraden als die Aufgabe nannte."""
+    assert sc.figure_issues(GRAPH) == []
+    wrong = {**GRAPH, "figur": {**GRAPH["figur"], "funktionen": [{"term": "2x-8"}, {"term": "0,5x+3"}]}}
+    assert [x["text"] for x in sc.figure_issues(wrong)] == ["Die Abbildung zeigt 2x-8, dieser Term kommt in der Aufgabe nicht vor."]
+    assert sc.figure_issues({**GRAPH, "figur": {**GRAPH["figur"], "funktionen": [{"term": "x^2-1"}]}}) == [], "nur Lineares"
+    assert sc.calc_issues({"prompt": "", "solution": "(3 + 4 = 7", "criteria": ""}) == [], "offene Klammer: kein Absturz"
+
+
+def test_at_creation_the_checker_may_fix_the_task_or_drop_the_figure(monkeypatch):
+    wrong = {**GRAPH, "figur": {**GRAPH["figur"], "funktionen": [{"term": "2x-8"}, {"term": "7-x"}]}}
+    calls = fake_checker(monkeypatch,
+                         {"tasks": [{"nr": 1, "eigene_loesung": "…", "ok": False, "fehler": "Abbildung passt nicht",
+                                     "solution": GRAPH["solution"], "criteria": GRAPH["criteria"], "abbildung_weglassen": True,
+                                     "aufgabe": GRAPH["prompt"] + " Zeichne beide Geraden selbst."}]},
+                         {"tasks": [{"nr": 1, "eigene_loesung": "…", "ok": True}]})
+    out = run(sc.assure(1, "Mathematik", [wrong]))
+    assert "figur" not in out[0] and out[0]["abbildung"] is None and out[0]["prompt"].endswith("selbst.")
+    assert calls[0]["aufgabe_aendern"] is True and "2x-8" in calls[0]["aufgaben"][0]["rechnerpruefung"][0]
+    assert out[0]["geprueft"] == {**out[0]["geprueft"], "berichtigt": True, "fehler": "Abbildung passt nicht"}
+    # Auf einer Arbeit, die das Kind schon hat, bleibt der Aufgabentext.
+    fake_checker(monkeypatch,
+                 {"tasks": [{"nr": 1, "eigene_loesung": "…", "ok": False, "fehler": "x", "solution": RIGHT["solution"],
+                             "criteria": RIGHT["criteria"], "aufgabe": "Ganz andere Aufgabe"}]},
+                 {"tasks": [{"nr": 1, "eigene_loesung": "…", "ok": True}]})
+    kept = run(sc.assure(1, "Mathematik", [WRONG], rewrite=False))
+    assert kept[0]["prompt"] == WRONG["prompt"] and kept[0]["solution"] == RIGHT["solution"]
+
+
+def test_a_second_round_may_fix_what_the_first_correction_missed(monkeypatch):
+    half = {"tasks": [{"nr": 1, "eigene_loesung": "…", "ok": False, "fehler": "a) falsch", "solution": "a) x = 4,5 fast",
+                       "criteria": "1 P x = 4,5; 1 P Rest"}]}
+    calls = fake_checker(monkeypatch,
+                         {"tasks": [{"nr": 1, "eigene_loesung": "…", "ok": False, "fehler": "Punkte", "solution": "zwischen", "criteria": "k"}]},
+                         half, {"tasks": [{"nr": 1, "eigene_loesung": "…", "ok": True}]})
+    out = run(sc.assure(1, "Deutsch", [{"prompt": "Erkläre.", "solution": "a", "criteria": "b"}]))
+    assert len(calls) == 3 and out[0]["solution"] == "a) x = 4,5 fast"

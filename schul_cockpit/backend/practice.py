@@ -17,7 +17,9 @@ Sitzt ein höherer Bereich sicher, gilt ein noch offener darunter als mit gezeig
 """
 from __future__ import annotations
 
+import re
 from contextlib import closing
+from datetime import date
 
 from .db import webapp_conn
 from .request_cache import memo
@@ -141,7 +143,31 @@ def _weakness(r: dict) -> tuple:
     return (r["level"], target["ratio"] if target["ratio"] is not None else -1, r["id"])
 
 
-def slots(fmt: str, rows: list[dict], chosen: list[int] | None = None, level: int | None = None) -> list[dict]:
+def _quotas(n: int, pool: list[dict], weights: dict[int, float] | None) -> dict[int, int]:
+    """Wie viele der n Aufgaben jedes Thema bekommt: nach seinem Umfang im Buch
+    (Seiten), jedes Thema mindestens zweimal, wenn es passt (D220)."""
+    ids = [r["id"] for r in pool]
+    w = {i: float((weights or {}).get(i) or 0) for i in ids}
+    if not weights or not all(w.values()):
+        w = {i: 1.0 for i in ids}
+    floor = 2 if n >= 2 * len(ids) else 1 if n >= len(ids) else 0
+    total = sum(w.values())
+    ideal = {i: n * w[i] / total for i in ids}
+    q = {i: int(ideal[i]) for i in ids}
+    for i in sorted(ids, key=lambda i: (-(ideal[i] - int(ideal[i])), ids.index(i)))[:n - sum(q.values())]:
+        q[i] += 1
+    for i in ids:  # das Minimum geht zulasten des größten Themas
+        while q[i] < floor:
+            donor = max((j for j in ids if q[j] > floor), key=lambda j: q[j], default=None)
+            if donor is None:
+                break
+            q[donor] -= 1
+            q[i] += 1
+    return q
+
+
+def slots(fmt: str, rows: list[dict], chosen: list[int] | None = None, level: int | None = None,
+          weights: dict[int, float] | None = None) -> list[dict]:
     """Welche Aufgaben die Arbeit bekommt: je Platz ein Thema und ein Bereich.
 
     ``level`` None heißt stufenweise: jedes Thema auf seinem nächsten Niveau.
@@ -175,13 +201,21 @@ def slots(fmt: str, rows: list[dict], chosen: list[int] | None = None, level: in
             out += [{"topic_id": r["id"], "afb": aim(r)}, {"topic_id": r["id"], "afb": min(3, aim(r) + 1)}]
     elif fmt == "probe":
         pool = pick or rows
-        # Wie eine echte Arbeit: etwa 40 % I, 40 % II, 20 % III, jedes Thema dabei.
+        # Wie eine echte Arbeit: etwa 40 % I, 40 % II, 20 % III, jedes Thema dabei,
+        # jedes nach seinem Umfang im Buch gewichtet (D220). Jeder Bereich geht
+        # zuerst an ein Thema, das ihn noch nicht hat, bei Gleichstand ans schwächere.
         n = min(MAX_TASKS, max(6, len(pool)))
         want = [1] * round(n * .4) + [2] * round(n * .4)
         want += [3] * (n - len(want))
         order = sorted(pool, key=_weakness)
-        for i, afb in enumerate(sorted(want)):
-            out.append({"topic_id": order[i % len(order)]["id"], "afb": afb})
+        quota = _quotas(n, order, weights)
+        left, have = dict(quota), {r["id"]: set() for r in order}
+        for afb in sorted(want):
+            cands = [r for r in order if left[r["id"]] > 0]
+            best = min(cands, key=lambda r: (afb in have[r["id"]], -left[r["id"]] / quota[r["id"]], order.index(r)))
+            out.append({"topic_id": best["id"], "afb": afb})
+            left[best["id"]] -= 1
+            have[best["id"]].add(afb)
     return out[:MAX_TASKS]
 
 
@@ -191,3 +225,77 @@ def result_of(points: float, most: float, uncertain: bool) -> str:
     if most and points / most >= SURE:
         return "correct"
     return "partial" if points > 0 else "incorrect"
+
+
+# Probearbeit als Finale (D220): Sie soll den Stoff der echten Arbeit in der
+# richtigen Gewichtung abdecken. Das Raster kennt nur grobe Themen; das Buch
+# kennt die Abschnitte, die Lehrkraft die Themenliste.
+_MODEL_PAGES = re.compile(r"check-?up|vermischt|sichern|vernetzen|training|teste dich|selbsttest|wiederholen", re.I)
+
+
+def topic_pages(topic: dict) -> set[int]:
+    out = set()
+    for place in topic.get("places") or []:
+        for p in place.get("pages") or []:
+            try:
+                out.add(int(p))
+            except (TypeError, ValueError):
+                continue
+    return out
+
+
+def stoff(account_id: int, subject: str, topics: list[dict], exam_date: str | None) -> dict:
+    """Abschnitte des Buchs, die die Themen der Arbeit abdecken (mit Seiten und
+    Inhalt), Seiten mit Übungen im Stil einer Arbeit und die Themenliste der
+    Lehrkraft. Leer, wenn nichts davon bekannt ist."""
+    from datetime import timedelta
+    from .exam_scope import book_chapters
+    from .learning import today_local
+    end = exam_date or today_local().isoformat()
+    pages = set().union(*(topic_pages(t) for t in topics)) if topics else set()
+    try:
+        chapters = book_chapters(account_id, subject, "0000-01-01", end)
+    except Exception:
+        chapters = []
+    def overlaps(c):
+        lo, hi = c.get("start_page") or 0, c.get("end_page") or c.get("start_page") or 0
+        return any(lo <= p <= hi for p in pages)
+    since = (date.fromisoformat(end) - timedelta(days=70)).isoformat()
+    picked = [c for c in chapters if overlaps(c)] if pages else [c for c in chapters if since <= (c.get("first_date") or "") <= end]
+    numbers = {str(c.get("number")) for c in picked}
+    # Die feinste Gliederung: ein Kapitel nur, wenn keiner seiner Abschnitte dabei ist.
+    leaves = [c for c in picked if not any(n != str(c.get("number")) and n.startswith(f"{c.get('number')}.") for n in numbers)]
+    sections, models = [], []
+    for c in leaves:
+        titles = []
+        for p in c.get("page_index") or []:
+            t = (p.get("title") or "").strip()
+            if t and t not in titles:
+                titles.append(t)
+            if _MODEL_PAGES.search(t) and p.get("page") not in models:
+                models.append(p.get("page"))
+        span = f"S. {c.get('start_page')}" + (f"–{c['end_page']}" if c.get("end_page") else "")
+        sections.append({"abschnitt": f"{c.get('number')} {c.get('title')}".strip(), "seiten": span,
+                         "umfang_seiten": max(1, (c.get("end_page") or c.get("start_page") or 0) - (c.get("start_page") or 0) + 1),
+                         "inhalt": titles[:8]})
+    for c in picked:
+        for p in c.get("page_index") or []:
+            if _MODEL_PAGES.search(p.get("title") or "") and p.get("page") not in models:
+                models.append(p.get("page"))
+    notice = []
+    try:
+        from .sources import exam_notices
+        from . import mentor_context as mc
+        start = (date.fromisoformat(end) - timedelta(days=60)).isoformat()
+        notice = [n["text"][:2500] for n in exam_notices(account_id)
+                  if mc.same_subject(n["subject_name"], subject) and start <= n["date"] <= end and n["text"]]
+    except Exception:
+        notice = []
+    out = {}
+    if sections:
+        out["abschnitte"] = sections
+    if models:
+        out["seiten_wie_eine_arbeit"] = sorted(p for p in models if p is not None)
+    if notice:
+        out["themenliste_lehrkraft"] = notice[-2:]
+    return out

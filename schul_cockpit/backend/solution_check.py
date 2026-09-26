@@ -70,6 +70,8 @@ def _parse(text: str):
 
     def take():
         nonlocal i
+        if i >= len(toks):
+            raise _Unreadable("Ende")  # etwa eine offene Klammer
         i += 1
         return toks[i - 1]
 
@@ -246,7 +248,7 @@ def _number(text: str) -> Fraction | None:
         return None  # Zahlen ohne Rechenzeichen nebeneinander, Aufzählungen: nicht raten
     try:
         return _parse(src)(Fraction(0))
-    except (_Unreadable, ZeroDivisionError, RecursionError):
+    except (_Unreadable, ZeroDivisionError, RecursionError, IndexError):
         return None
 
 
@@ -316,9 +318,45 @@ def arith_issues(task: dict) -> list[dict]:
     return issues
 
 
+_TERM_DEF = re.compile(r"(?:\b[A-Za-z]\d?\s*\(\s*x\s*\)|\by)\s*=\s*([0-9xX(),.+\-−–*·/:\s]+?)(?=\s*(?:und|,\s|;|\.\s|\.$|\n|$|\)?\s*[A-Za-zÄÖÜäöüß]{2,}))")
+
+
+def _linear(text: str):
+    """Ein linearer Term in x als Paar (Steigung, Achsenabschnitt), sonst None."""
+    try:
+        f = _parse(text.replace("^", "**"))
+        a, b, c = f(Fraction(0)), f(Fraction(1)), f(Fraction(2))
+    except (_Unreadable, ZeroDivisionError, RecursionError, IndexError, TypeError):
+        return None
+    return (b - a, a) if c - b == b - a else None
+
+
+def figure_issues(task: dict) -> list[dict]:
+    """Ein gezeichneter Funktionsgraph zeigt die Terme der Aufgabe (D220). Anlass:
+    Eine Probearbeit fragte nach 3x − 2 und 0,5x + 3, die Zeichnung zeigte andere
+    Geraden. Geprüft werden nur lineare Terme, die sich sicher lesen lassen."""
+    fig = task.get("figur") or {}
+    if not isinstance(fig, dict) or fig.get("type") != "funktionsgraph":
+        return []
+    drawn = [(f.get("term") or "", _linear(f.get("term") or "")) for f in fig.get("funktionen") or []]
+    drawn = [(t, v) for t, v in drawn if v is not None]
+    asked = [v for m in _TERM_DEF.finditer(_normalize(task.get("prompt") or "")) if (v := _linear(m.group(1))) is not None]
+    if not drawn or not asked:
+        return []
+    return [{"stelle": "Abbildung", "text": f"Die Abbildung zeigt {t}, dieser Term kommt in der Aufgabe nicht vor."}
+            for t, v in drawn if v not in asked]
+
+
 def calc_issues(task: dict) -> list[dict]:
-    """Alles, was die App selbst nachrechnen kann."""
-    return math_issues(task) + arith_issues(task)
+    """Alles, was die App selbst nachrechnen kann. Eine Prüfhilfe darf nie
+    abstürzen: Was sie nicht lesen kann, meldet sie nicht."""
+    out = []
+    for check in (math_issues, arith_issues, figure_issues):
+        try:
+            out += check(task)
+        except Exception:
+            LOG.warning("Rechnerprüfung %s nicht möglich", check.__name__, exc_info=True)
+    return out
 
 
 _CRIT_POINTS = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:P\b|Pkt\b|Punkte?\b)")
@@ -346,6 +384,8 @@ class Checked(InputModel):
     fehler: str = Field(default="", max_length=800)
     solution: str = Field(default="", max_length=3000)
     criteria: str = Field(default="", max_length=1200)
+    aufgabe: str = Field(default="", max_length=4000)
+    abbildung_weglassen: bool = False
 
 
 class CheckOut(InputModel):
@@ -357,15 +397,21 @@ CHECK = (
     "Löse jede Aufgabe zuerst selbst vollständig und Schritt für Schritt in eigene_loesung, ohne der Musterlösung zu trauen; "
     "rechne jede Zahl nach. Vergleiche dann mit solution und criteria. ok=true nur, wenn die Musterlösung fachlich und "
     "rechnerisch vollständig richtig ist, jedes Ergebnis in criteria dazu passt und die Aufgabe eindeutig lösbar ist "
-    "(auch mit der beschriebenen Abbildung). Sonst ok=false, fehler nennt den Fehler knapp, solution und criteria sind "
-    "vollständig berichtigt (Teilpunkte wie bisher, gleiche Punktzahl). rechnerpruefung nennt, was eine Rechnerprüfung "
-    "schon gefunden hat; sie irrt bei richtiger Lesart nicht. Eine Bewertung je Aufgabe, nr wie in aufgaben. Nur JSON: "
+    "(auch mit der beschriebenen Abbildung) und die Teilpunkte in criteria zusammen genau punkte ergeben (zähle selbst nach). "
+    "Sonst ok=false, fehler nennt den Fehler knapp, solution und criteria sind vollständig berichtigt, mit derselben "
+    "Punktzahl und Teilpunkten, die genau punkte ergeben. Liegt der Fehler in der Aufgabe selbst (mehrdeutig, verlangt etwas, "
+    "das es nicht gibt, passt nicht zur Abbildung) und ist aufgabe_aendern true, steht in aufgabe der vollständige "
+    "berichtigte Aufgabentext mit gleichem Stoff, Anforderungsbereich und Umfang; passt die Abbildung nicht und ist die "
+    "Aufgabe ohne sie lösbar, setze abbildung_weglassen=true. Ist aufgabe_aendern false, bleibt der Aufgabentext, wie er ist. "
+    "rechnerpruefung nennt, was eine Rechnerprüfung schon gefunden hat; sie irrt bei richtiger Lesart nicht. "
+    "Eine Bewertung je Aufgabe, nr wie in aufgaben. Nur JSON: "
     + json.dumps(CheckOut.model_json_schema()))
 
 
-async def _check(account_id: int, subject: str, tasks: list[dict], flagged: dict[int, list[dict]]) -> dict[int, Checked]:
+async def _check(account_id: int, subject: str, tasks: list[dict], flagged: dict[int, list[dict]],
+                 rewrite: bool = False) -> dict[int, Checked]:
     from . import ai_gateway as ai
-    context = {"fach": subject, "aufgaben": [
+    context = {"fach": subject, "aufgabe_aendern": rewrite, "aufgaben": [
         {"nr": i + 1, "aufgabe": t.get("prompt"), "solution": t.get("solution"), "criteria": t.get("criteria"),
          "punkte": t.get("points"), "abbildung": t.get("abbildung_text") or t.get("figur_text") or None,
          "rechnerpruefung": [x["text"] for x in flagged.get(i, [])]} for i, t in enumerate(tasks)]}
@@ -387,42 +433,57 @@ class CheckFailed(RuntimeError):
     """Eine Musterlösung ließ sich nicht sicher prüfen: keine Arbeit ausgeben."""
 
 
-async def assure(account_id: int, subject: str, tasks: list[dict]) -> list[dict]:
+ROUNDS = 2  # Berichtigungsrunden, bevor eine Arbeit nicht ausgegeben wird
+
+
+def _without_figure(task: dict) -> dict:
+    return {k: v for k, v in task.items() if not (k.startswith("figur") or k.startswith("abbildung"))} | {"abbildung": None}
+
+
+async def assure(account_id: int, subject: str, tasks: list[dict], rewrite: bool = True) -> list[dict]:
     """Jede Musterlösung geprüft, falls nötig berichtigt und noch einmal geprüft.
-    Gibt die Aufgaben mit Prüfvermerk zurück oder wirft CheckFailed."""
+    Gibt die Aufgaben mit Prüfvermerk zurück oder wirft CheckFailed.
+
+    ``rewrite``: Beim Erstellen darf der Prüfer auch den Aufgabentext berichtigen
+    oder eine unpassende Abbildung weglassen (D220); bei einer Arbeit, die das
+    Kind schon hat, nur Musterlösung und Kriterien. Bis zu ROUNDS Runden."""
     out = [dict(t) for t in tasks]
-    # Rechenfehler sind hart: Sie verhindern die Ausgabe, bis sie berichtigt sind.
-    # Unstimmige Teilpunkte sind nur ein Hinweis an den Prüfer: Das Lesen der
-    # Kriterien kann irren (in 24 von 40 bestehenden Aufgaben passten sie nicht,
-    # teils nur scheinbar), und die Bewertung vergibt ohnehin nie mehr, als die
-    # Aufgabe hat (D218).
+    # Was die App selbst nachrechnet, ist hart: Es verhindert die Ausgabe, bis
+    # es berichtigt ist. Unstimmige Teilpunkte liest sie nicht sicher genug
+    # (D218); die zählt der Prüfer selbst nach, hier stehen sie nur im Log.
     hard = {i: v for i, t in enumerate(out) if (v := calc_issues(t))}
-    soft = {i: v for i, t in enumerate(out) if (v := structure_issues(t))}
-    flagged = {i: hard.get(i, []) + soft.get(i, []) for i in set(hard) | set(soft)}
-    first = await _check(account_id, subject, out, flagged)
-    redo = sorted(i for i in range(len(out)) if not first[i].ok or i in hard)
-    for i in redo:
-        c = first[i]
-        if c.ok:  # die Rechnerprüfung fand etwas, der Prüfer nicht: nicht ausgeben
-            raise CheckFailed(f"Aufgabe {i + 1}: " + "; ".join(x["text"] for x in hard[i]))
-        if not c.solution.strip() or not c.criteria.strip():
-            raise CheckFailed(f"Aufgabe {i + 1}: {c.fehler or 'ohne Berichtigung'}")
-        LOG.warning("Musterlösung berichtigt (Aufgabe %s): %s", i + 1, c.fehler)
-        out[i] = {**out[i], "solution": c.solution, "criteria": c.criteria}
-    if redo:
-        again = {i: calc_issues(out[i]) for i in redo}
-        for i in redo:
+    verdict = await _check(account_id, subject, out, hard, rewrite)
+    fixed: dict[int, str] = {}
+    todo = sorted(i for i in range(len(out)) if not verdict[i].ok or i in hard)
+    for round_ in range(ROUNDS):
+        if not todo:
+            break
+        for i in todo:
+            c = verdict[i]
+            if c.ok:  # die Rechnerprüfung fand etwas, der Prüfer nicht: nicht ausgeben
+                raise CheckFailed(f"Aufgabe {i + 1}: " + "; ".join(x["text"] for x in hard.get(i, [])))
+            if not c.solution.strip() or not c.criteria.strip():
+                raise CheckFailed(f"Aufgabe {i + 1}: {c.fehler or 'ohne Berichtigung'}")
+            LOG.warning("Musterlösung berichtigt (Aufgabe %s, Runde %s): %s", i + 1, round_ + 1, c.fehler)
+            t = _without_figure(out[i]) if rewrite and c.abbildung_weglassen else out[i]
+            t = {**t, "solution": c.solution, "criteria": c.criteria}
+            if rewrite and c.aufgabe.strip():
+                t["prompt"] = c.aufgabe.strip()
+            out[i] = t
+            fixed.setdefault(i, c.fehler)
+        hard = {i: v for i in todo if (v := calc_issues(out[i]))}
+        for i in todo:
             for x in structure_issues(out[i]):
-                LOG.warning("Teilpunkte nach Berichtigung unstimmig (Aufgabe %s): %s", i + 1, x["text"])
-        if any(again.values()):
-            raise CheckFailed("; ".join(x["text"] for v in again.values() for x in v))
-        second = await _check(account_id, subject, [out[i] for i in redo], {})
-        bad = [redo[j] + 1 for j, c in second.items() if not c.ok]
-        if bad:
-            raise CheckFailed(f"Aufgabe {', '.join(map(str, bad))} nach Berichtigung weiter fehlerhaft")
+                LOG.info("Teilpunkte nach Berichtigung vielleicht unstimmig (Aufgabe %s): %s", i + 1, x["text"])
+        again = await _check(account_id, subject, [out[i] for i in todo], {j: hard[i] for j, i in enumerate(todo) if i in hard}, rewrite)
+        verdict = {i: again[j] for j, i in enumerate(todo)}
+        todo = [i for i in todo if not verdict[i].ok or i in hard]
+    if todo:
+        raise CheckFailed(f"Aufgabe {', '.join(str(i + 1) for i in todo)} nach {ROUNDS} Berichtigungen weiter fehlerhaft: "
+                          + "; ".join(verdict[i].fehler for i in todo)[:400])
     from .learning import now_iso
     for i, t in enumerate(out):
-        t["geprueft"] = {"at": now_iso(), "berichtigt": i in redo, "fehler": first[i].fehler if i in redo else ""}
+        t["geprueft"] = {"at": now_iso(), "berichtigt": i in fixed, "fehler": fixed.get(i, "")}
     return out
 
 
@@ -459,7 +520,7 @@ async def recheck_open() -> None:
             tasks = snap.get("tasks") or []
             if not tasks or all(t.get("geprueft") for t in tasks):
                 continue
-            checked = await assure(r["account_id"], snap.get("subject") or "", tasks)
+            checked = await assure(r["account_id"], snap.get("subject") or "", tasks, rewrite=False)
         except CheckFailed as exc:
             LOG.warning("Offene Übungsarbeit %s: Musterlösung nicht sicher prüfbar: %s", r["id"], exc)
             continue

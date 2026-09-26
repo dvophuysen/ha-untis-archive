@@ -476,3 +476,42 @@ def test_parents_check_any_paper_themselves_with_ai_support(paper):
     kid = client.get(f"{BASE}/attempts/{a['id']}").json()
     assert "prior" not in kid and "_prior" not in kid["feedback"]
     assert kid["feedback"]["0"]["lost"][0]["fix"].startswith("So:") and kid["feedback"]["losses"] == [{"kind": "rechenweg", "label": "Rechenweg oder Begründung fehlt", "points": 8}]
+
+
+def test_the_final_probe_weights_topics_by_their_size_and_covers_every_level():
+    """D220: Die Probearbeit verteilt die Aufgaben nach Umfang im Buch, jedes
+    Thema mindestens zweimal, und jedes Thema bekommt zuerst verschiedene Bereiche."""
+    rows = _rows(2)
+    even = pr.slots("probe", rows)
+    per = {t: sorted(x["afb"] for x in even if x["topic_id"] == t) for t in (1, 2)}
+    assert per == {1: [1, 2, 3], 2: [1, 2, 3]}, "ohne Seitenangaben gleich verteilt"
+    heavy = pr.slots("probe", rows, weights={1: 16, 2: 7})
+    per = {t: sorted(x["afb"] for x in heavy if x["topic_id"] == t) for t in (1, 2)}
+    assert len(per[1]) == 4 and len(per[2]) == 2 and per[2] == [1, 2] and set(per[1]) == {1, 2, 3}
+    assert sorted(x["afb"] for x in heavy) == [1, 1, 2, 2, 3, 3], "40/40/20 bleibt"
+    assert pr.slots("probe", rows, weights={1: 16, 2: 0}) == even, "fehlt eine Angabe, gleich verteilt"
+
+
+def test_the_probe_gets_the_book_sections_model_pages_and_the_teachers_list(monkeypatch):
+    from backend import exam_scope, sources
+    idx = lambda *pairs: [{"page": p, "title": t} for p, t in pairs]  # noqa: E731
+    chapters = [
+        {"number": "1", "title": "Gleichungen", "start_page": 8, "end_page": 35, "first_date": "2026-08-24",
+         "page_index": idx((10, "Gleichungen aufstellen und lösen"), (32, "Check-up"), (34, "Sichern und Vernetzen – Vermischte Aufgaben"))},
+        {"number": "1.1", "title": "Gleichungen aufstellen und lösen", "start_page": 10, "end_page": 17, "first_date": "2026-08-17",
+         "page_index": idx((10, "Gleichungen aufstellen und lösen"))},
+        {"number": "1.2", "title": "Gleichungen lösen mit systematischem Probieren", "start_page": 18, "end_page": 24, "first_date": "2026-08-18",
+         "page_index": idx((18, "Systematisches Probieren"), (21, "Gleichungen grafisch und mit Tabellen lösen"))},
+        {"number": "2", "title": "Lineare Funktionen", "start_page": 36, "end_page": 60, "first_date": "2026-10-10", "page_index": []},
+    ]
+    monkeypatch.setattr(exam_scope, "book_chapters", lambda *a: chapters)
+    monkeypatch.setattr(sources, "exam_notices", lambda a: [
+        {"subject_name": "MATHEMATIK", "date": "2026-09-20", "text": "Themen: Gleichungen aufstellen, Probieren, Äquivalenzumformungen"},
+        {"subject_name": "DEUTSCH", "date": "2026-09-20", "text": "Kommasetzung"}])
+    topics = [{"places": [{"label": "Buch", "pages": list(range(10, 18))}]}, {"places": [{"label": "Buch", "pages": [18, 21, 32]}]}]
+    got = pr.stoff(1, "Mathematik", topics, "2026-09-28")
+    assert [x["abschnitt"] for x in got["abschnitte"]] == ["1.1 Gleichungen aufstellen und lösen", "1.2 Gleichungen lösen mit systematischem Probieren"]
+    assert got["abschnitte"][1]["inhalt"] == ["Systematisches Probieren", "Gleichungen grafisch und mit Tabellen lösen"]
+    assert got["abschnitte"][0]["umfang_seiten"] == 8 and got["seiten_wie_eine_arbeit"] == [32, 34]
+    assert got["themenliste_lehrkraft"] == ["Themen: Gleichungen aufstellen, Probieren, Äquivalenzumformungen"]
+    assert pr.stoff(1, "Mathematik", [], "2026-09-28")["abschnitte"][0]["abschnitt"].startswith("1.1"), "ohne Seiten: die Kapitel der letzten Wochen"
