@@ -209,3 +209,9 @@ def test_the_endpoint_answers_in_one_call(env):
     r = client.get("/api/accounts/1/week/rolling?from=2026-09-28&days=3")
     assert [d["date"] for d in r.json()["days"]] == ["2026-09-28", "2026-09-29", "2026-09-30"]
     assert client.get("/api/accounts/1/week/rolling?from=gestern").status_code == 400
+
+
+def test_holiday_names_read_as_latin1_are_repaired():
+    assert wr.repair_text("Osterferien BrÃ¼ckentag") == "Osterferien Brückentag"
+    assert wr.repair_text("Herbstferien") == "Herbstferien"
+    assert wr.repair_text("Ã€ßx€") == "Ã€ßx€", "geht die Rückwandlung nicht auf, bleibt der Text"

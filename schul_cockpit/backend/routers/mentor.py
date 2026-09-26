@@ -457,11 +457,12 @@ async def _dashboard(account_id,user):
         r['label']='Mit Abstand selbstständig gezeigt' if delayed else 'Selbstständig gezeigt · später prüfen' if r['independent'] else 'Noch in Arbeit'
     parent=is_parent(user)
     planning=await learning_overview(account_id,user)
+    # „deferred“ wiederholt Lernziele samt Begründung und liest keine Seite: halbe Antwort (~90 KB) weniger.
     shared=planning['shared_plan']
     progress=[{**r,"label":next((x["label"] for g in shared["goals"] for x in g.get("skill_states",[]) if x["id"]==r["id"]),r["label"])} for r in progress]
     from ..subject_names import SubjectCatalog
     catalog=SubjectCatalog(account_id)
-    return dict(demo=False,archived_sessions=archived,legacy_sessions=legacy,enabled=s['enabled'],background=s['background'],profile=s['profile'],candidates=shared["today"]["actions"],shared_plan=shared,sessions=sessions,progress=progress,
+    return dict(demo=False,archived_sessions=archived,legacy_sessions=legacy,enabled=s['enabled'],background=s['background'],profile=s['profile'],candidates=shared["today"]["actions"],shared_plan={k:v for k,v in shared.items() if k!='deferred'},sessions=sessions,progress=progress,
                 subjects=catalog.choices(s['lessons'],s['tasks']),errors=s['errors'],read_at=s['read_at'],
                 can_manage=parent,can_write=planning['can_write'],today=planning['today'],budget=ai.status() if parent else None,speech=bool(ai.transcribe_url()),
                 exams=planning.get('exams',[]),warnings=planning.get('warnings',[]))

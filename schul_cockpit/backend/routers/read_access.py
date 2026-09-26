@@ -23,7 +23,7 @@ def dataset(name, source, columns, date_field=None, modified=None, joins='', acc
     DATASETS[name] = (source, f'{name} d {joins}', account, columns.split(), date_field, modified)
 
 dataset('accounts','archive','id name',account='d.id')
-dataset('lessons','archive','id account_id untis_period_id date start_time end_time subject_untis_id subject_name teacher_untis_id teacher_name code lstext lstext_manual_override subst_text info was_absent absence_reason is_supervision_guess supervision_manual_override student_group last_updated_at','date','last_updated_at')
+dataset('lessons','archive','id account_id untis_period_id date start_time end_time subject_untis_id subject_name teacher_untis_id teacher_name code lstext lstext_manual_override subst_text info was_absent absence_reason is_supervision_guess supervision_manual_override student_group removed_at last_updated_at','date','last_updated_at')
 dataset('homework','archive','id account_id untis_homework_id untis_lesson_id subject_untis_id subject_name text assigned_date due_date completed first_seen_at last_updated_at','assigned_date','last_updated_at')
 dataset('absences','archive','id account_id start_date end_date start_time end_time reason text is_excused excuse_status last_updated_at','start_date','last_updated_at')
 dataset('master_schoolyear','archive','id account_id name startDate endDate last_updated_at','startDate','last_updated_at')

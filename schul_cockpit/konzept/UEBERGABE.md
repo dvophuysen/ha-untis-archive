@@ -1,10 +1,18 @@
 # Übergabe an die nächste Session
 
-Stand 26.09.2026. Live läuft Schul-Cockpit **1.37.1** (Heute in einer Runde, eine Rückmelde-Regel überall, Teamunterricht, Ladezeiten im Log „langsam:“, D211) (vergessene Rückmeldungen bleiben offen wie Hausaufgaben, D210; vier Ringe auf der Familienkarte, Freitagsstand am Wochenende, D209; 1.34.0 war die Überarbeitung D208); untis_archive **0.6.0** läuft seit dem HA-Neustart am 26.09. (HA 2026.9.3; getestet gegen 2026.2.3). Offen zur Abstimmung: [ENTWURF_VOKABEL_ABSTAND.md](ENTWURF_VOKABEL_ABSTAND.md). Nach ein, zwei Tagen `python3 scripts/ha_addon_log.py --lines 20000 --grep langsam` auswerten. Keine Kindernamen,
+Stand 26.09.2026. Live läuft Schul-Cockpit **1.37.3** (1.37.2: Familienkarte von 10–15 s auf etwa 1 s, Merkzettel je Aufruf; Messung mit Echtdaten siehe unten) (Heute in einer Runde, eine Rückmelde-Regel überall, Teamunterricht, Ladezeiten im Log „langsam:“, D211) (vergessene Rückmeldungen bleiben offen wie Hausaufgaben, D210; vier Ringe auf der Familienkarte, Freitagsstand am Wochenende, D209; 1.34.0 war die Überarbeitung D208); untis_archive **0.6.0** läuft seit dem HA-Neustart am 26.09. (HA 2026.9.3; getestet gegen 2026.2.3). Offen zur Abstimmung: [ENTWURF_VOKABEL_ABSTAND.md](ENTWURF_VOKABEL_ABSTAND.md). Nach ein, zwei Tagen `python3 scripts/ha_addon_log.py --lines 20000 --grep langsam` auswerten. Keine Kindernamen,
 PINs oder Schlüssel in diesem Dokument (D15/D68). Maßgeblicher Einstieg ist
 [README.md](README.md) in diesem Ordner; Einzelheiten zu jedem Release
 stehen im [CHANGELOG](../CHANGELOG.md), die Begründungen in
 [ENTSCHEIDUNGEN.md](ENTSCHEIDUNGEN.md).
+
+## Ladezeiten und Vokabeln 26.09.2026 (1.37.2, 1.37.3)
+
+- Die Instanz läuft auf einem Raspberry Pi 4: rund sechsmal langsamer als die Sandbox. Messen mit einer lokalen Kopie aus dem Lesezugang: alle Datensätze je Konto exportieren (Seiten zu 250, `next_after`), `history.db` aus `storage.SCHEMA` der Komponente, `webapp.db` über `db.init_webapp_db()`, fehlende Pflichtspalten mit Platzhaltern füllen, Elternnutzer mit Verknüpfungen anlegen; dann Router direkt oder über `TestClient(app)` mit überschriebenem `get_current_user` aufrufen (`supervisor_client.get_calendar_events` durch eine leere Funktion ersetzen). Echte Daten bleiben im Scratchpad, nie im Repo.
+- Ursache der langsamen Familienkarte: kein `request_cache.scope()`, dadurch rechneten die Ringe das Vokabel-Grundpensum dreimal über alle Einheiten (`vocab.cards` je Einheit). Jetzt Scope in `/dashboard` und `/parent/todo`, `vocab.unit_word_ids` für das Pensum. `request_cache.scope()` schließt Merkzettel und Verbindungsliste am Ende; Hintergrundaufgaben, die im Scope starten, bekommen keine geschlossene Verbindung mehr (Test in `test_request_cache.py`).
+- Lokal gemessen (Sandbox, ×6 für den Pi): Familienkarte 0,14 s (vorher 2,3 s), Heute 0,1 s, Plan 0,06 s, Mentor-Übersicht 0,05 s, Vokabel-Einheiten ≤ 0,16 s. `GET /materials/sources` schreibt beim Lesen (`sources.sync_links`) und kann auf eine Schreibsperre der Hintergrundlesung warten (live einmal 3,3 s).
+- Lesezugang liefert jetzt `lessons.removed_at`: damit zählen, wie viele Geisterstunden die Komponente markiert, bevor das Add-on sie ausblendet (die Ansicht `lessons` in `attendance.install_attendance_view` wäre die eine Stelle dafür).
+- Vokabeln: Empfehlung mit Zahlen in [ENTWURF_VOKABEL_ABSTAND.md](ENTWURF_VOKABEL_ABSTAND.md), wartet auf die Entscheidung des Nutzers.
 
 ## Überarbeitung 26.09.2026 (1.34.0, D208)
 

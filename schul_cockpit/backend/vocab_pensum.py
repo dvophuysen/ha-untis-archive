@@ -42,14 +42,16 @@ WEEKDAYS = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"
 
 def school_days(account_id: int, first: date, last: date) -> list[date]:
     """Schultage im Zeitraum. Der Stundenplan reicht nicht beliebig weit nach
-    vorn: Jenseits des letzten bekannten Unterrichtstags zählen Montag bis Freitag."""
+    vorn: Jenseits des letzten bekannten Unterrichtstags zählen Montag bis
+    Freitag ohne Ferien und Feiertage, wie im Lernplan (A13). Vorher verteilte
+    das Pensum einen Test nach den Herbstferien auch auf die Ferientage."""
     if last < first:
         return []
     from . import rewards
+    from .schoolday import project
     known = set(rewards.school_days(account_id, first, last))
     horizon = max(known) if known else first - timedelta(days=1)
-    rest = (first + timedelta(days=i) for i in range((last - first).days + 1))
-    return sorted(known | {d for d in rest if d > horizon and d.weekday() < 5})
+    return project(account_id, known, first, last, horizon)
 
 
 def _upcoming(account_id: int, day: date) -> list[dict]:

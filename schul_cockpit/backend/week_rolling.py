@@ -40,6 +40,18 @@ LOOKBACK = 70
 EXAM_TIMEOUT = 4.0
 
 
+def repair_text(text: str) -> str:
+    """UTF-8, das einmal als Latin-1 gelesen wurde („BrÃ¼ckentag“), zurück in
+    „Brückentag“. So stehen manche Feriennamen schon in UNTIS. Nur wenn die
+    Rückwandlung glatt aufgeht; sonst bleibt der Text, wie er ist."""
+    if "Ã" not in text and "Â" not in text:
+        return text
+    try:
+        return text.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return text
+
+
 def holidays(account_id: int, start: date, end: date) -> list[dict]:
     """Ferien und Feiertage aus UNTIS, falls die Integration sie liefert."""
     try:
@@ -50,7 +62,7 @@ def holidays(account_id: int, start: date, end: date) -> list[dict]:
                 (account_id, end.isoformat(), start.isoformat())).fetchall()
     except sqlite3.Error:
         return []
-    return [{"name": r["longName"] or r["name"] or "Ferien", "start": r["startDate"], "end": r["endDate"]}
+    return [{"name": repair_text(r["longName"] or r["name"] or "Ferien"), "start": r["startDate"], "end": r["endDate"]}
             for r in rows if r["startDate"] and r["endDate"]]
 
 

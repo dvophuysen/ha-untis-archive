@@ -174,6 +174,18 @@ def test_unit_words_are_the_trainer_cards(env, free):
         assert sorted(vocab.unit_word_ids(1, EN, unit)) == cards and cards
 
 
+def test_holidays_beyond_the_timetable_are_not_school_days(env, monkeypatch):
+    """Hinter dem bekannten Stundenplan zählen Ferien nicht als Lerntage (A13)."""
+    import sqlite3
+    week = [MON + timedelta(days=i) for i in range(5)]
+    monkeypatch.setattr(rewards, "school_days", lambda a, first, last: [d for d in week if first <= d <= last])
+    with sqlite3.connect(db.SETTINGS.history_db_path) as h:
+        h.execute("CREATE TABLE IF NOT EXISTS master_holidays(account_id INTEGER, name TEXT, longName TEXT, startDate TEXT, endDate TEXT)")
+        h.execute("INSERT INTO master_holidays VALUES(1,'HF','Herbstferien','2026-10-12','2026-10-23')")
+    days = vp.school_days(1, MON, MON + timedelta(days=25))
+    assert days[:5] == week and days[5:] == [date(2026, 10, 26), date(2026, 10, 27), date(2026, 10, 28), date(2026, 10, 29), date(2026, 10, 30)]
+
+
 def test_pensum_endpoint(env, free):
     client, state, _ = env
     client.app.include_router(vocab_daily.router, prefix="/api")

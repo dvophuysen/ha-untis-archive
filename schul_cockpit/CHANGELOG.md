@@ -1,3 +1,10 @@
+## 1.37.3
+
+- Vokabelpensum: Ferien und Feiertage hinter dem bekannten Stundenplan zählen nicht mehr als Lerntage, wie im Lernplan. Ein Test nach den Herbstferien verteilt seine Wörter jetzt auf die echten Schultage davor.
+- Feriennamen, die UNTIS mit verrutschten Umlauten liefert („BrÃ¼ckentag“), stehen wieder richtig da („Brückentag“).
+- Die Übersicht des Lernbegleiters ist nur noch halb so groß (die zurückgestellten Lernziele, die keine Seite zeigt, fallen weg) und lädt über den Fernzugriff schneller.
+- Lesezugang: Unterrichtsstunden nennen, ob die Integration sie als aus dem Stundenplan entfernt markiert hat (`removed_at`).
+
 ## 1.37.2
 
 - Die Familienkarte lädt deutlich schneller: Ringe, Lernplan und Ausblick rechneten das Vokabelpensum je Kind dreimal, jedes Mal über alle Einheiten; live dauerte die Seite 10 bis 15 Sekunden, auf einem Messrechner mit denselben Daten jetzt 0,15 statt 2,3 Sekunden. Auch „Heute“ und „Erledigen“ werden schneller.
