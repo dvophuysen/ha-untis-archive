@@ -6,6 +6,7 @@
   import LearningGoal from '../lib/LearningGoal.svelte';
   import { onMount, tick } from 'svelte';
   import { api, ApiError } from '../lib/api.js';
+  import { getEarly } from '../lib/prefetch.js';
   import { isoToday, formatShortDate, daysBetween, stripUntisMetadata, carryText, localDay } from '../lib/format.js';
   import { splitTasks } from '../lib/dayDashboard.js';
   import { dayPhase, mergeLessons, held, lessonOver } from '../lib/dayPhase.js';
@@ -29,19 +30,24 @@
   let showDone = $state(false), message = $state(''), bag = $state(null), todayBag = $state(null);
   let focusBusy = $state(false), celebrate = $state(false);
   let paperId = $state(null), stepBusy = $state(''), stepError = $state('');
-  let request = 0;
+  let request = 0, loadedAt = 0;
+  // Die mit /today gelieferte Tasche gilt nur frisch; springt die Seite erst
+  // Stunden später auf „nach der Schule“, holt die Packliste sie selbst.
+  const freshBag = (b) => (Date.now() - loadedAt < 60000 ? b : null);
 
   async function load(reset = false) {
     if (!accountId) return;
     const id = accountId, ticket = ++request;
     if (reset) { data = null; tasks = []; plan = null; editing = null; paperId = null; stepError = ''; showDone = false; message = ''; bag = null; todayBag = null; loading = true; }
     error = ''; planError = '';
+    // Beim ersten Aufbau kann die Antwort schon mit /api/me gestartet sein (prefetch.js).
+    const get = reset ? getEarly : api.get;
     const results = await Promise.allSettled([
-      api.get(`/api/accounts/${id}/today`), api.get(`/api/accounts/${id}/tasks?recent_done_days=14`), api.get(`/api/accounts/${id}/plan?compact=1`),
+      get(`/api/accounts/${id}/today`), get(`/api/accounts/${id}/tasks?recent_done_days=14`), get(`/api/accounts/${id}/plan?compact=1`),
     ]);
     if (ticket !== request || id !== accountId) return;
     const [day, work, learning] = results;
-    if (day.status === 'fulfilled') { data = { ...day.value, lessons: (day.value.lessons ?? []).map(l => ({ ...l, date: l.date || day.value.date })) }; }
+    if (day.status === 'fulfilled') { loadedAt = Date.now(); data = { ...day.value, lessons: (day.value.lessons ?? []).map(l => ({ ...l, date: l.date || day.value.date })) }; }
     else error = 'Dein Stundenplan konnte nicht aktualisiert werden.';
     if (work.status === 'fulfilled') tasks = work.value?.tasks ?? [];
     else error += ' Deine Aufgaben konnten nicht aktualisiert werden.';
@@ -149,7 +155,7 @@
     void done;
     if (!accountId) { gains = null; return; }
     const id = accountId;
-    api.get(`/api/accounts/${id}/rewards`).then((r) => { if (id === accountId && r?.streak) gains = r; }).catch(() => {});
+    getEarly(`/api/accounts/${id}/rewards`).then((r) => { if (id === accountId && r?.streak) gains = r; }).catch(() => {});
   });
   // Gefeiert wird nur, wenn das Kind selbst die App benutzt, nie beim Mitlesen.
   const kidHere = $derived(!actsAsParent(appState.me) && view.mode !== 'mirror');
@@ -338,7 +344,7 @@
     {#if phase === 'vor'}
       <section class="sec" data-section="tasche">
         <h3>Dabei? <small>{todayBag?.packed ? '✓ alles drin' : 'Tasche für heute'}</small></h3>
-        <PackingChecklist {accountId} schoolDay={day} variant="grid" onstatus={(s) => (todayBag = s)} />
+        <PackingChecklist {accountId} schoolDay={day} variant="grid" initial={freshBag(data.today_bag)} onstatus={(s) => (todayBag = s)} />
       </section>
     {/if}
     {#if phase === 'in' && notedToday.length}
@@ -387,7 +393,7 @@
     </section>
     <section class="sec" id="s-tasche" data-section="tasche">
       {#if finished['s-tasche']}<button class="fold-head" onclick={() => setOpen('s-tasche', folded('s-tasche'))} aria-expanded={!folded('s-tasche')}><span>✓ Tasche für {WEEKDAYS[new Date(nextSchoolDay + 'T12:00:00').getDay()]}</span><small>{bag?.packed ? 'alles drin' : 'antippen, wenn drin'} {folded('s-tasche') ? '▸' : '▾'}</small></button>{:else}<h3>Tasche für {WEEKDAYS[new Date(nextSchoolDay + 'T12:00:00').getDay()]} <small>{bag?.packed ? 'alles drin' : 'antippen, wenn drin'}</small></h3>{/if}
-      <div class:hidden-fold={folded('s-tasche')}><PackingChecklist {accountId} schoolDay={nextSchoolDay} variant="grid" onstatus={(s) => (bag = s)} /></div>
+      <div class:hidden-fold={folded('s-tasche')}><PackingChecklist {accountId} schoolDay={nextSchoolDay} variant="grid" initial={freshBag(data.bag)} onstatus={(s) => (bag = s)} /></div>
     </section>
     {#if endedLessons.length || fbLessons.length || backlogCount}
       <section class="sec" id="s-stunden" data-section="rueckmelden">

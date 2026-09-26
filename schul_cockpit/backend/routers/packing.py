@@ -34,6 +34,12 @@ def can_write(user, account_id):
 
 @router.get('/accounts/{account_id}/packing/{school_day}')
 def get_packing(account_id: int, school_day: date, user: CurrentUser = Depends(get_current_user)):
+    return packing_view(account_id, school_day, user)
+
+
+def packing_view(account_id, school_day, user):
+    """Die Tasche eines Tages, wie GET sie liefert. „Heute“ bringt sie mit,
+    damit die Startseite ohne eigenen Aufruf dafür steht."""
     access(user, account_id)
     check_day(school_day)
     items, fingerprint, schedule = packing_plan(account_id, school_day)

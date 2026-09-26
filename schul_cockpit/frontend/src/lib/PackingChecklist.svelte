@@ -1,16 +1,21 @@
 <script>
   import {subjectStyle} from './subjectStyle.js';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { api } from './api.js';
   // variant „grid“ (D171): die Fächer als Kacheln zum Abhaken, für die Tasche
   // von morgen nach Schulschluss. onstatus meldet den Stand an die Startseite.
-  let { accountId, schoolDay, variant = 'schedule', onstatus = null } = $props();
+  // initial: dieselbe Antwort wie GET …/packing/{Tag}, von „Heute“ mitgeliefert;
+  // passt sie zu Kind und Tag, entfällt der erste Aufruf. Danach wie bisher.
+  let { accountId, schoolDay, variant = 'schedule', onstatus = null, initial = null } = $props();
   let data = $state(null), error = $state(''), loading = $state(true), busy = $state(false);
   let request = 0;
+  const fits = (r, account, day) => !!r && r.account_id === account && r.school_day === day && Array.isArray(r.items) && Array.isArray(r.schedule);
   async function load(reset = false) {
     const account = accountId, day = schoolDay, ticket = ++request;
     if (reset) { data = null; busy = false; }
     if (!account || !day) { loading = false; return; }
+    const seed = reset ? untrack(() => (fits(initial, account, day) ? initial : null)) : null;
+    if (seed) { data = seed; error = ''; loading = false; return; }
     loading = true; error = '';
     try {
       const result = await api.get(`/api/accounts/${account}/packing/${day}`);

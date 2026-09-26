@@ -3,6 +3,7 @@
 import { api, ApiError, onUnauthorized } from './api.js';
 import { resetProfile } from './profile.svelte.js';
 import { forgetTodo } from './parentTodo.svelte.js';
+import { forgetPrefetch } from './prefetch.js';
 
 export const appState = $state({
   loading: true,
@@ -42,6 +43,8 @@ export async function loadMe() {
     }
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
+      // Vorab geholte Antworten gehörten zur alten Anmeldung.
+      forgetPrefetch();
       appState.needsLogin = true;
       appState.me = null;
     } else {
@@ -63,6 +66,7 @@ onUnauthorized(() => {
 export async function logout() {
   try { await api.post('/api/auth/logout'); } catch (_) { /* ignore */ }
   appState.activeAccountId = null;
+  forgetPrefetch();
   resetProfile();
   forgetTodo();
   await loadMe();

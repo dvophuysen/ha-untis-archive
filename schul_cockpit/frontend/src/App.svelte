@@ -39,6 +39,7 @@
   import { api } from './lib/api.js';
   import { startUsagePing } from './lib/usagePing.js';
   import { jumpTo, sectionParam } from './lib/jump.js';
+  import { prefetch, knownAccount, todayPaths } from './lib/prefetch.js';
 
   // Eine Adresse mit „%“ im Namen ließ decodeURIComponent werfen: Die Seite blieb leer.
   function decodePart(value) {
@@ -120,6 +121,12 @@
 
   onMount(() => {
     loadMe();
+    // Kindergerät auf „Heute“ mit bekanntem Kind: die Daten gleich mit /api/me holen.
+    // Passt es danach nicht (anderes Kind, Elternhülle, Anmeldung), verfällt die Antwort still.
+    if (route.name === 'today' && lastShell() === 'kid') {
+      const known = (() => { try { return knownAccount(); } catch { return null; } })();
+      if (known) prefetch(todayPaths(known));
+    }
     const handler = () => {
       route = parseHash();
       // Zurück aus dem Mitlesen (auch mit der Zurück-Geste): Landet man wieder

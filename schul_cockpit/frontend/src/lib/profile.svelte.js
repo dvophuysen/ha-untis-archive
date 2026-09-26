@@ -1,5 +1,6 @@
 // Gestaltung je Kind (D176): Akzentfarbe, Profilbild, Hell/Dunkel, Dichte, Freude.
 import { api } from './api.js';
+import { getEarly } from './prefetch.js';
 
 export const COLORS = [
   ['petrol', '#176b72', 'Petrol'], ['kobalt', '#3056d3', 'Kobalt'], ['glut', '#c2410c', 'Glut'], ['beere', '#b3265e', 'Beere'],
@@ -17,7 +18,7 @@ export async function loadProfile(accountId) {
   if (!accountId) return;
   wanted = accountId;
   try {
-    const prefs = await api.get(`/api/accounts/${accountId}/profile`);
+    const prefs = await getEarly(`/api/accounts/${accountId}/profile`);
     if (wanted !== accountId) return;
     profile.accountId = accountId;
     profile.prefs = { ...DEFAULTS, ...prefs };
