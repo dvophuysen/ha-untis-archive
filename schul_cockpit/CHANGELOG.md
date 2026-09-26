@@ -1,3 +1,8 @@
+## 1.42.2
+
+- Probearbeit: Der Stoff kommt aus dem ganzen Buchkapitel der Arbeit, nicht nur aus den Seiten, die im Unterricht genannt wurden. Vorher fehlten dadurch ganze Abschnitte, etwa die Äquivalenzumformungen. Die Themen werden nach dem Umfang ihrer Abschnitte gewichtet.
+- Gelingt der erste Entwurf einer Übungsarbeit nicht, entsteht sie ein zweites Mal, statt mit einer Fehlermeldung abzubrechen.
+
 ## 1.42.1
 
 - Probearbeit wie eine echte Arbeit: Jede Aufgabe gehört zu einem bestimmten Abschnitt des Schulbuchs, sodass jeder Abschnitt vorkommt. Punkte und Zeit werden nachgeprüft (je Aufgabe nicht zu viele Punkte, insgesamt passend zur Zeit); liegt eine Arbeit daneben, entsteht sie neu.

@@ -233,6 +233,12 @@ def result_of(points: float, most: float, uncertain: bool) -> str:
 _MODEL_PAGES = re.compile(r"check-?up|vermischt|sichern|vernetzen|training|teste dich|selbsttest|wiederholen", re.I)
 
 
+def _stems(text: str) -> set[str]:
+    """Wortanfänge (fünf Buchstaben) der längeren Wörter: „umformen“ trifft
+    „Äquivalenzumformungen“."""
+    return {w[:5] for w in re.findall(r"[a-zäöüß]{5,}", text.lower())}
+
+
 def topic_pages(topic: dict) -> set[int]:
     out = set()
     for place in topic.get("places") or []:
@@ -261,7 +267,12 @@ def stoff(account_id: int, subject: str, topics: list[dict], exam_date: str | No
         lo, hi = c.get("start_page") or 0, c.get("end_page") or c.get("start_page") or 0
         return any(lo <= p <= hi for p in pages)
     since = (date.fromisoformat(end) - timedelta(days=70)).isoformat()
-    picked = [c for c in chapters if overlaps(c)] if pages else [c for c in chapters if since <= (c.get("first_date") or "") <= end]
+    hit = [c for c in chapters if overlaps(c)] if pages else [c for c in chapters if since <= (c.get("first_date") or "") <= end]
+    # Ein angeschnittenes Kapitel gehört ganz dazu (wie exam_scope): Die Themen
+    # nennen oft nur die Seite aus dem Unterricht, die Arbeit prüft das Kapitel.
+    root = lambda c: (c.get("part_label") or "", str(c.get("number") or "").split(".")[0])  # noqa: E731
+    roots = {root(c) for c in hit}
+    picked = [c for c in chapters if root(c) in roots]
     numbers = {str(c.get("number")) for c in picked}
     # Die feinste Gliederung: ein Kapitel nur, wenn keiner seiner Abschnitte dabei ist.
     leaves = [c for c in picked if not any(n != str(c.get("number")) and n.startswith(f"{c.get('number')}.") for n in numbers)]
@@ -296,6 +307,19 @@ def stoff(account_id: int, subject: str, topics: list[dict], exam_date: str | No
                   if mc.same_subject(n["subject_name"], subject) and start <= n["date"] <= end and n["text"]]
     except Exception:
         notice = []
+    # Abschnitte ohne Seitentreffer: zum Thema mit den passenden Stichwörtern,
+    # sonst zu dem mit den wenigsten Abschnitten.
+    ids = [t["id"] for t in topics if t.get("id") is not None]
+    if ids:
+        stems = {t["id"]: _stems(t.get("title") or "") for t in topics if t.get("id") is not None}
+        common = set.intersection(*stems.values()) if len(stems) > 1 else set()
+        for sec in sections:
+            if any(sec["abschnitt"] == x["abschnitt"] for v in by_topic.values() for x in v):
+                continue
+            words = (sec["abschnitt"] + " " + " ".join(sec["inhalt"])).lower()
+            score = {i: sum(1 for w in stems[i] - common if w in words) for i in ids}
+            best = max(ids, key=lambda i: (score[i], -len(by_topic.get(i, []))))
+            by_topic.setdefault(best, []).append({"abschnitt": sec["abschnitt"], "seiten": sec["seiten"], "umfang": sec["umfang_seiten"]})
     out = {}
     if by_topic:
         out["_je_thema"] = by_topic  # intern: für die Zuordnung der Plätze, nicht für das Modell
@@ -308,13 +332,29 @@ def stoff(account_id: int, subject: str, topics: list[dict], exam_date: str | No
     return out
 
 
+def section_weights(by_topic: dict[int, list[dict]]) -> dict[int, float]:
+    """Umfang je Thema aus seinen Abschnitten; ein Abschnitt, den mehrere Themen
+    teilen, zählt für jedes anteilig."""
+    share: dict[str, int] = {}
+    for secs in by_topic.values():
+        for x in secs:
+            share[x["abschnitt"]] = share.get(x["abschnitt"], 0) + 1
+    return {t: sum(x["umfang"] / share[x["abschnitt"]] for x in secs) for t, secs in by_topic.items()}
+
+
 def assign_sections(plan: list[dict], by_topic: dict[int, list[dict]]) -> list[str | None]:
     """Jedem Platz einer Probearbeit einen Abschnitt seines Themas geben, damit
     jeder Abschnitt vorkommt, größere zuerst und öfter (D220)."""
     used: dict[int, int] = {}
+    share: dict[str, int] = {}
+    for v in by_topic.values():
+        for x in v:
+            share[x["abschnitt"]] = share.get(x["abschnitt"], 0) + 1
     out = []
     for p in plan:
-        secs = sorted(by_topic.get(p["topic_id"]) or [], key=lambda x: -x["umfang"])
+        own = by_topic.get(p["topic_id"]) or []
+        # Eigene Abschnitte zuerst; einen geteilten deckt sonst das andere Thema ab.
+        secs = sorted([x for x in own if share[x["abschnitt"]] == 1] or own, key=lambda x: -x["umfang"])
         if not secs:
             out.append(None)
             continue

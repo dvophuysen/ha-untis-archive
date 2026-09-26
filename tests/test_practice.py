@@ -515,6 +515,17 @@ def test_the_probe_gets_the_book_sections_model_pages_and_the_teachers_list(monk
     assert got["abschnitte"][0]["umfang_seiten"] == 8 and got["seiten_wie_eine_arbeit"] == [32, 34]
     assert got["themenliste_lehrkraft"] == ["Themen: Gleichungen aufstellen, Probieren, Äquivalenzumformungen"]
     assert pr.stoff(1, "Mathematik", [], "2026-09-28")["abschnitte"][0]["abschnitt"].startswith("1.1"), "ohne Seiten: die Kapitel der letzten Wochen"
+    # Wie live: Die Themen kennen nur die im Unterricht genannte Seite 18. Das
+    # angeschnittene Kapitel gehört ganz dazu; Abschnitte ohne Seitentreffer
+    # gehen nach Stichwörtern an ein Thema.
+    chapters.append({"number": "1.3", "title": "Gleichungen lösen mit Äquivalenzumformungen", "start_page": 25, "end_page": 32,
+                     "first_date": "2026-09-08", "page_index": idx((25, "Gleichungen lösen mit Äquivalenzumformungen"))})
+    live = [{"id": 11, "title": "Gleichungen aufstellen, umformen und lösen", "places": [{"label": "Buch", "pages": [18]}]},
+            {"id": 12, "title": "Wertetabellen, Graphen und grafisches Lösen von Gleichungen", "places": [{"label": "Buch", "pages": [18]}]}]
+    got = pr.stoff(1, "Mathematik", live, "2026-09-28")
+    assert [x["abschnitt"][:3] for x in got["abschnitte"]] == ["1.1", "1.2", "1.3"]
+    mine = {t: [x["abschnitt"][:3] for x in v] for t, v in got["_je_thema"].items()}
+    assert mine == {11: ["1.2", "1.1", "1.3"], 12: ["1.2"]}
 
 
 def test_each_probe_place_gets_a_book_section_and_odd_points_are_found():
@@ -534,3 +545,14 @@ def test_each_probe_place_gets_a_book_section_and_odd_points_are_found():
     got = pr.paper_issues(bad, 45, "probe")
     assert got[0].startswith("Aufgabe 1 hat 13 Punkte") and got[1].startswith("Aufgabe 2 hat 12") and "Zusammen 54 Punkte" in got[2]
     assert pr.paper_issues([{**t, "minutes": 2} for t in good], 45, "probe")[-1] == "Die Minuten der Aufgaben ergeben 12, die Arbeit hat 45."
+
+
+def test_topics_are_weighted_by_their_sections_and_take_their_own_first():
+    by_topic = {11: [{"abschnitt": "1.2", "seiten": "S. 18–24", "umfang": 7}, {"abschnitt": "1.1", "seiten": "S. 10–17", "umfang": 8},
+                     {"abschnitt": "1.3", "seiten": "S. 25–32", "umfang": 8}],
+                12: [{"abschnitt": "1.2", "seiten": "S. 18–24", "umfang": 7}]}
+    assert pr.section_weights(by_topic) == {11: 19.5, 12: 3.5}
+    plan = pr.slots("probe", _rows(12)[10:], weights=pr.section_weights(by_topic))
+    got = [(p["topic_id"], s) for p, s in zip(plan, pr.assign_sections(plan, by_topic))]
+    assert sorted(got) == [(11, "1.1 (S. 10–17)"), (11, "1.1 (S. 10–17)"), (11, "1.3 (S. 25–32)"), (11, "1.3 (S. 25–32)"),
+                           (12, "1.2 (S. 18–24)"), (12, "1.2 (S. 18–24)")]

@@ -163,9 +163,18 @@ async def create_paper(account_id: int, body: PaperIn, user: CurrentUser = Depen
         raise HTTPException(403, "KI im Lernrahmen aktivieren.")
     rows = pr.raster(account_id, body.exam_key)["topics"]
     full = {t["id"]: t for t in pr.topics(account_id, body.exam_key)}
-    # Die Probearbeit gewichtet die Themen nach ihrem Umfang im Buch (D220).
-    weights = {tid: len(pr.topic_pages(t)) for tid, t in full.items()}
-    plan = pr.slots(body.format, rows, body.topic_ids, body.level, weights)
+    # Der Stoff der echten Arbeit (D220): Abschnitte des Buchs, Seiten im Stil
+    # einer Arbeit, die Themenliste der Lehrkraft.
+    try:
+        stoff = pr.stoff(account_id, info["subject"], list(full.values()), info.get("date"))
+    except Exception:
+        _LOG.warning("Stoff der Arbeit nicht lesbar", exc_info=True)
+        stoff = {}
+    by_topic = stoff.pop("_je_thema", {})
+    # Die Probearbeit gewichtet die Themen nach ihrem Umfang im Buch (D220):
+    # nach ihren Abschnitten, ein geteilter Abschnitt zählt anteilig.
+    plan = pr.slots(body.format, rows, body.topic_ids, body.level, pr.section_weights(by_topic) or
+                    {tid: len(pr.topic_pages(t)) for tid, t in full.items()})
     if not plan:
         raise HTTPException(422, "Für diese Arbeit sind noch keine Themen bekannt.")
     fmt = pr.FORMATS[body.format]
@@ -181,21 +190,14 @@ async def create_paper(account_id: int, body: PaperIn, user: CurrentUser = Depen
     places = [{"nr": i + 1, "thema": full[p["topic_id"]]["title"], "beschreibung": full[p["topic_id"]]["detail"],
                "stellen": full[p["topic_id"]]["places_label"], "afb": p["afb"], "bereich": pr.AFB_NAMES[p["afb"]]}
               for i, p in enumerate(plan)]
-    # Der Stoff der echten Arbeit (D220): Abschnitte des Buchs, Seiten im Stil
-    # einer Arbeit, die Themenliste der Lehrkraft. Bei der Probearbeit bekommt
-    # jeder Platz einen Abschnitt, damit jeder vorkommt.
-    try:
-        stoff = pr.stoff(account_id, info["subject"], [full[t] for t in used], info.get("date"))
-    except Exception:
-        _LOG.warning("Stoff der Arbeit nicht lesbar", exc_info=True)
-        stoff = {}
-    by_topic = stoff.pop("_je_thema", {})
+    # Bei der Probearbeit bekommt jeder Platz einen Abschnitt, damit jeder vorkommt.
     if body.format == "probe" and by_topic:
         for place, sec in zip(places, pr.assign_sections(plan, by_topic)):
             if sec:
                 place["abschnitt"] = sec
-    _LOG.info("Übungsarbeit %s: Abschnitte %s, Themenliste %s", body.format,
-              [x["abschnitt"] for x in stoff.get("abschnitte", [])], bool(stoff.get("themenliste_lehrkraft")))
+    _LOG.info("Übungsarbeit %s: Abschnitte %s, Themenliste %s, Plätze %s", body.format,
+              [x["abschnitt"] for x in stoff.get("abschnitte", [])], bool(stoff.get("themenliste_lehrkraft")),
+              [(p["topic_id"], p["afb"], pl.get("abschnitt", "")[:4]) for p, pl in zip(plan, places)])
     # Abbildungen der Seiten zu den Themen (D198): eine Aufgabe darf eine davon mitdrucken.
     from .. import figures, page_figures
     figures_on = {}
@@ -237,23 +239,29 @@ async def create_paper(account_id: int, body: PaperIn, user: CurrentUser = Depen
         "Klar formuliert, ohne Platzhalter außer Lücken zum Ausfüllen; Zahlen so gewählt, dass Zeichnungen auf Papier gelingen (Schnittpunkte im gezeichneten Bereich). "
         "solution vollständig und korrekt, jede Zahl nachgerechnet; criteria nennt die Teilpunkte einzeln mit Punktzahl, z. B. „1 P Ansatz; 2 P Rechnung; 1 P Antwortsatz“, "
         "und die Teilpunkte ergeben zusammen genau points. Eine Abbildung zeigt genau die Terme, Zahlen und Beschriftungen der Aufgabe. "
-        "Keine Buchstellen, Bilder oder Quellen erfinden. Kein Versprechen, dass dies der echte Klausurstoff sei. Nur JSON: "
-        + json.dumps(PaperPack.model_json_schema()))
+        "Keine Buchstellen, Bilder oder Quellen erfinden. Kein Versprechen, dass dies der echte Klausurstoff sei. ")
+    schema = "Nur JSON: " + json.dumps(PaperPack.model_json_schema())
     note = ""
     for attempt in range(2):
-        raw, _, _ = await ai.complete(account_id, "exam_create", instruction + note, context, max_output=12000)
+        # Der Hinweis steht vor dem Schema: dahinter las das Modell ihn als Teil der Ausgabe.
+        raw, _, _ = await ai.complete(account_id, "exam_create", instruction + note + schema, context, max_output=12000)
         try:
             pack = PaperPack.model_validate_json(raw)
             tasks = sorted(pack.tasks, key=lambda t: t.slot)
             if [t.slot for t in tasks] != list(range(1, len(plan) + 1)):
-                raise ValueError("slots")
+                raise ValueError(f"Plätze {[t.slot for t in tasks]} statt 1 bis {len(plan)}")
             if len({t.prompt for t in tasks}) != len(tasks):
-                raise ValueError("duplicate")
+                raise ValueError("zwei gleiche Aufgaben")
             for t in tasks:
                 if t.figur:
                     figures.validate(t.figur)  # eine ungültige Zeichnung heißt: neu erstellen (D197)
-        except (ValueError, ValidationError):
-            raise HTTPException(502, "Die Übungsarbeit ist nicht vollständig geworden. Bitte noch einmal erstellen.") from None
+        except (ValueError, ValidationError) as exc:
+            why = str(exc).splitlines()[0][:300]
+            _LOG.warning("Übungsarbeit unvollständig (Versuch %s): %s", attempt + 1, why)
+            if attempt:
+                raise HTTPException(502, "Die Übungsarbeit ist nicht vollständig geworden. Bitte noch einmal erstellen.") from None
+            note = f" WICHTIG, beim ersten Versuch unbrauchbar ({why}): genau nach dem Schema antworten. "
+            continue
         # Wie eine echte Arbeit: Punkte und Zeit (D220). Einmal neu, dann gut.
         off = pr.paper_issues([{**t.model_dump(), "afb": p["afb"]} for t, p in zip(tasks, plan)], fmt["minutes"], body.format)
         if not off or attempt:
