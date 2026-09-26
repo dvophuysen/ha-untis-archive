@@ -17,7 +17,7 @@ from .. import mentor_context as mc
 from .. import mentor_demo as demo_data
 from .. import exam_scope
 from .. import learning_plan as lp
-from ..grading_consensus import settle
+from ..grading_consensus import diverge, settle, settle_exact
 from ..feedback import Detail,TASK_RULES,QUALITY_RULES,ManualIn,SuggestIn,apply_manual,balance,loss_summary
 from .learning import access
 from .mentor import Task
@@ -340,11 +340,12 @@ async def grade_next(account_id:int,aid:int,user:CurrentUser=Depends(get_current
             # Zwei unabhängige Durchgänge, bei Abweichung oder Unleserlichem ein dritter;
             # es zählt nur, worin zwei übereinstimmen (D202).
             passes=[g for g in await asyncio.gather(*[_grade_pass(account_id,instruction,context,images,task['points']) for _ in range(2)]) if g]
-            if len(passes)<2 or settle(passes,task['points'])['uncertain']:
+            # Uneinig, auch um einen halben Punkt: ein dritter Durchgang, dann zählt der mittlere (D217).
+            if len(passes)<2 or settle(passes,task['points'])['uncertain'] or diverge(passes):
                 third=await _grade_pass(account_id,instruction,context,images,task['points'],effort='medium')
                 if third:passes.append(third)
             if len(passes)<2:raise HTTPException(502,'Diese Bewertung ist noch nicht verlässlich. Die übrigen Ergebnisse bleiben gespeichert.')
-            result={**balance(settle(passes,task['points']),task['points']),'passes':len(passes)}
+            result={**balance(settle_exact(passes,task['points']),task['points']),'passes':len(passes)}
             flagged=[g for g in passes if getattr(g,'loesung_falsch',False)]
             if flagged or hints:
                 # Fehler der Musterlösung an der Aufgabe festhalten (D217).

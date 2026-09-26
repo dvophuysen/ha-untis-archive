@@ -153,6 +153,16 @@ async def lifespan(app: FastAPI):
     from .db import webapp_conn
     with __import__("contextlib").closing(webapp_conn()) as c:
         c.execute("UPDATE mentor_exam_attempts SET status='submitted' WHERE status='grading'")
+    # Stufen, die nach einer Berichtigung nicht mehr zu den Antworten passen (D218).
+    try:
+        from . import lernstand
+        with __import__("contextlib").closing(webapp_conn()) as c:
+            healed = lernstand.heal(c)
+            c.commit()
+        if healed:
+            _LOGGER.info("%s Lernstufe(n) nach Berichtigung neu abgelesen", healed)
+    except Exception:
+        _LOGGER.warning("Lernstufen nicht geprüft", exc_info=True)
     # Unsicher gelesene Auswertungen zählen nie (D202): ältere einmal zurückstellen.
     try:
         from .routers.practice import hold_uncertain

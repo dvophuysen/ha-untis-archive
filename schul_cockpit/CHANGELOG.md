@@ -1,3 +1,9 @@
+## 1.40.1
+
+- Zwei Auswertungen vom 26.09. nachgerechnet und berichtigt, ohne Handkorrektur: ein Kurztest (8 statt 8,5 von 10, der Schnittpunkt fehlte auf dem Blatt) und ein Einstiegstest (16 statt 19,5 von 26: verlangte Erklärung, Kürzen und Rechnung fehlten). Die Begründung jeder berichtigten Aufgabe sagt, was sich geändert hat; Lernstand und Raster rechnen mit den neuen Punkten.
+- Eine Probearbeit, die als erste Arbeit geschrieben wurde, zählt im Tagesplan als Einstieg. Der Schritt „Probearbeit“ bleibt offen, bis nach dem Üben eine weitere geschrieben ist.
+- Genauer bewerten: Sind sich zwei Auswertungen auch nur um einen halben Punkt uneinig, kommt eine dritte dazu, und es zählt eine echte Bewertung mit ihrer eigenen Begründung statt eines Mittelwerts. Punkte gibt es Kriterium für Kriterium; fehlt eine verlangte Rechnung, Erklärung oder das Kürzen, gibt es dafür nichts.
+
 ## 1.40.0
 
 - Qualitätssicherung der Musterlösungen: Jede neue Übungsarbeit, jeder Kurztest und jede Übungsklausur des Lernbegleiters wird geprüft, bevor das Kind sie bekommt. Gleichungen rechnet die App selbst exakt nach; zusätzlich löst ein zweiter, unabhängiger Durchgang jede Aufgabe selbst und vergleicht mit Musterlösung und Punktkriterien. Fehler werden berichtigt und noch einmal geprüft; bleibt ein Zweifel, entsteht keine Arbeit, das Kind wird gebeten, neu zu erstellen.

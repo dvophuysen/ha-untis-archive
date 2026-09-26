@@ -1543,3 +1543,60 @@ WHERE account_id=1 AND id=5 AND json_extract(feedback_json,'$."0".points')=9.0
 
 
 
+
+# Einmalig (D218): Zwei Auswertungen vom 26.09.2026 nachgerechnet und auf
+# Wunsch der Eltern ohne Handkorrektur berichtigt. Konto 1, Versuch 6
+# (Kurztest Graphen): Aufgabe 1 gab 2,5 statt 2 Punkte, der Schnittpunkt fehlt
+# auf dem Blatt (8 statt 8,5 von 10). Konto 2, Versuch 4 (Einstiegstest
+# Brüche): Aufgabe 2 3,5 Punkte für einen 3-Punkte-Teil, Aufgabe 3 volle Punkte
+# ohne verlangte Erklärung und Kürzen, Aufgabe 4 volle Punkte für c) ohne
+# Rechnung (16 statt 19,5 von 26). Punkte im Lernstand mit; die Stufen der
+# Themen liest der Start neu ab (topic_recheck).
+_MIGRATIONS.append(("fix_paper_d218_nachgerechnet", """
+CREATE TABLE IF NOT EXISTS topic_recheck (topic_id INTEGER PRIMARY KEY);
+UPDATE mentor_exam_attempts SET feedback_json=json_set(feedback_json,
+    '$."0".points', 2.0,
+    '$."0".earned', json('[{"text": "Tabelle vollständig und richtig ausgefüllt", "points": 1.0}, {"text": "Lösung x = 2 richtig bestimmt (mit Rechnung)", "points": 1.0}]'),
+    '$."0".lost', json('[{"points": 1.0, "kind": "unvollstaendig", "why": "Der Schnittpunkt S(2|4) ist nicht hingeschrieben. Gefragt war S( ___ | ___ ); aus der Tabelle ablesbar reicht nicht.", "fix": "Bei x = 2 sind beide Werte 4, also S(2|4) eintragen und dann x = 2 angeben."}]'),
+    '$."0".rationale', 'Tabelle vollständig und richtig, x = 2 richtig gerechnet. Der Schnittpunkt S(2|4) steht nicht auf dem Blatt: 2 von 3 Punkten. (Berichtigt: Die erste Bewertung gab 2,5 Punkte und zog den halben Punkt fälschlich bei der Tabelle ab.)',
+    '$."0".next_step', 'Schreib bei Schnittpunkt-Aufgaben immer beide Koordinaten hin, z. B. S(2|4), bevor du x angibst.',
+    '$.losses', json('[{"kind": "unvollstaendig", "label": "Unvollständig", "points": 1.0}, {"kind": "nicht_bearbeitet", "label": "Nicht bearbeitet", "points": 1.0}]')),
+  version=version+1
+WHERE account_id=1 AND id=6 AND json_extract(feedback_json,'$."0".points')=2.5;
+INSERT OR IGNORE INTO topic_recheck(topic_id)
+  SELECT topic_id FROM topic_answers WHERE account_id=1 AND attempt_id=6 AND afb=1 AND max_points=3 AND points=2.5;
+UPDATE topic_answers SET points=2.0, result='partial'
+WHERE account_id=1 AND attempt_id=6 AND afb=1 AND max_points=3 AND points=2.5
+  AND EXISTS(SELECT 1 FROM mentor_exam_attempts WHERE id=6 AND account_id=1 AND json_extract(feedback_json,'$."0".points')=2.0);
+UPDATE mentor_exam_attempts SET feedback_json=json_set(feedback_json,
+    '$."1".points', 5.0,
+    '$."1".earned', json('[{"text": "a) richtig in 15tel umgewandelt und Summe 3 11/15", "points": 3.0}, {"text": "c) richtig addiert, Ergebnis 3", "points": 2.0}]'),
+    '$."1".lost', json('[{"points": 2.0, "kind": "rechenfehler", "why": "b) 4 3/4 − 1 5/6 ergibt 2 11/12; auf dem Blatt steht 6 14/24.", "fix": "4 3/4 = 19/4 = 57/12, 1 5/6 = 11/6 = 22/12. 57/12 − 22/12 = 35/12 = 2 11/12."}]'),
+    '$."1".rationale', 'a) und c) richtig, b) falsch: 5 von 7 Punkten. (Berichtigt: Die erste Bewertung gab für a) 3,5 Punkte, a) ist aber nur 3 Punkte wert.)',
+    '$."2".points', 4.0,
+    '$."2".earned', json('[{"text": "a) richtig auf 54stel erweitert, Summe 43/54", "points": 2.0}, {"text": "b) richtig auf 12tel erweitert, Summe 20/12 = 1 8/12", "points": 1.5}, {"text": "c) Vergleich a < b richtig", "points": 0.5}]'),
+    '$."2".lost', json('[{"points": 0.5, "kind": "rechenweg", "why": "Die Aufgabe verlangte eine kurze Erklärung, wie du den Hauptnenner gewählt hast; sie fehlt.", "fix": "Zum Beispiel: 54 ist durch 2, 9 und 27 teilbar, deshalb ist 54 der Hauptnenner."}, {"points": 0.5, "kind": "form", "why": "b) 1 8/12 ist nicht gekürzt; die Aufgabe sagt: kürze sinnvoll.", "fix": "8/12 durch 4 kürzen: 1 8/12 = 1 2/3."}]'),
+    '$."2".rationale', 'a) und b) richtig gerechnet, der Vergleich stimmt. Es fehlen die Erklärung zum Hauptnenner und das Kürzen von 1 8/12 auf 1 2/3: 4 von 5 Punkten. (Berichtigt: Die erste Bewertung gab 5 von 5, obwohl Erklärung und Kürzen fehlten.)',
+    '$."2".next_step', 'Kürze am Ende jedes Ergebnis und schreib einen Satz dazu, wie du den Hauptnenner findest.',
+    '$."2".loesung_falsch', json('true'),
+    '$."2".loesung_hinweis', 'Teil c) spricht von drei Ergebnissen a) bis c), es gibt aber nur zwei (a und b). Das war ein Fehler der Aufgabe; dein Vergleich a < b zählt.',
+    '$."3".points', 1.0,
+    '$."3".earned', json('[{"text": "c) Ergebnis 4 3/12 stimmt (gekürzt 4 1/4)", "points": 1.0}]'),
+    '$."3".lost', json('[{"points": 5.0, "kind": "nicht_bearbeitet", "why": "a) und b) sind nicht bearbeitet.", "fix": "a) 2 3/5 − 1/3 − 3/4 = 156/60 − 20/60 − 45/60 = 91/60 = 1 31/60. b) (4 1/3 + 3 3/4) + (4 1/3 − 3 3/4) = 97/12 + 7/12 = 104/12 = 8 2/3."}, {"points": 2.0, "kind": "rechenweg", "why": "c) Rechenausdruck und Rechnung fehlen, nur das Ergebnis steht da; die Aufgabe verlangte Rechnung und Ergebnis. 4 3/12 ist außerdem nicht gekürzt.", "fix": "6 5/6 − 2 7/12 = 82/12 − 31/12 = 51/12 = 4 3/12 = 4 1/4."}]'),
+    '$."3".rationale', 'a) und b) nicht bearbeitet. Bei c) stimmt das Ergebnis, aber Rechenausdruck und Rechnung fehlen: 1 von 8 Punkten. (Berichtigt: Die erste Bewertung gab für c) 3 Punkte, obwohl keine Rechnung auf dem Blatt steht.)',
+    '$.losses', json('[{"kind": "nicht_bearbeitet", "label": "Nicht bearbeitet", "points": 5.0}, {"kind": "rechenweg", "label": "Rechenweg oder Begründung fehlt", "points": 2.5}, {"kind": "rechenfehler", "label": "Rechen- oder Flüchtigkeitsfehler", "points": 2.0}, {"kind": "form", "label": "Darstellung", "points": 0.5}]')),
+  version=version+1
+WHERE account_id=2 AND id=4 AND json_extract(feedback_json,'$."1".points')=5.5
+  AND json_extract(feedback_json,'$."2".points')=5 AND json_extract(feedback_json,'$."3".points')=3.0;
+INSERT OR IGNORE INTO topic_recheck(topic_id)
+  SELECT DISTINCT topic_id FROM topic_answers WHERE account_id=2 AND attempt_id=4;
+UPDATE topic_answers SET points=5.0, result='partial'
+WHERE account_id=2 AND attempt_id=4 AND afb=1 AND max_points=7 AND points=5.5
+  AND EXISTS(SELECT 1 FROM mentor_exam_attempts WHERE id=4 AND account_id=2 AND json_extract(feedback_json,'$."1".points')=5.0);
+UPDATE topic_answers SET points=4.0, result='correct'
+WHERE account_id=2 AND attempt_id=4 AND afb=2 AND max_points=5 AND points=5
+  AND EXISTS(SELECT 1 FROM mentor_exam_attempts WHERE id=4 AND account_id=2 AND json_extract(feedback_json,'$."2".points')=4.0);
+UPDATE topic_answers SET points=1.0, result='partial'
+WHERE account_id=2 AND attempt_id=4 AND afb=2 AND max_points=8 AND points=3
+  AND EXISTS(SELECT 1 FROM mentor_exam_attempts WHERE id=4 AND account_id=2 AND json_extract(feedback_json,'$."3".points')=1.0);
+"""))

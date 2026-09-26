@@ -128,3 +128,16 @@ def test_open_papers_are_checked_at_start_and_only_solutions_change(env, monkeyp
     assert snap["solution"] == RIGHT["solution"] and snap["prompt"] == WRONG["prompt"] and snap["geprueft"]["berichtigt"]
     assert exam["solution"] == RIGHT["solution"]
     assert rows[ids[1]][0]["solution"] == WRONG["solution"], "abgegebene Arbeit: nicht angefasst"
+
+
+def test_mismatched_part_points_are_a_hint_not_a_stop(monkeypatch):
+    """Teilpunkte, die nicht zur Aufgabe passen, erfährt der Prüfer; sie halten
+    die Arbeit aber nicht auf, weil das Lesen der Kriterien irren kann (D218)."""
+    odd = {**RIGHT, "points": 7}
+    assert sc.structure_issues(odd)[0]["text"] == "Die Teilpunkte in den Kriterien ergeben 9 Punkte, die Aufgabe hat 7."
+    assert sc.structure_issues(RIGHT) == []
+    assert sc.structure_issues({"criteria": "1 P Tabelle (je Spalte insgesamt 1 P); 2 P Lösung", "points": 3}) == []
+    calls = fake_checker(monkeypatch, {"tasks": [{"nr": 1, "eigene_loesung": "…", "ok": True}]})
+    out = run(sc.assure(1, "Mathematik", [odd]))
+    assert out[0]["geprueft"]["berichtigt"] is False and len(calls) == 1
+    assert "Teilpunkte" in calls[0]["aufgaben"][0]["rechnerpruefung"][0]

@@ -512,15 +512,16 @@ def test_unsure_exam_grading_is_held_for_the_parents_and_never_counts(setup):
     client.put(B+f"/exams/attempts/{a['id']}",json={'version':0,'answers':{str(i):f'Antwort {i}' for i in range(3)}})
     client.post(B+f"/exams/attempts/{a['id']}/submit")
     contexts=[]
-    # Aufgabe 1: zwei einig. Aufgabe 2: 1 gegen 5, der dritte gibt 5. Aufgabe 3: dreimal unleserlich.
-    mock(patch,[exam_grade(4),exam_grade(5),exam_grade(1),exam_grade(5),exam_grade(5),exam_grade(0,True)],contexts)
+    # Aufgabe 1: 4 gegen 5, der dritte gibt 5 (uneinig heißt ein dritter, D218).
+    # Aufgabe 2: 1 gegen 5, der dritte gibt 5. Aufgabe 3: dreimal unleserlich.
+    mock(patch,[exam_grade(4),exam_grade(5),exam_grade(5),exam_grade(1),exam_grade(5),exam_grade(5),exam_grade(0,True)],contexts)
     r=client.post(B+f"/exams/attempts/{a['id']}/grade-next").json()
-    assert r['status']=='submitted' and r['feedback']=={'0':{'pending':True}} and len(contexts)==2,'Punkte erst, wenn alle feststehen'
+    assert r['status']=='submitted' and r['feedback']=={'0':{'pending':True}} and len(contexts)==3,'Punkte erst, wenn alle feststehen'
     with closing(db.webapp_conn()) as c:assert c.execute('SELECT COUNT(*) FROM mentor_evidence').fetchone()[0]==0
     client.post(B+f"/exams/attempts/{a['id']}/grade-next")
-    assert len(contexts)==5
+    assert len(contexts)==6
     r=client.post(B+f"/exams/attempts/{a['id']}/grade-next").json()
-    assert len(contexts)==8 and r['status']=='review'
+    assert len(contexts)==9 and r['status']=='review'
     pending={'pending':True}
     assert r['feedback']=={'0':pending,'1':pending,'2':pending,'check':{'per_task':True,'passes':3,'open':[3]}},'Kind sieht keine Punkte'
     assert client.get(B+f"/exams/attempts/{a['id']}").json()['feedback']==r['feedback']
@@ -529,7 +530,7 @@ def test_unsure_exam_grading_is_held_for_the_parents_and_never_counts(setup):
     assert client.post(B+f"/exams/attempts/{a['id']}/review",json={'points':{'2':3}}).status_code==403,'Kind prüft nicht selbst'
     state.user=parent
     seen=client.get(B+f"/exams/attempts/{a['id']}").json()
-    assert seen['feedback']['2']['uncertain'] and seen['feedback']['0']['points']==4.5
+    assert seen['feedback']['2']['uncertain'] and seen['feedback']['0']['points']==5 and seen['feedback']['0']['passes']==3
     assert seen['feedback']['1']['points']==5 and seen['feedback']['1']['passes']==3
     assert ex.review_items(1)==[{'attempt_id':a['id'],'subject':'Deutsch','title':'Kontrolle','open':[3],'passes':3}]
     from backend.routers import practice as rp
@@ -553,7 +554,7 @@ def test_unsure_exam_grading_is_held_for_the_parents_and_never_counts(setup):
     rich={**exam_grade(6),'earned':[{'text':'Alles richtig','points':6}]}
     mock(patch,[rich],contexts)
     s=client.post(B+f"/exams/attempts/{a['id']}/manual/suggest",json={'hint':'Aufgabe 1 großzügig.'}).json()
-    assert len(contexts)==3 and contexts[0]['eltern_hinweis']=='Aufgabe 1 großzügig.' and contexts[0]['bisherige_bewertung']['punkte']==4.5
+    assert len(contexts)==3 and contexts[0]['eltern_hinweis']=='Aufgabe 1 großzügig.' and contexts[0]['bisherige_bewertung']['punkte']==5
     assert s['tasks']['0']['points']==6 and s['tasks']['0']['earned'][0]['points']==6
     t=lambda p:{'points':p,'rationale':'Von uns geprüft.','next_step':'Weiter.','earned':[],'lost':[{'points':6-p,'kind':'unvollstaendig','why':'Teil fehlt.','fix':'So geht es.'}] if p<6 else [],'model':'Lösung.'}
     done=client.post(B+f"/exams/attempts/{a['id']}/manual",json={'tasks':{'0':t(6),'1':t(3),'2':t(0)}}).json()

@@ -36,6 +36,24 @@ def settle(xs: list, most: float, exclude: set[str] | None = None) -> dict:
     return {**best.model_dump(exclude=exclude), "uncertain": True, "spread": [x.points for x in sure]}
 
 
+def diverge(xs: list) -> bool:
+    """Ob sicher gelesene Durchgänge verschiedene Punkte geben (D217): Dann
+    kommt ein dritter dazu, statt zu mitteln."""
+    return len({x.points for x in xs if not x.uncertain}) > 1
+
+
+def settle_exact(xs: list, most: float, exclude: set[str] | None = None) -> dict:
+    """Wie settle, aber bei drei oder mehr einigen Durchgängen zählt der mittlere
+    echte Durchgang mit seiner eigenen Begründung, kein Mittelwert (D217). Ein
+    Mittel aus 3 und 2 Punkten ergab 2,5 mit einer Begründung, in der die Tabelle
+    nur einen halben Punkt bekam, obwohl sie stimmte."""
+    agree = agreeing(xs)
+    if len(agree) >= 3:
+        mid = sorted(agree, key=lambda x: x.points)[len(agree) // 2]
+        return {**mid.model_dump(exclude=exclude), "points": min(most, mid.points), "uncertain": False}
+    return settle(xs, most, exclude)
+
+
 def majority(votes: list[str]) -> str | None:
     """Ein Wort: richtig oder falsch, wenn mindestens zwei Durchgänge es so
     lesen; unklar oder uneinig bleibt offen (None)."""

@@ -18,7 +18,7 @@ from pydantic import Field, ValidationError
 from .. import ai_gateway as ai
 from .. import mentor_context as mc
 from .. import practice as pr
-from ..grading_consensus import settle
+from ..grading_consensus import diverge, settle, settle_exact
 from ..auth import CurrentUser, get_current_user
 from ..db import webapp_conn
 from ..learning import InputModel, now_iso, today_local
@@ -487,7 +487,7 @@ def consensus(passes: list[PaperGrade], tasks: list[dict]) -> tuple[dict[int, di
     for i, t in enumerate(tasks):
         nr = i + 1
         runs = [{x.nr: x for x in g.tasks}[nr] for g in passes]
-        final[nr] = settle(runs, t["points"], {"nr"})
+        final[nr] = settle_exact(runs, t["points"], {"nr"})
         # Hat ein Durchgang oder die Rechnerprüfung einen Fehler der Musterlösung
         # gefunden, steht das an der Aufgabe (D217).
         hints = grading_hints(t)
@@ -746,7 +746,10 @@ async def grade_paper(account_id: int, aid: int, body: TypedAnswers, user: Curre
         # ein dritter; es zählt nur, worin zwei übereinstimmen (D202).
         passes = [g for g in await asyncio.gather(*[_grade_pass(account_id, instruction, context, images, tasks) for _ in range(2)]) if g]
         final, open_nrs = consensus(passes, tasks)
-        if len(passes) < 2 or open_nrs:
+        # Uneinig, auch um einen halben Punkt: ein dritter Durchgang, dann zählt
+        # der mittlere mit seiner eigenen Begründung (D217).
+        split = any(diverge([{x.nr: x for x in g.tasks}[i + 1] for g in passes]) for i in range(len(tasks))) if len(passes) >= 2 else False
+        if len(passes) < 2 or open_nrs or split:
             third = await _grade_pass(account_id, instruction, context, images, tasks, effort="medium")
             if third:
                 passes.append(third)

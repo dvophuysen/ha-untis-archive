@@ -201,6 +201,20 @@ def refresh(c, topic_id: int, session_id: int | None = None) -> dict:
     return state
 
 
+def heal(c) -> int:
+    """Beim Start: die Themen neu ablesen, die eine Berichtigung (Migration) in
+    ``topic_recheck`` vorgemerkt hat. Die Migration ändert Punkte einer Antwort,
+    die Stufe liest nur Python ab (D218). Gibt die Zahl zurück."""
+    try:
+        ids = [r[0] for r in c.execute("SELECT topic_id FROM topic_recheck ORDER BY topic_id")]
+    except Exception:
+        return 0  # Tabelle entsteht mit der Migration
+    for tid in ids:
+        refresh(c, tid)
+        c.execute("DELETE FROM topic_recheck WHERE topic_id=?", (tid,))
+    return len(ids)
+
+
 def _answer_columns(c, table: str) -> list[str]:
     return [r[1] for r in c.execute(f"PRAGMA table_info({table})")]
 

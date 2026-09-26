@@ -6,6 +6,13 @@ PINs oder Schlüssel in diesem Dokument (D15/D68). Maßgeblicher Einstieg ist
 stehen im [CHANGELOG](../CHANGELOG.md), die Begründungen in
 [ENTSCHEIDUNGEN.md](ENTSCHEIDUNGEN.md).
 
+## Auswertungen und Qualität 26.09.2026 (1.39.x bis 1.40.1, D216–D218)
+
+- Musterlösungen werden vor der Ausgabe rechnerisch und fachlich geprüft (`solution_check.assure`, D217). Unstimmige Teilpunkte in Kriterien sind nur ein Hinweis (`structure_issues`), weil sie in 24 von 40 vorhandenen Aufgaben nicht passten; eine harte Sperre würde fast jede Arbeit aufhalten. Besser wäre, der Erzeuger schriebe Kriterien, deren Teilpunkte aufgehen (offen).
+- Berichtigungen ausgewerteter Arbeiten immer per Migration mit Vermerk in der Begründung, nie von Hand (Nutzer). Punkte in `topic_answers` mit ändern und die Themen in `topic_recheck` vormerken; der Start liest ihre Stufen neu ab (`lernstand.heal`). Muster: `fix_paper_d218_nachgerechnet`, Test in `tests/test_paper_corrections.py`.
+- Nachrechnen gegen die Fotos: Fotos über `/api/accounts/{acc}/learning/mentor/exams/attempts/{aid}/photos/{pid}` (Ingress-Sitzung) laden, Aufgabe für Aufgabe gegen die Kriterien lesen.
+- Offen zur Entscheidung: ob ein einzelner voller Einstiegstest weiterhin ein Anforderungsniveau „sicher“ macht (D192) oder erst eine zweite Aufgabe; dieselbe Absicherung für Aufgaben im Mentor-Dialog (D217).
+
 ## Ladezeiten und Vokabeln 26.09.2026 (1.37.2, 1.37.3)
 
 - Die Instanz läuft auf einem Raspberry Pi 4: rund sechsmal langsamer als die Sandbox. Messen mit einer lokalen Kopie aus dem Lesezugang: alle Datensätze je Konto exportieren (Seiten zu 250, `next_after`), `history.db` aus `storage.SCHEMA` der Komponente, `webapp.db` über `db.init_webapp_db()`, fehlende Pflichtspalten mit Platzhaltern füllen, Elternnutzer mit Verknüpfungen anlegen; dann Router direkt oder über `TestClient(app)` mit überschriebenem `get_current_user` aufrufen (`supervisor_client.get_calendar_events` durch eine leere Funktion ersetzen). Echte Daten bleiben im Scratchpad, nie im Repo.

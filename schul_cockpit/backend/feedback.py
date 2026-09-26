@@ -39,6 +39,13 @@ QUALITY_RULES = (
     "dann nicht zu Übungen, die das Kind nicht braucht. Setze in diesem Fall loesung_falsch=true und nenne in "
     "loesung_hinweis knapp den Fehler der Musterlösung. rechnerpruefung nennt, was eine Rechnerprüfung schon gefunden "
     "hat; sie irrt bei richtiger Lesart nicht. "
+    "Vergib Punkte Kriterium für Kriterium: Jeder Posten in earned gehört zu genau einem Kriterium und ist nie größer "
+    "als dessen Punkte; die Posten ergeben zusammen die Punkte der Aufgabe. Verlangt die Aufgabe eine Rechnung, einen "
+    "Rechenausdruck, eine Erklärung oder eine Begründung und fehlt sie, gibt es für dieses Kriterium keine Punkte, auch "
+    "wenn das Ergebnis stimmt; nenne das in lost. Fordert die Aufgabe ein gekürztes Ergebnis, ist ein ungekürztes nicht voll. "
+    "Wer ein Ergebnis nicht hinschreibt (etwa einen Schnittpunkt), bekommt dafür keine Punkte, auch wenn es aus einer "
+    "Tabelle ablesbar wäre. Passen die Teilpunkte der Kriterien nicht zur Punktzahl der Aufgabe, vergib anteilig "
+    "und nie mehr, als die Aufgabe hat. "
 )
 
 

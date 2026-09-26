@@ -468,9 +468,15 @@ def _fits(paper: dict, step: dict) -> bool:
 def _match_papers(steps: list[dict], papers: list[dict]) -> set[int]:
     """Welche Papier-Schritte eine ausgewertete Arbeit erledigt (Index in ``steps``).
     Erst die genau passende Arbeit (Format, Thema), dann jede übrige der Reihe
-    nach: gemessen ist gemessen, auch wenn das Kind eine andere gewählt hat."""
+    nach: gemessen ist gemessen, auch wenn das Kind eine andere gewählt hat.
+    Eine Probearbeit als erste Arbeit ist der Einstieg, nicht die Probearbeit am
+    Ende, für die geübt wird (D218)."""
     left = list(papers)
     done: set[int] = set()
+    entry = next((i for i, s in enumerate(steps) if s.get("format") == "einstieg"), None)
+    if entry is not None and left and left[0]["format"] == "probe" and not any(p["format"] == "einstieg" for p in left):
+        left.pop(0)
+        done.add(entry)
     for fit_only in (True, False):
         for i, s in enumerate(steps):
             if i in done:

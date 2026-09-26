@@ -508,3 +508,19 @@ def test_a_task_of_a_graded_paper_is_reworked_with_the_mentor(exam_env):
     # Noch einmal: dieselbe Einheit, der Auftrag kommt dazu.
     again = client.post(B + "/sessions", json={"topic_id": tid, "paper_attempt_id": 80, "paper_task": 0}).json()
     assert again["id"] == s["id"]
+
+
+def test_a_corrected_answer_gets_its_stage_read_again_at_start(env):
+    """Eine Migration berichtigt Punkte und merkt das Thema vor; beim Start liest
+    die App die Stufe neu ab (D218)."""
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO exam_topics(id,account_id,subject,exam_key,position,title,stage,reason,created_at,updated_at) "
+                  "VALUES(1,1,'Mathematik','k',1,'Brüche','sitzt','3 Aufgaben','2026-09-10T10:00:00','2026-09-10T10:00:00')")
+        c.execute("INSERT INTO topic_answers(account_id,topic_id,session_id,task_kind,result,help_used,re_explained,afb,task_form,created_at) "
+                  "VALUES(1,1,-4,'Berechne','partial',0,0,2,'','2026-09-26T12:00:00+02:00')")
+        assert lernstand.heal(c) == 0, "ohne Vormerkung bleibt alles, wie es ist"
+        c.execute("INSERT INTO topic_recheck(topic_id) VALUES(1)")
+        assert lernstand.heal(c) == 1
+        assert c.execute("SELECT stage FROM exam_topics WHERE id=1").fetchone()[0] != "sitzt"
+        assert not c.execute("SELECT 1 FROM topic_recheck").fetchone()
+        assert lernstand.heal(c) == 0

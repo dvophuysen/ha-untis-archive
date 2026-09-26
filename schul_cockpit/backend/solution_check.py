@@ -222,6 +222,22 @@ def math_issues(task: dict) -> list[dict]:
     return issues
 
 
+_CRIT_POINTS = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:P\b|Pkt\b|Punkte?\b)")
+
+
+def structure_issues(task: dict) -> list[dict]:
+    """Die Teilpunkte in den Kriterien ergeben die Punkte der Aufgabe. Zahlen in
+    Klammern („je Spalte insgesamt 1 P“) sind Erläuterung und zählen nicht."""
+    text = re.sub(r"\([^()]*\)", " ", task.get("criteria") or "")
+    found = [Fraction(m.group(1).replace(",", ".")) for m in _CRIT_POINTS.finditer(text)]
+    most = task.get("points")
+    if not found or most is None or sum(found) == Fraction(str(most)):
+        return []
+    total = sum(found)
+    shown = str(total.numerator) if total.denominator == 1 else f"{float(total):g}".replace(".", ",")
+    return [{"stelle": "Kriterien", "text": f"Die Teilpunkte in den Kriterien ergeben {shown} Punkte, die Aufgabe hat {most:g}."}]
+
+
 # ---------------------------------------------------------------- fachlich
 
 class Checked(InputModel):
@@ -276,20 +292,29 @@ async def assure(account_id: int, subject: str, tasks: list[dict]) -> list[dict]
     """Jede Musterlösung geprüft, falls nötig berichtigt und noch einmal geprüft.
     Gibt die Aufgaben mit Prüfvermerk zurück oder wirft CheckFailed."""
     out = [dict(t) for t in tasks]
-    flagged = {i: math_issues(t) for i, t in enumerate(out)}
-    flagged = {i: v for i, v in flagged.items() if v}
+    # Rechenfehler sind hart: Sie verhindern die Ausgabe, bis sie berichtigt sind.
+    # Unstimmige Teilpunkte sind nur ein Hinweis an den Prüfer: Das Lesen der
+    # Kriterien kann irren (in 24 von 40 bestehenden Aufgaben passten sie nicht,
+    # teils nur scheinbar), und die Bewertung vergibt ohnehin nie mehr, als die
+    # Aufgabe hat (D218).
+    hard = {i: v for i, t in enumerate(out) if (v := math_issues(t))}
+    soft = {i: v for i, t in enumerate(out) if (v := structure_issues(t))}
+    flagged = {i: hard.get(i, []) + soft.get(i, []) for i in set(hard) | set(soft)}
     first = await _check(account_id, subject, out, flagged)
-    redo = sorted(i for i in range(len(out)) if not first[i].ok or i in flagged)
+    redo = sorted(i for i in range(len(out)) if not first[i].ok or i in hard)
     for i in redo:
         c = first[i]
         if c.ok:  # die Rechnerprüfung fand etwas, der Prüfer nicht: nicht ausgeben
-            raise CheckFailed(f"Aufgabe {i + 1}: " + "; ".join(x["text"] for x in flagged[i]))
+            raise CheckFailed(f"Aufgabe {i + 1}: " + "; ".join(x["text"] for x in hard[i]))
         if not c.solution.strip() or not c.criteria.strip():
             raise CheckFailed(f"Aufgabe {i + 1}: {c.fehler or 'ohne Berichtigung'}")
         LOG.warning("Musterlösung berichtigt (Aufgabe %s): %s", i + 1, c.fehler)
         out[i] = {**out[i], "solution": c.solution, "criteria": c.criteria}
     if redo:
         again = {i: math_issues(out[i]) for i in redo}
+        for i in redo:
+            for x in structure_issues(out[i]):
+                LOG.warning("Teilpunkte nach Berichtigung unstimmig (Aufgabe %s): %s", i + 1, x["text"])
         if any(again.values()):
             raise CheckFailed("; ".join(x["text"] for v in again.values() for x in v))
         second = await _check(account_id, subject, [out[i] for i in redo], {})

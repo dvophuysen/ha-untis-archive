@@ -536,3 +536,20 @@ def test_weekend_vocab_counts_for_the_friday_vocab_step(world, monkeypatch):
     step = {"kind": "vocab", "key": "vocab:Latein:u1", "subject": "Latein", "target": 10}
     assert not sp._vocab_done_since(1, step, FRI, FRI)
     assert sp._vocab_done_since(1, step, FRI, SAT)
+
+
+def test_a_first_probe_is_the_entry_test_not_the_final_probe():
+    """Eine Probearbeit ganz am Anfang misst den Stand; die Probearbeit am Ende,
+    für die geübt wird, bleibt offen (D218)."""
+    steps = [{"format": "einstieg"}, {"format": "kurz", "topic_id": 11}, {"format": "kurz", "topic_id": 12},
+             {"format": "probe"}]
+    probe, k11, k12 = ({"id": 3, "format": "probe", "topics": {11, 12}}, {"id": 5, "format": "kurz", "topics": {11}},
+                       {"id": 6, "format": "kurz", "topics": {12}})
+    assert sp._match_papers(steps, [probe, k11, k12]) == {0, 1, 2}
+    later = {"id": 9, "format": "probe", "topics": {11, 12}}
+    assert sp._match_papers(steps, [probe, k11, k12, later]) == {0, 1, 2, 3}
+    # Ein echter Einstiegstest bleibt der Einstieg; eine Probearbeit danach ist die Probearbeit.
+    entry = {"id": 2, "format": "einstieg", "topics": {11, 12}}
+    assert sp._match_papers(steps, [entry, probe]) == {0, 3}
+    # Ein Kurztest als erste Arbeit bleibt der Kurztest.
+    assert sp._match_papers(steps, [k12]) == {2}
