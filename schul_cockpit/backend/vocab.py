@@ -1469,6 +1469,26 @@ def rank(state: dict, direction_stage: str) -> tuple:
     return (1 if due else order, 0 if st.get("last_result") in ("incorrect", "partial") else 1, st.get("last") or "")
 
 
+@memo(shallow=True)  # nur gelesen: unit_word_ids filtert, niemand verändert die Einträge
+def _trainable_rows(account_id: int, subject: str) -> list[dict]:
+    with closing(webapp_conn()) as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT id,unit,foreign_word,meanings_json FROM vocab_words WHERE account_id=? AND lower(subject)=lower(?) "
+            "AND hidden=0 ORDER BY page,position,id", (account_id, subject))]
+    return [w for w in rows if trainable(w)]
+
+
+def unit_word_ids(account_id: int, subject: str, unit: str) -> list[int]:
+    """Die Wörter einer Einheit wie ``cards(…, 1, "from", 100000)``, ohne Stufen
+    und Karten zu rechnen: Das Vokabelpensum braucht nur die Menge (je Einheit
+    rechnete es sonst den ganzen Trainer)."""
+    from . import vocab_catalog
+    if vocab_catalog.active(account_id, subject):
+        return [w["id"] for w in vocab_catalog.selected_words(account_id, subject, unit, "")]
+    family = unit_family(account_id, subject, unit)
+    return [w["id"] for w in _trainable_rows(account_id, subject) if w["unit"] in family]
+
+
 def cards(account_id: int, subject: str, unit: str, stage: int, direction: str, limit: int = 40,
           section: str = "", box: str = "") -> list[dict]:
     """Die Karten einer Einheit, Wackler und fällige zuerst; für Stufe 2 nur Wörter,

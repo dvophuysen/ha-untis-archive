@@ -154,6 +154,26 @@ def test_without_a_test_ten_due_reviews(env, free):
     assert vp.daily(1, MON - timedelta(days=6)) == [], "nichts fällig"
 
 
+def test_one_subject_whatever_its_spelling(env, free):
+    """Buch und Wortliste schreiben das Fach verschieden („SPANISCH“, „spanisch“).
+    Das Grundpensum zählt die fälligen Wörter der Einheit zusammen, statt die
+    Einheit je Schreibweise einmal mit einem Teil davon zu rechnen."""
+    upper = words(6, subject="SPANISCH", material=1)
+    lower = words(6, subject="spanisch", material=2)
+    for wid in upper + lower:
+        attempt(wid, MON - timedelta(days=7)); attempt(wid, MON - timedelta(days=7), hh=17)
+    items = vp.daily(1, MON)
+    assert len(items) == 1 and items[0]["due"] == 12 and items[0]["target"] == 10
+
+
+def test_unit_words_are_the_trainer_cards(env, free):
+    from backend import vocab
+    words(5, unit="Unit 3"); words(4, unit="Unit 3 A", material=2, page=201); words(3, unit="Unit 4", material=3, page=210)
+    for unit in ("Unit 3", "Unit 3 A", "Unit 4"):
+        cards = sorted(w["id"] for w in vocab.cards(1, EN, unit, 1, "from", 100000))
+        assert sorted(vocab.unit_word_ids(1, EN, unit)) == cards and cards
+
+
 def test_pensum_endpoint(env, free):
     client, state, _ = env
     client.app.include_router(vocab_daily.router, prefix="/api")

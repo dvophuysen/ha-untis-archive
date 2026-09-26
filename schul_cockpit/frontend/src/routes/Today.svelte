@@ -59,8 +59,9 @@
   onMount(() => {
     const tick = () => { const oldDay = isoAt(now); now = new Date(); if (oldDay !== isoAt(now)) load(); };
     // Beim Zurückkehren feuern visibilitychange und focus oft beide; einmal
-    // neu laden genügt (D177).
-    let lastResume = 0;
+    // neu laden genügt (D177). Das gilt auch für den Fokus gleich beim Öffnen:
+    // Die Seite lädt dann ohnehin.
+    let lastResume = Date.now();
     const resume = () => {
       if (document.hidden || Date.now() - lastResume < 3000) return;
       lastResume = Date.now(); now = new Date(); load();

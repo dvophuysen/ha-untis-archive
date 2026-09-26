@@ -193,6 +193,28 @@ def test_the_dashboard_brings_the_board_in_one_request(env, monkeypatch):
     assert "plan" not in kid
 
 
+def test_the_dashboard_computes_the_vocab_pensum_once_per_kid(env, monkeypatch):
+    """Ringe, Plan und Ausblick lesen dasselbe Vokabelpensum; ohne Merkzettel
+    rechnete die Familienkarte es je Kind dreimal (live 10–15 s)."""
+    client, state, patch = env
+    from backend.routers import dashboard
+    from backend import vocab_pensum
+
+    async def exams(*a, **kw):
+        return {"exams": []}
+    monkeypatch.setattr(dashboard, "resolve_exams", exams)
+    monkeypatch.setattr(dashboard, "account_subjects", lambda a: [])
+    quiet(monkeypatch)
+    calls = []
+    monkeypatch.setattr(vocab_pensum, "_base_entry", lambda a, d: calls.append((a, d)))
+    monkeypatch.setattr(vocab_pensum, "school_days", lambda a, first, last: [first])
+    # Wie die Ringe über Plan, Erledigt und Ausblick: dreimal dasselbe Pensum.
+    monkeypatch.setattr(fb, "rings", lambda a, t, n: [vocab_pensum.daily(a, t) for _ in range(3)] and {})
+    client.app.include_router(dashboard.router, prefix="/api")
+    assert client.get("/api/dashboard").status_code == 200
+    assert calls and len(calls) == len(set(calls)), calls
+
+
 def test_the_today_page_skips_a_day_where_everything_is_cancelled(env, monkeypatch):
     client, state, patch = env
     from datetime import timedelta

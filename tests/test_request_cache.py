@@ -77,3 +77,35 @@ def test_connections_reused_within_scope_only(env):
             raise AssertionError("am Ende des Aufrufs geschlossen")
         except Exception as exc:
             assert "closed" in str(exc)
+
+
+def test_a_background_task_started_inside_does_not_inherit_the_scope(env):
+    """asyncio kopiert den Kontext in jede neue Aufgabe. Läuft sie nach dem
+    Aufruf weiter, darf sie weder eine dort geschlossene Verbindung bekommen
+    noch aus dem Merkzettel des Aufrufs lesen."""
+    import asyncio
+    calls = []
+
+    @request_cache.memo
+    def rows():
+        calls.append(1)
+        return 1
+
+    async def later(started):
+        await started.wait()
+        rows(); rows()
+        with closing(db.webapp_conn()) as c:
+            return c.execute("SELECT 1").fetchone()[0]
+
+    async def main():
+        started = asyncio.Event()
+        with request_cache.scope():
+            rows()
+            with closing(db.webapp_conn()) as c:
+                c.execute("SELECT 1")
+            task = asyncio.get_running_loop().create_task(later(started))
+        started.set()
+        return await task
+
+    assert asyncio.run(main()) == 1
+    assert len(calls) == 3, "nach dem Aufruf ohne Merkzettel"

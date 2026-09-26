@@ -26,20 +26,40 @@ _CACHE: contextvars.ContextVar[dict | None] = contextvars.ContextVar("request_ca
 _IDLE: contextvars.ContextVar[list | None] = contextvars.ContextVar("request_cache_idle", default=None)
 
 
+class _Memo(dict):
+    closed = False
+
+
+class _Idle(list):
+    closed = False
+
+
 @contextmanager
 def scope():
-    """Ein Merkzettel für die Dauer des Blocks. Verschachtelt gilt der äußere."""
-    if _CACHE.get() is not None:
+    """Ein Merkzettel für die Dauer des Blocks. Verschachtelt gilt der äußere.
+
+    Eine Hintergrundaufgabe, die im Block startet, erbt Merkzettel und
+    Verbindungsliste (asyncio kopiert den Kontext). Nach dem Block sind beide
+    geschlossen: Die Aufgabe liest dann ohne Merkzettel und bekommt nie eine der
+    hier geschlossenen Verbindungen."""
+    current = _CACHE.get()
+    if current is not None and not current.closed:
         yield
         return
-    token, idle_token = _CACHE.set({}), _IDLE.set([])
+    cache, pool = _Memo(), _Idle()
+    token, idle_token = _CACHE.set(cache), _IDLE.set(pool)
     try:
         yield
     finally:
-        idle = _IDLE.get() or []
         _IDLE.reset(idle_token)
         _CACHE.reset(token)
-        for conn in idle:
+        cache.closed = pool.closed = True
+        cache.clear()
+        from .db import _POOL_LOCK
+        with _POOL_LOCK:
+            leftover = list(pool)
+            pool.clear()
+        for conn in leftover:
             try:
                 conn.discard()
             except Exception:  # anderer Thread: schließt der Aufräumer
@@ -48,7 +68,8 @@ def scope():
 
 def idle() -> list | None:
     """Die freien Verbindungen des laufenden Aufrufs, ohne ``scope()`` None."""
-    return _IDLE.get()
+    pool = _IDLE.get()
+    return None if pool is None or pool.closed else pool
 
 
 def forget() -> None:
@@ -56,6 +77,11 @@ def forget() -> None:
     cache = _CACHE.get()
     if cache is not None:
         cache.clear()
+
+
+def _active() -> dict | None:
+    cache = _CACHE.get()
+    return None if cache is None or cache.closed else cache
 
 
 def _shallow(value):
@@ -71,7 +97,7 @@ def memo(fn=None, *, shallow: bool = False):
 
         @functools.wraps(f)
         def inner(*args, **kwargs):
-            cache = _CACHE.get()
+            cache = _active()
             if cache is None:
                 return f(*args, **kwargs)
             key = (f.__module__, f.__qualname__, args, tuple(sorted(kwargs.items())))

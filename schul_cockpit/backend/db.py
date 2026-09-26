@@ -796,7 +796,8 @@ class _Conn(sqlite3.Connection):
         if free is not None and any(c is self for c in free):
             return  # schon zurückgelegt: zweites close()
         if free is not None and self.pool_key and self.pool_key[2] == threading.get_ident() and not self.in_transaction:
-            free.append(self)
+            with _POOL_LOCK:
+                free.append(self)
             return
         super().close()
 
@@ -804,14 +805,23 @@ class _Conn(sqlite3.Connection):
         super().close()
 
 
+# Die Kinder der Familienkarte laufen in eigenen Threads mit demselben
+# Merkzettel: Suchen und Herausnehmen darf kein anderer Thread unterbrechen,
+# sonst nähme einer den Eintrag eines anderen heraus.
+_POOL_LOCK = threading.Lock()
+
+
 def _reuse(key: tuple) -> sqlite3.Connection | None:
     from .request_cache import idle
     free = idle()
-    for i, conn in enumerate(free or []):
-        if conn.pool_key == key:
-            del free[i]
-            conn.row_factory = sqlite3.Row
-            return conn
+    if not free:
+        return None
+    with _POOL_LOCK:
+        for i, conn in enumerate(free):
+            if conn.pool_key == key:
+                del free[i]
+                conn.row_factory = sqlite3.Row
+                return conn
     return None
 
 

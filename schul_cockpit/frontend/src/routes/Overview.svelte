@@ -25,7 +25,14 @@
   let error = $state(null);
 
   let request = 0;
+  // Beim Öffnen kamen Laden und das Fokus-Ereignis gleichzeitig: zwei volle
+  // Aufrufe nebeneinander. Läuft einer, wartet der nächste nicht zusätzlich;
+  // der Fokus lädt erst nach zehn Sekunden wieder.
+  let running = false;
+  let loadedAt = 0;
   async function load() {
+    if (running) return;
+    running = true;
     const current = ++request;
     loading = !data;
     error = null;
@@ -35,6 +42,8 @@
     } catch (e) {
       if (current === request) error = e.message;
     } finally {
+      running = false;
+      loadedAt = Date.now();
       if (current === request) loading = false;
     }
   }
@@ -42,9 +51,10 @@
   $effect(() => {
     untrack(load);
     const refresh = () => { if (!document.hidden) load(); };
-    window.addEventListener('focus', refresh);
+    const onFocus = () => { if (Date.now() - loadedAt > 10000) refresh(); };
+    window.addEventListener('focus', onFocus);
     const timer = setInterval(refresh, 60000);
-    return () => { request++; clearInterval(timer); window.removeEventListener('focus', refresh); };
+    return () => { request++; clearInterval(timer); window.removeEventListener('focus', onFocus); };
   });
 
   // Wohin ein Ring der Familienkarte springt: der Abschnitt auf „Heute“ des Kindes.

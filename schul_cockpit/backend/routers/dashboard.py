@@ -15,7 +15,7 @@ from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from .. import family_board, lernstand, usage_report
+from .. import family_board, lernstand, request_cache, usage_report
 from ..auth import CurrentUser, get_current_user, linked_account_ids
 from ..view_mode import acts_as_parent
 from ..learning import today_local
@@ -165,9 +165,12 @@ async def dashboard(user: CurrentUser = Depends(get_current_user)) -> dict:
     # Geisterkarte im Dashboard. Die IDs melden wir separat, damit die
     # Oberfläche warnen kann statt still Unsinn anzuzeigen.
     stale_account_ids = [acc_id for acc_id in account_ids if acc_id not in names]
-    # Die Kinder parallel: Kalender und Karte laufen je Kind unabhängig.
-    kids = list(await asyncio.gather(*(
-        _dashboard_for_account(acc_id, names[acc_id], today) for acc_id in account_ids if acc_id in names)))
+    # Die Kinder parallel: Kalender und Karte laufen je Kind unabhängig. Ein
+    # Merkzettel für den ganzen Aufruf (wie auf „Heute“): Die Ringe lesen Plan und
+    # Vokabelpensum sonst dreimal, jedes Mal über alle Einheiten (live 10–15 s).
+    with request_cache.scope():
+        kids = list(await asyncio.gather(*(
+            _dashboard_for_account(acc_id, names[acc_id], today) for acc_id in account_ids if acc_id in names)))
     return {
         "today": today_iso,
         "kids": kids,

@@ -1,3 +1,10 @@
+## 1.37.2
+
+- Die Familienkarte lädt deutlich schneller: Ringe, Lernplan und Ausblick rechneten das Vokabelpensum je Kind dreimal, jedes Mal über alle Einheiten; live dauerte die Seite 10 bis 15 Sekunden, auf einem Messrechner mit denselben Daten jetzt 0,15 statt 2,3 Sekunden. Auch „Heute“ und „Erledigen“ werden schneller.
+- Beim Öffnen lädt die Familienkarte nur noch einmal statt zweimal gleichzeitig, „Heute“ ebenso.
+- Vokabelpensum ohne anstehenden Test: Wörter eines Fachs zählen zusammen, auch wenn Buch und Wortliste das Fach verschieden schreiben (etwa „SPANISCH“ und „spanisch“). Vorher stand dort nur ein Teil der fälligen Wörter.
+- Eine Hintergrundarbeit, die während eines Seitenaufrufs startet, bekommt nach dessen Ende keine schon geschlossene Datenbankverbindung mehr.
+
 ## 1.37.1
 
 - Lernseite und Lernbegleiter: Ein Tipp auf einen Link (etwa „Ansehen“ bei einer Übungsarbeit oder „Los“), während die Seite noch lädt, geht nicht mehr verloren, sondern wird danach ausgeführt.

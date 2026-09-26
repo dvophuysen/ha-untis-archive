@@ -172,9 +172,10 @@ def trainer_unit(account_id: int, subject: str, places: list[dict]) -> tuple[str
     return raw, raw
 
 
+@memo
 def _unit_words(account_id: int, subject: str, unit: str) -> list[int]:
     from . import vocab
-    return [w["id"] for w in vocab.cards(account_id, subject, unit, 1, "from", 100000)]
+    return vocab.unit_word_ids(account_id, subject, unit)
 
 
 def _states(account_id: int, ids: list[int], day: date) -> dict[int, dict]:
@@ -281,9 +282,16 @@ def _base_entry(account_id: int, day: date) -> dict | None:
         rows = c.execute(
             "SELECT DISTINCT w.subject,w.id FROM vocab_attempts a JOIN vocab_words w ON w.id=a.word_id "
             "WHERE a.account_id=? AND a.created_at<?", (account_id, day.isoformat())).fetchall()
+    # Ein Fach, gleich wie es geschrieben ist: Wörter aus Buch und Wortliste
+    # tragen „SPANISCH“ und „spanisch“ (alle Abfragen vergleichen ohne Groß- und
+    # Kleinschreibung). Sonst lief jede Einheit doppelt durch, jeweils mit nur
+    # einem Teil der fälligen Wörter. Name: die häufigste Schreibweise.
+    spelled: dict[str, Counter] = {}
     by_subject: dict[str, list[int]] = {}
     for subject, wid in rows:
-        by_subject.setdefault(subject, []).append(wid)
+        spelled.setdefault(subject.casefold(), Counter())[subject] += 1
+        by_subject.setdefault(subject.casefold(), []).append(wid)
+    by_subject = {max(spelled[k].items(), key=lambda kv: (kv[1], kv[0]))[0]: ids for k, ids in by_subject.items()}
     best = None
     for subject, ids in by_subject.items():
         states = _states(account_id, ids, day)
