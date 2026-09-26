@@ -68,10 +68,25 @@ async def _today(account_id: int, user) -> dict:
                     l["caught_up"] = False
                 next_block = {"date": cand_iso, "lessons": cand}
                 break
+        # Freier Tag (Wochenende, Ferien): Rückmeldungen und Ringe zeigen den
+        # Stand des letzten Schultags, wie die Lernliste (D205).
+        carry_block: dict | None = None
+        if not any(not l["is_cancelled"] and not l["was_absent"] for l in lessons):
+            try:
+                from ..study_plan import carry_day
+                carry = carry_day(account_id, today_date)
+            except Exception:
+                carry = None
+            if carry is not None:
+                carry_block = {"date": carry.isoformat(), "lessons": [
+                    l for l in lessons_for_date(conn, account_id, carry.isoformat())
+                    if not lesson_is_hidden(l, hidden)]}
     finally:
         conn.close()
 
     lesson_ids = [lesson_row["id"] for lesson_row in lessons]
+    if carry_block:
+        lesson_ids += [l["id"] for l in carry_block["lessons"]]
     checkins_by_lesson: dict[int, dict] = {}
     caught_up_lessons: set[int] = set()
     if lesson_ids:
@@ -112,9 +127,14 @@ async def _today(account_id: int, user) -> dict:
             unrated += 1
         enriched.append(lesson)
 
+    for lesson in (carry_block or {}).get("lessons", []):
+        lesson["checkin"] = checkins_by_lesson.get(lesson["id"])
+        lesson["caught_up"] = lesson["id"] in caught_up_lessons
+
     return {
         "date": today_iso,
         "lessons": enriched,
+        "carry_lessons": carry_block,
         "summary": {
             "unrated_lessons": unrated,
             "upcoming_exams_7d": len(exams),

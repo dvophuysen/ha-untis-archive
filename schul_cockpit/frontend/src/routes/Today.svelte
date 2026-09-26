@@ -11,6 +11,7 @@
   import { dayPhase, mergeLessons, held, lessonOver } from '../lib/dayPhase.js';
   import { subjectStyle } from '../lib/subjectStyle.js';
   import PackingChecklist from '../lib/PackingChecklist.svelte';
+  import DayRings from '../lib/DayRings.svelte';
   import DaySchedule from '../lib/DaySchedule.svelte';
   import QuickAdd from '../lib/QuickAdd.svelte';
   import TaskRow from '../lib/TaskRow.svelte';
@@ -72,10 +73,15 @@
   const work = $derived(splitTasks(tasks, day, nextSchoolDay));
   const dueToday = $derived(work.due.filter(t => t.due_date <= day));
   // Aufgaben-Ring: alles, was bis zum nächsten Schultag fällig ist, dazu Überfälliges.
-  const ringTasks = $derived(tasks.filter(t => t.due_date && t.due_date <= (nextSchoolDay || day) && (t.status !== 'done' || t.due_date >= day)));
+  const ringTasks = $derived(tasks.filter(t => t.due_date && t.due_date <= (nextSchoolDay || day) && (t.status !== 'done' || t.due_date >= (carryLessons?.date || day))));
   const openTasks = $derived(ringTasks.filter(t => t.status !== 'done'));
   // Rückmeldungen je Zeile gezählt: eine Doppelstunde ist eine Rückmeldung.
-  const endedLessons = $derived(mergeLessons((data?.lessons ?? []).filter(l => held(l) && lessonOver(l, now))));
+  // Am freien Tag gelten Rückmeldungen und Ringe für den letzten Schultag, wie die Lernliste (D205).
+  const carryLessons = $derived(data?.carry_lessons ?? null);
+  const fbLessons = $derived(carryLessons ? carryLessons.lessons : (data?.lessons ?? []));
+  const fbNow = $derived(carryLessons ? new Date(`${carryLessons.date}T23:59:00`) : now);
+  const fbTitle = $derived(carryLessons ? `Stunden vom ${WEEKDAYS[new Date(carryLessons.date + 'T12:00:00').getDay()]}` : 'Stunden von heute');
+  const endedLessons = $derived(mergeLessons(fbLessons.filter(l => held(l) && lessonOver(l, fbNow))));
   const feedbackOpen = $derived(endedLessons.filter(g => g.lessons.some(l => l.checkin?.rating == null)).length);
   const notedToday = $derived(tasks.filter(t => t.source === 'manual' && localDay(t.created_at) === day && t.status !== 'done'));
   // Lernen (D180): der eingefrorene Pflichtplan des Tages, erledigt live geprüft.
@@ -204,7 +210,6 @@
     if (folded(id)) { setOpen(id, true); await tick(); }
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
-  const ringStyle = (d, n) => `background:conic-gradient(var(--accent) ${n ? Math.round(d / n * 100) : 0}%, var(--bg-elevated) 0)`;
 </script>
 
 {#if celebrate && !reduceMotion && (profile.prefs.joy ?? 'konfetti') === 'konfetti'}<div class="confetti" aria-hidden="true">{#each confetti as c}<span style="left:{c.left}%;background:{c.hue};animation-delay:{c.delay}s;animation-duration:{c.dur}s"></span>{/each}</div>{/if}
@@ -291,12 +296,12 @@
   {/each}
 
   {#if afterSchool && nextSchoolDay}
-    <div class="rings">
-      <button class="ring-btn" class:full={!openTasks.length} onclick={() => jump('s-aufgaben')}><span class="ring" style={ringStyle(ringTasks.length - openTasks.length, ringTasks.length)}><span>{!openTasks.length ? '✓' : '📚'}</span></span><b>Aufgaben</b><small>{ringTasks.length - openTasks.length} von {ringTasks.length}</small></button>
-      <button class="ring-btn" class:full={!learnOpen} onclick={() => jump('s-lernen')}><span class="ring" style={ringStyle(learnSteps.length - learnOpen, learnSteps.length)}><span>{!learnOpen ? '✓' : '🧠'}</span></span><b>Lernen</b><small>{learnSteps.length ? `${learnSteps.length - learnOpen} von ${learnSteps.length}` : 'frei'}</small></button>
-      <button class="ring-btn" class:full={bag?.packed} onclick={() => jump('s-tasche')}><span class="ring" style={ringStyle(bag?.done ?? 0, bag?.total ?? 0)}><span>{bag?.packed ? '✓' : '🎒'}</span></span><b>Tasche</b><small>{bag ? `${bag.done} von ${bag.total}` : '…'}</small></button>
-      <button class="ring-btn" class:full={!feedbackOpen} onclick={() => jump('s-stunden')}><span class="ring" style={ringStyle(endedLessons.length - feedbackOpen, endedLessons.length)}><span>{!feedbackOpen ? '✓' : '💬'}</span></span><b>Feedback</b><small>{endedLessons.length - feedbackOpen} von {endedLessons.length}</small></button>
-    </div>
+    <DayRings onpick={(k) => jump(k)} items={[
+      { key: 's-aufgaben', label: 'Aufgaben', icon: '📚', done: ringTasks.length - openTasks.length, total: ringTasks.length, full: !openTasks.length, text: `${ringTasks.length - openTasks.length} von ${ringTasks.length}` },
+      { key: 's-lernen', label: 'Lernen', icon: '🧠', done: learnSteps.length - learnOpen, total: learnSteps.length, full: !learnOpen, text: learnSteps.length ? `${learnSteps.length - learnOpen} von ${learnSteps.length}` : 'frei' },
+      { key: 's-tasche', label: 'Tasche', icon: '🎒', done: bag?.done ?? 0, total: bag?.total ?? 0, full: !!bag?.packed, text: bag ? `${bag.done} von ${bag.total}` : '…' },
+      { key: 's-stunden', label: 'Feedback', icon: '💬', done: endedLessons.length - feedbackOpen, total: endedLessons.length, full: !feedbackOpen, text: `${endedLessons.length - feedbackOpen} von ${endedLessons.length}` },
+    ]} />
   {/if}
 
   {#if phase === 'in'}
@@ -365,10 +370,10 @@
       {#if finished['s-tasche']}<button class="fold-head" onclick={() => setOpen('s-tasche', folded('s-tasche'))} aria-expanded={!folded('s-tasche')}><span>✓ Tasche für {WEEKDAYS[new Date(nextSchoolDay + 'T12:00:00').getDay()]}</span><small>{bag?.packed ? 'alles drin' : 'antippen, wenn drin'} {folded('s-tasche') ? '▸' : '▾'}</small></button>{:else}<h3>Tasche für {WEEKDAYS[new Date(nextSchoolDay + 'T12:00:00').getDay()]} <small>{bag?.packed ? 'alles drin' : 'antippen, wenn drin'}</small></h3>{/if}
       <div class:hidden-fold={folded('s-tasche')}><PackingChecklist {accountId} schoolDay={nextSchoolDay} variant="grid" onstatus={(s) => (bag = s)} /></div>
     </section>
-    {#if endedLessons.length || (data.lessons ?? []).length}
+    {#if endedLessons.length || fbLessons.length}
       <section class="sec" id="s-stunden" data-section="rueckmelden">
-        {#if finished['s-stunden']}<button class="fold-head" onclick={() => setOpen('s-stunden', folded('s-stunden'))} aria-expanded={!folded('s-stunden')}><span>✓ Stunden von heute</span><small>{endedLessons.length - feedbackOpen} von {endedLessons.length} {folded('s-stunden') ? '▸' : '▾'}</small></button>{:else}<h3>Stunden von heute <small>{endedLessons.length - feedbackOpen} von {endedLessons.length}</small></h3>{/if}
-        {#if !folded('s-stunden')}<DaySchedule {accountId} lessons={data.lessons} {now} live={false} onsaved={() => saved('Rückmeldung gespeichert.')} />{/if}
+        {#if finished['s-stunden']}<button class="fold-head" onclick={() => setOpen('s-stunden', folded('s-stunden'))} aria-expanded={!folded('s-stunden')}><span>✓ {fbTitle}</span><small>{endedLessons.length - feedbackOpen} von {endedLessons.length} {folded('s-stunden') ? '▸' : '▾'}</small></button>{:else}<h3>{fbTitle} <small>{endedLessons.length - feedbackOpen} von {endedLessons.length}</small></h3>{/if}
+        {#if !folded('s-stunden')}<DaySchedule {accountId} lessons={fbLessons} now={fbNow} live={false} onsaved={() => saved('Rückmeldung gespeichert.')} />{/if}
       </section>
     {/if}
     {#if data.retakes?.length || data.photo_requests?.length}
@@ -457,12 +462,6 @@
   .gains span{background:rgba(255,255,255,.15);border-radius:var(--r-md);padding:var(--sp-2) 4px;font-size:.72rem;display:grid}
   .gains b{font-size:var(--fs-md)}
   .new-badge{background:var(--accent-fg);color:var(--accent);border-radius:var(--r-pill);padding:6px 12px;font-weight:700;font-size:var(--fs-xs)}
-  .rings{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-2);margin-bottom:var(--sp-2)}
-  .ring-btn{display:grid;justify-items:center;gap:3px;padding:var(--sp-2) 4px;border-radius:var(--r-md);min-height:100px;background:var(--bg-card)}
-  .ring{width:50px;height:50px;border-radius:50%;display:grid;place-items:center}
-  .ring span{width:39px;height:39px;border-radius:50%;background:var(--bg-card);display:grid;place-items:center;font-size:1.1rem}
-  .ring-btn.full .ring span{background:var(--accent);color:var(--accent-fg);font-weight:800}
-  .ring-btn b{font-size:var(--fs-xs)}.ring-btn small{font-size:.72rem;color:var(--fg-muted)}
   .sec{margin-top:var(--sp-4)}
   .fold-head{width:100%;display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);min-height:44px;padding:var(--sp-2) var(--sp-3);background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-md);color:var(--fg);font-weight:700;font-size:var(--fs-md);text-align:left;margin-bottom:var(--sp-2)}
   .fold-head span{color:var(--good-fg, var(--fg))}

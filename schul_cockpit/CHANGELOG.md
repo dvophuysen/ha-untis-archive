@@ -1,3 +1,8 @@
+## 1.35.0
+
+- Die Familienkarte zeigt je Kind die vier Ringe von „Heute“: Aufgaben, Lernen, Tasche, Feedback. Sie ersetzen die Zeilen „Lernen heute“ und „✓ … erledigt“; ein Tipp auf einen Ring springt in den Abschnitt beim Kind. Die Ringe stehen für Eltern immer da, nicht erst nach der Schule.
+- Am Wochenende und in den Ferien zeigen die Ringe überall den Stand des letzten Schultags: Lernen die Liste vom Freitag, Feedback die Stunden vom Freitag, Aufgaben wie am Freitagabend. Auf „Heute“ heißt der Abschnitt dann „Stunden vom Freitag“, die Stunden lassen sich noch bewerten. Vorher stand am Samstag „0 von 0“ und damit fälschlich erledigt.
+
 ## 1.34.0
 
 Überarbeitung nach einer vollständigen Durchsicht des Codes (D208). Nichts an Aussehen oder Abläufen ändert sich, außer wo es unten steht.

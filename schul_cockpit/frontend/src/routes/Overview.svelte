@@ -9,6 +9,7 @@
   // führt stattdessen nach „Erledigen“ (D183). Die Seite „Heute“ des Kindes
   // wird nicht wiederholt.
   import ActionLabel from '../lib/ActionLabel.svelte';
+  import DayRings from '../lib/DayRings.svelte';
   import { subjectStyle } from '../lib/subjectStyle.js';
   import { formatShortDate, weekdayOf } from '../lib/format.js';
   import { untrack } from 'svelte';
@@ -45,6 +46,14 @@
     const timer = setInterval(refresh, 60000);
     return () => { request++; clearInterval(timer); window.removeEventListener('focus', refresh); };
   });
+
+  // Wohin ein Ring der Familienkarte springt: der Abschnitt auf „Heute“ des Kindes.
+  const RING_GO = {
+    tasks: { page: 'today', section: 'aufgaben' },
+    study: { page: 'today', section: 'lernen,lernen-kurz' },
+    bag: { page: 'today', section: 'tasche' },
+    feedback: { page: 'today', section: 'rueckmelden' },
+  };
 
   function open(kid, target) {
     if (!target) return;
@@ -128,12 +137,27 @@
           </button>
         {/if}
 
-        {#if kid.study}
+        {#if kid.rings}
+          <!-- Die vier Ringe wie auf „Heute“ des Kindes; am freien Tag der Stand des letzten Schultags (D205). -->
+          {@const rg = kid.rings}
+          {@const st = rg.study}
+          <DayRings onpick={(k) => open(kid, RING_GO[k])} items={[
+            { key: 'tasks', label: 'Aufgaben', icon: '📚', done: rg.tasks.done, total: rg.tasks.total, full: rg.tasks.done === rg.tasks.total, text: `${rg.tasks.done} von ${rg.tasks.total}` },
+            { key: 'study', label: 'Lernen', icon: '🧠', done: st?.done ?? 0, total: st?.total ?? 0, full: !st || st.done === st.total, text: st?.total ? `${st.done} von ${st.total}` : 'frei' },
+            { key: 'bag', label: 'Tasche', icon: '🎒', done: rg.bag?.done ?? 0, total: rg.bag?.total ?? 0, full: !!rg.bag?.packed, text: rg.bag ? `${rg.bag.done} von ${rg.bag.total}` : '–' },
+            { key: 'feedback', label: 'Feedback', icon: '💬', done: rg.feedback.done, total: rg.feedback.total, full: rg.feedback.done === rg.feedback.total, text: `${rg.feedback.done} von ${rg.feedback.total}` },
+          ]} />
+          {#if rg.carry_day || st?.tight?.length}
+            <p class="ring-note">{#if rg.carry_day}Stand vom {weekdayOf(rg.carry_day)}{/if}{#each st?.tight ?? [] as t}{rg.carry_day ? ' · ' : ''}eng bis {subjectStyle(t.subject).name} am {formatShortDate(t.exam_date)}{/each}</p>
+          {/if}
+        {:else}
+          {#if kid.study}
           <!-- Lernen heute (D180): nur zur Information, die App steuert selbst nach. -->
           <button class="okline study" class:open={kid.study.done < kid.study.total} onclick={() => open(kid, { page: 'today', section: 'lernen,lernen-kurz' })}><span>{kid.study.carry ? `Lernen, Liste vom ${weekdayOf(kid.study.carry.from)}` : 'Lernen heute'}: {kid.study.done} von {kid.study.total}{#each kid.study.tight ?? [] as t} · eng bis {subjectStyle(t.subject).name} am {formatShortDate(t.exam_date)}{/each}</span></button>
         {/if}
         {#if b.ok.length}
           <button class="okline" onclick={() => open(kid, { page: 'today' })}><span>✓ {b.ok.join(' · ')}</span></button>
+        {/if}
         {/if}
         {#each b.acute as r (r.key)}
           <button class="row {r.tone}" onclick={() => open(kid, r.go)}>
@@ -244,6 +268,7 @@
     margin-bottom: 0.2rem;
   }
   /* Offenes Lernen ist kein Versäumnis: neutral statt grün (D180). */
+  .ring-note { margin: calc(-1 * var(--sp-1)) 0 var(--sp-2); font-size: var(--fs-xs); color: var(--fg-muted); }
   button.okline.study.open { background: var(--bg-elevated); color: var(--fg); }
   .row {
     display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: left; min-height: 48px;

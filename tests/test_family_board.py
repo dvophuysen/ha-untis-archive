@@ -242,3 +242,44 @@ def test_an_exam_on_the_calendar_marks_its_lesson(env):
     day = fb.schedule(1, date(2026, 9, 28), datetime(2026, 9, 28, 7, 0),
                       [{"date": "2026-09-28", "subject_name": "MATHEMATIK"}])[0]
     assert day["periods"][0]["exam"] and "Mathematik: Arbeit" in day["notes"]
+
+
+def test_on_the_weekend_the_rings_show_the_friday_state(env, monkeypatch):
+    """Am freien Tag zeigen die Ringe den Stand des letzten Schultags (D205):
+    Feedback zu den Stunden vom Freitag, Aufgaben wie am Freitagabend."""
+    lessons([(31, "2026-09-25", 800, 845, None), (32, "2026-09-25", 850, 935, None),   # Doppelstunde
+             (33, "2026-09-25", 1130, 1215, None), (34, "2026-09-28", 800, 845, None)])
+    with closing(db.webapp_conn()) as c, c:
+        for lid in (31, 32):  # „Heute“ bewertet eine Doppelstunde für beide Stunden
+            c.execute("INSERT INTO lesson_checkins(account_id,lesson_id,user_id,rating,created_at,updated_at) VALUES(1,?,1,3,'now','now')", (lid,))
+        c.execute("INSERT INTO tasks(account_id,title,task_type,status,source,due_date,created_at,updated_at) "
+                  "VALUES(1,'Brüche','homework','open','manual','2026-09-28','now','now')")
+        c.execute("INSERT INTO tasks(account_id,title,task_type,status,source,due_date,created_at,updated_at,completed_at) "
+                  "VALUES(1,'Lesen','homework','done','manual','2026-09-25','now',?,?)",
+                  (datetime.now().astimezone().isoformat(), datetime.now().astimezone().isoformat()))
+    saturday = fb.rings(1, date(2026, 9, 26), datetime(2026, 9, 26, 10, 0))
+    assert saturday["carry_day"] == "2026-09-25" and saturday["next_school_day"] == "2026-09-28"
+    # Die Doppelstunde ist bewertet (eine Zeile), die Stunde um 11:30 nicht.
+    assert saturday["feedback"] == {"done": 1, "total": 2}
+    assert saturday["tasks"] == {"done": 1, "total": 2}
+    # Am Schultag selbst zählen nur die schon beendeten Stunden.
+    friday = fb.rings(1, date(2026, 9, 25), datetime(2026, 9, 25, 10, 0))
+    assert friday["carry_day"] is None and friday["feedback"] == {"done": 1, "total": 1}
+
+
+def test_the_today_page_brings_the_last_school_day_on_a_free_day(env, monkeypatch):
+    client, state, patch = env
+    from backend.routers import today as today_routes
+    lessons([(41, "2026-09-25", 800, 845, None), (42, "2026-09-28", 800, 845, None)])
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO lesson_checkins(account_id,lesson_id,user_id,rating,created_at,updated_at) VALUES(1,41,1,2,'now','now')")
+    monkeypatch.setattr(today_routes, "today_local", lambda: date(2026, 9, 26))
+    client.app.include_router(today_routes.router, prefix="/api")
+    body = client.get("/api/accounts/1/today").json()
+    assert body["lessons"] == [] and body["next"]["date"] == "2026-09-28"
+    carry = body["carry_lessons"]
+    assert carry["date"] == "2026-09-25" and [l["id"] for l in carry["lessons"]] == [41]
+    assert carry["lessons"][0]["checkin"]["rating"] == 2
+    # An einem Schultag gibt es keinen Übertrag.
+    monkeypatch.setattr(today_routes, "today_local", lambda: date(2026, 9, 25))
+    assert client.get("/api/accounts/1/today").json()["carry_lessons"] is None

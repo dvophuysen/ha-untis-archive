@@ -280,17 +280,17 @@ async def _dashboard_for_account(account_id: int, name: str, today: date) -> dic
     except Exception:
         _LOG.warning("Belohnung für Konto %s nicht lesbar", account_id, exc_info=True)
 
-    # Lernen heute (D180), nur zur Information: Die App steuert selbst nach.
-    study = None
+    # Die vier Ringe von „Heute“ (Aufgaben, Lernen, Tasche, Feedback), immer
+    # sichtbar: Eltern sehen auch morgens, was vom Vortag oder Freitag offen ist.
     try:
-        from .. import study_plan
-        # Wie „Heute“ des Kindes: am Wochenende die Liste vom Freitag (D205).
-        p = await asyncio.to_thread(study_plan.for_day, account_id, now.date(), store=False)
-        if p["total"] or p["tight"]:
-            study = {"done": p["done"], "total": p["total"], "tight": p["tight"][:1], "frozen": p["frozen"],
-                     "carry": p.get("carry")}
+        day_rings = await asyncio.to_thread(family_board.rings, account_id, today, now)
     except Exception:
-        _LOG.warning("Lernplan für Konto %s nicht lesbar", account_id, exc_info=True)
+        _LOG.warning("Ringe für Konto %s nicht lesbar", account_id, exc_info=True)
+        day_rings = None
+    # Lernen heute (D180), nur zur Information: Die App steuert selbst nach.
+    study = (day_rings or {}).get("study")
+    if study and not (study["total"] or study["tight"]):
+        study = None
 
     # Stundenplan-Raster und Tagesstreifen stehen nicht mehr auf der Startseite
     # (D166); der Plan liegt unter Übersichten → Woche.
@@ -302,6 +302,7 @@ async def _dashboard_for_account(account_id: int, name: str, today: date) -> dic
     return {
         "rewards": rewards_brief,
         "study": study,
+        "rings": day_rings,
         "profile": profile,
         "account_id": account_id,
         "name": name,

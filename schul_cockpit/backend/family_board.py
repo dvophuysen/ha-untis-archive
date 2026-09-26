@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 import re
 from contextlib import closing
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from . import lernstand, usage_report
 from .courses import hidden_keys, lesson_is_hidden
@@ -153,6 +153,96 @@ def feedback(account_id: int, today: date, now: datetime) -> dict:
     return {"earlier": sum(1 for l in lessons if l["date"] < today.isoformat() and l["id"] not in rated),
             "today": sum(1 for l in today_lessons if l["id"] not in rated),
             "today_total": len(today_lessons), "total": len(lessons)}
+
+
+def _merged(lessons: list[dict]) -> list[list[dict]]:
+    """Doppelstunden als eine Zeile, wie auf „Heute“ (dayPhase.mergeLessons):
+    gleiches Fach, gleicher Zustand, höchstens 20 Minuten dazwischen."""
+    groups: list[list[dict]] = []
+    for l in sorted(lessons, key=lambda x: x.get("start_time") or 0):
+        last = groups[-1][-1] if groups else None
+        if last is not None:
+            gap = (_minutes(l.get("start_time")) or 0) - (_minutes(last.get("end_time")) or 0)
+            same = (l.get("subject_name") or l.get("subject_short")) == (last.get("subject_name") or last.get("subject_short"))
+            if same and bool(l.get("is_cancelled")) == bool(last.get("is_cancelled")) and 0 <= gap <= 20:
+                groups[-1].append(l)
+                continue
+        groups.append([l])
+    return groups
+
+
+def _minutes(hhmm) -> int | None:
+    return hhmm // 100 * 60 + hhmm % 100 if isinstance(hhmm, int) else None
+
+
+def rings(account_id: int, today: date, now: datetime) -> dict:
+    """Die vier Ringe von „Heute“ für die Familienkarte, nach denselben Regeln:
+    Aufgaben bis zum nächsten Schultag samt Überfälligem, die Lernliste (am
+    Wochenende die vom Freitag, D205), die Tasche, die jetzt zählt, und die
+    Rückmeldungen zu den beendeten Stunden von heute (Doppelstunde einmal).
+    Liest nur; für Eltern wird nichts festgehalten."""
+    today_iso = today.isoformat()
+    nxt = next_school_day(account_id, today)
+    # Am freien Tag gilt der Stand des letzten Schultags, wie am Freitagabend.
+    try:
+        from .study_plan import carry_day
+        carry = carry_day(account_id, today)
+    except Exception:
+        carry = None
+    ref = carry or today
+    ref_iso = ref.isoformat()
+    out: dict = {"next_school_day": nxt, "carry_day": carry.isoformat() if carry else None}
+
+    since = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()  # wie /tasks?recent_done_days=14
+    with closing(webapp_conn()) as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT status,due_date FROM tasks WHERE account_id=? AND due_date IS NOT NULL AND due_date<=? "
+            "AND (status!='done' OR COALESCE(completed_at, updated_at, '')>=?)",
+            (account_id, nxt or today_iso, since))]
+    ring = [t for t in rows if t["status"] != "done" or t["due_date"] >= ref_iso]
+    open_ = sum(1 for t in ring if t["status"] != "done")
+    out["tasks"] = {"done": len(ring) - open_, "total": len(ring)}
+
+    try:
+        from . import study_plan
+        plan = study_plan.for_day(account_id, today, store=False)
+        out["study"] = {"done": plan["done"], "total": plan["total"], "carry": plan.get("carry"),
+                        "tight": plan["tight"][:1], "frozen": plan["frozen"]}
+    except Exception:
+        _LOG.warning("Lernplan für Konto %s nicht lesbar", account_id, exc_info=True)
+        out["study"] = None
+
+    day, _phase = bag_target(account_id, today, now)
+    day = day or nxt
+    out["bag"] = None
+    if day:
+        try:
+            from .packing import packing_plan, view
+            items, fingerprint, schedule_ = packing_plan(account_id, date.fromisoformat(day))
+            with closing(webapp_conn()) as conn:
+                bag = view(account_id, date.fromisoformat(day), items, fingerprint, conn, schedule_)
+            out["bag"] = {"day": day, "done": bag["confirmed_count"], "total": len(bag["items"]),
+                          "packed": bag["status"] == "packed"}
+        except Exception:
+            _LOG.warning("Packliste für Konto %s nicht lesbar", account_id, exc_info=True)
+
+    hidden = hidden_keys(account_id)
+    with closing(history_conn()) as hconn:
+        lessons = [l for l in lessons_for_date(hconn, account_id, ref_iso) if not lesson_is_hidden(l, hidden)]
+    # Ein vergangener Schultag ist ganz vorbei.
+    clock = 24 * 60 if carry else now.hour * 60 + now.minute
+    ended = [g for g in _merged([l for l in lessons if not l.get("is_cancelled") and not l.get("was_absent")])
+             if (_minutes(g[-1].get("end_time")) is not None and clock >= _minutes(g[-1].get("end_time")))]
+    ids = [l["id"] for g in ended for l in g]
+    rated: set = set()
+    if ids:
+        with closing(webapp_conn()) as conn:
+            rated = {r[0] for r in conn.execute(
+                f"SELECT lesson_id FROM lesson_checkins WHERE account_id=? AND rating IS NOT NULL "
+                f"AND lesson_id IN ({','.join('?' * len(ids))})", (account_id, *ids))}
+    open_fb = sum(1 for g in ended if any(l["id"] not in rated for l in g))
+    out["feedback"] = {"done": len(ended) - open_fb, "total": len(ended)}
+    return out
 
 
 def acute(account_id: int, tasks: list[dict], today: date, now: datetime, evening: bool) -> tuple[list[dict], list[str]]:

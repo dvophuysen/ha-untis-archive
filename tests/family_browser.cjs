@@ -35,7 +35,7 @@ const modes=[];
 await page.route('**/api/**',async route=>{
 const u=new URL(route.request().url()).pathname;let body={};modes.push([u,route.request().headers()['x-view-mode']||'']);
 if(u==='/api/me')body={id:1,role:'parent',accounts:[{id:1,name:'Kind A'},{id:2,name:'Kind B'}]};
-else if(u==='/api/dashboard')body={today:'2026-09-24',kids:[{account_id:1,name:'Kind A',board:boardA,study:{done:1,total:2,tight:[]}},{account_id:2,name:'Kind B',board:boardB}]};
+else if(u==='/api/dashboard')body={today:'2026-09-24',kids:[{account_id:1,name:'Kind A',board:boardA,study:{done:1,total:2,tight:[]},rings:{next_school_day:'2026-09-25',carry_day:null,tasks:{done:2,total:2},study:{done:1,total:2,tight:[],carry:null},bag:{day:'2026-09-25',done:3,total:3,packed:true},feedback:{done:1,total:3}}},{account_id:2,name:'Kind B',board:boardB}]};
 else if(u==='/api/parent-report')body={weekday:6,at:'18:00',targets:[],services:[]};
 else if(u==='/api/parent/todo')body={today:'2026-09-24',total:3,blocking:[],household:[],kids:[{account_id:1,name:'Kind A',items:[]},{account_id:2,name:'Kind B',items:[]}]};
 await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(body)});
@@ -52,7 +52,9 @@ assert.equal(await page.locator('.top-bar button').count(),1,'only the profile b
 assert.equal(await page.getByText('Wochenbericht aufs Handy').count(),0,'weekly report moved to Einstellen');
 assert.equal(await page.getByText(/^Kinderansicht /).count(),0,'child view only via profile button');
 await a.getByText('Nachsteuern',{exact:true}).waitFor();await b.getByText('Eingreifen',{exact:true}).waitFor();
-await a.getByText('✓ Aufgaben bis morgen erledigt · Tasche für Fr gepackt · 6/6 Stunden bewertet').waitFor();
+// Die vier Ringe wie auf „Heute“ ersetzen Lernzeile und Erledigt-Zeile.
+assert.deepEqual(await a.locator('.ring-btn').allInnerTexts().then(t=>t.map(x=>x.replace(/\s+/g,' ').trim())),['✓ Aufgaben 2 von 2','🧠 Lernen 1 von 2','✓ Tasche 3 von 3','💬 Feedback 1 von 3']);
+assert.equal(await a.locator('.okline').count(),0,'rings replace the ok lines');
 assert.equal(await b.locator('.okline').count(),0);
 // Stundenplan: heute und der nächste Schultag, Ausfall durchgestrichen, früher Schluss gelb (D170).
 assert.deepEqual(await a.locator('.plan .lbl > span:first-child').allInnerTexts(),['Heute','Fr 25.09.']);
@@ -81,8 +83,8 @@ assert.equal(await page.evaluate(()=>location.hash),'#/overview');assert.equal(a
 // Auch die Zurück-Geste führt aus dem Mitlesen zur Elternansicht.
 await a.locator('.plan').click();await page.waitForFunction(()=>location.hash==='#/week');
 await page.goBack();await a.waitFor();assert.equal(await mode(),'parent');
-// Lernen heute springt in den Lernen-Abschnitt von Heute.
-await a.getByText('Lernen heute: 1 von 2').click();
+// Der Lernen-Ring springt in den Lernen-Abschnitt von Heute.
+await a.getByRole('button',{name:'Lernen: 1 von 2'}).click();
 assert.equal(await page.evaluate(()=>location.hash),'#/today?s=lernen%2Clernen-kurz');assert.equal(await mode(),'mirror');
 await page.goto('http://127.0.0.1:4180/#/overview');await a.waitFor();
 await page.goto('http://127.0.0.1:4180/#/overview');await b.waitFor();
