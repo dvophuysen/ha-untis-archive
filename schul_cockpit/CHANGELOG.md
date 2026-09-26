@@ -1,5 +1,6 @@
 ## 1.39.0
 
+- Kurztest eines Kindes berichtigt: Die Musterlösung nannte bei 2x − 6 = 3 fälschlich x = 4; die richtige Antwort 4,5 kostete deshalb einen halben Punkt. Aufgabe 1 zählt jetzt 9 von 9, der Kurztest 16 von 18.
 - Lernplan strenger: Die nächste Arbeit kommt ganz zuerst, spätere danach, nicht mehr im Wechsel. Wird es für eine Arbeit eng, gilt nur noch sie (wie zwei Schultage vorher). Auch eine schon festgehaltene Liste steht jetzt nach Termin. Auf „Heute“ sind die Lernschritte nummeriert, der nächste offene ist als „Jetzt dran“ hervorgehoben.
 - Vokabeln: „Weiß ich nicht“ zählt fürs Pensum als falsch geübtes Wort (das Wort wackelt und kommt vorn wieder), für Extrameile und Abzeichen weiter nicht. Am Wochenende zeigt der Trainer das Vokabelpensum der Freitagsliste mit dem Stand seit Freitag. In der Runde steht „Pensum: x von y“; ist es erreicht, meldet der Trainer das sofort und nennt den nächsten Schritt im Lernplan. Wer eine andere Einheit übt, sieht, welche fürs Pensum zählt.
 - Kurztests unabhängig voneinander: Während ein Kurztest noch entsteht, läuft oder ausgewertet wird, lässt sich der nächste schon beginnen. „Los“ beim Kurztest eines Themas öffnet nur noch einen Kurztest dieses Themas, nicht mehr den laufenden eines anderen; auch erledigt ist der Schritt, zu dem die Arbeit passt. Auf „Heute“ und auf der Lernseite.

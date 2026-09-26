@@ -1491,4 +1491,31 @@ CREATE TABLE IF NOT EXISTS study_plan_changes (
 );
 CREATE INDEX IF NOT EXISTS idx_study_plan_changes_day ON study_plan_changes(account_id, day, id);
 """))
+# Einmalig (D216): Im Kurztest Gleichungen von Konto 1 (Versuch 5, 26.09.2026)
+# war die Musterlösung falsch (2x − 6 = 3 → „x = 4“ statt 4,5); die Bewertung
+# zog deshalb für die richtige Antwort 4,5 einen halben Punkt ab. Auf Wunsch
+# der Eltern ohne Handkorrektur berichtigt: Musterlösung, Kriterien, Bewertung
+# und Lernstand der Aufgabe 1 (9 von 9).
+_MIGRATIONS.append(("fix_paper_konto1_versuch5_loesung", """
+UPDATE mentor_exam_attempts SET
+  snapshot=json_set(snapshot,
+    '$.tasks[0].solution', 'a) 2x - 6 = 3  → +6  → 2x = 9  → :2  → x = 4,5' || char(10) ||
+      'b) 3/4 x + 8 = 7  → -8  → 3/4 x = -1  → : (3/4)  → x = -1 / (3/4) = -1 * 4/3 = -4/3 = -1,333...' || char(10) ||
+      'c) 3 + 1,5x = 12  → -3  → 1,5x = 9  → :1,5  → x = 6',
+    '$.tasks[0].criteria', 'a) 1 P richtige Umformung (+6), 1 P richtige Division, 1 P richtiges Ergebnis x=4,5; ' ||
+      'b) 1 P richtige Subtraktion (-8), 1 P richtige Division durch 3/4, 1 P korrektes Ergebnis x=-4/3; ' ||
+      'c) 1 P richtige Subtraktion (-3), 1 P richtige Division durch 1,5, 1 P korrektes Ergebnis x=6'),
+  feedback_json=json_set(feedback_json,
+    '$."0".points', 9.0,
+    '$."0".lost', json('[]'),
+    '$."0".earned', json('[{"text": "a) richtig umgeformt (+6, :2) und richtiges Ergebnis x = 4,5", "points": 3.0}, {"text": "b) richtige Subtraktion, Division durch 3/4 und korrektes Ergebnis x = -4/3", "points": 3.0}, {"text": "c) richtige Subtraktion, Division durch 1,5 und korrektes Ergebnis x = 6", "points": 3.0}]'),
+    '$."0".rationale', 'Alle drei Gleichungen richtig umgeformt und gelöst: 9 von 9 Punkten. (Berichtigt: Die Musterlösung nannte bei a) fälschlich x = 4; richtig ist x = 4,5, wie du gerechnet hast.)',
+    '$."0".next_step', 'Weiter so: Bei jeder Gleichung das Ergebnis zur Probe einsetzen.'),
+  version=version+1
+WHERE account_id=1 AND id=5 AND json_extract(snapshot,'$.tasks[0].solution') LIKE '%2x = 9  → :2  → x = 4' || char(10) || '%';
+UPDATE topic_answers SET points=9.0, result='correct'
+WHERE account_id=1 AND attempt_id=5 AND afb=1 AND points=8.5 AND max_points=9
+  AND EXISTS(SELECT 1 FROM mentor_exam_attempts WHERE id=5 AND account_id=1 AND json_extract(feedback_json,'$."0".points')=9.0);
+"""))
+
 
