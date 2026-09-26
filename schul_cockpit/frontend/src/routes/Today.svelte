@@ -9,7 +9,7 @@
   import { getEarly } from '../lib/prefetch.js';
   import { isoToday, formatShortDate, daysBetween, stripUntisMetadata, carryText, localDay } from '../lib/format.js';
   import { splitTasks } from '../lib/dayDashboard.js';
-  import { dayPhase, mergeLessons, held, lessonOver } from '../lib/dayPhase.js';
+  import { dayPhase, mergeLessons, held, lessonOver, groupOpen } from '../lib/dayPhase.js';
   import { subjectStyle } from '../lib/subjectStyle.js';
   import PackingChecklist from '../lib/PackingChecklist.svelte';
   import DayRings from '../lib/DayRings.svelte';
@@ -89,7 +89,7 @@
   const fbTitle = $derived(carryLessons ? `Stunden vom ${WEEKDAYS[new Date(carryLessons.date + 'T12:00:00').getDay()]}` : 'Stunden von heute');
   // Ein Eintrag ohne Fach ist keine Stunde (etwa eine Klassenfahrt): keine Rückmeldung.
   const endedLessons = $derived(mergeLessons(fbLessons.filter(l => held(l) && (l.subject_name || l.subject_short) && lessonOver(l, fbNow))));
-  const dayFeedbackOpen = $derived(endedLessons.filter(g => g.lessons.some(l => l.checkin?.rating == null)).length);
+  const dayFeedbackOpen = $derived(endedLessons.filter(groupOpen).length);
   // Vergessene Rückmeldungen der Vortage bleiben stehen, bis sie nachgeholt sind (D210).
   const backlogDays = $derived.by(() => {
     const byDay = new Map();

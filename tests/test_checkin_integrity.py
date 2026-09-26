@@ -24,9 +24,14 @@ def install(env):
     client.app.include_router(checkins.router, prefix='/api')
     child(state)
     with sqlite3.connect(db.SETTINGS.history_db_path) as c:
-        c.execute('CREATE TABLE lessons(id INTEGER PRIMARY KEY, account_id INTEGER, untis_period_id INTEGER, subject_untis_id INTEGER, date TEXT, start_time INTEGER, end_time INTEGER, was_absent INTEGER, code TEXT, subject_name TEXT)')
-        c.executemany('INSERT INTO lessons VALUES(?, ?, ?, 7, ?, 800, 900, 0, NULL, ?)',
-                      [(i, 1 if i < 6 else 2, 100+i, today_local().isoformat(), 'Testfach') for i in range(1, 7)])
+        # Die Spalten, die queries.lessons_in_range liest (rewards.feedback_due).
+        c.execute('CREATE TABLE lessons(id INTEGER PRIMARY KEY, account_id INTEGER, untis_period_id INTEGER, subject_untis_id INTEGER, date TEXT, start_time INTEGER, end_time INTEGER, was_absent INTEGER, code TEXT, subject_name TEXT, '
+                  'teacher_untis_id INTEGER, teacher_name TEXT, teacher_orig_name TEXT, room TEXT, room_orig TEXT, subject_orig_name TEXT, is_teacher_substituted INTEGER, is_room_substituted INTEGER, '
+                  'is_subject_substituted INTEGER, lstext TEXT, subst_text TEXT, info TEXT, absence_reason TEXT, is_late_addition INTEGER, period_info_json TEXT, payload_json TEXT)')
+        # Fünf Stunden nacheinander: Gleichzeitige Einträge im selben Fach wären eine Stunde (Teamunterricht).
+        c.executemany('INSERT INTO lessons(id,account_id,untis_period_id,subject_untis_id,date,start_time,end_time,was_absent,code,subject_name) '
+                      'VALUES(?, ?, ?, 7, ?, ?, ?, 0, NULL, ?)',
+                      [(i, 1 if i < 6 else 2, 100+i, today_local().isoformat(), 700+100*i, 745+100*i, 'Testfach') for i in range(1, 7)])
     return client, state, patch
 
 
