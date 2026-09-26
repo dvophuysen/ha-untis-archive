@@ -218,6 +218,24 @@ def household_items(status: dict | None = None) -> list[dict]:
     return out
 
 
+def feedback_items(account_id: int, today: date) -> list[dict]:
+    """Vergessene Rückmeldungen der Vortage (D210): nachholen lassen oder, wenn
+    das Kind nicht da war, als entfallen markieren."""
+    from . import rewards
+    try:
+        open_ = rewards.feedback_backlog(account_id, today - timedelta(days=1), rewards.now_local())
+    except Exception:
+        _LOG.warning("Offene Rückmeldungen für Konto %s nicht lesbar", account_id, exc_info=True)
+        return []
+    if not open_:
+        return []
+    days = sorted({l["date"] for l in open_})
+    since = _day(days[0])
+    return [item("feedback", "feedback_backlog", f"{_plural(len(open_), 'Stunde', 'Stunden')} ohne Rückmeldung",
+                 f"seit {since}, an {_plural(len(days), 'Tag', 'Tagen')}. Nachholen lassen oder, wenn das Kind nicht da war, als entfallen markieren.",
+                 action("Ansehen", "today", section="nachholen"))]
+
+
 def blocking(user, account_ids: list[int]) -> tuple[list[dict], set[int]]:
     """Verwaiste Verlinkungen und fehlende Einrichtung stehen ganz oben."""
     out = []
@@ -280,6 +298,7 @@ async def collect(user, account_ids: list[int], today: date) -> dict:
             items.append(item("review", "needs_review", f"{_plural(review, 'Lesung', 'Lesungen')} gegenlesen",
                               "Beim Lesen der Fotos war die App an einzelnen Stellen unsicher.",
                               action("Gegenlesen", "materialien", section="gegenlesen")))
+        items += feedback_items(account_id, today)
         items += calendar_items(account_id, data.get("all_entries") or [], today)
         items += learning_items(account_id)
         # Eine zurückgehaltene Auswertung steht vorn: Das Kind wartet darauf (D202).

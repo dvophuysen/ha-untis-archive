@@ -269,25 +269,54 @@ def test_on_the_weekend_the_rings_show_the_friday_state(env, monkeypatch):
 
 def test_forgotten_feedback_stays_open_until_it_is_caught_up(env):
     """D210: Wie eine überfällige Hausaufgabe bleibt eine vergessene Rückmeldung
-    stehen, bis sie nachgeholt ist; erst dann schließt der Ring. Vor Beginn der
-    Zählung wird nichts eingefordert."""
+    stehen, bis sie nachgeholt ist; erst dann schließt der Ring. Eingefordert
+    wird ab Beginn des Schuljahrs; Eltern können einen Tag erlassen."""
     from backend import rewards
-    lessons([(51, "2026-09-23", 800, 845, None), (52, "2026-09-24", 800, 845, None),
+    lessons([(50, "2026-07-10", 800, 845, None),                                   # voriges Schuljahr
+             (51, "2026-09-23", 800, 845, None), (52, "2026-09-24", 800, 845, None),
              (53, "2026-09-24", 850, 935, None), (54, "2026-09-25", 800, 845, None),
              (55, "2026-09-24", 1000, 1045, "cancelled")])
-    with closing(db.webapp_conn()) as c, c:
-        c.execute("INSERT OR REPLACE INTO reward_config(id,start_day) VALUES(1,'2026-09-24')")
     now = datetime(2026, 9, 25, 14, 0)
-    # Mittwoch liegt vor der Zählung, der ausgefallene Donnerstag zählt nie.
-    assert [l["id"] for l in rewards.feedback_backlog(1, date(2026, 9, 25), now)] == [52, 53, 54]
+    # Juli liegt vor dem Schuljahr, der ausgefallene Donnerstag zählt nie.
+    assert [l["id"] for l in rewards.feedback_backlog(1, date(2026, 9, 25), now)] == [51, 52, 53, 54]
     friday = fb.rings(1, date(2026, 9, 25), now)
-    assert friday["feedback"] == {"done": 0, "total": 2, "backlog": 1}  # Donnerstag als Doppelstunde
-    assert rewards.day_state(1, date(2026, 9, 25), now)["feedback_open"] == 3
+    assert friday["feedback"] == {"done": 0, "total": 3, "backlog": 2}  # Mi, Do (Doppelstunde), Fr
+    assert rewards.day_state(1, date(2026, 9, 25), now)["feedback_open"] == 4
+    # Eltern erlassen den Mittwoch, das Kind war nicht da.
+    assert rewards.waive_feedback_day(1, date(2026, 9, 23), 1, now) == 1
+    assert [l["id"] for l in rewards.feedback_backlog(1, date(2026, 9, 25), now)] == [52, 53, 54]
     with closing(db.webapp_conn()) as c, c:
         for lid in (52, 53, 54):
             c.execute("INSERT INTO lesson_checkins(account_id,lesson_id,user_id,rating,created_at,updated_at) VALUES(1,?,1,2,'now','now')", (lid,))
     assert rewards.feedback_backlog(1, date(2026, 9, 25), now) == []
     assert fb.rings(1, date(2026, 9, 25), now)["feedback"] == {"done": 1, "total": 1, "backlog": 0}
+
+
+def test_only_parents_waive_a_day_and_only_in_the_past(env, monkeypatch):
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    from backend import rewards, parent_todo
+    from backend.routers import checkins
+    lessons([(61, "2026-09-23", 800, 845, None)])
+    monkeypatch.setattr(rewards, "now_local", lambda: datetime(2026, 9, 25, 14, 0, tzinfo=rewards.TZ))
+    items = parent_todo.feedback_items(1, date(2026, 9, 25))
+    assert [i["title"] for i in items] == ["1 Stunde ohne Rückmeldung"]
+    assert items[0]["action"]["page"] == "today" and items[0]["action"]["section"] == "nachholen"
+    monkeypatch.setattr("backend.routers.learning.access", lambda user, account, write=False, parent=False: (_ for _ in ()).throw(HTTPException(403)) if user.role == "child" else None)
+    kid = SimpleNamespace(id=2, role="child", is_admin=False)
+    parent = SimpleNamespace(id=1, role="parent", is_admin=False)
+    try:
+        checkins.waive_feedback(1, checkins.WaiveIn(day=date(2026, 9, 23)), kid)
+        assert False, "Kinder erlassen nichts"
+    except HTTPException as e:
+        assert e.status_code == 403
+    try:
+        checkins.waive_feedback(1, checkins.WaiveIn(day=date(2026, 9, 25)), parent)
+        assert False, "nur vergangene Tage"
+    except HTTPException as e:
+        assert e.status_code == 400
+    assert checkins.waive_feedback(1, checkins.WaiveIn(day=date(2026, 9, 23)), parent) == {"waived": 1}
+    assert parent_todo.feedback_items(1, date(2026, 9, 25)) == []
 
 
 def test_the_today_page_brings_the_last_school_day_on_a_free_day(env, monkeypatch):

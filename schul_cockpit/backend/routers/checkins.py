@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -217,3 +217,20 @@ def delete_caught_up(
     finally:
         conn.close()
     return {"ok": True}
+
+
+class WaiveIn(BaseModel):
+    day: date
+
+
+@router.post("/accounts/{account_id}/feedback/waive")
+def waive_feedback(account_id: int, body: WaiveIn, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Eltern erlassen die offenen Rückmeldungen eines Tages, an dem das Kind
+    nicht da war, ohne dass die Schule es führt (D210). Wie „entfällt“ bei
+    Aufgaben nur für Eltern."""
+    from .learning import access
+    from .. import rewards
+    access(user, account_id, write=True, parent=True)
+    if body.day >= rewards.now_local().date():
+        raise HTTPException(status_code=400, detail="Nur für vergangene Tage.")
+    return {"waived": rewards.waive_feedback_day(account_id, body.day, user.id, rewards.now_local())}

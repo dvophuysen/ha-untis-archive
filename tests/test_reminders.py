@@ -74,7 +74,7 @@ def test_web_push_is_gone(env):
 
 def test_snapshot_uses_due_tasks_material_and_ended_feedback(env):
     """Rückmeldungen: beendete, gehaltene Stunden ohne Bewertung, auch vergessene
-    der Vortage ab Beginn der Zählung (D210)."""
+    der Vortage ab Beginn des Schuljahrs (D210)."""
     import sqlite3
     from test_day_close import LESSON_COLUMNS
     _,_,patch=setup(env)
@@ -83,12 +83,11 @@ def test_snapshot_uses_due_tasks_material_and_ended_feedback(env):
         h.execute(f"CREATE TABLE IF NOT EXISTS lessons({LESSON_COLUMNS})")
         h.executemany("INSERT INTO lessons(id,account_id,date,start_time,end_time,subject_name,code,was_absent) VALUES(?,1,?,?,?,'Mathematik',?,0)",
                       [(1,'2026-09-14',915,1000,None),(2,'2026-09-14',1815,1900,None),(3,'2026-09-14',1015,1100,'cancelled'),
-                       (4,'2026-09-11',800,845,None),(5,'2026-09-01',800,845,None)])
+                       (4,'2026-09-11',800,845,None),(5,'2026-07-10',800,845,None)])
     with closing(db.webapp_conn()) as c:
-        c.execute("INSERT OR REPLACE INTO reward_config(id,start_day) VALUES(1,'2026-09-10')")
         c.execute("INSERT INTO tasks(account_id,title,status,source,due_date,created_at,updated_at) VALUES(1,'Aufgabe','open','manual','2026-09-15','now','now')")
     # Heute um 10 Uhr offen, die Stunde bis 19 Uhr läuft noch, die ausgefallene zählt nicht;
-    # dazu der vergessene Freitag. Der 01.09. liegt vor der Zählung.
+    # dazu der vergessene Freitag. Der Juli gehört zum vorigen Schuljahr.
     assert r.snapshot(1,NOW)==dict(homework=1,material=1,feedback=2,photos=0)
     with closing(db.webapp_conn()) as c:
         c.execute("UPDATE tasks SET status='done'")

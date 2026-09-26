@@ -32,7 +32,7 @@ def world(env, monkeypatch):
     def lessons(account, first, last):
         out, d, lid = [], first, 0
         while d <= last:
-            if d.weekday() < 5 and d not in plan["free"]:
+            if d.weekday() < 5 and d not in plan["free"] and d >= plan.get("since", date.min):
                 lid = int(d.strftime("%Y%m%d"))
                 out.append({"id": lid, "date": d.isoformat(), "start_time": 800, "end_time": 1300,
                             "subject_name": "Deutsch", "lstext": "Kommasetzung"})
@@ -197,6 +197,8 @@ def test_done_detection(world):
 
 
 def test_geschafft_needs_learning(world, monkeypatch):
+    # Offene Rückmeldungen der Vortage hielten den Tag offen (D210): hier gibt es keine.
+    world["since"] = MON
     tue = MON + timedelta(days=1)
     with closing(db.webapp_conn()) as c, c:
         c.execute("INSERT INTO reward_config(id,start_day) VALUES(1,?)", (MON.isoformat(),))
@@ -223,6 +225,8 @@ def test_geschafft_needs_learning(world, monkeypatch):
 
 
 def test_rescue_counts_learning_done_next_morning(world, monkeypatch):
+    # Offene Rückmeldungen der Vortage hielten den Tag offen (D210): hier gibt es keine.
+    world["since"] = MON
     tue = MON + timedelta(days=1)
     with closing(db.webapp_conn()) as c, c:
         c.execute("INSERT INTO reward_config(id,start_day) VALUES(1,?)", (MON.isoformat(),))

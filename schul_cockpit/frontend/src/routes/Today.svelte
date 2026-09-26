@@ -180,6 +180,15 @@
     finally { focusBusy = false; }
   }
   function saved(text = '') { message = text; load(); }
+  // Eltern erlassen die Rückmeldungen eines Tages, an dem das Kind nicht da war (D210).
+  let waiving = $state(null);
+  async function waive(day) {
+    if (!confirm(`Rückmeldungen vom ${formatShortDate(day)} entfallen lassen? Das Kind war an diesem Tag nicht im Unterricht.`)) return;
+    waiving = day;
+    try { await api.post(`/api/accounts/${accountId}/feedback/waive`, { day }); saved('Rückmeldungen für diesen Tag entfallen.'); }
+    catch (e) { message = e.message; }
+    finally { waiving = null; }
+  }
   // Ein Papier-Schritt startet die Übungsarbeit direkt (D178). Ist heute für
   // diesen Schritt schon eine erstellt und noch offen, geht sie wieder auf.
   async function startStep(s) {
@@ -387,7 +396,7 @@
           {#if backlogCount}
             <h4 class="backlog-head" data-section="nachholen">Noch nachholen <small>{backlogCount} {backlogCount === 1 ? 'Stunde' : 'Stunden'}</small></h4>
             {#each backlogDays as d (d.date)}
-              <p class="backlog-day">{formatShortDate(d.date)}</p>
+              <p class="backlog-day"><span>{formatShortDate(d.date)}</span>{#if actsAsParent(appState.me)}<button class="waive" disabled={waiving === d.date} onclick={() => waive(d.date)}>Entfällt, war nicht da</button>{/if}</p>
               <DaySchedule {accountId} lessons={d.lessons} now={new Date(`${d.date}T23:59:00`)} live={false} onsaved={() => saved('Rückmeldung nachgeholt.')} />
             {/each}
           {/if}
@@ -482,7 +491,8 @@
   .new-badge{background:var(--accent-fg);color:var(--accent);border-radius:var(--r-pill);padding:6px 12px;font-weight:700;font-size:var(--fs-xs)}
   .sec{margin-top:var(--sp-4)}
   .backlog-head{margin:var(--sp-3) 0 var(--sp-1);font-size:var(--fs-md)}.backlog-head small{font-weight:600;color:var(--fg-muted);font-size:var(--fs-xs)}
-  .backlog-day{margin:var(--sp-2) 0 2px;font-size:var(--fs-xs);color:var(--fg-muted);font-weight:700}
+  .backlog-day{margin:var(--sp-2) 0 2px;font-size:var(--fs-xs);color:var(--fg-muted);font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2)}
+  .backlog-day .waive{font-size:var(--fs-xs);min-height:36px;padding:0 var(--sp-2);border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-card);color:var(--fg)}
   .fold-head{width:100%;display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);min-height:44px;padding:var(--sp-2) var(--sp-3);background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-md);color:var(--fg);font-weight:700;font-size:var(--fs-md);text-align:left;margin-bottom:var(--sp-2)}
   .fold-head span{color:var(--good-fg, var(--fg))}
   .fold-head small{font-weight:600;color:var(--fg-muted);font-size:var(--fs-xs);white-space:nowrap}

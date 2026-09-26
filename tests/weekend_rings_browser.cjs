@@ -32,6 +32,7 @@ assert.equal(await ring.getAttribute('aria-label'),'Feedback: 1 von 3');
 await page.getByRole('heading',{name:/^Noch nachholen/}).waitFor();
 assert.match(await page.locator('.backlog-head').innerText(),/1 Stunde/);
 assert.equal(await page.locator('.backlog-day').innerText(),'Do. 24.09.');
+assert.equal(await page.locator('.backlog-day .waive').count(),0,'Kinder erlassen nichts');
 assert.equal(await page.getByRole('button',{name:'Lernen: 1 von 2'}).count(),1);
 await page.getByRole('heading',{name:/^Stunden vom Freitag/}).waitFor();
 assert.equal(await page.getByText('Stunden von heute').count(),0);

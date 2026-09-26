@@ -337,24 +337,38 @@ def _bag_packed(c, account_id: int, day: date) -> bool:
 
 
 def feedback_backlog(account_id: int, until: date, now: datetime) -> list[dict]:
-    """Beendete Stunden ohne Rückmeldung vom Beginn der Zählung bis ``until``.
+    """Beendete Stunden ohne Rückmeldung vom Beginn des Schuljahrs bis ``until``.
 
     Wie eine überfällige Hausaufgabe verfällt eine vergessene Rückmeldung
     nicht: Sie bleibt stehen, bis sie nachgeholt ist (D210). Ausgefallene
-    Stunden, Stunden ohne das Kind und ausgeblendete Kurse zählen nicht."""
-    # Der Tag selbst zählt immer, die Tage davor erst ab Beginn der Zählung:
-    # Stunden aus der Zeit davor wurden nie eingefordert.
-    first = min(until, start_day())
+    Stunden, Stunden ohne das Kind, ausgeblendete Kurse und von Eltern
+    erlassene Stunden zählen nicht."""
+    # Eingefordert wird ab Beginn des Schuljahrs (1. August), der Tag selbst immer.
+    from .learning_fields import school_year_start
+    first = min(until, school_year_start(until))
     today, clock = now.date().isoformat(), now.hour * 60 + now.minute
     ended = [l for l in _lessons(account_id, first, until) if _held(l)
              and (l["date"] < today or (l["date"] == today and (_minutes(l.get("end_time")) or 0) <= clock))]
     if not ended:
         return []
+    marks, ids = ",".join("?" * len(ended)), [l["id"] for l in ended]
     with closing(webapp_conn()) as c:
         rated = {r["lesson_id"] for r in c.execute(
             f"SELECT lesson_id FROM lesson_checkins WHERE account_id=? AND rating IS NOT NULL "
-            f"AND lesson_id IN ({','.join('?' * len(ended))})", (account_id, *[l["id"] for l in ended]))}
+            f"AND lesson_id IN ({marks})", (account_id, *ids))}
+        # Von Eltern erlassen: Das Kind war nicht da, ohne dass die Schule es führt.
+        rated |= {r["lesson_id"] for r in c.execute(
+            f"SELECT lesson_id FROM feedback_waivers WHERE account_id=? AND lesson_id IN ({marks})", (account_id, *ids))}
     return [l for l in ended if l["id"] not in rated]
+
+
+def waive_feedback_day(account_id: int, day: date, user_id: int, now: datetime) -> int:
+    """Eltern erlassen die offenen Rückmeldungen eines Tages (D210)."""
+    lessons = [l for l in feedback_backlog(account_id, day, now) if l["date"] == day.isoformat()]
+    with closing(webapp_conn()) as c, c:
+        c.executemany("INSERT OR IGNORE INTO feedback_waivers(account_id,lesson_id,waived_by,created_at) VALUES(?,?,?,?)",
+                      [(account_id, l["id"], user_id, now.isoformat()) for l in lessons])
+    return len(lessons)
 
 
 def _feedback_open(c, account_id: int, day: date, now: datetime) -> int:

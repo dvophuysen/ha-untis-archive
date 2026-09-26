@@ -1442,3 +1442,15 @@ CREATE TABLE IF NOT EXISTS digital_textbook_misses (
  PRIMARY KEY(account_id, book_id, page)
 );
 """))
+
+# Rückmeldungen, die Eltern erlassen, weil das Kind nicht da war (D210): Die
+# Stunde bleibt, sie wird nur nicht mehr eingefordert.
+_MIGRATIONS.append(("opt_fb_001_feedback_waivers", """
+CREATE TABLE IF NOT EXISTS feedback_waivers (
+    account_id INTEGER NOT NULL,
+    lesson_id INTEGER NOT NULL,
+    waived_by INTEGER,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (account_id, lesson_id)
+);
+"""))
