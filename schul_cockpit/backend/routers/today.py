@@ -100,6 +100,7 @@ async def _today(account_id: int, user) -> dict:
         lesson_ids += [l["id"] for l in carry_block["lessons"]]
     checkins_by_lesson: dict[int, dict] = {}
     caught_up_lessons: set[int] = set()
+    waived_lessons: set[int] = set()
     if lesson_ids:
         wconn = webapp_conn()
         try:
@@ -119,6 +120,12 @@ async def _today(account_id: int, user) -> dict:
                 [account_id, *lesson_ids],
             ).fetchall():
                 caught_up_lessons.add(r["lesson_id"])
+            # Von Eltern erlassene Stunden (D210) brauchen keine Rückmeldung.
+            waived_lessons = {r["lesson_id"] for r in wconn.execute(
+                f"SELECT lesson_id FROM feedback_waivers "
+                f"WHERE account_id = ? AND lesson_id IN ({placeholder})",
+                [account_id, *lesson_ids],
+            ).fetchall()}
         finally:
             wconn.close()
 
@@ -134,6 +141,7 @@ async def _today(account_id: int, user) -> dict:
         cin = checkins_by_lesson.get(lid)
         lesson["checkin"] = cin
         lesson["caught_up"] = lid in caught_up_lessons
+        lesson["waived"] = lid in waived_lessons
         if (cin is None or cin["rating"] is None) and not lesson["is_cancelled"] and not lesson["was_absent"]:
             unrated += 1
         enriched.append(lesson)
@@ -141,6 +149,7 @@ async def _today(account_id: int, user) -> dict:
     for lesson in (carry_block or {}).get("lessons", []):
         lesson["checkin"] = checkins_by_lesson.get(lesson["id"])
         lesson["caught_up"] = lesson["id"] in caught_up_lessons
+        lesson["waived"] = lesson["id"] in waived_lessons
 
     # Vergessene Rückmeldungen der Tage davor bleiben stehen, bis sie
     # nachgeholt sind (D210), wie überfällige Hausaufgaben.

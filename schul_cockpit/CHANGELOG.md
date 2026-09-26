@@ -1,3 +1,10 @@
+## 1.37.0
+
+- „Heute“ lädt schneller: Die Tasche kommt direkt mit dem Tagesplan, und auf dem Gerät des Kindes starten die Daten gleich mit der Anmeldung statt danach. Über den Fernzugriff steht die Seite etwa eine halbe Sekunde früher.
+- Woche und Familienstatus zählen offene Rückmeldungen wie „Heute“: auch ältere als eine Woche (ab 21.09.), nie Einträge ohne Fach, nie von Eltern erlassene Stunden. Erlässt ein Elternteil den Freitag, zählt er auch am Wochenende nicht mehr.
+- Teamunterricht (zwei Lehrkräfte, gleiches Fach, gleiche Zeit) steht als eine Stunde da; eine Bewertung gilt für beide Einträge. Parallele Stunden in verschiedenen Fächern bleiben getrennt.
+- Die App misst ihre Ladezeiten: Jede Antwort nennt ihre Dauer, langsame Aufrufe stehen im Add-on-Log. Ein Kalender aus Home Assistant wird eine Minute gemerkt.
+
 ## 1.36.1
 
 - Vergessene Rückmeldungen werden ab Montag, 21.09., eingefordert; ältere Stunden hat die App nie nachgefragt.

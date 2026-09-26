@@ -382,6 +382,13 @@ def test_the_today_page_brings_the_last_school_day_on_a_free_day(env, monkeypatc
     assert carry["lessons"][0]["checkin"]["rating"] == 2
     # Die vergessene Stunde vom Donnerstag steht zum Nachholen darunter (D210).
     assert [l["id"] for l in body["feedback_backlog"]] == [43]
+    # Erlassen die Eltern den Freitag, zählt er weder im Übertrag noch im Ring.
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO feedback_waivers(account_id,lesson_id,waived_by,created_at) VALUES(1,41,1,'now')")
+    body = client.get("/api/accounts/1/today").json()
+    assert body["carry_lessons"]["lessons"][0]["waived"] is True
+    assert fb.rings(1, date(2026, 9, 26), datetime(2026, 9, 26, 10, 0))["feedback"]["done"] == \
+        fb.rings(1, date(2026, 9, 26), datetime(2026, 9, 26, 10, 0))["feedback"]["total"] - 1  # nur Donnerstag offen
     # An einem Schultag gibt es keinen Übertrag.
     monkeypatch.setattr(today_routes, "today_local", lambda: date(2026, 9, 25))
     assert client.get("/api/accounts/1/today").json()["carry_lessons"] is None

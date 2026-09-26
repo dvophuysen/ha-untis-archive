@@ -84,7 +84,8 @@
   // Rückmeldungen je Zeile gezählt: eine Doppelstunde ist eine Rückmeldung.
   // Am freien Tag gelten Rückmeldungen und Ringe für den letzten Schultag, wie die Lernliste (D205).
   const carryLessons = $derived(data?.carry_lessons ?? null);
-  const fbLessons = $derived(carryLessons ? carryLessons.lessons : (data?.lessons ?? []));
+  // Von Eltern erlassene Stunden (D210) fragt die App nicht mehr ab.
+  const fbLessons = $derived((carryLessons ? carryLessons.lessons : (data?.lessons ?? [])).filter(l => !l.waived));
   const fbNow = $derived(carryLessons ? new Date(`${carryLessons.date}T23:59:00`) : now);
   const fbTitle = $derived(carryLessons ? `Stunden vom ${WEEKDAYS[new Date(carryLessons.date + 'T12:00:00').getDay()]}` : 'Stunden von heute');
   // Ein Eintrag ohne Fach ist keine Stunde (etwa eine Klassenfahrt): keine Rückmeldung.

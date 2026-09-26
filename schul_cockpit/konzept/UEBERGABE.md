@@ -1,6 +1,6 @@
 # Übergabe an die nächste Session
 
-Stand 26.09.2026. Live läuft Schul-Cockpit **1.36.1** (vergessene Rückmeldungen bleiben offen wie Hausaufgaben, D210; vier Ringe auf der Familienkarte, Freitagsstand am Wochenende, D209; 1.34.0 war die Überarbeitung D208); untis_archive **0.6.0** ist über HACS installiert und wird erst mit dem nächsten HA-Neustart durch den Nutzer wirksam (HA 2026.9.3; getestet gegen 2026.2.3, neuer geht unter Python 3.13 nicht). Keine Kindernamen,
+Stand 26.09.2026. Live läuft Schul-Cockpit **1.37.0** (Heute in einer Runde, eine Rückmelde-Regel überall, Teamunterricht, Ladezeiten im Log „langsam:“, D211) (vergessene Rückmeldungen bleiben offen wie Hausaufgaben, D210; vier Ringe auf der Familienkarte, Freitagsstand am Wochenende, D209; 1.34.0 war die Überarbeitung D208); untis_archive **0.6.0** läuft seit dem HA-Neustart am 26.09. (HA 2026.9.3; getestet gegen 2026.2.3). Offen zur Abstimmung: [ENTWURF_VOKABEL_ABSTAND.md](ENTWURF_VOKABEL_ABSTAND.md). Nach ein, zwei Tagen `python3 scripts/ha_addon_log.py --lines 20000 --grep langsam` auswerten. Keine Kindernamen,
 PINs oder Schlüssel in diesem Dokument (D15/D68). Maßgeblicher Einstieg ist
 [README.md](README.md) in diesem Ordner; Einzelheiten zu jedem Release
 stehen im [CHANGELOG](../CHANGELOG.md), die Begründungen in
@@ -11,7 +11,7 @@ stehen im [CHANGELOG](../CHANGELOG.md), die Begründungen in
 - Vollständige Durchsicht des Codes, Befunde und Umsetzungsstand in [OPTIMIERUNG.md](OPTIMIERUNG.md). Umgesetzt in sechs Strängen: KI-Pipeline (Anspruch `analysis_claimed_at`, dauerhafte Versuchszähler, Abbildungen mit `attempts`), Kern (Migrationen je Schritt in einer Transaktion, `split_statements`; Sitzungen als sha256; `reconcile` über alle Tabellen mit `account_id`), Tagesablauf (`tasks.ha_description` als Abgleichschlüssel, Minutenschleife über alle Konten, `rewards.note_later`), Lernen (`topic_answers_void`, `mc.stable_version`, `mc.fit_context`, `schoolday.py`, `digital_textbook_misses`), Frontend (Lazy-Seiten, Kindwechsel mit `{#key}`, Update-Neuladen nur ohne Eingaben), HA-Komponente (`lessons.removed_at`, `absence_deletions`, Lehrstoff-Nachlauf, `backup.py`).
 - Neu für Mehrfach-Schreibzugriffe: `db.tx(conn)`; `with conn:` allein ist bei `isolation_level=None` keine Transaktion.
 - Offen: Vokabel-Wiederholung mit Abstand (D155, eigener Entwurf), Liste „Bewusst offen“ in OPTIMIERUNG.md. Nach dem HA-Neustart prüfen, ob `absence_deletions` leer bleibt oder nur echte Löschungen enthält und ob der Lehrstoff-Nachlauf die Stunden der letzten Tage füllt.
-- Tests: 1023 Backend, 18 `tests_ha` (Python 3.13, `pytest-homeassistant-custom-component==0.13.316`), 13 Browser-Tests (`NODE_PATH=/opt/node22/lib/node_modules/playwright/node_modules SCHOOL_TEST_CHROMIUM=/opt/pw-browsers/chromium-1194/chrome-linux/chrome node tests/<name>_browser.cjs`), `npm test` im Frontend.
+- Tests: 1039 Backend, 18 `tests_ha` (Python 3.13, `pytest-homeassistant-custom-component==0.13.316`), 13 Browser-Tests (`NODE_PATH=/opt/node22/lib/node_modules/playwright/node_modules SCHOOL_TEST_CHROMIUM=/opt/pw-browsers/chromium-1194/chrome-linux/chrome node tests/<name>_browser.cjs`), `npm test` im Frontend.
 
 ## UX-Überarbeitung 25.09.2026 (1.17.0 bis 1.21.0, D171 bis D177)
 

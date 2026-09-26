@@ -232,6 +232,10 @@ def rings(account_id: int, today: date, now: datetime) -> dict:
             rated = {r[0] for r in conn.execute(
                 f"SELECT lesson_id FROM lesson_checkins WHERE account_id=? AND rating IS NOT NULL "
                 f"AND lesson_id IN ({','.join('?' * len(ids))})", (account_id, *ids))}
+            # Von Eltern erlassen (D210) gilt wie bewertet, auch am letzten Schultag.
+            rated |= {r[0] for r in conn.execute(
+                f"SELECT lesson_id FROM feedback_waivers WHERE account_id=? "
+                f"AND lesson_id IN ({','.join('?' * len(ids))})", (account_id, *ids))}
     open_fb = sum(1 for g in ended if _group_open(g, rated))
     # Vergessene Rückmeldungen der Tage davor bleiben offen, bis sie nachgeholt
     # sind (D210), wie überfällige Aufgaben.
