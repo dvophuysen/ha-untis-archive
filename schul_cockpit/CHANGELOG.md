@@ -1,3 +1,7 @@
+## 1.37.1
+
+- Lernseite und Lernbegleiter: Ein Tipp auf einen Link (etwa „Ansehen“ bei einer Übungsarbeit oder „Los“), während die Seite noch lädt, geht nicht mehr verloren, sondern wird danach ausgeführt.
+
 ## 1.37.0
 
 - „Heute“ lädt schneller: Die Tasche kommt direkt mit dem Tagesplan, und auf dem Gerät des Kindes starten die Daten gleich mit der Anmeldung statt danach. Über den Fernzugriff steht die Seite etwa eine halbe Sekunde früher.

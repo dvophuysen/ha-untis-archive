@@ -1,6 +1,6 @@
 # Übergabe an die nächste Session
 
-Stand 26.09.2026. Live läuft Schul-Cockpit **1.37.0** (Heute in einer Runde, eine Rückmelde-Regel überall, Teamunterricht, Ladezeiten im Log „langsam:“, D211) (vergessene Rückmeldungen bleiben offen wie Hausaufgaben, D210; vier Ringe auf der Familienkarte, Freitagsstand am Wochenende, D209; 1.34.0 war die Überarbeitung D208); untis_archive **0.6.0** läuft seit dem HA-Neustart am 26.09. (HA 2026.9.3; getestet gegen 2026.2.3). Offen zur Abstimmung: [ENTWURF_VOKABEL_ABSTAND.md](ENTWURF_VOKABEL_ABSTAND.md). Nach ein, zwei Tagen `python3 scripts/ha_addon_log.py --lines 20000 --grep langsam` auswerten. Keine Kindernamen,
+Stand 26.09.2026. Live läuft Schul-Cockpit **1.37.1** (Heute in einer Runde, eine Rückmelde-Regel überall, Teamunterricht, Ladezeiten im Log „langsam:“, D211) (vergessene Rückmeldungen bleiben offen wie Hausaufgaben, D210; vier Ringe auf der Familienkarte, Freitagsstand am Wochenende, D209; 1.34.0 war die Überarbeitung D208); untis_archive **0.6.0** läuft seit dem HA-Neustart am 26.09. (HA 2026.9.3; getestet gegen 2026.2.3). Offen zur Abstimmung: [ENTWURF_VOKABEL_ABSTAND.md](ENTWURF_VOKABEL_ABSTAND.md). Nach ein, zwei Tagen `python3 scripts/ha_addon_log.py --lines 20000 --grep langsam` auswerten. Keine Kindernamen,
 PINs oder Schlüssel in diesem Dokument (D15/D68). Maßgeblicher Einstieg ist
 [README.md](README.md) in diesem Ordner; Einzelheiten zu jedem Release
 stehen im [CHANGELOG](../CHANGELOG.md), die Begründungen in
