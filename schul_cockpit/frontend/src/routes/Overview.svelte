@@ -55,6 +55,10 @@
     feedback: { page: 'today', section: 'rueckmelden' },
   };
 
+  // Was ein Ring schon zeigt, steht nicht noch einmal als Zeile darunter.
+  // Überfällige Aufgaben bleiben: Sie zählt der Ring nicht als Warnung.
+  const IN_RINGS = new Set(['due', 'bag', 'feedback']);
+
   function open(kid, target) {
     if (!target) return;
     setActiveAccount(kid.account_id);
@@ -159,7 +163,7 @@
           <button class="okline" onclick={() => open(kid, { page: 'today' })}><span>✓ {b.ok.join(' · ')}</span></button>
         {/if}
         {/if}
-        {#each b.acute as r (r.key)}
+        {#each b.acute.filter((r) => !kid.rings || !IN_RINGS.has(r.key)) as r (r.key)}
           <button class="row {r.tone}" onclick={() => open(kid, r.go)}>
             <span class="ic" aria-hidden="true">{r.icon}</span>
             <span class="tx"><b>{r.title}</b><small>{r.detail}</small></span>

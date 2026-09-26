@@ -11,7 +11,7 @@ const scheduleA=[{date:'2026-09-24',label:'Heute',is_today:true,start:'07:50',en
  {date:'2026-09-25',label:'Fr 25.09.',is_today:false,start:'07:50',end:'13:10',planned_start:'07:50',planned_end:'13:10',early_end:false,late_start:false,all_cancelled:false,headline:'',deviates:false,notes:[],
   periods:[per('MU','07:50','08:35'),per('MU','08:40','09:25'),per('MA','09:45','10:30',{exam:true}),per('MA','10:30','11:15',{exam:true})]}];
 const boardA={schedule:scheduleA,status:{level:'warn',label:'Nachsteuern',reasons:['Mathematik: noch nichts geübt']},evening:false,
-  ok:['Aufgaben bis morgen erledigt','Tasche für Fr gepackt','6/6 Stunden bewertet'],acute:[],
+  ok:['Aufgaben bis morgen erledigt','Tasche für Fr gepackt','6/6 Stunden bewertet'],acute:[{key:'overdue',tone:'bad',icon:'⚠️',title:'1 Aufgabe überfällig',detail:'Brüche',go:go('today','aufgaben')},{key:'due',tone:'info',icon:'📝',title:'1 Aufgabe bis morgen offen',detail:'Lesen',go:go('today','aufgaben')},{key:'bag',tone:'info',icon:'🎒',title:'Tasche für Mo 28.09.: 0 von 3 Fächern',detail:'noch nicht alles abgehakt',go:go('today','tasche')},{key:'feedback',tone:'warn',icon:'🗣️',title:'4 Stunden ohne Rückmeldung',detail:'an den Vortagen 4',go:go('week')}],
   exams:[{exam_key:'cal:m',date:'2026-09-28',day:'Mo 28.09.',days_until:4,subject_name:'MATHEMATIK',kind:'Arbeit',topics:4,practiced:3,stages:stages(1,1,1,1),missing:0,material_ok:true,go:go('klausuren','arbeit-cal:m')},
          {exam_key:'cal:mu',date:'2026-10-05',day:'Mo 05.10.',days_until:11,subject_name:'MUSIK',kind:'Lernkontrolle',topics:1,practiced:0,stages:stages(0,0,0,1),missing:0,material_ok:true,go:go('klausuren','arbeit-cal:mu')}],
   later:[{exam_key:'cal:e',day:'Fr 30.10.',days_until:36,subject_name:'ENGLISCH',topics:3,missing:2,go:go('klausuren','arbeit-cal:e')},
@@ -55,6 +55,8 @@ await a.getByText('Nachsteuern',{exact:true}).waitFor();await b.getByText('Eingr
 // Die vier Ringe wie auf „Heute“ ersetzen Lernzeile und Erledigt-Zeile.
 assert.deepEqual(await a.locator('.ring-btn').allInnerTexts().then(t=>t.map(x=>x.replace(/\s+/g,' ').trim())),['✓ Aufgaben 2 von 2','🧠 Lernen 1 von 2','✓ Tasche 3 von 3','💬 Feedback 1 von 3']);
 assert.equal(await a.locator('.okline').count(),0,'rings replace the ok lines');
+// Was ein Ring zeigt, steht nicht noch einmal als Zeile da; Überfälliges bleibt.
+assert.deepEqual(await a.locator('.row b').allInnerTexts(),['1 Aufgabe überfällig','Mathematik fällt schwer']);
 assert.equal(await b.locator('.okline').count(),0);
 // Stundenplan: heute und der nächste Schultag, Ausfall durchgestrichen, früher Schluss gelb (D170).
 assert.deepEqual(await a.locator('.plan .lbl > span:first-child').allInnerTexts(),['Heute','Fr 25.09.']);

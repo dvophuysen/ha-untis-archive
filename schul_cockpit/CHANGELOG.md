@@ -1,3 +1,7 @@
+## 1.35.1
+
+- Familienkarte: Was die Ringe schon zeigen, steht nicht mehr zusätzlich als Zeile darunter (Tasche, Stunden ohne Rückmeldung, Aufgaben bis morgen). Überfällige Aufgaben, Aufgaben ohne Termin, Fotos und Arbeiten bleiben als Zeilen.
+
 ## 1.35.0
 
 - Die Familienkarte zeigt je Kind die vier Ringe von „Heute“: Aufgaben, Lernen, Tasche, Feedback. Sie ersetzen die Zeilen „Lernen heute“ und „✓ … erledigt“; ein Tipp auf einen Ring springt in den Abschnitt beim Kind. Die Ringe stehen für Eltern immer da, nicht erst nach der Schule.
