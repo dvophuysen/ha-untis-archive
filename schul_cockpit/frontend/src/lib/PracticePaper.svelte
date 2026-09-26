@@ -6,11 +6,14 @@
   import { view, actsAsParent } from './viewMode.svelte.js';
   import { appState } from './store.svelte.js';
   import { showFile } from './fileViewer.svelte.js';
+  import TaskFeedback from './TaskFeedback.svelte';
+  import FeedbackSummary from './FeedbackSummary.svelte';
+  import ManualReview from './ManualReview.svelte';
 
   let { accountId, attemptId, onclose = () => {}, backLabel = 'Zurück zum Raster' } = $props();
   const base = $derived(`/api/accounts/${accountId}/practice/attempts/${attemptId}`);
   let a = $state(null), error = $state(''), busy = $state(''), typing = $state(false), answers = $state({});
-  let fileInput = $state(null), printing = $state(false);
+  let fileInput = $state(null), printing = $state(false), manual = $state(false);
   const ROMAN = { 1: 'I', 2: 'II', 3: 'III' };
   const num = (x) => Number(x).toLocaleString('de-DE');
   const store = () => `practice-answers-${attemptId}`;
@@ -71,6 +74,9 @@
     const points = Object.fromEntries(openNrs.map((nr) => [String(nr - 1), Number(String(reviewPoints[String(nr - 1)]).replace(',', '.'))]));
     a = await api.post(`${base}/review`, { points });
   });
+  // Nacharbeiten mit dem Mentor (D207): nur mit Thema, nur wenn Punkte fehlen.
+  const redoHref = (t, i) => (t.topic_id ? `#/learning?topic_id=${t.topic_id}&redo=${attemptId}&task=${i}` : '');
+  const manualSaved = (res) => { a = res; manual = false; window.scrollTo?.(0, 0); };
   const total = $derived(a ? a.exam.tasks.reduce((s, t) => s + t.points, 0) : 0);
   const got = $derived(a && graded ? a.exam.tasks.reduce((s, t, i) => s + (a.feedback[String(i)]?.uncertain ? 0 : a.feedback[String(i)]?.points || 0), 0) : 0);
   const canSubmit = $derived(a && (a.pages.length || Object.values(answers).some((v) => (v || '').trim())));
@@ -86,7 +92,14 @@
       <h3>{a.exam.title}</h3>
     </header>
 
-    {#if reviewing && !parentView}
+    {#if manual && parentView && (reviewing || graded)}
+      {#if a.pages.length}
+        <div class="pages review-pages">
+          {#each a.pages as pid, n (pid)}<button type="button" class="page-open" onclick={() => showFile(photoUrl(pid), `Seite ${n + 1}`)} aria-label={`Seite ${n + 1} groß ansehen`}><img src={photoUrl(pid)} alt={`Seite ${n + 1}`} loading="lazy" /></button>{/each}
+        </div>
+      {/if}
+      <ManualReview tasks={a.exam.tasks} feedback={a.feedback} {base} onsaved={manualSaved} oncancel={() => (manual = false)} />
+    {:else if reviewing && !parentView}
       <div class="notice review-wait" role="status">
         <strong>Deine Arbeit ist abgegeben.</strong>
         <p>Einige Aufgaben konnte die App auch nach mehreren Versuchen nicht sicher lesen. Deine Eltern schauen sie sich an; danach siehst du hier deine Punkte. So bekommst du keine falschen Punkte, weder zu viele noch zu wenige.</p>
@@ -116,29 +129,31 @@
         </article>
       {/each}
       <button class="primary" disabled={!!busy || !reviewReady} onclick={saveReview}>Punkte übernehmen</button>
+      <button class="btn" disabled={!!busy} onclick={() => (manual = true)}>Alle Aufgaben selbst prüfen</button>
       {#if a.pages.length || Object.values(a.answers || {}).some((v) => (v || '').trim())}<button class="btn" disabled={!!busy} onclick={regradeNow}>Mit denselben Fotos neu auswerten</button>{/if}
       <button class="ghost" disabled={!!busy} onclick={regrade}>Seiten austauschen und neu auswerten</button>
     {:else if graded}
       <div class="result">
         <strong class="big">{num(got)} von {total} Punkten</strong>
         {#if a.feedback.overall?.text}<p>{a.feedback.overall.text}</p>{/if}
-        <p class="dim">{a.feedback.check?.resolved_by_parent?.length ? `Ausgewertet nach den Punktkriterien, Aufgabe ${a.feedback.check.resolved_by_parent.join(', ')} von deinen Eltern geprüft.` : a.feedback.check ? `Ausgewertet nach den Punktkriterien, ${a.feedback.check.passes} unabhängige Auswertungen stimmen überein.` : 'KI-Auswertung nach den Punktkriterien, keine Schulnote.'} Keine Schulnote.</p>
+        <p class="dim">{a.feedback.check?.manual ? 'Von deinen Eltern geprüft.' : a.feedback.check?.resolved_by_parent?.length ? `Ausgewertet nach den Punktkriterien, Aufgabe ${a.feedback.check.resolved_by_parent.join(', ')} von deinen Eltern geprüft.` : a.feedback.check ? `Ausgewertet nach den Punktkriterien, ${a.feedback.check.passes} unabhängige Auswertungen stimmen überein.` : 'KI-Auswertung nach den Punktkriterien, keine Schulnote.'} Keine Schulnote.</p>
       </div>
+      <FeedbackSummary overall={a.feedback.overall} losses={a.feedback.losses} />
       {#each a.exam.tasks as t, i}
         {@const f = a.feedback[String(i)]}
         <article class="task">
           <div class="t-head"><strong>Aufgabe {i + 1}</strong><span class="tag">{t.skill_title} · {ROMAN[t.afb]}</span>
             <span class="pts" class:full={f && !f.uncertain && f.points === t.points}>{f?.uncertain ? 'unklar' : `${num(f?.points ?? 0)} / ${t.points}`}</span></div>
           {#if t.figur_src}<img class="fig" src={t.figur_src} alt={t.figur_text || 'Abbildung zur Aufgabe'} />{/if}{#if t.abbildung}<img class="fig" src={`./api/accounts/${accountId}/materials/figures/${t.abbildung}`} alt={t.abbildung_text || 'Abbildung zur Aufgabe'} loading="lazy" />{/if}<p class="preserve">{t.prompt}</p>
-          {#if f}<p>{f.rationale}</p><p><strong>Nächster Schritt:</strong> {f.next_step}</p>
-            {#if f.transcription}<details><summary>So wurde deine Antwort gelesen</summary><p class="preserve">{f.transcription}</p></details>{/if}{/if}
-          <details><summary>Lösung und Punktkriterien</summary><p class="preserve">{t.solution}</p><p class="preserve dim">{t.criteria}</p></details>
+          <TaskFeedback {f} most={t.points} solution={t.solution} criteria={t.criteria} practiceHref={redoHref(t, i)} />
+          {#if parentView && a.prior?.[String(i)] && a.prior[String(i)].points !== f?.points}<p class="dim">Vor eurer Prüfung: {a.prior[String(i)].uncertain ? 'unklar' : `${num(a.prior[String(i)].points)} Punkte`} (sieht das Kind nicht)</p>{/if}
         </article>
       {/each}
       {#if actsAsParent(appState.me)}
         <div class="regrade">
-          <p class="dim">Zweifel an der Auswertung? Die App wertet mit denselben Fotos neu aus, wieder mehrfach und unabhängig. Bei schlecht lesbaren Fotos erst die Seiten austauschen. Die bisherige Auswertung zählt dann nicht mehr.</p>
+          <p class="dim">Zweifel an der Auswertung? Prüft die Arbeit selbst, auf Wunsch mit einem KI-Vorschlag, oder lasst die App mit denselben Fotos neu auswerten. Bei schlecht lesbaren Fotos erst die Seiten austauschen. Das Kind sieht immer nur die neueste Bewertung.</p>
           <span class="regrade-acts">
+            <button class="btn" disabled={!!busy} onclick={() => { manual = true; window.scrollTo?.(0, 0); }}>Selbst prüfen</button>
             <button class="btn" disabled={!!busy} onclick={regradeNow}>Neu auswerten lassen</button>
             <button class="ghost" disabled={!!busy} onclick={regrade}>Seiten austauschen</button>
           </span>

@@ -1,12 +1,12 @@
 # Übergabe an die nächste Session
 
-Stand 26.09.2026. Schul-Cockpit **1.32.0**, untis_archive **0.6.0** (wirksam erst nach einem HA-Neustart durch den Nutzer). Keine Kindernamen,
+Stand 26.09.2026. Schul-Cockpit **1.34.0**, untis_archive **0.6.0** (wirksam erst nach einem HA-Neustart durch den Nutzer). Keine Kindernamen,
 PINs oder Schlüssel in diesem Dokument (D15/D68). Maßgeblicher Einstieg ist
 [README.md](README.md) in diesem Ordner; Einzelheiten zu jedem Release
 stehen im [CHANGELOG](../CHANGELOG.md), die Begründungen in
 [ENTSCHEIDUNGEN.md](ENTSCHEIDUNGEN.md).
 
-## Überarbeitung 26.09.2026 (1.32.0, D207)
+## Überarbeitung 26.09.2026 (1.34.0, D208)
 
 - Vollständige Durchsicht des Codes, Befunde und Umsetzungsstand in [OPTIMIERUNG.md](OPTIMIERUNG.md). Umgesetzt in sechs Strängen: KI-Pipeline (Anspruch `analysis_claimed_at`, dauerhafte Versuchszähler, Abbildungen mit `attempts`), Kern (Migrationen je Schritt in einer Transaktion, `split_statements`; Sitzungen als sha256; `reconcile` über alle Tabellen mit `account_id`), Tagesablauf (`tasks.ha_description` als Abgleichschlüssel, Minutenschleife über alle Konten, `rewards.note_later`), Lernen (`topic_answers_void`, `mc.stable_version`, `mc.fit_context`, `schoolday.py`, `digital_textbook_misses`), Frontend (Lazy-Seiten, Kindwechsel mit `{#key}`, Update-Neuladen nur ohne Eingaben), HA-Komponente (`lessons.removed_at`, `absence_deletions`, Lehrstoff-Nachlauf, `backup.py`).
 - Neu für Mehrfach-Schreibzugriffe: `db.tx(conn)`; `with conn:` allein ist bei `isolation_level=None` keine Transaktion.

@@ -1,6 +1,6 @@
-## 1.32.0
+## 1.34.0
 
-Überarbeitung nach einer vollständigen Durchsicht des Codes (D207). Nichts an Aussehen oder Abläufen ändert sich, außer wo es unten steht.
+Überarbeitung nach einer vollständigen Durchsicht des Codes (D208). Nichts an Aussehen oder Abläufen ändert sich, außer wo es unten steht.
 
 Schneller
 - Die App startet schneller: Die Startseite lädt weniger als die Hälfte, Woche und Lernen werden im Hintergrund vorbereitet. Eltern laden beim Öffnen nicht mehr zuerst die Seite eines Kindes.
@@ -46,6 +46,19 @@ Weitere Korrekturen
 - Die Familienkarte zeigt parallele Stunden. „Mehr laden“ in Materialien bleibt stehen. Die Nutzungszeit am Elterngerät zählt auch beim Schließen für das Kind.
 - Die zweite Seite einer Doppelseite passt wieder zur Hausaufgabe. Buchseiten nach einer gestörten Anmeldung werden später wieder geholt. Dateien mit Umlauten im Namen öffnen wieder. Stundeneinträge behalten ihre Kapitel, von Hand gesetzte Kapitelenden bleiben beim Neulesen.
 - Suche findet Umlaute und ß. Nach Mitternacht gilt überall das deutsche Datum. Eine unlesbare history.db lässt das Add-on starten und zeigt den Fehler.
+
+## 1.33.0
+
+- Auch die Übungsklausur zeigt je Aufgabe, was Punkte gebracht hat, wo Punkte verloren gingen und wie es richtig gewesen wäre. Eltern können sie selbst prüfen, auf Wunsch mit einem KI-Vorschlag.
+- Beim Vokabeltest auf Papier steht bei jedem falschen Wort, was genau falsch war, dazu eine Merkhilfe; oben steht, woran es lag (etwa Rechtschreibung oder Artikel) und was als Nächstes geübt wird. Eltern können jedes Wort selbst entscheiden.
+- Beim Üben mit dem Mentor sagt die Rückmeldung zu einer Antwort jetzt immer, was stimmt, was fehlt und wie es zur vollständigen Antwort kommt.
+
+## 1.32.0
+
+- Übungsarbeiten zeigen jetzt je Aufgabe, was Punkte gebracht hat, wo und warum Punkte verloren gingen und was dort hätte stehen müssen, dazu die volle Lösung und den nächsten Schritt.
+- Oben steht eine Zusammenfassung: was schon klappt, wo die meisten Punkte liegen geblieben sind und was als Nächstes geübt wird.
+- „Mit dem Mentor üben“ bei jeder Aufgabe öffnet eine Übung genau zu diesem Fehler.
+- Eltern können jede Arbeit selbst prüfen, auf Wunsch mit einem KI-Vorschlag. Das Kind sieht nur die neueste Bewertung.
 
 ## 1.31.2
 

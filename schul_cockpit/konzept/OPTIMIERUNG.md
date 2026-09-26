@@ -273,7 +273,7 @@ die Platte, Migrationen als nummerierte Dateien mit `PRAGMA user_version`.
 Das sind Umbauten mit Wirkung auf den Lernstand und die Kosten; sie brauchen
 jeweils einen eigenen Entwurf.
 
-## 6. Umsetzungsstand (26.09.2026, Schul-Cockpit 1.32.0, untis_archive 0.6.0, D207)
+## 6. Umsetzungsstand (26.09.2026, Schul-Cockpit 1.34.0, untis_archive 0.6.0, D208)
 
 Umgesetzt: alle P0-Befunde (K1 bis K11), alle P1-Befunde (A1 bis A22, H1 bis H8), der größte Teil von P2, die Pakete 1, 2, 4, 6, 7 und 8 sowie aus Paket 3 und 5 der Transaktionshelfer `db.tx`, das Modul `schoolday.py` für Schultage mit Ferien, die Rechteprüfung mit Geräterolle in Lernen, Arbeiten und Aufgaben, die Datumsgrenzen nach deutscher Zeit an den gefundenen Stellen und die Tempo-Punkte (Fächerkatalog, Vokabel-Fortschritt, Lernplan liest ohne Schreiben, Kompass/Arbeiten/Fotos/PDF im Threadpool, Belohnungsprüfung nach der Antwort, Startbundle 92 auf 52 kB gzip).
 

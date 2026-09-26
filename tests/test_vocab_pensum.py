@@ -319,6 +319,45 @@ def test_too_many_unsure_words_hold_the_paper_for_the_parents(setup):
     assert vocab_daily.review_items(1) == []
 
 
+def test_parents_check_a_vocab_paper_themselves_and_the_trainer_follows(setup):
+    """D207: Jedes falsche Wort bekommt Grund, Hinweis und Merkhilfe; Eltern prüfen
+    ein ausgewertetes Blatt selbst, auf Wunsch mit KI-Vorschlag, und die
+    Antworten im Trainer werden ersetzt, nicht doppelt gezählt."""
+    client, state, patch = setup
+    parent = state.user
+    p = child_paper(client, state)
+    seen = []
+
+    async def complete(account, purpose, instruction, context, images=None, **kw):
+        seen.append(context)
+        ws = [{"nr": w["nr"], "verdict": "richtig", "read": f"r{w['nr']}"} for w in context["woerter"]]
+        ws[0] = {"nr": 1, "verdict": "falsch", "read": "hause", "kind": "sprache", "note": "ou statt au.", "tip": "house wie Haus, nur mit ou."}
+        return json.dumps({"words": ws, "overall": "Gut.", "focus": ["Schreibung mit ou üben"]}), {}, "fake"
+    patch.setattr(ai, "complete", complete)
+    g = client.post(f"/api/accounts/1/vocab/papers/{p['id']}/grade").json()
+    w1 = g["words"][0]
+    assert w1["kind"] == "sprache" and w1["tip"].startswith("house") and g["losses"] == [{"kind": "sprache", "label": "Rechtschreibung", "count": 1}]
+    assert g["summary"]["focus"] == ["Schreibung mit ou üben"] and g["check"]["counted_at"]
+    with closing(db.webapp_conn()) as c:
+        assert c.execute("SELECT COUNT(*) FROM vocab_attempts WHERE result='incorrect'").fetchone()[0] == 1
+    body = {"words": {str(n): {"verdict": "richtig"} for n in range(1, 11)}, "overall": {"text": "Alles richtig.", "focus": ["Weiter so"]}}
+    assert client.post(f"/api/accounts/1/vocab/papers/{p['id']}/manual", json=body).status_code == 403, "Kind prüft nicht selbst"
+    state.user = parent
+    s = client.post(f"/api/accounts/1/vocab/papers/{p['id']}/manual/suggest", json={"hint": "Wort 1 ist richtig."}).json()
+    assert seen[-1]["eltern_hinweis"] == "Wort 1 ist richtig." and seen[-1]["woerter"][0]["bisher"] == "falsch" and s["words"]["1"]["kind"] == "sprache"
+    assert client.post(f"/api/accounts/1/vocab/papers/{p['id']}/manual", json={"words": {"1": {"verdict": "richtig"}}}).status_code == 422
+    body["words"]["2"] = {"verdict": "falsch", "kind": "regel", "note": "Artikel fehlt.", "tip": "Immer mit Artikel lernen."}
+    done = client.post(f"/api/accounts/1/vocab/papers/{p['id']}/manual", json=body).json()
+    assert done["result"] == {"richtig": 9, "falsch": 1, "unklar": 0} and done["check"]["manual"]
+    assert done["words"][1]["checked_by_parent"] and done["words"][1]["read"] == "r2"
+    with closing(db.webapp_conn()) as c:
+        rows = [tuple(x) for x in c.execute("SELECT word_id,result FROM vocab_attempts ORDER BY id")]
+    assert len(rows) == 10 and sum(1 for x in rows if x[1] == "incorrect") == 1, "ersetzt, nicht doppelt"
+    child(state)
+    kid = client.get(f"/api/accounts/1/vocab/papers/{p['id']}").json()
+    assert kid["overall"] == "Alles richtig." and kid["words"][1]["tip"] == "Immer mit Artikel lernen." and "_prior" not in json.dumps(kid)
+
+
 def test_test_mode_blocks_paper_writes_but_not_the_pensum():
     assert view_mode.TEST_BLOCKED.match("/api/accounts/1/vocab/papers")
     assert view_mode.TEST_BLOCKED.match("/api/accounts/1/learning/vocab/attempts")
