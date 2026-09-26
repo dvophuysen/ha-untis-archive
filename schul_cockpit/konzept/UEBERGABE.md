@@ -1,6 +1,6 @@
 # Übergabe an die nächste Session
 
-Stand 26.09.2026. Live läuft Schul-Cockpit **1.36.0** (vergessene Rückmeldungen bleiben offen wie Hausaufgaben, D210; vier Ringe auf der Familienkarte, Freitagsstand am Wochenende, D209; 1.34.0 war die Überarbeitung D208); untis_archive **0.6.0** ist über HACS installiert und wird erst mit dem nächsten HA-Neustart durch den Nutzer wirksam (HA 2026.9.3; getestet gegen 2026.2.3, neuer geht unter Python 3.13 nicht). Keine Kindernamen,
+Stand 26.09.2026. Live läuft Schul-Cockpit **1.36.1** (vergessene Rückmeldungen bleiben offen wie Hausaufgaben, D210; vier Ringe auf der Familienkarte, Freitagsstand am Wochenende, D209; 1.34.0 war die Überarbeitung D208); untis_archive **0.6.0** ist über HACS installiert und wird erst mit dem nächsten HA-Neustart durch den Nutzer wirksam (HA 2026.9.3; getestet gegen 2026.2.3, neuer geht unter Python 3.13 nicht). Keine Kindernamen,
 PINs oder Schlüssel in diesem Dokument (D15/D68). Maßgeblicher Einstieg ist
 [README.md](README.md) in diesem Ordner; Einzelheiten zu jedem Release
 stehen im [CHANGELOG](../CHANGELOG.md), die Begründungen in

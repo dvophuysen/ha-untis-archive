@@ -231,7 +231,8 @@ def rings(account_id: int, today: date, now: datetime) -> dict:
         lessons = [l for l in lessons_for_date(hconn, account_id, ref_iso) if not lesson_is_hidden(l, hidden)]
     # Ein vergangener Schultag ist ganz vorbei.
     clock = 24 * 60 if carry else now.hour * 60 + now.minute
-    ended = [g for g in _merged([l for l in lessons if not l.get("is_cancelled") and not l.get("was_absent")])
+    ended = [g for g in _merged([l for l in lessons if not l.get("is_cancelled") and not l.get("was_absent")
+                                 and l.get("subject_name")])  # ohne Fach: keine Stunde (Klassenfahrt)
              if (_minutes(g[-1].get("end_time")) is not None and clock >= _minutes(g[-1].get("end_time")))]
     ids = [l["id"] for g in ended for l in g]
     rated: set = set()

@@ -1,3 +1,9 @@
+## 1.36.1
+
+- Vergessene Rückmeldungen werden ab Montag, 21.09., eingefordert; ältere Stunden hat die App nie nachgefragt.
+- Kalendereinträge ohne Fach, etwa eine Klassenfahrt über den ganzen Tag, gelten nicht als Stunde und brauchen keine Rückmeldung.
+- Eltern können unter „Noch nachholen“ einen Tag als „Entfällt, war nicht da“ markieren, wenn das Kind nicht im Unterricht war, die Schule das aber nicht führt. Unter Erledigen steht je Kind, wie viele Rückmeldungen noch offen sind.
+
 ## 1.36.0
 
 - Vergessene Rückmeldungen zu Stunden verfallen nicht mehr, genau wie Hausaufgaben: Auf „Heute“ stehen unter den Stunden des Tages alle noch nicht bewerteten Stunden der Vortage unter „Noch nachholen“, nach Tagen geordnet, und lassen sich dort bewerten. Der Feedback-Ring schließt sich erst, wenn alles nachgeholt ist, auf „Heute“ und auf der Familienkarte.

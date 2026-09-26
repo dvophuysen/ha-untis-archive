@@ -336,18 +336,25 @@ def _bag_packed(c, account_id: int, day: date) -> bool:
     return all(i["key"] in done for i in items)
 
 
+# Seit hier fordert die App vergessene Rückmeldungen ein (D210): Montag der
+# Woche, in der die Regel kam. Ältere Stunden hat nie jemand eingefordert.
+FEEDBACK_FROM = date(2026, 9, 21)
+
+
 def feedback_backlog(account_id: int, until: date, now: datetime) -> list[dict]:
-    """Beendete Stunden ohne Rückmeldung vom Beginn des Schuljahrs bis ``until``.
+    """Beendete Stunden ohne Rückmeldung seit ``FEEDBACK_FROM`` bis ``until``.
 
     Wie eine überfällige Hausaufgabe verfällt eine vergessene Rückmeldung
     nicht: Sie bleibt stehen, bis sie nachgeholt ist (D210). Ausgefallene
     Stunden, Stunden ohne das Kind, ausgeblendete Kurse und von Eltern
     erlassene Stunden zählen nicht."""
-    # Eingefordert wird ab Beginn des Schuljahrs (1. August), der Tag selbst immer.
+    # Eingefordert wird ab FEEDBACK_FROM, in späteren Schuljahren ab deren
+    # Beginn (1. August); der Tag selbst immer.
     from .learning_fields import school_year_start
-    first = min(until, school_year_start(until))
+    first = min(until, max(school_year_start(until), FEEDBACK_FROM))
     today, clock = now.date().isoformat(), now.hour * 60 + now.minute
-    ended = [l for l in _lessons(account_id, first, until) if _held(l)
+    # Ein Eintrag ohne Fach ist keine Stunde, etwa eine Klassenfahrt über den ganzen Tag.
+    ended = [l for l in _lessons(account_id, first, until) if _held(l) and l.get("subject_name")
              and (l["date"] < today or (l["date"] == today and (_minutes(l.get("end_time")) or 0) <= clock))]
     if not ended:
         return []

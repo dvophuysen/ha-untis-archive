@@ -74,7 +74,7 @@ def test_web_push_is_gone(env):
 
 def test_snapshot_uses_due_tasks_material_and_ended_feedback(env):
     """Rückmeldungen: beendete, gehaltene Stunden ohne Bewertung, auch vergessene
-    der Vortage ab Beginn des Schuljahrs (D210)."""
+    der Vortage ab rewards.FEEDBACK_FROM (D210)."""
     import sqlite3
     from test_day_close import LESSON_COLUMNS
     _,_,patch=setup(env)
@@ -86,14 +86,14 @@ def test_snapshot_uses_due_tasks_material_and_ended_feedback(env):
                        (4,'2026-09-11',800,845,None),(5,'2026-07-10',800,845,None)])
     with closing(db.webapp_conn()) as c:
         c.execute("INSERT INTO tasks(account_id,title,status,source,due_date,created_at,updated_at) VALUES(1,'Aufgabe','open','manual','2026-09-15','now','now')")
-    # Heute um 10 Uhr offen, die Stunde bis 19 Uhr läuft noch, die ausgefallene zählt nicht;
-    # dazu der vergessene Freitag. Der Juli gehört zum vorigen Schuljahr.
-    assert r.snapshot(1,NOW)==dict(homework=1,material=1,feedback=2,photos=0)
+    # Heute um 10 Uhr offen, die Stunde bis 19 Uhr läuft noch, die ausgefallene zählt nicht.
+    # Vortage zählen erst ab rewards.FEEDBACK_FROM (21.09.); dieser Test spielt davor.
+    assert r.snapshot(1,NOW)==dict(homework=1,material=1,feedback=1,photos=0)
     with closing(db.webapp_conn()) as c:
         c.execute("UPDATE tasks SET status='done'")
         c.execute("INSERT INTO packing_items VALUES(1,'2026-09-15','subject:math',1,1,'now',2)")
-        c.execute("INSERT INTO lesson_checkins(account_id,lesson_id,user_id,rating,created_at,updated_at) VALUES(1,4,1,3,'now','now')")
-    assert r.snapshot(1,NOW)==dict(homework=0,material=0,feedback=1,photos=0)
+        c.execute("INSERT INTO lesson_checkins(account_id,lesson_id,user_id,rating,created_at,updated_at) VALUES(1,1,1,3,'now','now')")
+    assert r.snapshot(1,NOW)==dict(homework=0,material=0,feedback=0,photos=0)
 
 def test_the_morning_snapshot_checks_todays_bag_and_skips_skipped_tasks(env):
     """Morgens zählt die Tasche von gestern Abend, also die für heute, und nur

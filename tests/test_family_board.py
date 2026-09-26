@@ -270,14 +270,17 @@ def test_on_the_weekend_the_rings_show_the_friday_state(env, monkeypatch):
 def test_forgotten_feedback_stays_open_until_it_is_caught_up(env):
     """D210: Wie eine überfällige Hausaufgabe bleibt eine vergessene Rückmeldung
     stehen, bis sie nachgeholt ist; erst dann schließt der Ring. Eingefordert
-    wird ab Beginn des Schuljahrs; Eltern können einen Tag erlassen."""
+    wird ab rewards.FEEDBACK_FROM; Eltern können einen Tag erlassen."""
     from backend import rewards
-    lessons([(50, "2026-07-10", 800, 845, None),                                   # voriges Schuljahr
+    lessons([(50, "2026-09-18", 800, 845, None),                                   # vor der Zählung
              (51, "2026-09-23", 800, 845, None), (52, "2026-09-24", 800, 845, None),
              (53, "2026-09-24", 850, 935, None), (54, "2026-09-25", 800, 845, None),
              (55, "2026-09-24", 1000, 1045, "cancelled")])
+    with sqlite3.connect(db.SETTINGS.history_db_path) as h:  # Klassenfahrt: Eintrag ohne Fach
+        h.execute("INSERT INTO lessons(id,account_id,date,start_time,end_time,subject_name,code,was_absent) "
+                  "VALUES(56,1,'2026-09-22',750,2359,NULL,NULL,0)")
     now = datetime(2026, 9, 25, 14, 0)
-    # Juli liegt vor dem Schuljahr, der ausgefallene Donnerstag zählt nie.
+    # Juli liegt vor der Zählung, der ausgefallene Donnerstag und die Klassenfahrt zählen nie.
     assert [l["id"] for l in rewards.feedback_backlog(1, date(2026, 9, 25), now)] == [51, 52, 53, 54]
     friday = fb.rings(1, date(2026, 9, 25), now)
     assert friday["feedback"] == {"done": 0, "total": 3, "backlog": 2}  # Mi, Do (Doppelstunde), Fr

@@ -21,7 +21,7 @@
     return '';
   }
   // Rückmelden gilt für alle Stunden der Gruppe, die vorbei sind und stattfanden.
-  const ratable = (g) => g.lessons.filter((l) => held(l) && lessonOver(l, now));
+  const ratable = (g) => g.lessons.filter((l) => held(l) && (l.subject_name || l.subject_short) && lessonOver(l, now));
   const ratingOf = (g) => {
     const r = ratable(g).map((l) => l.checkin?.rating ?? null);
     return r.length && r.every((x) => x === r[0]) ? r[0] : null;

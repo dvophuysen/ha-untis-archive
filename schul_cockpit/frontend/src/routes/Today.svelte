@@ -81,7 +81,8 @@
   const fbLessons = $derived(carryLessons ? carryLessons.lessons : (data?.lessons ?? []));
   const fbNow = $derived(carryLessons ? new Date(`${carryLessons.date}T23:59:00`) : now);
   const fbTitle = $derived(carryLessons ? `Stunden vom ${WEEKDAYS[new Date(carryLessons.date + 'T12:00:00').getDay()]}` : 'Stunden von heute');
-  const endedLessons = $derived(mergeLessons(fbLessons.filter(l => held(l) && lessonOver(l, fbNow))));
+  // Ein Eintrag ohne Fach ist keine Stunde (etwa eine Klassenfahrt): keine Rückmeldung.
+  const endedLessons = $derived(mergeLessons(fbLessons.filter(l => held(l) && (l.subject_name || l.subject_short) && lessonOver(l, fbNow))));
   const dayFeedbackOpen = $derived(endedLessons.filter(g => g.lessons.some(l => l.checkin?.rating == null)).length);
   // Vergessene Rückmeldungen der Vortage bleiben stehen, bis sie nachgeholt sind (D210).
   const backlogDays = $derived.by(() => {
