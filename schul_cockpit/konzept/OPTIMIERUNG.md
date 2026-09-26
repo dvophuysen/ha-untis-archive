@@ -285,4 +285,5 @@ Bewusst offen:
 - Ein zentrales `clock.py`: die gefundenen Datumsfehler sind behoben, aber `date.today()` steht noch an Stellen, die nicht falsch rechnen, solange der Supervisor `TZ` setzt.
 - Geisterstunden (`lessons.removed_at`) filtert nur die Komponente; im Add-on noch nicht, weil Check-ins an `lessons.id` hängen.
 - `vocab_pensum.school_days` kennt die Ferien noch nicht (kann `schoolday.project` übernehmen), `routers/plan.py` baut den Plan noch synchron.
+- H5 (Sensor „Hausaufgaben offen“ ohne Datumsgrenze) bleibt vorerst: Die Todo-Automation gleicht ihre Liste an `items` an, eine Grenze ließe offene Aufgaben dort und im Add-on verschwinden. `open_homework(since_day)` steht bereit, sobald die Automation nur noch hinzufügt.
 - Noten eintragen dürfen Kinder weiterhin, weil die Oberfläche es ihnen anbietet; soll das nur für Eltern gelten, zuerst die Oberfläche ändern.

@@ -188,21 +188,20 @@ async def test_topic_backfill_is_capped(hass, berlin):
     assert coordinator.data["topics"]["backfill"] == TOPIC_BACKFILL_MAX_PER_PULL
 
 
-async def test_import_time_is_kept_open_when_topics_failed(hass, berlin):
+async def test_failed_topics_do_not_repeat_the_timetable_pass(hass, berlin):
+    """Scheitert ein Lehrstoff-Abruf, gilt der Import trotzdem als gelesen:
+    Sonst holte jeder Abruf den ganzen Stundenplan neu. Den Lehrstoff holt
+    der Nachlauf für Stunden ohne Lehrstoff."""
     fake = Fake(timetable=[_period(1, TODAY)], period_fail={1})
     with patch.object(coord_mod, "UntisClient", fake.client()):
         _entry, coordinator = await _setup(hass, fake)
         with _db(hass) as conn:
-            assert conn.execute("SELECT latest_import_time FROM accounts").fetchone()[0] is None
-        await coordinator.async_refresh()
-        # Stundenplan-Pass wiederholt, weil der Zeitstempel offen blieb.
-        assert len(fake.timetable_calls) == 2
+            assert conn.execute("SELECT latest_import_time FROM accounts").fetchone()[0] == 1
         fake.period_fail.clear()
+        fake.period_calls.clear()
         await coordinator.async_refresh()
-        await coordinator.async_refresh()
-    with _db(hass) as conn:
-        assert conn.execute("SELECT latest_import_time FROM accounts").fetchone()[0] == 1
-    assert len(fake.timetable_calls) == 3
+        assert len(fake.timetable_calls) == 1
+        assert fake.period_calls, "der Nachlauf fragt die Stunde ohne Lehrstoff erneut"
 
 
 async def test_ghost_lessons_disappear_from_sensor_and_calendar(hass, berlin):

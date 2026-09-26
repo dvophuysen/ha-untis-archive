@@ -148,17 +148,22 @@ def note(account_id: int, kind: str | None, ref: str | int | None, user, when: d
         return
     when = when or now_local()
     try:
-        with closing(webapp_conn()) as c, c:
-            if kind:
-                c.execute("INSERT OR IGNORE INTO reward_events(account_id,kind,ref,day,created_at) VALUES(?,?,?,?,?)",
-                          (account_id, kind, str(ref), when.date().isoformat(), when.isoformat()))
-            c.execute("INSERT OR IGNORE INTO reward_activity(account_id,day,first_at) VALUES(?,?,?)",
-                      (account_id, when.date().isoformat(), when.isoformat()))
+        _record(account_id, kind, ref, when)
         _freeze_plan(account_id, when.date())
         evaluate(account_id, when)
     except Exception:
         # Belohnung ist Beiwerk: Sie darf nie eine Handlung des Kindes scheitern lassen.
         LOG.warning("Belohnung für Konto %s nicht erfasst", account_id, exc_info=True)
+
+
+def _record(account_id: int, kind: str | None, ref, when: datetime) -> None:
+    """Nur festhalten, ohne den Tag zu prüfen."""
+    with closing(webapp_conn()) as c, c:
+        if kind:
+            c.execute("INSERT OR IGNORE INTO reward_events(account_id,kind,ref,day,created_at) VALUES(?,?,?,?,?)",
+                      (account_id, kind, str(ref), when.date().isoformat(), when.isoformat()))
+        c.execute("INSERT OR IGNORE INTO reward_activity(account_id,day,first_at) VALUES(?,?,?)",
+                  (account_id, when.date().isoformat(), when.isoformat()))
 
 
 def note_later(background, account_id: int, kind: str | None, ref: str | int | None, user,
@@ -181,18 +186,47 @@ def _note_isolated(account_id: int, kind, ref, user, when: datetime, extra_vocab
 # Eine Prüfung nach der anderen, wie zuvor im Event-Loop: Schnelle Antworten
 # im Trainer sollen nicht mehrere Lernpläne gleichzeitig einfrieren.
 _BACKGROUND = threading.Lock()
+# Je Konto höchstens ein Lauf. Weitere Anstöße, während einer läuft, landen in
+# der Warteschlange und werden vom laufenden mitgenommen: Ihre Ereignisse werden
+# festgehalten, der Tag aber nur einmal geprüft. Sonst stauten sich bei einem
+# schnell antwortenden Kind Dutzende wartende Threads, und der Threadpool, aus
+# dem auch jede Anmeldung kommt, lief voll.
+_STATE = threading.Lock()
+_QUEUE: dict[int, list] = {}
+_ACTIVE: set[int] = set()
 
 
 def _note_now(account_id: int, kind, ref, user, when: datetime, extra_vocab: bool) -> None:
+    with _STATE:
+        _QUEUE.setdefault(account_id, []).append((kind, ref, user, when, extra_vocab))
+        if account_id in _ACTIVE:
+            return
+        _ACTIVE.add(account_id)
     try:
-        with _BACKGROUND:
-            note(account_id, kind, ref, user, when, acting=True)
-            if extra_vocab:
-                # Mehr als das Tagespensum zählt für die Extrameile (D181), nie statt Pflicht.
-                from .reward_extras import note_extra_vocab
-                note_extra_vocab(account_id, user, when.date(), acting=True)
-    except Exception:
-        LOG.warning("Belohnung für Konto %s nicht erfasst", account_id, exc_info=True)
+        while True:
+            with _STATE:
+                batch = _QUEUE.pop(account_id, [])
+                if not batch:
+                    _ACTIVE.discard(account_id)
+                    return
+            try:
+                with _BACKGROUND:
+                    for kind, ref, _user, when, _extra in batch[:-1]:
+                        _record(account_id, kind, ref, when)
+                    kind, ref, user, when, _extra = batch[-1]
+                    for day in {item[3].date() for item in batch[:-1]} - {when.date()}:
+                        _freeze_plan(account_id, day)  # Anstoß vor Mitternacht, Lauf danach
+                    note(account_id, kind, ref, user, when, acting=True)
+                    if any(item[4] for item in batch):
+                        # Mehr als das Tagespensum zählt für die Extrameile (D181), nie statt Pflicht.
+                        from .reward_extras import note_extra_vocab
+                        note_extra_vocab(account_id, user, when.date(), acting=True)
+            except Exception:
+                LOG.warning("Belohnung für Konto %s nicht erfasst", account_id, exc_info=True)
+    except BaseException:
+        with _STATE:
+            _ACTIVE.discard(account_id)
+        raise
 
 
 def forget_note(account_id: int, task_id: int) -> bool:

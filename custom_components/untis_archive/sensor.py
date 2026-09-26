@@ -35,7 +35,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, OPEN_HOMEWORK_MAX_OVERDUE_DAYS
+from .const import DOMAIN
 from .coordinator import UntisCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -192,12 +192,11 @@ class HausaufgabenOffenSensor(_Base):
         self._attr_name = "Hausaufgaben offen"
 
     def _compute(self, today: date) -> tuple[int, dict[str, Any]]:
-        # Länger als zwei Wochen überfällige, nie abgehakte Aufgaben fallen
-        # heraus; ohne Grenze wuchs die Liste unbegrenzt.
-        items = self.coordinator.storage.open_homework(
-            self.coordinator.account_id,
-            (today - timedelta(days=OPEN_HOMEWORK_MAX_OVERDUE_DAYS)).isoformat(),
-        )
+        # Bewusst ohne Datumsgrenze: Die Todo-Automation gleicht ihre Liste an
+        # ``items`` an; fiele eine alte Aufgabe hier heraus, verschwände sie
+        # dort und mit ihr die Aufgabe im Add-on (samt Notizen). Eine Grenze
+        # braucht zuerst eine Automation, die nur hinzufügt.
+        items = self.coordinator.storage.open_homework(self.coordinator.account_id)
         return len(items), {
             "items": [
                 {

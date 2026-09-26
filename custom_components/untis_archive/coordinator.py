@@ -414,9 +414,11 @@ class UntisCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 session.klasse_id,
             )
 
-            # Den Zeitstempel nur übernehmen, wenn jeder Lehrstoff-Abruf
-            # durchkam; sonst holt der nächste Abruf den Pass nach.
-            if latest_import is not None and topic_failed == 0:
+            # Den Zeitstempel übernehmen, auch wenn einzelne Lehrstoff-Abrufe
+            # scheiterten: Sonst holte jeder Abruf den ganzen Stundenplan samt
+            # allen Lehrstoff-Abfragen neu, solange eine Stunde hängt. Fehlender
+            # Lehrstoff der letzten Tage kommt über den Nachlauf oben.
+            if latest_import is not None:
                 await self.hass.async_add_executor_job(
                     storage.set_latest_import_time,
                     account_id,

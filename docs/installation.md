@@ -61,8 +61,7 @@ auf. HA bildet die Entity-ID beim ersten Einrichten aus dem Anzeigenamen;
 so heißen sie bei einer neuen Einrichtung:
 
 - `sensor.untis_archive_<name>_lehrstoff_heute`
-- `sensor.untis_archive_<name>_hausaufgaben_offen` (offene Aufgaben, die
-  höchstens 14 Tage überfällig sind)
+- `sensor.untis_archive_<name>_hausaufgaben_offen`
 - `sensor.untis_archive_<name>_versaumter_stoff`
 - `sensor.untis_archive_<name>_fehlzeiten_schuljahr`
 - `sensor.untis_archive_<name>_stundenplan_anderungen_7_tage`
