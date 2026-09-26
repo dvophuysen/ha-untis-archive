@@ -108,3 +108,44 @@ def test_timetable_retains_cancellations_changes_and_ignores_old_general_items(e
     saved=client.get(url()).json()
     assert saved['status']=='packed' and saved['confirmed_count']==2
     assert not any(i['key'].startswith('basic:') for i in saved['items'])
+
+
+def test_today_brings_the_bag_the_page_shows(env):
+    """„Heute“ liefert die Tasche mit (ein Aufruf weniger beim Start): vor der
+    ersten Stunde die für heute, nach der letzten die für den nächsten
+    Schultag, jeweils genau wie GET …/packing/{Tag}."""
+    from datetime import datetime, timedelta
+    from backend.routers import today as today_routes
+    client, state, patch, _ = install(env)
+    timed = [dict(id=1, subject_name='Mathematik', start_time=800, end_time=845, is_cancelled=False, was_absent=False),
+             dict(id=2, subject_name='Sport', start_time=1150, end_time=1235, is_cancelled=False, was_absent=False)]
+    patch.setattr(today_routes, 'lessons_for_date', lambda conn, account, day: [dict(l, date=day) for l in timed])
+    patch.setattr(today_routes, 'upcoming_exams', lambda *a, **kw: [])
+    patch.setattr(today_routes, 'hidden_keys', lambda account: set())
+    patch.setattr(today_routes, 'today_local', lambda: DAY)
+    client.app.include_router(today_routes.router, prefix='/api')
+    at = lambda hh, mm: patch.setattr(today_routes, 'now_local', lambda: datetime(2026, 9, 14, hh, mm))
+    nxt = DAY + timedelta(days=1)
+    first = client.get(url()).json()
+    assert mark(client, first, first['items'][0]).status_code == 200
+    at(7, 10)
+    body = client.get('/api/accounts/1/today').json()
+    assert body['today_bag'] == client.get(url()).json() and body['today_bag']['confirmed_count'] == 1
+    assert body['bag'] is None
+    at(10, 0)
+    body = client.get('/api/accounts/1/today').json()
+    assert body['today_bag'] is None and body['bag'] is None, 'in der Schule zeigt die Seite keine Tasche'
+    at(12, 30)
+    body = client.get('/api/accounts/1/today').json()
+    assert body['next']['date'] == nxt.isoformat()
+    assert body['bag'] == client.get(url(nxt)).json() and body['bag']['school_day'] == nxt.isoformat()
+    assert body['today_bag'] is None
+    # Lesen darf das Elternteil, schreiben nicht: wie GET.
+    state.user = replace(state.user, id=4, role='parent')
+    assert client.get('/api/accounts/1/today').json()['bag']['can_write'] is False
+    child(state)
+    # Stundenplan gestört: die Seite fragt wie bisher selbst und zeigt die Meldung.
+    def broken(*args): raise sqlite3.OperationalError('unavailable')
+    patch.setattr(packing, 'lessons_for_date', broken)
+    body = client.get('/api/accounts/1/today').json()
+    assert body['bag'] is None and body['next']['date'] == nxt.isoformat()

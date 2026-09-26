@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from .. import day_close, request_cache
 from ..auth import CurrentUser, assert_account_access, get_current_user
@@ -16,6 +17,16 @@ router = APIRouter()
 # Ab dieser Uhrzeit zählt nur noch, was für morgen fehlt. Dieselbe Zeit steuert
 # die abendliche Erinnerung, damit Nachricht und Ansicht nicht auseinanderlaufen.
 DEFAULT_EVENING = "18:00"
+
+# Die Tasche kommt mit „Heute“ (ein Aufruf weniger beim Start): morgens die für
+# heute, nach der Schule die für den nächsten Schultag, wie die Seite sie zeigt
+# (dayPhase.js). Die Spanne fängt eine abweichende Geräteuhr ab; passt es nicht,
+# holt die Seite die Tasche wie bisher selbst.
+BAG_SLACK_MIN = 15
+
+
+def now_local() -> datetime:
+    return datetime.now(ZoneInfo("Europe/Berlin"))
 
 
 def evening_from(account_id: int) -> str:
@@ -154,6 +165,7 @@ async def _today(account_id: int, user) -> dict:
         },
         "upcoming_exams": exams,
         "next": next_block,
+        **_bags(account_id, user, today_date, lessons, next_block),
         "evening_from": evening_from(account_id),
         # Fürs Selbsteintragen (D174): an welchem Tag jedes Fach als Nächstes
         # Unterricht hat; dorthin schlägt die App den Termin vor.
@@ -173,6 +185,34 @@ async def _today(account_id: int, user) -> dict:
             "reliability": day_close.reliability(account_id, today_date),
         },
     }
+
+
+def _bags(account_id: int, user, today_date: date, lessons: list[dict], next_block: dict | None) -> dict:
+    """„today_bag“ vor der ersten Stunde, „bag“ ab der letzten für den
+    nächsten Schultag; jeweils genau die Antwort von GET …/packing/{Tag}."""
+    def minutes(hhmm):
+        return hhmm // 100 * 60 + hhmm % 100 if isinstance(hhmm, int) else None
+
+    real = [l for l in lessons if not l.get("is_cancelled") and not l.get("was_absent")
+            and minutes(l.get("start_time")) is not None and minutes(l.get("end_time")) is not None]
+    now = now_local()
+    t = now.hour * 60 + now.minute
+    wanted = {}
+    if real and t < minutes(real[0]["start_time"]) + BAG_SLACK_MIN:
+        wanted["today_bag"] = today_date
+    if next_block and (not real or t >= minutes(real[-1]["end_time"]) - BAG_SLACK_MIN):
+        wanted["bag"] = date.fromisoformat(next_block["date"])
+    found = {"today_bag": None, "bag": None}
+    for key, day in wanted.items():
+        try:
+            from .packing import packing_view
+            found[key] = packing_view(account_id, day, user)
+        except HTTPException:
+            pass  # die Seite fragt selbst und zeigt dann die Meldung
+        except Exception:
+            import logging
+            logging.getLogger("schul_cockpit.today").warning("Tasche für Konto %s nicht lesbar", account_id, exc_info=True)
+    return found
 
 
 def next_by_subject(account_id: int, today_date: date) -> dict[str, str]:
