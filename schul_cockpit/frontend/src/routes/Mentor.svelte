@@ -19,7 +19,10 @@
   async function pauseRunning(){if(running?.status==='active'&&data?.can_write){try{await api.post(`${base}/sessions/${running.id}/pause`,{paused:true});}catch{/* egal */}}running=null;}
   async function switchMode(value){if(value===demo)return;await pauseRunning();demo=value;data=null;tab='today';subject='';goal='';await load();}
   async function load(){data=await api.get(`${base}?demo=${demo}`);}
-  async function act(fn){if(busy)return;busy=true;error='';try{await fn();}catch(e){error=e.message;}finally{busy=false;}}
+  // Ein Link während des Ladens wird gemerkt und danach ausgeführt, statt verloren zu gehen.
+  let pendingHash=null;
+  function route(h){if(busy){pendingHash=h;return;}act(()=>follow(h));}
+  async function act(fn){if(busy)return;busy=true;error='';try{await fn();}catch(e){error=e.message;}finally{busy=false;if(pendingHash!==null){const next=pendingHash;pendingHash=null;route(next);}}}
   async function open(s){running=await api.get(`${base}/sessions/${s.id}`);}
   async function start(c){running=await api.post(`${base}/sessions`,{subject:c.subject,lesson_id:c.lesson_id||null,skill_id:c.skill_id||null,goal:c.title||goal,goal_key:c.key||null,minutes:c.minutes||10,voluntary:c.voluntary||false,demo});}
   const openSessions=$derived((data?.sessions||[]).filter(s=>!s.task_done));
@@ -37,7 +40,7 @@
     if(q.get('subject')){subject=q.get('subject');goal=q.get('topic')||'';tab=q.get('mode')==='exam'?'exams':'today';}
     else if(q.get('goal')){const g=data.shared_plan?.goals.find(g=>g.key===q.get('goal')||g.previous_keys?.includes(q.get('goal')));if(g){focusKey=g.key;goal=g.title;subject=g.subject;if(g.session_id)await open({id:g.session_id});else tab='today';}}
   }
-  $effect(()=>{const h=nav.hash;void nav;untrack(()=>act(()=>follow(h)));});
+  $effect(()=>{const h=nav.hash;void nav;untrack(()=>route(h));});
 </script>
 <div class="mentor">
   {#if data?.can_manage}<nav class="mode-switch" aria-label="Mentor-Modus"><button aria-pressed={!demo} class:chosen={!demo} disabled={busy||examBusy} onclick={()=>act(()=>switchMode(false))}>Kinderstand</button><button aria-pressed={demo} class:chosen={demo} disabled={busy||examBusy} onclick={()=>act(()=>switchMode(true))}>Demo ausprobieren</button></nav>

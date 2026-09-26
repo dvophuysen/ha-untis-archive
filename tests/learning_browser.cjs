@@ -137,7 +137,7 @@ const {chromium}=require('playwright-core');const http=require('http'),fs=requir
  await page.getByText('Deine Übungsarbeiten').waitFor();await page.getByText('6 von 40 Punkten · Ansehen').click();
  await page.getByText('Kurztest Gleichungen').first().waitFor().catch(dump);
  await page.getByRole('button',{name:/Zurück zu Lernen/}).first().click();await page.getByRole('heading',{name:'Heute Pflicht'}).waitFor();
- await page.evaluate(()=>{location.hash='#/learning?paper=41';});await page.getByText('Kurztest Gleichungen').first().waitFor();
+ await page.evaluate(()=>{location.hash='#/learning?paper=41';});await page.getByText('Kurztest Gleichungen').first().waitFor().catch(dump);
  assert.equal(await page.evaluate(()=>location.hash),'#/learning','Parameter entfernt');
  await page.getByRole('button',{name:/Zurück zu Lernen/}).first().click();await page.getByRole('heading',{name:'Heute Pflicht'}).waitFor();
  // Sprechprobe (D194): Prüfer im Chat, Senden ohne Aufgaben, Auswertung mit Kriterien und Baustellen.

@@ -26,7 +26,10 @@
     if (busy) return;
     busy = true; error = '';
     try { await fn(); } catch (e) { error = e instanceof ApiError ? e.message : (e?.message || 'Das hat nicht geklappt.'); }
-    finally { busy = false; }
+    finally {
+      busy = false;
+      if (pendingHash !== null) { const next = pendingHash; pendingHash = null; route(next); }
+    }
   }
   // Die Adresse bei jedem Wechsel auswerten, nicht nur beim ersten Laden (D186):
   // Links innerhalb der Lernseite („Los“, „Angehen“, Stundenthemen) wirken so.
@@ -56,7 +59,14 @@
     // Alte Lernplan-Links (?goal=) führen auf die Übersicht; der Plan heißt jetzt „Heute Pflicht“.
     if (subject || q.get('goal')) clearQuery();
   }
-  $effect(() => { const h = nav.hash; untrack(() => act(() => follow(h))); });
+  // Kommt ein Link, während noch geladen wird, geht er nicht verloren: Er
+  // wird gemerkt und danach ausgeführt (sonst tat ein Tipp auf „Los“ nichts).
+  let pendingHash = null;
+  function route(h) {
+    if (busy) { pendingHash = h; return; }
+    act(() => follow(h));
+  }
+  $effect(() => { const h = nav.hash; untrack(() => route(h)); });
 
   async function back() { running = null; paperId = null; examsView = null; await load(); }
   function go(href) { if (href) window.location.hash = href; }
