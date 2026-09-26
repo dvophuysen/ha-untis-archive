@@ -31,8 +31,9 @@ def test_cell_states():
     assert pr.cell([ans(1, 4), ans(1, 3.5)])["state"] == "sicher"
     assert pr.cell([ans(1, 4), ans(1, 4, fmt="probe")])["state"] == "bestaetigt"
     assert pr.cell([ans(1, 4), ans(1, 4, help_used=1)])["state"] == "fast"   # mit Hilfe zählt nicht
-    # D192: volle Punkte im Einstiegstest kalibrieren gleich, sonst bleibt es „fast“.
-    assert pr.cell([ans(1, 4, fmt="einstieg")])["state"] == "sicher"
+    # D219: auch volle Punkte im Einstiegstest sind erst eine Aufgabe („fast“).
+    assert pr.cell([ans(1, 4, fmt="einstieg")])["state"] == "fast"
+    assert pr.cell([ans(1, 4, fmt="einstieg"), ans(1, 4)])["state"] == "sicher"
     assert pr.cell([ans(1, 3.5, fmt="einstieg")])["state"] == "fast"
     assert pr.cell([ans(1, 4, fmt="einstieg", help_used=1)])["state"] == "offen"
     # Nur die letzten vier zählen: alte Fehler wachsen heraus.
@@ -133,10 +134,10 @@ def test_paper_from_creation_to_raster(paper):
     assert rows[5]["result"] == "correct" and rows[5]["points"] == 4
     raster = client.get(BASE, params={"exam_key": KEY}).json()
     first = raster["topics"][0]
-    # Volle Punkte im Einstiegstest: gleich sicher (D192).
-    assert first["cells"]["1"]["state"] == "sicher" and first["cells"]["2"]["state"] == "sicher" and first["ready"]
+    # Volle Punkte im Einstiegstest sind erst eine Aufgabe (D219, vorher D192: gleich sicher).
+    assert first["cells"]["1"]["state"] == "fast" and first["cells"]["2"]["state"] == "fast" and not first["ready"]
     assert raster["topics"][2]["cells"]["1"]["state"] == "unsicher"
-    assert raster["topics"][2]["cells"]["2"]["state"] == "sicher"
+    assert raster["topics"][2]["cells"]["2"]["state"] == "fast"
     assert raster["papers"][0]["points"] == 5 * 4 + 1 and raster["papers"][0]["points_max"] == 24
     # Zweimal auswerten kostet nichts.
     assert client.post(f"{BASE}/attempts/{a['id']}/grade", json={}).json()["status"] == "graded"

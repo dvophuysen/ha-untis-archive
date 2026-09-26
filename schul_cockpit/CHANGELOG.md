@@ -1,3 +1,9 @@
+## 1.41.0
+
+- Ein Bereich im Raster gilt erst nach zwei Aufgaben als sicher, auch nach vollen Punkten im Einstiegstest. Der Einstiegstest erspart weiter das Gespräch zu einem Thema, das er voll gezeigt hat, der Kurztest bestätigt dann.
+- Auch Aufgaben im Gespräch mit dem Lernbegleiter werden nachgerechnet, bevor das Kind sie sieht. Ist die Musterlösung falsch, rechnet der Lernbegleiter neu; bleibt sie falsch, kommt keine Aufgabe. Beim Bewerten zählt das fachlich Richtige, auch wenn die Musterlösung abweicht.
+- Die App rechnet jetzt auch Rechnungen mit Brüchen und gemischten Zahlen in Musterlösungen nach, etwa 57/12 − 22/12 = 35/12 = 2 11/12, bei Übungsarbeiten, Kurztests, Klausuren und im Gespräch.
+
 ## 1.40.1
 
 - Zwei Auswertungen vom 26.09. nachgerechnet und berichtigt, ohne Handkorrektur: ein Kurztest (8 statt 8,5 von 10, der Schnittpunkt fehlte auf dem Blatt) und ein Einstiegstest (16 statt 19,5 von 26: verlangte Erklärung, Kürzen und Rechnung fehlten). Die Begründung jeder berichtigten Aufgabe sagt, was sich geändert hat; Lernstand und Raster rechnen mit den neuen Punkten.

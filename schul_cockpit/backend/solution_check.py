@@ -7,10 +7,12 @@ Antwort des Kindes (4,5) kostete Punkte und einen falschen Rat. Nutzer:
 
 Zwei unabhängige Prüfungen:
 
-1. Rechnerisch (``math_issues``): Gleichungen mit einer Unbekannten x, die
+1. Rechnerisch (``calc_issues``): Gleichungen mit einer Unbekannten x, die
    linear sind, löst die App selbst mit exakten Brüchen und vergleicht mit dem
-   Ergebnis in Musterlösung und Kriterien. Was sie nicht sicher lesen kann,
-   prüft sie nicht (kein Fehlalarm), das übernimmt Schritt 2.
+   Ergebnis in Musterlösung und Kriterien (``math_issues``); Rechenketten mit
+   Zahlen, Brüchen und gemischten Zahlen rechnet sie nach (``arith_issues``,
+   D219). Was sie nicht sicher lesen kann, prüft sie nicht (kein Fehlalarm),
+   das übernimmt Schritt 2.
 2. Fachlich (``assure``): Ein zweiter Modelldurchgang löst jede Aufgabe selbst,
    ohne der Musterlösung zu trauen, vergleicht und berichtigt. Berichtigtes wird
    noch einmal rechnerisch und fachlich geprüft. Bleibt ein Zweifel, entsteht
@@ -222,6 +224,103 @@ def math_issues(task: dict) -> list[dict]:
     return issues
 
 
+# Rechenketten ohne Unbekannte („57/12 − 22/12 = 35/12 = 2 11/12“): Jedes
+# Gleichheitszeichen zwischen zwei lesbaren Zahlausdrücken muss stimmen. Was
+# nicht sicher lesbar ist (Wörter, Einheiten, Klammerreste, ≈), unterbricht die
+# Kette, statt zu raten. Gemischte Zahlen „2 3/5“ gelten als 2 + 3/5.
+_MIXED = re.compile(r"(?<![\d/.,])(\d+)\s+(\d+)\s*/\s*(\d+)(?![\d/.,])")
+_CHAIN_BREAK = re.compile(r"→|⇒|=>|;|\n|≈|<|>|≤|≥|≠|\|")
+_WRONG_ON_PURPOSE = re.compile(r"falsch|Fehler|stimmt nicht|wäre|≠", re.I)
+_NUM_CHARS = r"[\d\s+\-−–*·×⋅/:(),.]"
+_TAIL = re.compile(rf"{_NUM_CHARS}+$")
+_HEAD = re.compile(rf"^{_NUM_CHARS}+")
+
+
+def _number(text: str) -> Fraction | None:
+    """Ein reiner Zahlausdruck (Brüche, gemischte Zahlen, Klammern), sonst None."""
+    src = text.strip().rstrip(".…").strip().rstrip(",").strip()
+    if not src or not re.search(r"\d", src) or re.search(r"[^\d\s+\-−–*·×⋅/:(),.]", src):
+        return None
+    src = _MIXED.sub(r"(\1+\2/\3)", src)
+    if re.search(r"\d\s+\d|\d,\s|\.\s*\d", src.replace(" . ", " ")) or re.search(r"\d\.\d", src):
+        return None  # Zahlen ohne Rechenzeichen nebeneinander, Aufzählungen: nicht raten
+    try:
+        return _parse(src)(Fraction(0))
+    except (_Unreadable, ZeroDivisionError, RecursionError):
+        return None
+
+
+def _tail(piece: str) -> str | None:
+    """Der Zahlausdruck am Ende eines Stücks („Deshalb gilt 11/4“ → „11/4“).
+    Nichts, wenn davor eine Größe oder Unbekannte steht: „x + 4“, „I 2“, „T1(2)“."""
+    m = _TAIL.search(piece)
+    if not m:
+        return None
+    run, before = m.group(0), piece[:m.start()]
+    core = run.strip()
+    if not core or not re.match(r"[\d(]", core):
+        return None  # beginnt mit Rechenzeichen: davor stand ein Term
+    if before and run == run.lstrip() and before[-1] not in "(=":
+        return None  # mitten aus einem Wort
+    word = re.search(r"(\S+)\s*$", before)
+    if word and (len(word.group(1)) <= 2 or re.search(r"\d", word.group(1))):
+        return None  # „I 2“, „U 1“: Bezeichner mit Index
+    return core
+
+
+def _head(piece: str) -> str | None:
+    """Der Zahlausdruck am Anfang („68 Euro.“ → „68“). Nichts vor einer Größe,
+    Unbekannten oder einem Rest: „0,75 A − 0,28 A“, „2x“, „2 Rest 3“."""
+    m = _HEAD.match(piece)
+    if not m:
+        return None
+    core, after = m.group(0).strip(), piece[m.end():]
+    if not core:
+        return None
+    if after and not m.group(0)[-1:].isspace() and after[0].isalpha():
+        return None  # „2x“
+    word = re.match(r"([A-Za-zÄÖÜäöüß]+)(.*)", after, re.S)
+    if word:
+        if len(word.group(1)) <= 2 or word.group(1).lower() == "rest" or re.match(r"\s*[\d+\-−–*·/:]", word.group(2)):
+            return None
+    return core.rstrip(",.").rstrip()
+
+
+def arith_issues(task: dict) -> list[dict]:
+    """Rechenketten in Musterlösung und Kriterien, deren Seiten nicht gleich sind."""
+    issues = []
+    quoted = _normalize(task.get("prompt") or "").replace(" ", "")
+    for where, text in (("Musterlösung", task.get("solution") or ""), ("Kriterien", task.get("criteria") or "")):
+        for label, part in _parts(text).items():
+            for seg in _CHAIN_BREAK.split(part):
+                if "=" not in seg or _WRONG_ON_PURPOSE.search(seg):
+                    continue
+                # „Hauptnenner 12: 5/6 = …“: Ein Doppelpunkt direkt am Wort mit
+                # Leerzeichen danach trennt; „:2“ und „4 : 2“ teilen.
+                seg = re.sub(r"(?<=\S):(?=\s)", " ; ", seg).split(" ; ")[-1]
+                pieces = seg.split("=")
+                for left, right in zip(pieces, pieces[1:]):
+                    a, b = _tail(left), _head(right)
+                    va, vb = (_number(a) if a else None), (_number(b) if b else None)
+                    if va is None or vb is None or va == vb:
+                        continue
+                    a, b = a.strip(), b.strip()
+                    decimal = bool(re.search(r"\d[.,]\d", a + b))
+                    if decimal and abs(float(va - vb)) <= TOLERANCE:
+                        continue
+                    if _normalize(f"{a}={b}").replace(" ", "") in quoted:
+                        continue  # aus der Aufgabe zitiert
+                    issues.append({"teil": label, "stelle": where, "rechnung": f"{a} = {b}",
+                                   "text": f"{label + ') ' if label else ''}{where}: {a} = {b} stimmt nicht "
+                                           f"({a} ist {_fmt(va)}, {b} ist {_fmt(vb)})."})
+    return issues
+
+
+def calc_issues(task: dict) -> list[dict]:
+    """Alles, was die App selbst nachrechnen kann."""
+    return math_issues(task) + arith_issues(task)
+
+
 _CRIT_POINTS = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:P\b|Pkt\b|Punkte?\b)")
 
 
@@ -297,7 +396,7 @@ async def assure(account_id: int, subject: str, tasks: list[dict]) -> list[dict]
     # Kriterien kann irren (in 24 von 40 bestehenden Aufgaben passten sie nicht,
     # teils nur scheinbar), und die Bewertung vergibt ohnehin nie mehr, als die
     # Aufgabe hat (D218).
-    hard = {i: v for i, t in enumerate(out) if (v := math_issues(t))}
+    hard = {i: v for i, t in enumerate(out) if (v := calc_issues(t))}
     soft = {i: v for i, t in enumerate(out) if (v := structure_issues(t))}
     flagged = {i: hard.get(i, []) + soft.get(i, []) for i in set(hard) | set(soft)}
     first = await _check(account_id, subject, out, flagged)
@@ -311,7 +410,7 @@ async def assure(account_id: int, subject: str, tasks: list[dict]) -> list[dict]
         LOG.warning("Musterlösung berichtigt (Aufgabe %s): %s", i + 1, c.fehler)
         out[i] = {**out[i], "solution": c.solution, "criteria": c.criteria}
     if redo:
-        again = {i: math_issues(out[i]) for i in redo}
+        again = {i: calc_issues(out[i]) for i in redo}
         for i in redo:
             for x in structure_issues(out[i]):
                 LOG.warning("Teilpunkte nach Berichtigung unstimmig (Aufgabe %s): %s", i + 1, x["text"])
@@ -330,7 +429,7 @@ async def assure(account_id: int, subject: str, tasks: list[dict]) -> list[dict]
 def grading_hints(task: dict) -> list[str]:
     """Für die Bewertung: rechnerisch gefundene Fehler der Musterlösung."""
     try:
-        return [x["text"] for x in math_issues(task)]
+        return [x["text"] for x in calc_issues(task)]
     except Exception:  # eine Prüfhilfe darf die Bewertung nie aufhalten
         LOG.debug("Rechnerprüfung nicht möglich", exc_info=True)
         return []

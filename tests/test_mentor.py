@@ -1064,3 +1064,34 @@ def test_homework_help_climbs_a_help_ladder_and_a_full_check_fits():
     assert 'Hilfeleiter' in text and 'erst, wenn das Kind zum vorigen selbst etwas beigetragen hat' in text
     assert 'Nennt sie kein Blatt' in text
     m.Reply.model_validate({'message': 'x' * 3000, 'action': 'explain', 'summary': ''})
+
+
+def test_dialog_tasks_are_recalculated_and_the_assessment_learns_about_errors(setup):
+    """D219: Eine Gesprächsaufgabe mit falscher Musterlösung geht nicht an das
+    Kind; der Mentor bekommt den Befund und einen zweiten Versuch. Beim Bewerten
+    erfährt er, was die Rechnerprüfung an der laufenden Aufgabe findet."""
+    client,state,patch=setup;child(state)
+    wrong={**TASK,'prompt':'Berechne 57/12 − 22/12 und gib das Ergebnis als gemischte Zahl an.',
+           'solution':'57/12 − 22/12 = 35/12 = 2 10/12','criteria':'1 P Differenz 35/12; 1 P gemischte Zahl'}
+    right={**wrong,'solution':'57/12 − 22/12 = 35/12 = 2 11/12'}
+    outputs=[reply(task=wrong),reply(task=right),reply(task=None,action='explain',assessment={'result':'correct','rationale':'Stimmt.'})]
+    seen=[]
+    async def complete(account,purpose,instruction,context,*a,**kw):
+        seen.append((instruction,context))
+        return json.dumps(outputs[min(len(seen),len(outputs))-1]),{},'fake'
+    patch.setattr(ai,'complete',complete)
+    s=start(client)
+    r=send(client,s);assert r.status_code==200,r.text;s=r.json()
+    assert len(seen)==2 and 'rechnerisch falsch' in seen[1][0] and '35/12 = 2 10/12 stimmt nicht' in seen[1][0]
+    assert 'Rechne die Musterlösung jeder neuen Aufgabe' in seen[0][0]
+    with closing(db.webapp_conn()) as c:
+        stored=json.loads(c.execute('SELECT current_task FROM mentor_sessions WHERE id=?',(s['id'],)).fetchone()[0])
+        assert stored['solution']==right['solution']
+        # Eine ältere Aufgabe mit falscher Musterlösung: Die Bewertung erfährt es.
+        c.execute('UPDATE mentor_sessions SET current_task=? WHERE id=?',(json.dumps(wrong,ensure_ascii=False),s['id']))
+    r=send(client,s,kind='answer',text='2 11/12');assert r.status_code==200,r.text;s=r.json()
+    assert any('2 10/12' in x for x in seen[-1][1]['rechnerpruefung'])
+    # Bleibt die Rechnung auch im zweiten Versuch falsch, bekommt das Kind keine Aufgabe.
+    outputs[:]=[reply(task=wrong)]
+    r=send(client,s)
+    assert r.status_code==502 and 'nachrechnen' in r.json()['detail']

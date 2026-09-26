@@ -23,6 +23,7 @@ from .. import mentor_demo as demo_data
 from .. import lernstand
 from .. import mentor_opening as mopen
 from .. import learning_plan as lp
+from .. import solution_check
 from .learning import access,overview as learning_overview
 
 import logging
@@ -274,6 +275,16 @@ def add_message(c,sid,account,key,role,text,payload=None,author=None,user_id=Non
                      (account,sid,key,role,text,json.dumps(payload or {},ensure_ascii=False),author,user_id,now_iso())).lastrowid
 
 
+def task_miscalculated(reply)->str:
+    """Ein Hinweis für den zweiten Versuch, wenn die App in der Musterlösung der
+    neuen Aufgabe einen Rechenfehler findet (D219), sonst ''."""
+    if not reply.task:return ''
+    found=solution_check.calc_issues(reply.task.model_dump())
+    if not found:return ''
+    return ('Die Musterlösung deiner Aufgabe ist rechnerisch falsch: '+'; '.join(x['text'] for x in found)[:360]+
+            ' Rechne selbst nach und berichtige solution und criteria.')
+
+
 async def open_unit(account_id,sid,tier=None,persist=True):
     """Der erste Zug einer Einheit: Lage bestimmen, Einstieg vom Modell holen und
     als Begrüßung ablegen (mit erster Aufgabe, wenn die Lage eine will)."""
@@ -284,8 +295,19 @@ async def open_unit(account_id,sid,tier=None,persist=True):
     oral_context(account_id,s,ctx)
     lage=mopen.situation(account_id,s,ctx);ctx['situation']=lage
     if lage['lage'] in ('begleiten','kontrollieren'):return None,lage
-    raw,_,_=await ai.complete(account_id,ai.OPENING,mopen.instruction_for(lage['lage'],Reply.model_json_schema()),mopen.trim(ctx),max_output=2500,session_id=sid,tier=tier)
+    instruction=mopen.instruction_for(lage['lage'],Reply.model_json_schema())
+    raw,_,_=await ai.complete(account_id,ai.OPENING,instruction,mopen.trim(ctx),max_output=2500,session_id=sid,tier=tier)
     reply=Reply.model_validate_json(raw)
+    rechnung=task_miscalculated(reply) if reply.action=='task' else ''
+    if rechnung:
+        # Ein zweiter Versuch mit dem Befund; bleibt die Rechnung falsch, beginnt
+        # die Einheit ohne Aufgabe, statt eine falsche auszugeben (D219).
+        LOG.warning('Einstiegsaufgabe zurückgewiesen (Einheit %s): %s',sid,rechnung[:200])
+        raw,_,_=await ai.complete(account_id,ai.OPENING,instruction+' WICHTIG: '+rechnung,mopen.trim(ctx),max_output=2500,session_id=sid,tier=tier)
+        reply=Reply.model_validate_json(raw)
+        if reply.action=='task' and task_miscalculated(reply):
+            reply.task=None;reply.action='clarify'
+            reply.message='Los geht es. Schreib mir, womit du anfangen möchtest, dann bekommst du eine Aufgabe.'
     if reply.action=='task' and not reply.task:reply.action='clarify'
     if reply.action=='finish':reply.action='clarify'
     if reply.task and options_fault(reply.task):reply.task.optionen=[]
@@ -1144,6 +1166,13 @@ SCHEMA_TAIL='Antworte ausschließlich im folgenden JSON-Schema: '
 # Vorlage und Auftrag, und jedes nur einmal (G1, G2 aus D126). Gilt für
 # jede Einheit, die Aufgaben stellt — auch für den Einstieg.
 TASK_RULE=('Eine Aufgabe besteht aus Vorlage und Auftrag. task.vorlage ist das, woran gearbeitet wird, und steht wörtlich in der Aufgabe: der Textabschnitt, die Tabelle, die Gleichung, die drei Aussagen, die Beschreibung der Abbildung. Das Kind hat das Material nicht vor sich — „Lies S. 15, Z. 3-6“ ohne den Abschnitt ist keine Aufgabe, sondern eine Sackgasse. Zitierst du aus dem vorliegenden Material, gib den Wortlaut unverändert wieder und nenne die Stelle in task.quelle („Textband S. 15, Z. 2-3“). Baust du die Vorlage selbst, lass task.quelle leer und behaupte keine Fundstelle. Erfinde nie eine Stelle, die du nicht wirklich im Material gelesen hast; zähle Zeilen nur, wenn sie dort gezählt sind. Braucht eine Aufgabe keine Vorlage — eine reine Wissensfrage, eine Rechnung, die du selbst stellst —, bleibt task.vorlage leer und der Auftrag steht für sich. Die Aufgabe steht im Aufgabenfeld, nicht in der Nachricht: message ist, was du dem Kind daneben sagst, und wiederholt weder den Auftrag noch die Vorlage; eine Ankündigung wie „Erste Aufgabe:“ ist überflüssig. choices sind Wege weiterzureden („Ich brauche einen Tipp“, „Noch ein Beispiel“, „Ich probiere es selbst“), nie Antworten auf die Aufgabe, nie Arbeitshinweise und nie eine Wiederholung der Aufgabe; Antwortmöglichkeiten gehören in task.optionen. Null bis drei; bei einer offenen Aufgabe meist null. '+mopen.AUSWAHL_RULE)
+# Qualität der Aufgaben im Gespräch (D219, wie D217 für Übungsarbeiten): Die
+# Musterlösung rechnet der Mentor selbst nach, die App rechnet nach, was sie
+# sicher lesen kann, und beim Bewerten zählt das fachlich Richtige.
+QUALITY_RULE=('Rechne die Musterlösung jeder neuen Aufgabe Schritt für Schritt selbst nach, bevor du sie ausgibst; solution und criteria müssen fachlich stimmen. '
+              'Bewertest du eine Antwort zu current_task, löse die Aufgabe zuerst selbst, ohne der Musterlösung zu trauen. Ist die Musterlösung falsch, zählt das fachlich Richtige: '
+              'Eine richtige Antwort ist correct, auch wenn sie von der Musterlösung abweicht, und du sagst dem Kind offen, dass die Musterlösung der App falsch war. '
+              'rechnerpruefung nennt, was die Rechnerprüfung der App an der Musterlösung von current_task gefunden hat; sie irrt bei richtiger Lesart nicht. ')
 # Ein Thema der offiziellen Themenliste: Die App misst die Stufe, der Mentor liefert Aufgaben in
 # wechselnden Arten und den fachlichen Grund. Keine Uhr, keine Minuten.
 TOPIC_RULE=('topic ist ein Thema der offiziellen Themenliste der Lehrkraft für eine Arbeit. Übe dieses Thema. '
@@ -1701,9 +1730,14 @@ async def _turn(account_id,sid,body,user):
         from .. import oral_exam
         from .. import figures
         drawing=' '+figures.SPEC_HELP+' Eine Aufgabe darf so eine Abbildung in task.figur mitbringen, wenn sie ohne Bild nicht gut geht; der Auftrag bezieht sich dann auf die IDs darin. ' if figures.suits(s['subject']) and not (oral or homework_help or check) else ''
-        instruction=INSTRUCTION.replace(SCHEMA_TAIL,oral_exam.ORAL_RULE+CONTINUE_RULE+SCHEMA_TAIL) if oral else CHECK_INSTRUCTION if check else HOMEWORK_INSTRUCTION if homework_help else INSTRUCTION.replace(SCHEMA_TAIL,TASK_RULE+drawing+(TOPIC_RULE if topic_mode else '')+CONTINUE_RULE+SCHEMA_TAIL)
+        instruction=INSTRUCTION.replace(SCHEMA_TAIL,oral_exam.ORAL_RULE+CONTINUE_RULE+SCHEMA_TAIL) if oral else CHECK_INSTRUCTION if check else HOMEWORK_INSTRUCTION if homework_help else INSTRUCTION.replace(SCHEMA_TAIL,TASK_RULE+QUALITY_RULE+drawing+(TOPIC_RULE if topic_mode else '')+CONTINUE_RULE+SCHEMA_TAIL)
         # Über der Grenze von ai_gateway nach Vorrang kürzen statt 413 (A9);
         # ein Kontext, der passt, bleibt unverändert. Platz für den Hinweis beim zweiten Versuch.
+        if s.get('current_task') and not (oral or homework_help or check):
+            try:
+                hints=solution_check.grading_hints(json.loads(s['current_task']))
+                if hints:ctx['rechnerpruefung']=hints;LOG.warning('Musterlösung der Gesprächsaufgabe fehlerhaft (Einheit %s): %s',sid,'; '.join(hints)[:300])
+            except (ValueError,TypeError):pass
         trimmed=mc.fit_context(ctx,instruction+json.dumps(Reply.model_json_schema())+' '*600)
         if trimmed:LOG.info('Kontext der Einheit %s gekürzt: %s',sid,', '.join(trimmed))
         stoff=context_text(ctx)
@@ -1724,10 +1758,13 @@ async def _turn(account_id,sid,body,user):
             if not fehlt and reply.task and reply.task.figur:
                 try:figures.validate(reply.task.figur)
                 except ValueError as e:fehlt=f'Die Abbildung in task.figur ist ungültig ({str(e)[:200]}). Korrigiere sie nach der Anleitung oder lass figur weg.'
+            rechnung=task_miscalculated(reply) if not fehlt else ''
+            fehlt=fehlt or rechnung
             if not fehlt:
                 break
             LOG.info('Aufgabe zurückgewiesen: %s',fehlt[:80])
             if versuch:
+                if rechnung:raise HTTPException(502,'Die neue Aufgabe ließ sich nicht sicher nachrechnen. Bitte schick deine Nachricht noch einmal. Dein Stand bleibt erhalten.')
                 raise HTTPException(502,'Die Aufgabe hätte auf Material verwiesen, das du nicht vor dir hast. Dein Stand bleibt erhalten.')
             note=' WICHTIG: '+fehlt+' '
         if reply.task and reply.task.abbildung not in allowed_figures:reply.task.abbildung=None

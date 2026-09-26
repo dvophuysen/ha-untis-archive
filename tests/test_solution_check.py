@@ -141,3 +141,25 @@ def test_mismatched_part_points_are_a_hint_not_a_stop(monkeypatch):
     out = run(sc.assure(1, "Mathematik", [odd]))
     assert out[0]["geprueft"]["berichtigt"] is False and len(calls) == 1
     assert "Teilpunkte" in calls[0]["aufgaben"][0]["rechnerpruefung"][0]
+
+
+def test_the_calculator_checks_fraction_chains_and_ignores_what_it_cannot_read():
+    """D219: Rechenketten mit Brüchen und gemischten Zahlen rechnet die App nach;
+    Größen mit Einheit, Terme mit Unbekannter und Reste liest sie nicht."""
+    ok = {"prompt": "Berechne 4 3/4 − 1 5/6.", "solution": "4 3/4 = 19/4 = 57/12, 1 5/6 = 11/6 = 22/12. 57/12 − 22/12 = 35/12 = 2 11/12.",
+          "criteria": "1 P Umwandlung; 1 P Ergebnis 2 11/12"}
+    assert sc.arith_issues(ok) == []
+    bad = {**ok, "solution": ok["solution"].replace("= 2 11/12", "= 2 10/12")}
+    assert [x["rechnung"] for x in sc.arith_issues(bad)] == ["35/12 = 2 10/12"]
+    assert "2 10/12" in sc.calc_issues(bad)[0]["text"] and sc.grading_hints(bad)
+    traps = ["Knotenregel: I 2 = 0,75 A − 0,28 A = 0,47 A",          # Größen mit Index und Einheit
+             "Gleichung: x + (x + 4) = 42, also 2x = 38",             # Terme mit Unbekannter
+             "11 : 4 = 2 Rest 3. Deshalb gilt 11/4 = 2 3/4.",         # Division mit Rest
+             "T1(2) = 3·2 − 2 = 4",                                  # Funktionswert
+             "Die Gleichung 2x − 3 = 11 ist korrekt gelöst.",
+             "Falsch wäre 1/2 + 1/3 = 2/5.",                         # absichtlich falsch
+             "43/54 ≈ 0,796 < 1 2/3 = 5/3"]
+    for text in traps:
+        assert sc.arith_issues({"prompt": "", "solution": text, "criteria": ""}) == [], text
+    assert sc.arith_issues({"prompt": "Stimmt 3/4 = 6/9?", "solution": "3/4 = 6/9 stimmt nicht, 3/4 = 9/12.", "criteria": ""}) == []
+    assert sc.arith_issues({"prompt": "", "solution": "Die 80 Euro minus 12: 80 − 12 = 58 Euro.", "criteria": ""})[0]["rechnung"] == "80 − 12 = 58"

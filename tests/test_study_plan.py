@@ -437,10 +437,12 @@ def test_entry_test_calibrates_and_the_day_only_shrinks(world):
     view = sp.view(1, MON, store=True)
     got = [(s["format"], s["topic_id"], s["done"], bool(s["skipped"]), bool(s["waiting"])) for s in view["steps"]]
     assert got == [("einstieg", None, True, False, False),
-                   (None, ids[0], True, True, False), ("kurz", ids[0], True, True, False),
+                   (None, ids[0], True, True, False), ("kurz", ids[0], False, False, False),
                    (None, ids[1], False, False, False), ("kurz", ids[1], False, False, False),
                    ("probe", None, False, False, False)]
-    assert view["total"] == 6 and view["done"] == 3 and sp.open_count(1, MON) == 3
+    # Volle Punkte im Einstiegstest ersparen das Gespräch; der Kurztest bestätigt
+    # erst, dass es sitzt (D219).
+    assert view["total"] == 6 and view["done"] == 2 and sp.open_count(1, MON) == 4
     assert all(s["why"].startswith("Nicht mehr nötig") for s in view["steps"] if s["skipped"])
 
 
