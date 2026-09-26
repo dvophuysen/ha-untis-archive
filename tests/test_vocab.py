@@ -149,16 +149,56 @@ def att(day, result="correct", seconds=4):
     return {"result": result, "seconds": seconds, "created_at": f"{day}T16:00:00+02:00"}
 
 
-def test_word_stage_two_clean_sits_three_days_later_settles_and_errors_wobble():
+def at(day, result="correct", hh=16):
+    return {"result": result, "seconds": 4, "created_at": f"{day}T{hh:02d}:00:00+02:00"}
+
+
+def test_hold_grows_with_spacing_and_an_error_brings_the_word_forward():
+    """Haltbarkeits-Modell (D212): auf Anhieb richtig ist vorläufig sicher, jede
+    richtige Antwort mit Abstand macht das Wort haltbarer, dieselbe Antwort kurz
+    danach kaum; ein Fehler holt es nach vorn."""
     assert vocab.replay([])["stage"] == "neu"
-    assert vocab.replay([att("2026-09-16")])["stage"] == "wackelt"
-    state = vocab.replay([att("2026-09-16"), att("2026-09-16")])
-    assert state["stage"] == "sitzt" and state["due"] == "2026-09-19"
-    assert vocab.replay([att("2026-09-16"), att("2026-09-16"), att("2026-09-19")])["stage"] == "gefestigt"
-    assert vocab.replay([att("2026-09-16"), att("2026-09-16", seconds=30)])["stage"] == "sitzt"
-    assert vocab.replay([att("2026-09-16"), att("2026-09-16"), att("2026-09-19", "incorrect")])["stage"] == "wackelt"
+    first = vocab.replay([at("2026-10-01")])
+    assert (first["stage"], first["hold"], first["due"], first["relearn"]) == ("sitzt", 3.0, "2026-10-02", False)
+    assert vocab.replay([at("2026-10-01"), at("2026-10-01", hh=17)])["hold"] < 3.2, "gleich noch einmal bringt fast nichts"
+    spaced = vocab.replay([at("2026-10-01"), at("2026-10-02")])
+    assert spaced["hold"] == 7.5 and spaced["stage"] == "sitzt"
+    firm = vocab.replay([at("2026-10-01"), at("2026-10-02"), at("2026-10-05")])
+    assert firm["hold"] == 18.75 and firm["stage"] == "gefestigt"
+    wrong = vocab.replay([at("2026-10-01"), at("2026-10-02", "incorrect")])
+    assert (wrong["stage"], wrong["hold"], wrong["due"], wrong["relearn"]) == ("wackelt", 0.75, "2026-10-02", True)
+    again = vocab.replay([at("2026-10-01"), at("2026-10-02", "incorrect"), at("2026-10-02", hh=17)])
+    assert again["stage"] == "wackelt" and not again["relearn"], "gleich danach richtig: noch nicht haltbar"
+    back = vocab.replay([at("2026-10-01"), at("2026-10-02", "incorrect"), at("2026-10-03")])
+    assert back["stage"] == "sitzt" and back["hold"] == 1.88
+    assert vocab.replay([at("2026-10-01"), at("2026-10-02", "partial")])["hold"] == 1.5
+    assert vocab.replay([at("2026-10-01", "incorrect")])["stage"] == "wackelt"
     # Eine Rückfrage zählt nicht, weder gut noch schlecht.
-    assert vocab.replay([att("2026-09-16"), att("2026-09-16", "unclear"), att("2026-09-16")])["stage"] == "sitzt"
+    assert vocab.replay([at("2026-10-01"), at("2026-10-02", "unclear")])["hold"] == 3.0
+
+
+def test_the_old_stage_before_the_switch_is_the_starting_point():
+    """Wer vor der Umstellung „gefestigt“ hatte, fällt nicht zurück (D158)."""
+    old = [at("2026-09-16"), at("2026-09-16", hh=17), at("2026-09-19")]
+    assert vocab._legacy_stage(old) == "gefestigt"
+    state = vocab.replay(old)
+    assert state["stage"] == "gefestigt" and state["hold"] == 14.0
+    assert vocab.replay(old + [at("2026-10-20")])["hold"] > 14.0, "danach wächst sie weiter"
+    assert vocab.replay(old + [at("2026-10-01", "incorrect")])["stage"] == "wackelt", "ein Fehler zählt wie immer"
+    assert vocab.replay([at("2026-09-16", "incorrect")])["stage"] == "wackelt"
+
+
+def test_cards_put_errors_first_but_not_all_in_a_row():
+    from datetime import datetime
+    now = datetime.fromisoformat("2026-10-10T12:00:00+02:00")
+    fresh = vocab.replay([at("2026-10-10")])
+    faded = vocab.replay([at("2026-10-01")])
+    wrong = vocab.replay([at("2026-10-01"), at("2026-10-10", "incorrect")])
+    assert vocab.priority(wrong["hold"] and wrong, now) > vocab.priority(faded, now) > vocab.priority(fresh, now)
+    assert vocab.priority({}, now) == vocab.NEW_PRIORITY
+    states = {i: {"s1": wrong} for i in range(1, 5)} | {5: {"s1": fresh}, 6: {"s1": faded}}
+    order = [w["id"] for w in vocab.order_cards([{"id": i} for i in range(1, 7)], states, "s1")]
+    assert order == [1, 2, 6, 3, 4, 5]
 
 
 def seed_page(account=1, subject="LATEIN", text=PAGE, page=10, label="Begleitband", title="Lernwörter der Lektion 1"):
@@ -218,7 +258,8 @@ def test_attempts_move_the_word_and_wobblers_come_first(setup):
         ids = [r[0] for r in c.execute("SELECT id FROM vocab_words ORDER BY position")]
     r = client.post(V + "/attempts", json={"word_id": ids[2], "stage": 1, "direction": "from", "answer": "Sklave", "spoken": True, "seconds": 3})
     assert r.status_code == 200, r.text
-    assert r.json()["result"] == "correct" and r.json()["feedback"].startswith("Richtig. Im Buch: servus") and r.json()["word"]["state"]["s1"]["stage"] == "wackelt"
+    # Auf Anhieb richtig: vorläufig sicher (D212).
+    assert r.json()["result"] == "correct" and r.json()["feedback"].startswith("Richtig. Im Buch: servus") and r.json()["word"]["state"]["s1"]["stage"] == "sitzt"
     r = client.post(V + "/attempts", json={"word_id": ids[2], "stage": 1, "direction": "from", "answer": "Diener", "seconds": 5})
     assert r.json()["word"]["state"]["s1"]["stage"] == "sitzt"
     # Non-exact answers go through a semantic reviewer, never edit distance.
@@ -245,7 +286,7 @@ def test_attempts_move_the_word_and_wobblers_come_first(setup):
     cards = client.get(V + "/LATEIN/cards?unit=Lektion%201&stage=1&direction=from").json()["cards"]
     assert cards[0]["foreign_word"] == "servus" and cards[0]["state"]["s1"]["stage"] == "wackelt"
     units = client.get(V + "/LATEIN/units").json()["units"]
-    assert units[0]["s1"] == {"neu": 0, "wackelt": 3, "sitzt": 0, "gefestigt": 0}
+    assert units[0]["s1"] == {"neu": 0, "wackelt": 1, "sitzt": 2, "gefestigt": 0}
     # Aufgeben ist eine falsche Antwort mit Erklärung.
     r = client.post(V + "/attempts", json={"word_id": ids[0], "stage": 1, "direction": "from", "gave_up": True})
     assert r.json()["result"] == "incorrect" and r.json()["feedback"].startswith("Weiß ich nicht.")

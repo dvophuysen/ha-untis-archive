@@ -94,8 +94,9 @@ def test_a_mixed_exam_names_the_exam_and_fully_secure_units_rest(env, free):
     exam("cal:en-1", MON + timedelta(days=30), extra_topic="Simple past")
     e = vp.daily(1, MON)[0]
     assert e["why"].startswith("Die Arbeit ist in ")
-    for wid in ids:
-        attempt(wid, MON - timedelta(days=2)); attempt(wid, MON - timedelta(days=2), hh=17)
+    for wid in ids:  # mit Abstand bestätigt: sicher und noch nicht wieder fällig (D212)
+        for back in (9, 8, 5):
+            attempt(wid, MON - timedelta(days=back))
     assert vp.daily(1, MON) == [], "alles sicher und der Test noch weit: kein Pensum"
 
 
@@ -143,15 +144,54 @@ def test_done_counts_only_the_childs_practice_today(env, free):
     assert e["practiced"] == 10 and e["done"] and e["target"] == 10, "das Pensum bleibt über den Tag gleich"
 
 
-def test_without_a_test_ten_due_reviews(env, free):
+def test_without_a_test_the_active_unit_is_the_pensum(env, free):
+    """Ohne Test (D212): Die angefangene Einheit bringt ihre fälligen und noch
+    neuen Wörter, höchstens 15 am Tag; eine nie geübte Einheit bleibt neutral."""
     ids = words(20)
     for wid in ids[:12]:
         attempt(wid, MON - timedelta(days=7)); attempt(wid, MON - timedelta(days=7), hh=17)
     items = vp.daily(1, MON)
     assert len(items) == 1 and items[0]["exam_key"] is None
-    assert items[0]["target"] == 10 and items[0]["due"] == 12 and "Wiederholen" in items[0]["why"]
+    assert (items[0]["target"], items[0]["due"], items[0]["new"], items[0]["relearn"]) == (15, 12, 8, 0)
+    assert "zum Wiederholen fällig" in items[0]["why"] and "noch neu" in items[0]["why"]
     assert vp.daily(1, MON + timedelta(days=5)) == [], "am Wochenende kein Grundpensum"
-    assert vp.daily(1, MON - timedelta(days=6)) == [], "nichts fällig"
+    assert vp.daily(1, MON - timedelta(days=8)) == [], "vor dem ersten Üben ist die Einheit nicht aktiv"
+
+    attempt(ids[0], MON - timedelta(days=1), "incorrect")
+    wobbly = vp.daily(1, MON)[0]
+    assert (wobbly["relearn"], wobbly["due"]) == (1, 11) and wobbly["why"].startswith("1 Wort wackelt.")
+
+
+def test_a_word_practiced_in_another_unit_does_not_activate_this_one(env, free):
+    """Die Antwort nennt die Einheit, in der geübt wurde (unit_scope). Ein Wort,
+    das auch in einer anderen Einheit steht, macht diese nicht aktiv; ohne
+    Angabe braucht es mindestens drei geübte Wörter der Einheit."""
+    ids = words(5, unit="Unit 4", page=210)
+
+    def answer(wid, scope):
+        with closing(db.webapp_conn()) as c, c:
+            c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,created_at,user_id,unit_scope) "
+                      "VALUES(1,?,1,'from','x','correct',?,2,?)", (wid, f"{(MON - timedelta(days=2)).isoformat()}T16:00:00+02:00", scope))
+    for wid in ids[:3]:
+        answer(wid, "Unit 3")
+    assert vp.daily(1, MON) == []
+    answer(ids[3], None); answer(ids[4], None)
+    assert vp.daily(1, MON) == [], "zwei Wörter ohne Angabe reichen nicht"
+    answer(ids[0], "Unit 4")
+    assert vp.daily(1, MON)[0]["unit"] == "Unit 4"
+
+
+def test_a_unit_named_in_class_becomes_active(env, free):
+    """„Unidad 3“ im Stundenthema der letzten zwei Wochen macht die Einheit aktiv."""
+    import sqlite3
+    words(8, unit="Unidad 3", subject="SPANISCH")
+    assert vp.daily(1, MON) == []
+    with sqlite3.connect(db.SETTINGS.history_db_path) as h:
+        h.execute("CREATE TABLE IF NOT EXISTS lessons(account_id INTEGER, date TEXT, subject_name TEXT, lstext TEXT, lstext_manual_override TEXT)")
+        h.execute("INSERT INTO lessons VALUES(1,?,'SPANISCH','Unidad 3 Texto A',NULL)", ((MON - timedelta(days=3)).isoformat(),))
+    item = vp.daily(1, MON)[0]
+    assert (item["unit"], item["new"], item["target"]) == ("Unidad 3", 8, 8)
+    assert vp.daily(1, MON + timedelta(days=14)) == [], "nach zwei Wochen ohne Nennung und Üben wieder neutral"
 
 
 def test_one_subject_whatever_its_spelling(env, free):
@@ -163,7 +203,7 @@ def test_one_subject_whatever_its_spelling(env, free):
     for wid in upper + lower:
         attempt(wid, MON - timedelta(days=7)); attempt(wid, MON - timedelta(days=7), hh=17)
     items = vp.daily(1, MON)
-    assert len(items) == 1 and items[0]["due"] == 12 and items[0]["target"] == 10
+    assert len(items) == 1 and items[0]["due"] == 12 and items[0]["target"] == 12
 
 
 def test_unit_words_are_the_trainer_cards(env, free):

@@ -1,3 +1,10 @@
+## 1.38.0
+
+- Vokabeln nach Lernstand statt nach festen Tagen: Jedes Wort trägt eine Haltbarkeit. Auf Anhieb richtig gilt es gleich als vorläufig sicher („sitzt“). Jede richtige Antwort mit etwas Abstand macht es haltbarer; dieselbe Antwort kurz danach bringt kaum etwas. Ab zwei Wochen Haltbarkeit heißt es „gefestigt“. Ein Fehler setzt es auf „wackelt“, bis es wieder richtig kommt. Ein Wort fällt nie allein durch Zeit zurück, es wird nur wieder fällig.
+- Der Trainer fragt in der Reihenfolge des Bedarfs: zuerst, was zuletzt falsch war, dann neue Wörter und Wörter, die zu verblassen drohen; nie mehr als zwei Wackelwörter hintereinander.
+- Vokabelpensum ohne Test: kommt aus der Einheit, die gerade dran ist, weil sie in den letzten sechs Wochen geübt wurde oder im Unterricht der letzten zwei Wochen vorkam („Unidad 3“ im Stundenthema). Dran sind Wackelwörter, fällige und noch neue Wörter, höchstens 15 am Tag. Nie geübte Einheiten bleiben außen vor.
+- Niemand verliert etwas: Wer bis gestern ein Wort auf „sitzt“ oder „gefestigt“ hatte, behält das als Startwert.
+
 ## 1.37.3
 
 - Vokabelpensum: Ferien und Feiertage hinter dem bekannten Stundenplan zählen nicht mehr als Lerntage, wie im Lernplan. Ein Test nach den Herbstferien verteilt seine Wörter jetzt auf die echten Schultage davor.

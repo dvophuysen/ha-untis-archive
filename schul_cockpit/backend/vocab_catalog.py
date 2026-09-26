@@ -253,14 +253,14 @@ def selected_words(account_id: int, subject: str, unit: str, section: str = '') 
 
 
 def cards(account_id: int, subject: str, unit: str, stage: int, limit: int, section: str = '', *, book_order=False) -> list[dict]:
-    from .vocab import word_states, rank
+    from .vocab import word_states, order_cards
     words = selected_words(account_id, subject, unit, section)
     with closing(webapp_conn()) as c:
         states = word_states(c, account_id, [w['id'] for w in words])
     if not book_order:
         if stage == 2:
             words = [w for w in words if states[w['id']]['s1']['stage'] in ('sitzt', 'gefestigt')]
-        words.sort(key=lambda w: rank(states[w['id']], 's2' if stage == 2 else 's1'))
+        words = order_cards(words, states, 's2' if stage == 2 else 's1')
     return [{**{k: v for k, v in w.items() if k not in ('_at', 'source_label')},
              'label': w['source_label'], 'state': states[w['id']]} for w in words[:limit]]
 

@@ -5,8 +5,9 @@ Vokabelthema an, verteilt die App die Wörter der Einheit, die noch nicht sicher
 sitzen, auf die verbleibenden Schultage und legt die fälligen Wiederholungen
 dazu. Mindestens 10, höchstens 40 Wörter am Tag; je näher der Test und je
 schwächer die Trefferquote, desto mehr. Der nächste Test kommt zuerst, höchstens
-zwei Einträge am Tag. Ohne anstehenden Test bleibt ein Grundpensum von zehn
-fälligen Wiederholungen, wenn welche fällig sind.
+zwei Einträge am Tag. Ohne anstehenden Test kommt ein Grundpensum aus der
+aktiven Einheit, in der am meisten dran ist: Wackelwörter, fällige
+Wiederholungen und noch neue Wörter, höchstens 15 (D212).
 
 Das Pensum wird aus dem Stand vor dem Tag gerechnet und bleibt über den Tag
 gleich; erledigt ist es, wenn das Kind heute mindestens so viele verschiedene
@@ -30,7 +31,12 @@ LOG = logging.getLogger("schul_cockpit.vocab_pensum")
 
 HORIZON = 42
 MIN_WORDS, MAX_WORDS = 10, 40
-BASE_REVIEWS = 10
+# Ohne Test (D212): höchstens so viele Wörter aus einer aktiven Einheit am Tag.
+# Aktiv ist eine Einheit, die in den letzten sechs Wochen geübt wurde oder die
+# der Unterricht der letzten zwei Wochen nennt („Unidad 3“ im Stundenthema).
+BASE_MAX = 15
+LESSON_DAYS = 14
+UNSCOPED_MIN = 3
 MAX_ENTRIES = 2
 SECURE = ("sitzt", "gefestigt")
 # Ab so vielen gewerteten Antworten gilt die Trefferquote als belastbar.
@@ -187,8 +193,9 @@ def _states(account_id: int, ids: list[int], day: date) -> dict[int, dict]:
 
 
 def _is_due(state: dict, day: date) -> bool:
+    """Ein sicheres Wort, dessen Termin erreicht ist (Wiederholung, D212)."""
     s1 = state["s1"]
-    return s1["stage"] == "sitzt" and bool(s1.get("due")) and s1["due"] <= day.isoformat()
+    return s1["stage"] in SECURE and bool(s1.get("due")) and s1["due"] <= day.isoformat()
 
 
 def practiced(account_id: int, day: date, word_ids: list[int] | None = None) -> set[int]:
@@ -276,46 +283,95 @@ def _test_entry(account_id: int, day: date, exam: dict, subject: str, unit: str,
             "rate": round(rate, 2) if rate is not None else None, "why": why}
 
 
-def _base_entry(account_id: int, day: date) -> dict | None:
-    """Ohne anstehenden Test: zehn fällige Wiederholungen aus der Einheit, in der
-    die meisten fällig sind."""
+def _lesson_units(account_id: int, day: date) -> set[tuple[str, str, int]]:
+    """Einheiten, die das Stundenthema der letzten zwei Wochen nennt: (Sprache,
+    Art, Nummer), etwa („Spanisch“, „uni“, 3) für „Unidad 3 Texto A“."""
     from . import vocab
+    from .db import history_conn
+    try:
+        with closing(history_conn()) as c:
+            rows = c.execute(
+                "SELECT subject_name, COALESCE(NULLIF(lstext_manual_override,''), lstext) FROM lessons "
+                "WHERE account_id=? AND date>=? AND date<? AND COALESCE(NULLIF(lstext_manual_override,''), lstext, '')!=''",
+                (account_id, (day - timedelta(days=LESSON_DAYS)).isoformat(), day.isoformat())).fetchall()
+    except Exception:
+        LOG.warning("Stundenthemen für das Vokabelpensum nicht lesbar", exc_info=True)
+        return set()
+    out = set()
+    for subject, text in rows:
+        lang = vocab.language_of(subject or "")
+        for m in HOMEWORK_UNIT.finditer(text or ""):
+            if lang:
+                out.add((lang["name"], m.group(1).casefold()[:3], int(m.group(2))))
+    return out
+
+
+def _base_entry(account_id: int, day: date) -> dict | None:
+    """Ohne anstehenden Test (D212): aus der aktiven Einheit, in der am meisten
+    dran ist, bis zu 15 Wörter. Dran sind Wörter, die zuletzt falsch waren,
+    sichere Wörter mit erreichtem Termin und in einer aktiven Einheit die noch
+    nicht geübten. Der Stand vor dem Tag entscheidet (D181)."""
+    from . import vocab
+    since = (day - timedelta(days=HORIZON)).isoformat()
     with closing(webapp_conn()) as c:
-        rows = c.execute(
-            "SELECT DISTINCT w.subject,w.id FROM vocab_attempts a JOIN vocab_words w ON w.id=a.word_id "
-            "WHERE a.account_id=? AND a.created_at<?", (account_id, day.isoformat())).fetchall()
-    # Ein Fach, gleich wie es geschrieben ist: Wörter aus Buch und Wortliste
-    # tragen „SPANISCH“ und „spanisch“ (alle Abfragen vergleichen ohne Groß- und
-    # Kleinschreibung). Sonst lief jede Einheit doppelt durch, jeweils mit nur
-    # einem Teil der fälligen Wörter. Name: die häufigste Schreibweise.
-    spelled: dict[str, Counter] = {}
-    by_subject: dict[str, list[int]] = {}
-    for subject, wid in rows:
-        spelled.setdefault(subject.casefold(), Counter())[subject] += 1
-        by_subject.setdefault(subject.casefold(), []).append(wid)
-    by_subject = {max(spelled[k].items(), key=lambda kv: (kv[1], kv[0]))[0]: ids for k, ids in by_subject.items()}
+        spellings = c.execute("SELECT subject, COUNT(*) FROM vocab_words WHERE account_id=? AND hidden=0 GROUP BY subject",
+                              (account_id,)).fetchall()
+        recent = c.execute("SELECT DISTINCT word_id, unit_scope FROM vocab_attempts WHERE account_id=? AND created_at>=? AND created_at<?",
+                           (account_id, since, day.isoformat())).fetchall()
+    # Geübt heißt: in dieser Einheit geübt. Seit 1.13.4 steht die gewählte
+    # Einheit an jeder Antwort; ein Wort, das auch in anderen Einheiten
+    # vorkommt, macht diese nicht aktiv. Ältere Antworten ohne Angabe zählen,
+    # wenn mindestens drei Wörter der Einheit geübt wurden.
+    scoped = {r[1] for r in recent if r[1]}
+    unscoped = {r[0] for r in recent if not r[1]}
+    # Ein Fach, gleich wie es geschrieben ist (1.37.2); Name: die häufigste Schreibweise.
+    subjects: dict[str, tuple[str, int]] = {}
+    for subject, n in spellings:
+        key = subject.casefold()
+        if key not in subjects or (n, subject) > (subjects[key][1], subjects[key][0]):
+            subjects[key] = (subject, n)
+    named = _lesson_units(account_id, day)
     best = None
-    for subject, ids in by_subject.items():
-        states = _states(account_id, ids, day)
-        due = {wid for wid, s in states.items() if _is_due(s, day)}
-        if not due:
+    for subject, _ in subjects.values():
+        lang = vocab.language_of(subject)
+        if not lang:
             continue
         for u in vocab.units(account_id, subject):
             if not u.get("words"):
                 continue
-            mine = due & set(_unit_words(account_id, subject, u["unit"]))
-            if mine and (best is None or len(mine) > len(best[3])):
-                best = (subject, u["unit"], u.get("label") or u["unit"], mine)
+            ids = _unit_words(account_id, subject, u["unit"])
+            number = _unit_number(u.get("label") or u["unit"])
+            practiced_here = u["unit"] in scoped or len(unscoped & set(ids)) >= UNSCOPED_MIN
+            active = practiced_here or bool(number and (lang["name"], *number) in named)
+            if not active:
+                continue
+            states = _states(account_id, ids, day)
+            relearn = [w for w, st in states.items() if st["s1"].get("relearn")]
+            due = [w for w, st in states.items() if _is_due(st, day)]
+            new = [w for w, st in states.items() if st["s1"]["stage"] == "neu"]
+            if not (relearn or due or new):
+                continue
+            rank = (len(relearn) + len(due), len(new))
+            if best is None or rank > best[0]:
+                best = (rank, subject, u["unit"], u.get("label") or u["unit"], ids, len(relearn), len(due), len(new))
     if not best:
         return None
-    subject, unit, label, due = best
-    target = min(BASE_REVIEWS, len(due))
-    done_words = practiced(account_id, day, _unit_words(account_id, subject, unit))
-    why = (f"{len(due)} {'Wort ist' if len(due) == 1 else 'Wörter sind'} zum Wiederholen fällig. "
-           "Kurz wiederholen, dann bleiben sie sicher.")
+    _, subject, unit, label, ids, relearn, due, new = best
+    need = relearn + due + new
+    target = min(BASE_MAX, need)
+    done_words = practiced(account_id, day, ids)
+    parts = []
+    if relearn:
+        parts.append(f"{relearn} {'Wort wackelt' if relearn == 1 else 'Wörter wackeln'}.")
+    if due:
+        parts.append(f"{due} {'ist' if due == 1 else 'sind'} zum Wiederholen fällig.")
+    if new:
+        parts.append(f"{new} {'ist' if new == 1 else 'sind'} noch neu.")
+    why = " ".join(parts) + (" Die Wörter, die zuerst kommen, brauchen es am meisten." if need > target
+                             else " Kurz üben, dann bleibt die Einheit sicher.")
     return {"subject": subject, "unit": unit, "unit_label": label, "target": target, "done": len(done_words) >= target,
             "practiced": len(done_words), "href": _href(subject, unit), "exam_key": None, "exam_date": None,
-            "days_left": None, "open": 0, "due": len(due), "rate": None, "why": why}
+            "days_left": None, "open": new + relearn, "due": due, "relearn": relearn, "new": new, "rate": None, "why": why}
 
 
 # ------------------------------------------------------------------ Schnittstelle

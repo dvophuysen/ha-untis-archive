@@ -4,16 +4,19 @@ Stufe 1 prüft die Bedeutung, gesprochen (Latein → Deutsch wie in der Arbeit;
 Englisch in beide Richtungen). Stufe 2 prüft die Schreibweise, getippt ohne
 Autokorrektur, nur in die Fremdsprache hinein. Kein Multiple Choice, kein
 Abschreiben aus dem Heft. Die Stufe je Wort (neu, wackelt, sitzt, gefestigt)
-wird aus den Versuchen abgelesen: zweimal hintereinander richtig
-heißt sitzt, Tage später noch einmal richtig heißt gefestigt, ein Fehler setzt
-auf wackelt. Was das Kind sagt, zählt erst, wenn es dasteht.
+wird aus den Versuchen abgelesen, über eine Haltbarkeit in Tagen (D212): auf
+Anhieb richtig heißt vorläufig sicher, jede richtige Antwort mit Abstand macht
+das Wort haltbarer, ein Fehler holt es nach vorn. Was das Kind sagt, zählt erst,
+wenn es dasteht.
 """
 import json
 import logging
+import math
 import re
 import unicodedata
 from contextlib import closing
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from typing import Annotated
@@ -40,8 +43,33 @@ LANGUAGES = {
 }
 # Legacy API metadata only; response duration no longer affects mastery.
 HESITATION_SECONDS = 12
+# Die Regel bis 25.09.2026 (D155): zwei richtige in Folge „sitzt“, drei Tage
+# später richtig „gefestigt“. Sie liefert nur noch den Startwert (D158).
 CLEAN_RUN = 2
 CHECK_AFTER_DAYS = 3
+
+# Haltbarkeits-Modell (D212). Jedes Wort hat eine Haltbarkeit in Tagen; daraus
+# folgt, wie sicher es heute noch sitzt (Erinnerung = 2^(-Tage/Haltbarkeit)).
+# Die Zahlen sind ein erster Stand und werden an echten Verläufen geeicht
+# (Wiedervorlage in UEBERGABE.md). Alles wird bei jedem Lesen aus den Antworten
+# neu gerechnet; eine Änderung hier wirkt also sofort auf den ganzen Verlauf.
+MODEL_FROM = "2026-09-26"   # Umstellung; wer davor „sitzt“ hatte, behält es als Startwert
+FIRST_RIGHT_DAYS = 3.0      # auf Anhieb richtig: vorläufig sicher
+FIRST_WRONG_DAYS = 0.1      # auf Anhieb falsch: gleich noch einmal
+GROW = 2.5                  # richtig zum Termin: Haltbarkeit ×2,5, früher anteilig weniger
+SHRINK = {"incorrect": 0.25, "partial": 0.5}
+MIN_DAYS = 0.1
+RECALL_DUE = 0.8            # fällig, sobald die Erinnerung unter 80 % fällt
+SURE_DAYS = 1.0             # ab einem Tag Haltbarkeit „sitzt“
+FIRM_DAYS = 14.0            # ab zwei Wochen „gefestigt“
+LEGACY_SEED = {"sitzt": FIRST_RIGHT_DAYS, "gefestigt": FIRM_DAYS}
+# Vorrang beim Abfragen: ein Fehler ganz vorn, ein neues Wort mit festem
+# Standardwert, ein bekanntes Wort umso weiter vorn, je mehr es verblasst ist.
+RELEARN_PRIORITY = 2.0
+NEW_PRIORITY = 0.3
+# Höchstens so viele Wackelwörter hintereinander, solange andere da sind.
+HARD_RUN = 2
+TZ = ZoneInfo("Europe/Berlin")
 STAGES = ["neu", "wackelt", "sitzt", "gefestigt"]
 
 
@@ -199,18 +227,13 @@ def is_clean(a: dict) -> bool:
     return a["result"] == "correct"
 
 
-def replay(attempts: list[dict]) -> dict:
-    """Stufe eines Wortes für eine Stufe (Bedeutung oder Schreibweise)."""
-    stage, streak, sat, last, last_result = "neu", 0, None, None, None
-    correct_count = wrong_count = 0
+def _legacy_stage(attempts: list[dict]) -> str:
+    """Die Stufe nach der Regel bis zur Umstellung (D155), nur als Startwert."""
+    stage, streak, sat = "neu", 0, None
     for a in attempts:
-        day = date.fromisoformat(a["created_at"][:10])
-        last = day
         if a["result"] == "unclear":
             continue
-        last_result = a["result"]
-        correct_count += a['result'] == 'correct'
-        wrong_count += a['result'] in ('incorrect', 'partial')
+        day = date.fromisoformat(a["created_at"][:10])
         if is_clean(a):
             streak += 1
             if sat and (day - sat).days >= CHECK_AFTER_DAYS:
@@ -222,13 +245,101 @@ def replay(attempts: list[dict]) -> dict:
         else:
             streak = 0
             stage, sat = "wackelt", None
+    return stage
+
+
+def _moment(text: str) -> datetime:
+    at = datetime.fromisoformat(text)
+    return at if at.tzinfo else at.replace(tzinfo=TZ)
+
+
+def until_due(hold: float) -> float:
+    """Tage, bis ein Wort dieser Haltbarkeit fällig wird."""
+    return hold * math.log2(1 / RECALL_DUE)
+
+
+def recall(hold: float, days: float) -> float:
+    return 2 ** (-max(0.0, days) / hold)
+
+
+def replay(attempts: list[dict]) -> dict:
+    """Stand eines Wortes für eine Stufe (Bedeutung oder Schreibweise), D212.
+
+    Auf Anhieb richtig: Haltbarkeit drei Tage („sitzt“, vorläufig sicher). Jede
+    weitere richtige Antwort verlängert sie, voll (×2,5) erst, wenn das Wort
+    fällig war; dieselbe Antwort Minuten später bringt fast nichts. Falsch
+    kürzt sie und holt das Wort nach vorn, bis es wieder richtig kommt.
+    Stufe: wackelt nach einem Fehler oder unter einem Tag, sitzt bis zwei
+    Wochen, gefestigt darüber. Wer vor der Umstellung schon „sitzt“ oder
+    „gefestigt“ hatte, behält das als Startwert (D158)."""
+    hold = last_at = last = last_result = None
+    relearn = False
+    correct_count = wrong_count = streak = 0
+    earlier: list[dict] = []
+    seeded = False
+
+    def seed():
+        nonlocal hold, relearn
+        floor = LEGACY_SEED.get(_legacy_stage(earlier))
+        if floor and hold is not None and hold < floor and not relearn:
+            hold = floor
+
+    for a in attempts:
+        if not seeded and a["created_at"][:10] >= MODEL_FROM:
+            seed()
+            seeded = True
+        if not seeded:
+            earlier.append(a)
+        at = _moment(a["created_at"])
+        last = at.date()
+        if a["result"] == "unclear":
+            continue
+        last_result = a["result"]
+        right = is_clean(a)
+        correct_count += right
+        wrong_count += a["result"] in ("incorrect", "partial")
+        if hold is None:
+            hold, relearn = (FIRST_RIGHT_DAYS, False) if right else (FIRST_WRONG_DAYS, True)
+        elif right:
+            gap = (at - last_at).total_seconds() / 86400
+            hold *= GROW ** min(1.0, max(0.0, gap) / until_due(hold))
+            relearn = False
+        else:
+            hold = max(MIN_DAYS, hold * SHRINK.get(a["result"], SHRINK["incorrect"]))
+            relearn = True
+        streak = streak + 1 if right else 0
+        last_at = at
+    if not seeded:
+        seed()
+    if hold is None:
+        stage = "neu"
+    elif relearn or hold < SURE_DAYS:
+        stage = "wackelt"
+    elif hold < FIRM_DAYS:
+        stage = "sitzt"
+    else:
+        stage = "gefestigt"
     due = None
-    if stage == "sitzt" and sat:
-        due = (sat + timedelta(days=CHECK_AFTER_DAYS)).isoformat()
+    if hold is not None:
+        due = (last_at.date() if relearn else (last_at + timedelta(days=until_due(hold))).date()).isoformat()
     return {"stage": stage, "streak": streak, "last": last.isoformat() if last else None, "due": due,
+            "hold": round(hold, 2) if hold is not None else None, "relearn": relearn,
+            "last_at": last_at.isoformat() if last_at else None,
             "last_result": last_result, "correct_count": correct_count, "wrong_count": wrong_count,
             "unit_scopes": sorted({a['unit_scope'] for a in attempts if a.get('unit_scope')}),
             "unscoped": any(not a.get('unit_scope') and a['result'] != 'unclear' for a in attempts)}
+
+
+def priority(state: dict, now: datetime | None = None) -> float:
+    """Vorrang beim Abfragen: nach einem Fehler ganz vorn, ein neues Wort mit
+    festem Standardwert, ein bekanntes umso weiter vorn, je mehr es verblasst."""
+    if not state or state.get("stage", "neu") == "neu" or state.get("hold") is None:
+        return NEW_PRIORITY
+    if state.get("relearn"):
+        return RELEARN_PRIORITY
+    now = now or datetime.now(TZ)
+    days = (now - _moment(state["last_at"])).total_seconds() / 86400 if state.get("last_at") else 0.0
+    return 1 - recall(state["hold"], days)
 
 
 def word_states(c, account_id: int, word_ids: list[int], before: str | None = None) -> dict[int, dict]:
@@ -1460,13 +1571,27 @@ def public_word(w: dict, state: dict | None = None) -> dict:
             "unit": w["unit"], "label": w["source_label"], "page": w["page"], "state": state or {}}
 
 
-def rank(state: dict, direction_stage: str) -> tuple:
+def rank(state: dict, direction_stage: str, now: datetime | None = None) -> tuple:
+    """Sortierschlüssel: höchster Vorrang zuerst (D212); bei Gleichstand das
+    zuletzt falsch Beantwortete, dann das länger nicht Gefragte."""
     st = state.get(direction_stage, {})
-    stage = st.get("stage", "neu")
-    due = st.get("due") and st["due"] <= today_local().isoformat()
-    order = {"wackelt": 0, "neu": 2, "sitzt": 3, "gefestigt": 4}[stage]
-    # Zuletzt falsch vor zuletzt richtig-mit-Makel; dann das länger nicht Gefragte.
-    return (1 if due else order, 0 if st.get("last_result") in ("incorrect", "partial") else 1, st.get("last") or "")
+    return (-priority(st, now), 0 if st.get("last_result") in ("incorrect", "partial") else 1, st.get("last") or "")
+
+
+def order_cards(words: list[dict], states: dict[int, dict], key: str) -> list[dict]:
+    """Nach Vorrang, aber nicht nur Wackelwörter am Stück: nach höchstens zwei
+    folgt ein anderes, solange es eins gibt. Sonst frustriert die Runde."""
+    now = datetime.now(TZ)
+    ranked = sorted(words, key=lambda w: rank(states[w["id"]], key, now))
+    hard = [w for w in ranked if states[w["id"]].get(key, {}).get("relearn")]
+    rest = [w for w in ranked if not states[w["id"]].get(key, {}).get("relearn")]
+    out, run = [], 0
+    while hard or rest:
+        if hard and (run < HARD_RUN or not rest):
+            out.append(hard.pop(0)); run += 1
+        else:
+            out.append(rest.pop(0)); run = 0
+    return out
 
 
 @memo(shallow=True)  # nur gelesen: unit_word_ids filtert, niemand verändert die Einträge
@@ -1515,7 +1640,7 @@ def cards(account_id: int, subject: str, unit: str, stage: int, direction: str, 
     key = "s2" if stage == 2 else "s1"
     if stage == 2:
         words = [w for w in words if states[w["id"]]["s1"]["stage"] in ("sitzt", "gefestigt")]
-    words.sort(key=lambda w: rank(states[w["id"]], key))
+    words = order_cards(words, states, key)
     return [public_word(w, states[w["id"]]) for w in words[:limit]]
 
 

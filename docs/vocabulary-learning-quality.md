@@ -2,7 +2,7 @@
 
 ## Vorbereitete Änderung, noch nicht produktiv freigegeben
 
-- Richtige Antworten zählen unabhängig von ihrer Dauer. Zwei richtige Antworten in Folge ergeben „sitzt“, eine spätere richtige Wiederholung „gefestigt“. Falsche Antworten ergeben wieder „unsicher“. Es gibt keinen automatischen Verlust allein durch Zeitablauf.
+- Richtige Antworten zählen unabhängig von ihrer Dauer. Seit 1.38.0 (D212) trägt jedes Wort eine Haltbarkeit in Tagen: auf Anhieb richtig heißt „sitzt“ (vorläufig sicher, drei Tage), jede richtige Antwort mit Abstand verlängert die Haltbarkeit (voll ×2,5 erst zum Termin), ab zwei Wochen heißt das Wort „gefestigt“. Eine falsche Antwort kürzt sie und setzt auf „wackelt“, bis das Wort wieder richtig kommt. Die Stufe sinkt nicht allein durch Zeitablauf; die Zeit macht ein Wort nur wieder fällig. Der Stand vom 25.09.2026 gilt als Startwert.
 - Technische Transkriptionswartezeit wird in der neuen Oberfläche aus der Zeitmessung herausgerechnet. Ältere Sekundenwerte werden nicht rückwirkend geschätzt. Bestehende Versuche bleiben erhalten; ihre korrekten Ergebnisse werden nach der faireren Regel neu zusammengefasst.
 - Rot: mindestens ein bewerteter Versuch, bisher kein richtiger. Gelb: schon richtig, aber noch nicht ausreichend bestätigt oder zuletzt wieder falsch. Grün: sitzt/gefestigt. Grau: noch kein bewerteter Versuch.
 - Bedeutung und Schreibweise bleiben getrennt. Balken haben zusätzlich Textwerte; Farbe ist nicht die einzige Information.

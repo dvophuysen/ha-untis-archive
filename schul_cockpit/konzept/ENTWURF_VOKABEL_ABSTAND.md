@@ -1,6 +1,12 @@
 # Entwurf: Vokabeln mit zeitlichem Abstand (ergänzt D155)
 
-Stand 26.09.2026, nicht gebaut. Zur Entscheidung durch den Nutzer. Die Zahlen
+**Überholt:** Gebaut wurde am 26.09.2026 stattdessen das Haltbarkeits-Modell mit
+Rangfolge nach dem Vorschlag des Nutzers (D212, Schul-Cockpit 1.38.0). Die
+Datenlage und die Aufwandsrechnung unten bleiben als Grundlage der Eichung
+gültig. Eichung: `python3 scripts/vocab_calibration.py`, Wiedervorlage in
+UEBERGABE.md.
+
+Ursprünglicher Stand 26.09.2026, zur Entscheidung durch den Nutzer. Die Zahlen
 stammen aus dem Lesezugang (READ_ACCESS.md), Stand 26.09.2026 vormittags;
 Kinder hier als Kind A und Kind B.
 

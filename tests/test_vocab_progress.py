@@ -9,7 +9,8 @@ def word(wid, results=(), scope=None):
 def test_colors_distinguish_only_wrong_mixed_mastered_and_unseen():
     words = [word(1, ['incorrect']), word(2, ['correct']), word(3, ['correct', 'incorrect']),
              word(4, ['correct', 'correct']), word(5)]
-    assert progress.summarize(words + [words[0]]) == dict(wrong=1, uncertain=2, secure=1, new=1, total=5)
+    # Auf Anhieb richtig gilt als vorläufig sicher (D212).
+    assert progress.summarize(words + [words[0]]) == dict(wrong=1, uncertain=1, secure=2, new=1, total=5)
     assert progress.summarize(words, 's2') == dict(wrong=0, uncertain=0, secure=0, new=5, total=5)
 
 
