@@ -414,6 +414,12 @@ def test_the_friday_list_stays_on_the_weekend_and_weekend_work_counts(world, mon
         answer(ids[0], 1, 3, when=at(SAT, 11, k))
     sun = sp.today(1, kid, at(SUN, 9))
     assert sun["steps"][0]["done"], "Samstag zählt für die Freitagsliste"
+    # Die Familienkarte der Eltern liest dieselbe Liste mit demselben Stand
+    # und hält nichts fest.
+    card = sp.for_day(1, SUN, store=False)
+    assert card["carry"]["from"] == FRI.isoformat()
+    assert (card["done"], card["total"]) == (sun["done"], sun["total"]) and card["steps"] == sun["steps"]
+    assert sp.stored(1, SUN) is None
     assert sp.open_count(1, FRI, SUN) == sun["total"] - sun["done"]
     assert "carry" not in sp.today(1, kid, at(MON + timedelta(days=7), 15)), "am Montag gilt der neue Tag"
 

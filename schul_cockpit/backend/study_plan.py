@@ -596,8 +596,13 @@ def carry_day(account_id: int, day: date) -> date | None:
 
 def today(account_id: int, user, now: datetime | None = None) -> dict:
     now = now or rewards.now_local()
-    day = now.date()
-    store = rewards.acting_child(user)
+    return for_day(account_id, now.date(), store=rewards.acting_child(user))
+
+
+def for_day(account_id: int, day: date, *, store: bool) -> dict:
+    """Die Liste, die an ``day`` gilt; an freien Tagen die des letzten
+    Schultags (D205). Auch die Familienkarte der Eltern liest so, mit
+    ``store=False``: Sie hält nichts fest."""
     carry = carry_day(account_id, day)
     if carry is None:
         return view(account_id, day, store=store)

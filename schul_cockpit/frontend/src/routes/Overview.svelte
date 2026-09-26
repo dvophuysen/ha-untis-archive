@@ -10,7 +10,7 @@
   // wird nicht wiederholt.
   import ActionLabel from '../lib/ActionLabel.svelte';
   import { subjectStyle } from '../lib/subjectStyle.js';
-  import { formatShortDate } from '../lib/format.js';
+  import { formatShortDate, weekdayOf } from '../lib/format.js';
   import { untrack } from 'svelte';
   import { api } from '../lib/api.js';
   import { setActiveAccount } from '../lib/store.svelte.js';
@@ -130,7 +130,7 @@
 
         {#if kid.study}
           <!-- Lernen heute (D180): nur zur Information, die App steuert selbst nach. -->
-          <button class="okline study" class:open={kid.study.done < kid.study.total} onclick={() => open(kid, { page: 'today', section: 'lernen,lernen-kurz' })}><span>Lernen heute: {kid.study.done} von {kid.study.total}{#each kid.study.tight ?? [] as t} · eng bis {subjectStyle(t.subject).name} am {formatShortDate(t.exam_date)}{/each}</span></button>
+          <button class="okline study" class:open={kid.study.done < kid.study.total} onclick={() => open(kid, { page: 'today', section: 'lernen,lernen-kurz' })}><span>{kid.study.carry ? `Lernen, Liste vom ${weekdayOf(kid.study.carry.from)}` : 'Lernen heute'}: {kid.study.done} von {kid.study.total}{#each kid.study.tight ?? [] as t} · eng bis {subjectStyle(t.subject).name} am {formatShortDate(t.exam_date)}{/each}</span></button>
         {/if}
         {#if b.ok.length}
           <button class="okline" onclick={() => open(kid, { page: 'today' })}><span>✓ {b.ok.join(' · ')}</span></button>

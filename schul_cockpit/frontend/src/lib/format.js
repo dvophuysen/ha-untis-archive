@@ -127,6 +127,11 @@ export function stripUntisMetadata(notes) {
 
 // Freitagsliste an freien Tagen (D205): von welchem Schultag, bis wann sie gilt.
 const WEEKDAY = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+/** Wochentag eines ISO-Datums, lokal gerechnet („Freitag“). */
+export function weekdayOf(iso) {
+  return iso ? WEEKDAY[new Date(`${iso}T12:00:00`).getDay()] : '';
+}
+
 export function carryText(carry) {
   if (!carry?.from) return '';
   const from = WEEKDAY[new Date(`${carry.from}T12:00:00`).getDay()];

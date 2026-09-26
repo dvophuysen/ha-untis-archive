@@ -284,9 +284,11 @@ async def _dashboard_for_account(account_id: int, name: str, today: date) -> dic
     study = None
     try:
         from .. import study_plan
-        p = await asyncio.to_thread(study_plan.view, account_id, now.date(), store=False)
+        # Wie „Heute“ des Kindes: am Wochenende die Liste vom Freitag (D205).
+        p = await asyncio.to_thread(study_plan.for_day, account_id, now.date(), store=False)
         if p["total"] or p["tight"]:
-            study = {"done": p["done"], "total": p["total"], "tight": p["tight"][:1], "frozen": p["frozen"]}
+            study = {"done": p["done"], "total": p["total"], "tight": p["tight"][:1], "frozen": p["frozen"],
+                     "carry": p.get("carry")}
     except Exception:
         _LOG.warning("Lernplan für Konto %s nicht lesbar", account_id, exc_info=True)
 
