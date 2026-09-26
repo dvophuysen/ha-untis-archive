@@ -29,7 +29,9 @@
   let editing = $state(null), now = $state(new Date());
   let showDone = $state(false), message = $state(''), bag = $state(null), todayBag = $state(null);
   let focusBusy = $state(false), celebrate = $state(false);
-  let paperId = $state(null), stepBusy = $state(''), stepError = $state('');
+  // Übungsarbeiten entstehen unabhängig voneinander: Während eine erstellt oder
+  // ausgewertet wird, lässt sich die nächste schon beginnen (stepBusy: Schlüssel).
+  let paperId = $state(null), stepBusy = $state([]), stepError = $state('');
   let request = 0, loadedAt = 0;
   // Die mit /today gelieferte Tasche gilt nur frisch; springt die Seite erst
   // Stunden später auf „nach der Schule“, holt die Packliste sie selbst.
@@ -203,20 +205,28 @@
   async function startStep(s) {
     if (s.kind === 'paper' && s.attempt_id) { paperId = s.attempt_id; await tick(); jump('s-lernen'); return; }
     if (s.kind !== 'paper') { if (s.href) location.hash = s.href; return; }
-    if (stepBusy) return;
-    stepBusy = s.key; stepError = '';
+    if (stepBusy.includes(s.key)) return;
+    stepBusy = [...stepBusy, s.key]; stepError = '';
     const id = accountId;
     try {
       const r = await api.get(`/api/accounts/${id}/practice?exam_key=${encodeURIComponent(s.exam_key)}`);
-      const open = (r.papers ?? []).find(p => p.paper_format === s.format && p.attempt_id && p.status !== 'graded' && (p.created_at || '').slice(0, 10) === day);
-      if (open) paperId = open.attempt_id;
-      else {
+      // Nur die Arbeit genau dieses Schritts: gleiches Format und, beim Kurztest
+      // eines Themas, dieses Thema. Sonst öffnete „Los“ den laufenden oder gerade
+      // ausgewerteten Kurztest eines anderen Themas.
+      const fits = (p) => p.paper_format === s.format && p.attempt_id && p.status !== 'graded' && p.status !== 'review'
+        && (p.created_at || '').slice(0, 10) === day && (!s.topic_id || (p.topic_ids ?? []).includes(s.topic_id));
+      const open = (r.papers ?? []).find(fits);
+      let target = open?.attempt_id;
+      if (!target) {
         const a = await api.post(`/api/accounts/${id}/practice`, { exam_key: s.exam_key, format: s.format, topic_ids: s.topic_id ? [s.topic_id] : [], level: s.level ?? null });
-        paperId = a.id;
+        target = a.id;
       }
-      await tick(); jump('s-lernen');
+      if (id !== accountId) return;
+      // Ist inzwischen eine andere Arbeit offen, bleibt sie offen; die neue steht am Schritt bereit.
+      if (paperId === null) { paperId = target; await tick(); jump('s-lernen'); }
+      else load();
     } catch (e) { stepError = e instanceof ApiError ? e.message : 'Die Übungsarbeit konnte nicht geöffnet werden.'; }
-    finally { stepBusy = ''; }
+    finally { stepBusy = stepBusy.filter((k) => k !== s.key); }
   }
   // Erledigte Bereiche klappen sich zu (D187); von Hand Aufgeklapptes bleibt bis zum Abend offen.
   function readOpened() {
@@ -299,7 +309,7 @@
         {:else if nextStep}
           <strong class="focus-big clamp">{nextStep.title}</strong>
           <span class="focus-note">{nextStep.why}</span>
-          {#if !study.read_only}<span class="focus-actions"><button class="on-accent" disabled={!!stepBusy} onclick={() => startStep(nextStep)}>Los</button></span>{/if}
+          {#if !study.read_only}<span class="focus-actions"><button class="on-accent" disabled={stepBusy.includes(nextStep.key)} onclick={() => startStep(nextStep)}>{stepBusy.includes(nextStep.key) ? 'Wird erstellt …' : 'Los'}</button></span>{/if}
         {:else}
           <strong class="focus-big">Aufgaben erledigt. Noch {bag && !bag.packed ? 'die Tasche' : ''}{bag && !bag.packed && feedbackOpen ? ' und ' : ''}{feedbackOpen ? 'die Rückmeldungen' : ''}.</strong>
         {/if}
@@ -386,7 +396,7 @@
             <div class="learn-step" class:done={s.done} class:waiting={s.waiting}>
               <span class="learn-check" class:checked={s.done} aria-hidden="true">{s.done ? '✓' : ''}</span>
               <span class="learn-body"><strong>{s.title}</strong><small>{#if s.by_parent}Von deinen Eltern dazugenommen. {/if}{s.why}</small></span>
-              {#if s.done}<span class="learn-state">{s.skipped ? 'entfällt' : 'erledigt'}</span>{:else if s.waiting}<span class="learn-state">wartet</span>{:else if s.attempt_id}<button class="primary learn-go" onclick={() => startStep(s)}>{study?.read_only ? 'Öffnen' : 'Weiter'}</button>{:else if !study?.read_only}<button class="primary learn-go" disabled={!!stepBusy} onclick={() => startStep(s)}>{stepBusy === s.key ? 'Wird erstellt …' : 'Los'}</button>{/if}
+              {#if s.done}<span class="learn-state">{s.skipped ? 'entfällt' : 'erledigt'}</span>{:else if s.waiting}<span class="learn-state">wartet</span>{:else if s.attempt_id}<button class="primary learn-go" onclick={() => startStep(s)}>{study?.read_only ? 'Öffnen' : 'Weiter'}</button>{:else if !study?.read_only}<button class="primary learn-go" disabled={stepBusy.includes(s.key)} onclick={() => startStep(s)}>{stepBusy.includes(s.key) ? 'Wird erstellt …' : 'Los'}</button>{/if}
             </div>
           {:else}<p class="all-clear">✓ Heute ist nichts zum Lernen Pflicht.</p>{/each}
         </div>

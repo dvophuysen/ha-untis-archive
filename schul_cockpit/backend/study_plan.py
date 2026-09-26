@@ -448,15 +448,46 @@ def _version(account_id: int, day: date) -> int:
 
 # ----------------------------------------------------------------- Erledigt
 
-def _paper_count(c, account_id: int, exam_key: str, first: str, last: str) -> int:
-    # Jede im Zeitraum ausgewertete Übungsarbeit dieser Arbeit erledigt einen
-    # Papier-Schritt, gleich welches Format: gemessen ist gemessen.
-    return c.execute(
-        "SELECT COUNT(DISTINCT a.id) FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id "
+def _graded_papers(c, account_id: int, exam_key: str, first: str, last: str) -> list[dict]:
+    """Die im Zeitraum ausgewerteten Übungsarbeiten dieser Arbeit, mit Format und
+    geprüften Themen, älteste zuerst."""
+    rows = c.execute(
+        "SELECT DISTINCT a.id, e.paper_format, a.snapshot FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id "
         "WHERE a.account_id=? AND e.exam_key=? AND a.status IN ('graded','review') AND a.is_test=0 AND ("
         " EXISTS(SELECT 1 FROM topic_answers t WHERE t.attempt_id=a.id AND substr(t.created_at,1,10) BETWEEN ? AND ?)"
-        " OR substr(a.submitted_at,1,10) BETWEEN ? AND ?)",
-        (account_id, exam_key, first, last, first, last)).fetchone()[0]
+        " OR substr(a.submitted_at,1,10) BETWEEN ? AND ?) ORDER BY a.id",
+        (account_id, exam_key, first, last, first, last)).fetchall()
+    return [{"id": r[0], "format": r[1], "topics": _topics_of(r[2])} for r in rows]
+
+
+def _topics_of(snapshot: str | None) -> set[int]:
+    try:
+        return {t["topic_id"] for t in json.loads(snapshot or "{}").get("tasks", []) if t.get("topic_id")}
+    except (ValueError, TypeError, AttributeError):
+        return set()
+
+
+def _fits(paper: dict, step: dict) -> bool:
+    """Passt eine Übungsarbeit genau zu einem Papier-Schritt: gleiches Format und,
+    beim Kurztest eines Themas, dieses Thema."""
+    return paper["format"] == step.get("format") and (not step.get("topic_id") or step["topic_id"] in paper["topics"])
+
+
+def _match_papers(steps: list[dict], papers: list[dict]) -> set[int]:
+    """Welche Papier-Schritte eine ausgewertete Arbeit erledigt (Index in ``steps``).
+    Erst die genau passende Arbeit (Format, Thema), dann jede übrige der Reihe
+    nach: gemessen ist gemessen, auch wenn das Kind eine andere gewählt hat."""
+    left = list(papers)
+    done: set[int] = set()
+    for fit_only in (True, False):
+        for i, s in enumerate(steps):
+            if i in done:
+                continue
+            found = next((p for p in left if not fit_only or _fits(p, s)), None)
+            if found:
+                left.remove(found)
+                done.add(i)
+    return done
 
 
 def _dialog_done(c, account_id: int, s: dict, first: str, last: str) -> bool:
@@ -485,19 +516,23 @@ def mark_done(account_id: int, steps: list[dict], day: date, until: date | None 
         LOG.debug("Sprechprüfung im Tagesplan nicht umstellbar", exc_info=True)
     vocab = None
     out = []
-    papers: dict[str, int] = {}
+    paper_done: set[int] = set()
     with closing(webapp_conn()) as c:
-        for s in steps:
+        # Papier-Schritte je Arbeit: jede ausgewertete Arbeit erledigt einen,
+        # zuerst den, zu dem sie passt (Format, Thema).
+        for key in {s["exam_key"] for s in steps if s["kind"] == "paper" and s.get("exam_key")}:
+            idx = [i for i, s in enumerate(steps) if s["kind"] == "paper" and s.get("exam_key") == key]
+            try:
+                hits = _match_papers([steps[i] for i in idx], _graded_papers(c, account_id, key, first, last))
+            except Exception:
+                LOG.debug("Übungsarbeiten für %s nicht prüfbar", key, exc_info=True)
+                hits = set()
+            paper_done |= {idx[j] for j in hits}
+        for n, s in enumerate(steps):
             done = False
             try:
                 if s["kind"] == "paper":
-                    key = s["exam_key"]
-                    if key not in papers:
-                        papers[key] = _paper_count(c, account_id, key, first, last)
-                    # Mehrere Papier-Schritte einer Arbeit: der Reihe nach je eine Arbeit.
-                    done = papers[key] > 0
-                    if done:
-                        papers[key] -= 1
+                    done = n in paper_done
                 elif s["kind"] == "dialog" and s.get("topic_id"):
                     done = _dialog_done(c, account_id, s, first, last)
                 elif s["kind"] == "dialog" and s.get("lesson_id"):
@@ -597,13 +632,18 @@ def _attach_papers(account_id: int, steps: list[dict], day: date) -> None:
     with closing(webapp_conn()) as c:
         pool = {}
         for key in keys:
-            pool[key] = [r[0] for r in c.execute(
-                "SELECT a.id FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id "
+            pool[key] = [{"id": r[0], "format": r[1], "topics": _topics_of(r[2])} for r in c.execute(
+                "SELECT a.id, e.paper_format, a.snapshot FROM mentor_exam_attempts a JOIN mentor_exams e ON e.id=a.exam_id "
                 "WHERE a.account_id=? AND e.exam_key=? AND a.is_test=0 AND a.status NOT IN ('graded','review') "
                 "AND substr(a.started_at,1,10)>=? ORDER BY a.id", (account_id, key, day.isoformat()))]
+    # Je Schritt die Arbeit, die zu ihm passt (Format, Thema). Vorher bekam der
+    # erste offene Schritt jede laufende Arbeit, auch die eines anderen Themas.
     for s in steps:
         if s.get("kind") == "paper" and not s.get("done") and pool.get(s.get("exam_key")):
-            s["attempt_id"] = pool[s["exam_key"]].pop(0)
+            found = next((p for p in pool[s["exam_key"]] if _fits(p, s)), None)
+            if found:
+                pool[s["exam_key"]].remove(found)
+                s["attempt_id"] = found["id"]
 
 
 def view(account_id: int, day: date, *, store: bool, until: date | None = None) -> dict:

@@ -128,6 +128,9 @@ def _papers(account_id: int, exam_key: str, user) -> list[dict]:
         tasks = json.loads(r.pop("snapshot") or "{}").get("tasks", [])
         fb = json.loads(r.pop("feedback_json") or "{}")
         r["tasks"] = len(tasks)
+        # Welche Themen die Arbeit prüft: So öffnet „Los“ beim Kurztest eines
+        # Themas nicht den noch laufenden Kurztest eines anderen.
+        r["topic_ids"] = sorted({t["topic_id"] for t in tasks if t.get("topic_id")})
         r["points_max"] = sum(t["points"] for t in tasks)
         r["points"] = sum(f.get("points", 0) for k, f in fb.items() if k.isdigit() and not f.get("uncertain")) if fb else None
         r["unclear"] = sum(1 for k, f in fb.items() if k.isdigit() and f.get("uncertain"))

@@ -357,6 +357,33 @@ def test_open_paper_is_offered_again_even_when_only_reading(world):
     assert view["read_only"] and view["steps"][0]["format"] == "einstieg" and view["steps"][0]["attempt_id"] == aid
 
 
+def test_each_short_test_belongs_to_its_topic(world):
+    """Zwei Kurztests zugleich: Ein laufender oder ausgewerteter Kurztest zum
+    zweiten Thema hängt am Schritt dieses Themas, nicht am ersten (Nutzer: „Es
+    wäre gut, wenn die Kurztests gleichzeitig unabhängig voneinander begonnen
+    werden könnten“)."""
+    import json
+    first, second = exam("ma", "Mathematik", MON + timedelta(days=1), ["Gleichungen", "Wertetabellen"])
+    for t in (first, second):
+        answer(t, 2, 4)  # gemessen, damit kein Einstiegstest vorn steht
+    steps = [s for s in sp.compute(1, MON) if s.get("format") == "kurz"]
+    assert {s["topic_id"] for s in steps} == {first, second}
+
+    def paper(topic, status, when):
+        with closing(db.webapp_conn()) as c, c:
+            eid = c.execute("INSERT INTO mentor_exams(account_id,title,subject,scope_json,tasks_json,minutes,created_at,status,exam_key,paper_format) "
+                            "VALUES(1,'K','Mathematik','{}','[]',20,'t','published','ma','kurz')").lastrowid
+            return c.execute("INSERT INTO mentor_exam_attempts(account_id,exam_id,user_id,snapshot,started_at,status,is_test,submitted_at) "
+                             "VALUES(1,?,2,?,?,?,0,?)", (eid, json.dumps({"tasks": [{"topic_id": topic, "points": 4}]}),
+                                                         when.isoformat(), status, when.isoformat())).lastrowid
+    running = paper(second, "grading", at(MON, 15))
+    view = {s["topic_id"]: s for s in sp.view(1, MON, store=False)["steps"] if s.get("format") == "kurz"}
+    assert view[second]["attempt_id"] == running and not view[first].get("attempt_id"), "der erste bleibt frei für „Los“"
+    paper(second, "graded", at(MON, 16))
+    checked = {s["topic_id"]: s["done"] for s in sp.mark_done(1, steps, MON) if s.get("format") == "kurz"}
+    assert checked == {first: False, second: True}, "erledigt ist der Schritt, zu dem die Arbeit passt"
+
+
 def test_entry_test_calibrates_and_the_day_only_shrinks(world):
     """D192: Solange der Einstiegstest aussteht, warten die übrigen Schritte der
     Arbeit; danach entfällt, was er schon zeigt. Die Liste wächst nie."""

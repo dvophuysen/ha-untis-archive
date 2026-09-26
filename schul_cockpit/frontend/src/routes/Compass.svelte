@@ -19,7 +19,8 @@
   const base = $derived(`/api/accounts/${accountId}/learning/mentor`);
   let data = $state(null), error = $state(''), busy = $state(false);
   let running = $state(null), paperId = $state(null), examsView = $state(null);
-  let stepBusy = $state(''), openExam = $state(''), pick = $state(''), newTopic = $state(false);
+  // Übungsarbeiten entstehen unabhängig voneinander (stepBusy: Schlüssel der Schritte in Arbeit).
+  let stepBusy = $state([]), openExam = $state(''), pick = $state(''), newTopic = $state(false);
 
   async function load() { data = await api.get(`/api/accounts/${accountId}/learning/compass`); }
   async function act(fn) {
@@ -76,16 +77,19 @@
   async function startStep(s) {
     if (s.kind !== 'paper') { go(s.href); return; }
     if (s.attempt_id) { paperId = s.attempt_id; await tick(); window.scrollTo?.(0, 0); return; }
-    if (stepBusy) return;
-    stepBusy = s.key; error = '';
+    if (stepBusy.includes(s.key)) return;
+    stepBusy = [...stepBusy, s.key]; error = '';
     try {
       const r = await api.get(`/api/accounts/${accountId}/practice?exam_key=${encodeURIComponent(s.exam_key)}`);
-      const open = (r.papers ?? []).find((p) => p.paper_format === s.format && p.attempt_id && p.status !== 'graded' && (p.created_at || '').slice(0, 10) === data.day);
-      paperId = open ? open.attempt_id
+      // Nur die Arbeit genau dieses Schritts (Format und Thema), wie auf „Heute“.
+      const open = (r.papers ?? []).find((p) => p.paper_format === s.format && p.attempt_id && p.status !== 'graded' && p.status !== 'review'
+        && (p.created_at || '').slice(0, 10) === data.day && (!s.topic_id || (p.topic_ids ?? []).includes(s.topic_id)));
+      const target = open ? open.attempt_id
         : (await api.post(`/api/accounts/${accountId}/practice`, { exam_key: s.exam_key, format: s.format, topic_ids: s.topic_id ? [s.topic_id] : [], level: s.level ?? null })).id;
-      await tick(); window.scrollTo?.(0, 0);
+      if (paperId === null) { paperId = target; await tick(); window.scrollTo?.(0, 0); }
+      else await load();
     } catch (e) { error = e instanceof ApiError ? e.message : 'Die Übungsarbeit konnte nicht geöffnet werden.'; }
-    finally { stepBusy = ''; }
+    finally { stepBusy = stepBusy.filter((k) => k !== s.key); }
   }
 
   const chosen = $derived(data?.extra.find((s) => s.name === pick) ?? null);
@@ -167,7 +171,7 @@
             {#if s.done}<span class="state">{s.skipped ? 'entfällt' : 'erledigt'}</span>
             {:else if s.waiting}<span class="state">wartet</span>
             {:else if s.attempt_id}<button class="primary go" onclick={() => startStep(s)}>{canGo ? 'Weiter' : 'Öffnen'}</button>
-            {:else if canGo}<button class="primary go" disabled={!!stepBusy} onclick={() => startStep(s)}>{stepBusy === s.key ? 'Wird erstellt …' : 'Los'}</button>{/if}
+            {:else if canGo}<button class="primary go" disabled={stepBusy.includes(s.key)} onclick={() => startStep(s)}>{stepBusy.includes(s.key) ? 'Wird erstellt …' : 'Los'}</button>{/if}
           </div>
         {:else}<p class="all-clear">✓ Heute ist nichts zum Lernen Pflicht.</p>{/each}
       </div>
