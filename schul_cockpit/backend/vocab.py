@@ -279,7 +279,7 @@ def replay(attempts: list[dict]) -> dict:
     seeded = False
 
     def seed():
-        nonlocal hold, relearn
+        nonlocal hold
         floor = LEGACY_SEED.get(_legacy_stage(earlier))
         if floor and hold is not None and hold < floor and not relearn:
             hold = floor

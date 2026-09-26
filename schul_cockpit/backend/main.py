@@ -146,6 +146,8 @@ async def lifespan(app: FastAPI):
         _start("backup", nightly_backup_loop()),
         _start("sources", sources_loop()),
         _start("triggers", triggers_loop()),
+        # Offene Übungsarbeiten ohne Prüfvermerk nachprüfen (D217).
+        _start("paper_check", _paper_check(), once=True),
     ]
     # A process restart cannot leave a grading lease permanently stuck.
     from .db import webapp_conn
@@ -164,6 +166,11 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await _stop(tasks)
+
+
+async def _paper_check() -> None:
+    from .solution_check import recheck_open
+    await recheck_open()
 
 
 def _start(name: str, coro, *, once: bool = False) -> asyncio.Task:

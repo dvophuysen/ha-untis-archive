@@ -1,3 +1,9 @@
+## 1.40.0
+
+- Qualitätssicherung der Musterlösungen: Jede neue Übungsarbeit, jeder Kurztest und jede Übungsklausur des Lernbegleiters wird geprüft, bevor das Kind sie bekommt. Gleichungen rechnet die App selbst exakt nach; zusätzlich löst ein zweiter, unabhängiger Durchgang jede Aufgabe selbst und vergleicht mit Musterlösung und Punktkriterien. Fehler werden berichtigt und noch einmal geprüft; bleibt ein Zweifel, entsteht keine Arbeit, das Kind wird gebeten, neu zu erstellen.
+- Beim Bewerten rechnet die Bewertung jede Aufgabe selbst nach. Ist die Musterlösung falsch, zählt das fachlich Richtige; eine richtige Antwort verliert nie Punkte, weil sie von einer fehlerhaften Musterlösung abweicht. Die Aufgabe trägt dann den Hinweis „Hier war die Musterlösung der App fehlerhaft“.
+- Offene Arbeiten der letzten zwei Wochen werden beim Start nachgeprüft und falls nötig berichtigt; der Aufgabentext bleibt dabei unverändert. Alle vorhandenen Aufgaben beider Kinder wurden rechnerisch geprüft: ein Fehler (der schon berichtigte Kurztest), sonst keiner.
+
 ## 1.39.1
 
 - Vokabeln aus dem Lernplan: Startet das Kind eine Lektion aus dem Lernpfad, fragt der Trainer nur genau diese Lektion ab; andere Einheiten lassen sich dort nicht wählen. Freiwillig eine andere zu üben geht über einen eigenen Link.

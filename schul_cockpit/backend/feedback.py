@@ -29,6 +29,19 @@ LossKind = Literal["nicht_bearbeitet", "unvollstaendig", "rechenweg", "rechenfeh
 Half = dict(ge=0, le=20, multiple_of=0.5, allow_inf_nan=False)
 
 
+# Qualitätssicherung beim Bewerten (D217): Die Musterlösung kann irren. Eine
+# fachlich richtige Antwort verliert nie Punkte, weil sie von einer falschen
+# Musterlösung abweicht.
+QUALITY_RULES = (
+    "Rechne jede Aufgabe selbst nach, bevor du bewertest; traue der Musterlösung nicht blind. Ist loesung oder kriterien "
+    "fachlich oder rechnerisch falsch, gilt das fachlich Richtige: Eine richtige Antwort bekommt die Punkte, die sie mit "
+    "richtiger Musterlösung bekäme; ziehe nie Punkte ab, weil sie von einer fehlerhaften Musterlösung abweicht, und rate "
+    "dann nicht zu Übungen, die das Kind nicht braucht. Setze in diesem Fall loesung_falsch=true und nenne in "
+    "loesung_hinweis knapp den Fehler der Musterlösung. rechnerpruefung nennt, was eine Rechnerprüfung schon gefunden "
+    "hat; sie irrt bei richtiger Lesart nicht. "
+)
+
+
 class Earned(InputModel):
     text: str = Field(min_length=2, max_length=300)
     points: float = Field(**Half)

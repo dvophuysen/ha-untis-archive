@@ -22,7 +22,7 @@ from ..grading_consensus import settle
 from ..auth import CurrentUser, get_current_user
 from ..db import webapp_conn
 from ..learning import InputModel, now_iso, today_local
-from ..feedback import Detail, Summary, INSTRUCTION as FEEDBACK_RULES, ManualIn, SuggestIn, apply_manual, balance, for_child
+from ..feedback import Detail, Summary, INSTRUCTION as FEEDBACK_RULES, QUALITY_RULES, ManualIn, SuggestIn, apply_manual, balance, for_child
 from .learning import access
 from .mentor_exams import PHOTO_QUOTA, ExamTask, attempt_row, attempt_view
 
@@ -59,6 +59,9 @@ class TaskGrade(Detail):
     rationale: str = Field(min_length=3, max_length=1200)
     next_step: str = Field(min_length=3, max_length=400)
     transcription: str = Field(default="", max_length=3000)
+    # Musterlösung oder Kriterien fachlich falsch (D217): gewertet wird das Richtige.
+    loesung_falsch: bool = False
+    loesung_hinweis: str = Field(default="", max_length=600)
     # Nur bei Aufgaben ohne Thema (ältere Übungsklausuren): Nummer aus themen.
     thema_nr: int | None = Field(default=None, ge=1, le=20)
 
@@ -225,6 +228,15 @@ async def create_paper(account_id: int, body: PaperIn, user: CurrentUser = Depen
         if d.get("figur"):
             d.update(figures.prepared(d["figur"]))  # oben schon geprüft
         stored.append(d)
+    # Qualitätssicherung (D217): Jede Musterlösung wird rechnerisch und fachlich
+    # geprüft, bevor das Kind die Arbeit bekommt; Zweifel heißt: keine Arbeit.
+    from .. import solution_check
+    try:
+        stored = await solution_check.assure(account_id, info["subject"], stored)
+    except solution_check.CheckFailed as exc:
+        _LOG.warning("Übungsarbeit nicht ausgegeben, Musterlösung nicht sicher: %s", exc)
+        raise HTTPException(502, "Eine Musterlösung ließ sich nicht sicher prüfen. Die Arbeit wurde nicht ausgegeben. "
+                                 "Bitte noch einmal erstellen.") from None
     minutes = fmt["minutes"]
     child = _acting_child(user)
     with closing(webapp_conn()) as c, c:
@@ -471,9 +483,19 @@ def consensus(passes: list[PaperGrade], tasks: list[dict]) -> tuple[dict[int, di
     final, open_nrs = {}, []
     if not passes:
         return final, [i + 1 for i in range(len(tasks))]
+    from ..solution_check import grading_hints
     for i, t in enumerate(tasks):
         nr = i + 1
-        final[nr] = settle([{x.nr: x for x in g.tasks}[nr] for g in passes], t["points"], {"nr"})
+        runs = [{x.nr: x for x in g.tasks}[nr] for g in passes]
+        final[nr] = settle(runs, t["points"], {"nr"})
+        # Hat ein Durchgang oder die Rechnerprüfung einen Fehler der Musterlösung
+        # gefunden, steht das an der Aufgabe (D217).
+        hints = grading_hints(t)
+        flagged = [x for x in runs if x.loesung_falsch]
+        if flagged or hints:
+            final[nr]["loesung_falsch"] = True
+            final[nr]["loesung_hinweis"] = (flagged[0].loesung_hinweis if flagged and flagged[0].loesung_hinweis else "; ".join(hints))[:600]
+            _LOG.warning("Musterlösung fehlerhaft gemeldet (Aufgabe %s): %s", nr, final[nr]["loesung_hinweis"])
         if final[nr]["uncertain"]:
             open_nrs.append(nr)
     return final, open_nrs
@@ -671,9 +693,11 @@ def _grading_inputs(account_id: int, snap: dict, answers: dict, pages: list[dict
                 images.append(part)
     loose = [i for i, t in enumerate(tasks) if not t.get("topic_id")]
     exam_key, themen = _upcoming_topics(account_id, snap["subject"]) if loose else (None, [])
+    from ..solution_check import grading_hints
     context = {"fach": snap["subject"], "aufgaben": [
         {"nr": i + 1, "aufgabe": t["prompt"], "loesung": t["solution"], "kriterien": t["criteria"], "abbildung": t.get("abbildung_text") or t.get("figur_text") or None,
-         "punkte": t["points"], "afb": t["afb"], "getippt": answers.get(str(i), "")} for i, t in enumerate(tasks)]}
+         "punkte": t["points"], "afb": t["afb"], "getippt": answers.get(str(i), ""),
+         **({"rechnerpruefung": hints} if (hints := grading_hints(t)) else {})} for i, t in enumerate(tasks)]}
     if themen:
         context["themen"] = [{"nr": n + 1, "titel": t["title"], "beschreibung": t["detail"]} for n, t in enumerate(themen)]
         context["ohne_thema"] = [i + 1 for i in loose]
@@ -682,7 +706,8 @@ def _grading_inputs(account_id: int, snap: dict, answers: dict, pages: list[dict
         "Die Antworten stehen handschriftlich auf den beigefügten Fotos der Seiten und/oder getippt in getippt. "
         "Ordne jede Antwort über die Aufgabennummer zu; fehlt eine Antwort, 0 Punkte. Passt eine Antwort erkennbar zu einer anderen Aufgabe "
         "(etwa die Rechnung zu Aufgabe 1 unter Aufgabe 2), bewerte sie bei der Aufgabe, zu der sie gehört, und sage das in rationale. "
-        "Vergib Punkte strikt nach kriterien, Teilpunkte in halben Punkten, alternative richtige Wege zulassen, nie über punkte. "
+        "Vergib Punkte nach kriterien, Teilpunkte in halben Punkten, alternative richtige Wege zulassen, nie über punkte. "
+        + QUALITY_RULES +
         "Unleserlich oder nicht sicher zuzuordnen heißt uncertain=true, nicht falsch. transcription gibt die gelesene Antwort kurz wieder. "
         "rationale nennt konkret, welche Teilpunkte erreicht sind und was fehlt; next_step ist ein konkreter nächster Übungsschritt. "
         "Keine Schulnote. Eine Bewertung je Aufgabe, nr wie in aufgaben. " + FEEDBACK_RULES +

@@ -1517,5 +1517,29 @@ UPDATE topic_answers SET points=9.0, result='correct'
 WHERE account_id=1 AND attempt_id=5 AND afb=1 AND points=8.5 AND max_points=9
   AND EXISTS(SELECT 1 FROM mentor_exam_attempts WHERE id=5 AND account_id=1 AND json_extract(feedback_json,'$."0".points')=9.0);
 """))
+# Zu D216: dieselbe falsche Musterlösung auch in der Vorlage der Arbeit (id 9),
+# nicht nur im Versuch des Kindes.
+_MIGRATIONS.append(("fix_paper_konto1_arbeit9_loesung", """
+UPDATE mentor_exams SET tasks_json=json_set(tasks_json,
+    '$[0].solution', 'a) 2x - 6 = 3  → +6  → 2x = 9  → :2  → x = 4,5' || char(10) ||
+      'b) 3/4 x + 8 = 7  → -8  → 3/4 x = -1  → : (3/4)  → x = -1 / (3/4) = -1 * 4/3 = -4/3 = -1,333...' || char(10) ||
+      'c) 3 + 1,5x = 12  → -3  → 1,5x = 9  → :1,5  → x = 6',
+    '$[0].criteria', 'a) 1 P richtige Umformung (+6), 1 P richtige Division, 1 P richtiges Ergebnis x=4,5; ' ||
+      'b) 1 P richtige Subtraktion (-8), 1 P richtige Division durch 3/4, 1 P korrektes Ergebnis x=-4/3; ' ||
+      'c) 1 P richtige Subtraktion (-3), 1 P richtige Division durch 1,5, 1 P korrektes Ergebnis x=6')
+WHERE account_id=1 AND id=9 AND json_extract(tasks_json,'$[0].solution') LIKE '%2x = 9  → :2  → x = 4' || char(10) || '%';
+"""))
+# Zu D216/D217: Die berichtigte Aufgabe trägt den Vermerk, damit das Kind sieht,
+# dass die Musterlösung der App falsch war und nicht seine Antwort.
+_MIGRATIONS.append(("fix_paper_konto1_versuch5_vermerk", """
+UPDATE mentor_exam_attempts SET feedback_json=json_set(feedback_json,
+    '$."0".loesung_falsch', json('true'),
+    '$."0".loesung_hinweis', 'Bei a) stand in der Musterlösung x = 4; richtig ist x = 4,5, so wie du gerechnet hast.'),
+  version=version+1
+WHERE account_id=1 AND id=5 AND json_extract(feedback_json,'$."0".points')=9.0
+  AND json_extract(feedback_json,'$."0".loesung_falsch') IS NULL;
+"""))
+
+
 
 

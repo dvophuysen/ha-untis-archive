@@ -12,6 +12,7 @@
 
 {#if f}
   <div class="fb">
+    {#if f.loesung_falsch}<p class="qa" role="note">Hier war die Musterlösung der App fehlerhaft. Gewertet wurde das fachlich Richtige{#if f.loesung_hinweis}: {f.loesung_hinweis}{:else}.{/if}</p>{/if}
     {#if f.transcription}<details class="read"><summary>So wurde deine Antwort gelesen</summary><p class="preserve">{f.transcription}</p></details>{/if}
     {#if earned.length}
       <div class="part ok">
@@ -43,6 +44,7 @@
 
 <style>
   .fb { display: grid; gap: 6px; }
+  .qa { margin: 0; padding: 6px 10px; border-radius: 8px; background: var(--warm-soft, #fef3c7); font-size: var(--fs-sm); }
   .fb p { margin: 0; }
   .part { display: grid; gap: 2px; padding: 6px 8px; border-radius: var(--r-sm); }
   .part.ok { background: color-mix(in srgb, var(--ok, #2e7d32) 9%, transparent); }
