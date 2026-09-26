@@ -31,8 +31,8 @@ def snapshot(account, now, morning=False, photos=True):
         homework = c.execute("SELECT COUNT(*) FROM tasks WHERE account_id=? AND status IN ('open','in_progress') "
                              "AND due_date IS NOT NULL AND due_date<=?", (account, target.isoformat())).fetchone()[0]
     # Alle offenen Rückmeldungen, auch vergessene der Vortage (D210).
-    from .rewards import feedback_backlog
-    feedback = len(feedback_backlog(account, now.date(), now))
+    from .rewards import feedback_backlog, feedback_count
+    feedback = feedback_count(feedback_backlog(account, now.date(), now))
     return dict(homework=homework, material=len(items)-bag['confirmed_count'], feedback=feedback,
                 photos=photo_count(account, now) if photos else 0)
 

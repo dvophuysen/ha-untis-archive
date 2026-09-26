@@ -341,13 +341,39 @@ def _bag_packed(c, account_id: int, day: date) -> bool:
 FEEDBACK_FROM = date(2026, 9, 21)
 
 
-def feedback_backlog(account_id: int, until: date, now: datetime) -> list[dict]:
-    """Beendete Stunden ohne Rückmeldung seit ``FEEDBACK_FROM`` bis ``until``.
+def same_slot(a: dict, b: dict) -> bool:
+    """Teamunterricht: zwei Einträge im selben Fach zur selben Zeit (etwa zwei
+    Lehrkräfte in Musik) sind eine Stunde. Verschiedene Fächer parallel
+    (Wahlpflicht, Religion und Werte und Normen) bleiben getrennt; ebenso
+    lib/dayPhase.js ``sameSlot``."""
+    subject = a.get("subject_name") or a.get("subject_short")
+    return (bool(subject) and subject == (b.get("subject_name") or b.get("subject_short"))
+            and a.get("date") == b.get("date") and a.get("start_time") == b.get("start_time")
+            and a.get("end_time") == b.get("end_time")
+            and (a.get("subject_untis_id") is None or b.get("subject_untis_id") is None
+                 or a.get("subject_untis_id") == b.get("subject_untis_id"))
+            and bool(a.get("is_cancelled")) == bool(b.get("is_cancelled")))
 
-    Wie eine überfällige Hausaufgabe verfällt eine vergessene Rückmeldung
-    nicht: Sie bleibt stehen, bis sie nachgeholt ist (D210). Ausgefallene
-    Stunden, Stunden ohne das Kind, ausgeblendete Kurse und von Eltern
-    erlassene Stunden zählen nicht."""
+
+def feedback_slots(lessons: list[dict]) -> list[list[dict]]:
+    """Die Einträge je Stunde, in der Reihenfolge der ersten Nennung. Ein Slot
+    mit mehreren Einträgen ist Teamunterricht; er ist zurückgemeldet, sobald
+    einer seiner Einträge bewertet ist."""
+    slots: list[list[dict]] = []
+    for l in lessons:
+        twin = next((s for s in slots if same_slot(s[0], l)), None)
+        if twin is None:
+            slots.append([l])
+        else:
+            twin.append(l)
+    return slots
+
+
+def feedback_due(account_id: int, until: date, now: datetime) -> list[tuple[list[dict], bool]]:
+    """Jede beendete Stunde seit ``FEEDBACK_FROM`` bis ``until``, für die eine
+    Rückmeldung fällig ist oder war, als Slot mit „erledigt“ (bewertet oder von
+    Eltern erlassen). Ausgefallene Stunden, Stunden ohne das Kind,
+    ausgeblendete Kurse und Einträge ohne Fach zählen nie."""
     # Eingefordert wird ab FEEDBACK_FROM, in späteren Schuljahren ab deren
     # Beginn (1. August); der Tag selbst immer.
     from .learning_fields import school_year_start
@@ -360,13 +386,29 @@ def feedback_backlog(account_id: int, until: date, now: datetime) -> list[dict]:
         return []
     marks, ids = ",".join("?" * len(ended)), [l["id"] for l in ended]
     with closing(webapp_conn()) as c:
-        rated = {r["lesson_id"] for r in c.execute(
+        done = {r["lesson_id"] for r in c.execute(
             f"SELECT lesson_id FROM lesson_checkins WHERE account_id=? AND rating IS NOT NULL "
             f"AND lesson_id IN ({marks})", (account_id, *ids))}
         # Von Eltern erlassen: Das Kind war nicht da, ohne dass die Schule es führt.
-        rated |= {r["lesson_id"] for r in c.execute(
+        done |= {r["lesson_id"] for r in c.execute(
             f"SELECT lesson_id FROM feedback_waivers WHERE account_id=? AND lesson_id IN ({marks})", (account_id, *ids))}
-    return [l for l in ended if l["id"] not in rated]
+    return [(s, any(l["id"] in done for l in s)) for s in feedback_slots(ended)]
+
+
+def feedback_backlog(account_id: int, until: date, now: datetime) -> list[dict]:
+    """Beendete Stunden ohne Rückmeldung seit ``FEEDBACK_FROM`` bis ``until``.
+
+    Wie eine überfällige Hausaufgabe verfällt eine vergessene Rückmeldung
+    nicht: Sie bleibt stehen, bis sie nachgeholt ist (D210). Geliefert werden
+    alle Einträge offener Stunden, bei Teamunterricht also beide, damit eine
+    Bewertung beide trifft; gezählt wird mit ``feedback_count``."""
+    return [l for slot, done in feedback_due(account_id, until, now) if not done for l in slot]
+
+
+def feedback_count(lessons: list[dict]) -> int:
+    """So viele Rückmeldungen fehlen: Teamunterricht zählt einmal, eine
+    Doppelstunde zweimal (zwei Stunden)."""
+    return len(feedback_slots(lessons))
 
 
 def waive_feedback_day(account_id: int, day: date, user_id: int, now: datetime) -> int:
@@ -375,11 +417,11 @@ def waive_feedback_day(account_id: int, day: date, user_id: int, now: datetime) 
     with closing(webapp_conn()) as c, c:
         c.executemany("INSERT OR IGNORE INTO feedback_waivers(account_id,lesson_id,waived_by,created_at) VALUES(?,?,?,?)",
                       [(account_id, l["id"], user_id, now.isoformat()) for l in lessons])
-    return len(lessons)
+    return feedback_count(lessons)
 
 
 def _feedback_open(c, account_id: int, day: date, now: datetime) -> int:
-    return len(feedback_backlog(account_id, day, now))
+    return feedback_count(feedback_backlog(account_id, day, now))
 
 
 def day_state(account_id: int, day: date, now: datetime) -> dict:

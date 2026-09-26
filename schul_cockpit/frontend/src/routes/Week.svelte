@@ -9,6 +9,7 @@
   import DaySchedule from '../lib/DaySchedule.svelte';
   import WeekGrid from '../lib/WeekGrid.svelte';
   import { slotsOf } from '../lib/dayStrip.js';
+  import { openSlots } from '../lib/dayPhase.js';
   import { subjectStyle } from '../lib/subjectStyle.js';
 
   let { accountId } = $props();
@@ -125,7 +126,8 @@
     return { total, parts: days.map((d) => `${d.is_today ? 'heute' : d.label.slice(0, 2)} ${d.tasks_open}`) };
   });
   const slots = $derived(slotsOf((data?.days || []).map((d) => d.strip).filter(Boolean)));
-  const pending = $derived((data?.feedback?.days || []).reduce((n, d) => n + d.lessons.filter((l) => !l.checkin?.rating).length, 0));
+  // Teamunterricht (zwei Einträge im selben Fach zur selben Zeit) ist eine Stunde.
+  const pending = $derived((data?.feedback?.days || []).reduce((n, d) => n + openSlots(d.lessons), 0));
   // In den Ferien: ein Satz statt leerer Wochen.
   const holidayNow = $derived((data?.free || []).find((f) => f.name && f.start <= data.today && data.today <= f.end));
   // Freie Werktage zwischen den gezeigten Tagen stehen im Kalender als eigene Zeile.

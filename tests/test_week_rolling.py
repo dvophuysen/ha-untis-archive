@@ -156,10 +156,44 @@ def test_past_days_bring_a_review_and_open_feedback(env):
     assert "1 Hausaufgabe erledigt" in data["review"]["lines"] and "1 von 10 Stunden zurückgemeldet" in data["review"]["lines"]
     assert not any("€" in line or "KI" in line for line in data["review"]["lines"])
     assert data["feedback"]["count"] == 9
-    # In der Standardansicht stehen offene Rückmeldungen der letzten sieben Tage.
+    # In der Standardansicht stehen die offenen Rückmeldungen wie auf „Heute“
+    # (rewards.feedback_backlog): eingefordert ab rewards.FEEDBACK_FROM (21.09.).
     ahead = run()
-    assert ahead["review"] is None and ahead["feedback"]["count"] == 9
-    assert ahead["feedback"]["days"][0]["date"] == "2026-09-17"
+    assert ahead["review"] is None and ahead["feedback"]["count"] == 6
+    assert ahead["feedback"]["days"][0]["date"] == "2026-09-21"
+
+
+def test_the_week_counts_open_feedback_like_today(env):
+    """„Noch zurückmelden“ nach derselben Regel wie Ring und Serie (D210):
+    auch älter als sieben Tage, nie ein Eintrag ohne Fach, nie eine erlassene
+    Stunde; Teamunterricht (zwei Einträge im selben Fach zur selben Zeit) ist
+    eine Stunde. Das gilt auch zurückgeblättert."""
+    _, _, patch = env
+    no_exams(patch)
+    team = {"subject_untis_id": 7}
+    lessons([(204, "2026-09-21", 800, 845, "Physik"),
+             (201, "2026-09-22", 1035, 1120, "Musik", None, {**team, "teacher_name": "A", "untis_period_id": 1}),
+             (202, "2026-09-22", 1035, 1120, "Musik", None, {**team, "teacher_name": "B", "untis_period_id": 2}),
+             (203, "2026-09-22", 750, 2359, None),                                          # Klassenfahrt
+             (206, "2026-09-22", 800, 845, "Religion"), (207, "2026-09-22", 800, 845, "Werte und Normen")])
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO feedback_waivers(account_id,lesson_id,waived_by,created_at) VALUES(1,204,1,'x')")
+        c.execute("INSERT INTO lesson_checkins(account_id,lesson_id,user_id,rating,created_at,updated_at) VALUES(1,206,2,3,'x','x')")
+    later = dict(today=date(2026, 10, 6), now=datetime(2026, 10, 6, 7, 0))
+    ahead = run(**later)
+    assert [d["date"] for d in ahead["feedback"]["days"]] == ["2026-09-22"]
+    # Werte und Normen läuft parallel zu Religion, ist aber ein anderes Fach: offen.
+    assert [l["id"] for l in ahead["feedback"]["days"][0]["lessons"]] == [207, 201, 202]
+    assert ahead["feedback"]["count"] == 2
+    past = run(before=date(2026, 9, 24), **later)
+    assert past["mode"] == "past"
+    assert [(d["date"], [l["id"] for l in d["lessons"]]) for d in past["feedback"]["days"]] == [("2026-09-22", [207, 201, 202])]
+    assert past["feedback"]["count"] == 2
+    # Eine Bewertung für einen der beiden Musik-Einträge schließt die Stunde.
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO lesson_checkins(account_id,lesson_id,user_id,rating,created_at,updated_at) VALUES(1,202,2,2,'x','x')")
+    assert [l["id"] for d in run(**later)["feedback"]["days"] for l in d["lessons"]] == [207]
+    assert [l["id"] for d in run(before=date(2026, 9, 24), **later)["feedback"]["days"] for l in d["lessons"]] == [207]
 
 
 def test_the_endpoint_answers_in_one_call(env):

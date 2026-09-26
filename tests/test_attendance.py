@@ -22,7 +22,6 @@ def seed(env):
     client, state, patch = install(env)
     with sqlite3.connect(db.SETTINGS.history_db_path) as c:
         c.executescript('''
-        ALTER TABLE lessons ADD COLUMN absence_reason TEXT;
         CREATE TABLE absences(id INTEGER PRIMARY KEY,account_id INTEGER,
           start_date TEXT,end_date TEXT,start_time INTEGER,end_time INTEGER,
           reason TEXT,is_excused INTEGER);
@@ -79,7 +78,8 @@ def test_archive_recompute_repairs_old_flags_and_keeps_real_absences(env):
     try:
         assert store.recompute_attendance(1,day,day) == 0
         assert store._conn.execute('SELECT was_absent,absence_reason FROM lessons WHERE id=1').fetchone()[:] == (0,None)
-        store._conn.execute('INSERT INTO absences VALUES(2,1,?,?,800,900,?,0)', (day,day,'Abwesend'))
+        # Den ganzen Vormittag abwesend: alle fünf Stunden (08:00 bis 12:45).
+        store._conn.execute('INSERT INTO absences VALUES(2,1,?,?,800,1300,?,0)', (day,day,'Abwesend'))
         store._conn.commit()
         assert store.recompute_attendance(1,day,day) == 5
         assert store._conn.execute('SELECT absence_reason FROM lessons WHERE id=1').fetchone()[0] == 'Abwesend'

@@ -231,7 +231,7 @@ def feedback_items(account_id: int, today: date) -> list[dict]:
         return []
     days = sorted({l["date"] for l in open_})
     since = _day(days[0])
-    return [item("feedback", "feedback_backlog", f"{_plural(len(open_), 'Stunde', 'Stunden')} ohne Rückmeldung",
+    return [item("feedback", "feedback_backlog", f"{_plural(rewards.feedback_count(open_), 'Stunde', 'Stunden')} ohne Rückmeldung",
                  f"seit {since}, an {_plural(len(days), 'Tag', 'Tagen')}. Nachholen lassen oder, wenn das Kind nicht da war, als entfallen markieren.",
                  action("Ansehen", "today", section="nachholen"))]
 

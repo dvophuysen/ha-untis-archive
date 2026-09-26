@@ -4,7 +4,7 @@
   // Stunde lässt sie sich direkt hier zurückmelden (D07: dieselben Gesichter).
   import { subjectStyle } from './subjectStyle.js';
   import { api } from './api.js';
-  import { mergeLessons, lessonOver, held } from './dayPhase.js';
+  import { mergeLessons, lessonOver, held, groupLessons, groupSlots } from './dayPhase.js';
   import LessonDetail from './LessonDetail.svelte';
 
   let { accountId, lessons = [], now = new Date(), live = true, onsaved = () => {} } = $props();
@@ -20,10 +20,14 @@
     if (nowMin >= t(g.start_time)) return 'now';
     return '';
   }
-  // Rückmelden gilt für alle Stunden der Gruppe, die vorbei sind und stattfanden.
-  const ratable = (g) => g.lessons.filter((l) => held(l) && (l.subject_name || l.subject_short) && lessonOver(l, now));
+  // Rückmelden gilt für alle Stunden der Gruppe, die vorbei sind und stattfanden,
+  // bei Teamunterricht für beide Einträge (eine Stunde, zwei Lehrkräfte).
+  const ratable = (g) => groupLessons(g).filter((l) => held(l) && (l.subject_name || l.subject_short) && lessonOver(l, now));
   const ratingOf = (g) => {
-    const r = ratable(g).map((l) => l.checkin?.rating ?? null);
+    const ids = new Set(ratable(g).map((l) => l.id));
+    // Je Stunde zählt die Bewertung eines ihrer Einträge.
+    const r = groupSlots(g).map((s) => s.filter((l) => ids.has(l.id))).filter((s) => s.length)
+      .map((s) => s.find((l) => l.checkin?.rating != null)?.checkin.rating ?? null);
     return r.length && r.every((x) => x === r[0]) ? r[0] : null;
   };
   async function rate(g, value) {

@@ -295,6 +295,48 @@ def test_forgotten_feedback_stays_open_until_it_is_caught_up(env):
     assert fb.rings(1, date(2026, 9, 25), now)["feedback"] == {"done": 1, "total": 1, "backlog": 0}
 
 
+def test_team_teaching_is_one_lesson_for_feedback(env):
+    """Zwei Einträge im selben Fach zur selben Zeit (Musik mit zwei Lehrkräften)
+    sind eine Stunde: Eine Bewertung zu einem der beiden genügt, offen zählt
+    sie einmal. feedback_backlog liefert beide Einträge, damit „Heute“ sie in
+    einer Zeile zeigt und die Bewertung für beide speichert. Parallele Stunden
+    in verschiedenen Fächern (Religion und Werte und Normen) bleiben getrennt."""
+    from backend import rewards
+    with sqlite3.connect(db.SETTINGS.history_db_path) as h:
+        h.execute(f"CREATE TABLE IF NOT EXISTS lessons({LESSON_COLUMNS})")
+        h.executemany("INSERT INTO lessons(id,account_id,untis_period_id,date,start_time,end_time,subject_untis_id,"
+                      "subject_name,teacher_name,code,was_absent) VALUES(?,1,?,?,?,?,?,?,?,NULL,0)",
+                      [(71, 901, "2026-09-24", 1035, 1120, 7, "Musik", "A"), (72, 902, "2026-09-24", 1035, 1120, 7, "Musik", "B"),
+                       (73, 903, "2026-09-24", 800, 845, 8, "Religion", "C"), (74, 904, "2026-09-24", 800, 845, 9, "Werte und Normen", "D"),
+                       (75, 905, "2026-09-23", 1035, 1120, 7, "Musik", "A"), (76, 906, "2026-09-23", 1035, 1120, 7, "Musik", "B"),
+                       # gleicher Name, anderes UNTIS-Fach: nicht dieselbe Stunde
+                       (77, 907, "2026-09-23", 800, 845, 10, "Kurs", "E"), (78, 908, "2026-09-23", 800, 845, 11, "Kurs", "F")])
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO lesson_checkins(account_id,lesson_id,user_id,rating,created_at,updated_at) VALUES(1,76,2,3,'now','now')")
+        c.execute("INSERT INTO lesson_checkins(account_id,lesson_id,user_id,rating,created_at,updated_at) VALUES(1,77,2,3,'now','now')")
+    now = datetime(2026, 9, 25, 14, 0)
+    thursday = date(2026, 9, 24)
+    # Mittwoch: eine Musik-Bewertung schließt die Teamstunde; Kurs 78 bleibt offen.
+    backlog = rewards.feedback_backlog(1, thursday, now)
+    assert [l["id"] for l in backlog] == [78, 73, 74, 71, 72]
+    assert rewards.feedback_count(backlog) == 4
+    assert rewards.day_state(1, thursday, now)["feedback_open"] == 4
+    assert fb.feedback(1, date(2026, 9, 25), now) == {"earlier": 4, "today": 0, "today_total": 0, "total": 6}
+    # Freitag ohne Stunden: Der Ring zeigt den Donnerstag (Religion, Werte und
+    # Normen, Musik als eine Zeile) und Kurs 78 vom Mittwoch.
+    assert fb.rings(1, date(2026, 9, 25), now)["feedback"] == {"done": 0, "total": 4, "backlog": 1}
+    assert fb.rings(1, thursday, datetime(2026, 9, 24, 12, 0))["feedback"] == {"done": 0, "total": 4, "backlog": 1}
+    with closing(db.webapp_conn()) as c, c:
+        for lid in (72, 73):
+            c.execute("INSERT INTO lesson_checkins(account_id,lesson_id,user_id,rating,created_at,updated_at) VALUES(1,?,2,2,'now','now')", (lid,))
+    assert [l["id"] for l in rewards.feedback_backlog(1, thursday, now)] == [78, 74]
+    ring = fb.rings(1, thursday, datetime(2026, 9, 24, 12, 0))["feedback"]
+    assert ring == {"done": 2, "total": 4, "backlog": 1}
+    # Erlassen zählt die Stunden, nicht die Einträge.
+    assert rewards.waive_feedback_day(1, thursday, 1, now) == 1
+    assert [l["id"] for l in rewards.feedback_backlog(1, thursday, now)] == [78]
+
+
 def test_only_parents_waive_a_day_and_only_in_the_past(env, monkeypatch):
     from types import SimpleNamespace
     from fastapi import HTTPException

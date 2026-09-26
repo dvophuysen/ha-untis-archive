@@ -37,7 +37,6 @@ LATER_DAYS = 90       # danach nur noch als „Später“
 LATER_MAX = 5
 URGENT_DAYS = 7       # fehlt dann noch Material: Eingreifen
 IDLE_DAYS = 14        # ist dann noch nichts geübt: Nachsteuern
-FEEDBACK_DAYS = 7
 WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
 LEVELS = {"bad": "Eingreifen", "warn": "Nachsteuern", "good": "Im Griff"}
 _KINDS = [("vergleichsarbeit", "Vergleichsarbeit"), ("sprechprüfung", "Sprechprüfung"),
@@ -87,13 +86,6 @@ def _plural(n: int, one: str, many: str) -> str:
     return f"{n} {one if n == 1 else many}"
 
 
-def _ended(lesson: dict, now: datetime) -> bool:
-    end = lesson.get("end_time")
-    if not isinstance(end, int) or not 0 <= end <= 2359 or end % 100 > 59:
-        return False
-    return now.time() >= datetime.strptime(f"{end:04d}", "%H%M").time()
-
-
 def next_school_day(account_id: int, today: date) -> str | None:
     hidden = hidden_keys(account_id)
     with closing(history_conn()) as conn:
@@ -131,44 +123,43 @@ def bag_target(account_id: int, today: date, now: datetime) -> tuple[str | None,
 
 
 def feedback(account_id: int, today: date, now: datetime) -> dict:
-    """Stunden ohne Rückmeldung: die der letzten Tage und die schon beendeten
-    von heute. Ausgefallene, versäumte und ausgeblendete Stunden zählen nicht."""
-    hidden = hidden_keys(account_id)
-    horizon = (today - timedelta(days=FEEDBACK_DAYS)).isoformat()
-    with closing(history_conn()) as hconn:
-        rows = [dict(r) for r in hconn.execute(
-            "SELECT * FROM lessons WHERE account_id=? AND date>=? AND date<=? "
-            "AND (code IS NULL OR LOWER(code)!='cancelled') AND was_absent=0",
-            (account_id, horizon, today.isoformat()))]
-    lessons = [l for l in rows if not lesson_is_hidden(l, hidden)
-               and (l["date"] < today.isoformat() or _ended(l, now))]
-    if not lessons:
-        return {"earlier": 0, "today": 0, "today_total": 0, "total": 0}
-    ids = [l["id"] for l in lessons]
-    with closing(webapp_conn()) as wconn:
-        rated = {r[0] for r in wconn.execute(
-            f"SELECT DISTINCT lesson_id FROM lesson_checkins WHERE account_id=? AND rating IS NOT NULL "
-            f"AND lesson_id IN ({','.join('?' * len(ids))})", (account_id, *ids))}
-    today_lessons = [l for l in lessons if l["date"] == today.isoformat()]
-    return {"earlier": sum(1 for l in lessons if l["date"] < today.isoformat() and l["id"] not in rated),
-            "today": sum(1 for l in today_lessons if l["id"] not in rated),
-            "today_total": len(today_lessons), "total": len(lessons)}
+    """Stunden ohne Rückmeldung nach derselben Regel wie Ring, Serie und
+    Tagesabschluss (``rewards.feedback_due``, D210): die vergessenen der
+    Vortage seit ``rewards.FEEDBACK_FROM`` und die schon beendeten von heute.
+    Ausgefallene, versäumte, ausgeblendete, erlassene Stunden und Einträge
+    ohne Fach zählen nicht, Teamunterricht zählt einmal."""
+    from .rewards import feedback_due
+    today_iso = today.isoformat()
+    due = feedback_due(account_id, today, now)
+    todays = [done for slot, done in due if slot[0]["date"] == today_iso]
+    return {"earlier": sum(1 for slot, done in due if not done and slot[0]["date"] < today_iso),
+            "today": todays.count(False), "today_total": len(todays), "total": len(due)}
 
 
 def _merged(lessons: list[dict]) -> list[list[dict]]:
     """Doppelstunden als eine Zeile, wie auf „Heute“ (dayPhase.mergeLessons):
-    gleiches Fach, gleicher Zustand, höchstens 20 Minuten dazwischen."""
+    gleiches Fach, gleicher Zustand, höchstens 20 Minuten dazwischen.
+    Teamunterricht (``rewards.same_slot``) steht mit in der Zeile."""
+    from .rewards import feedback_slots
     groups: list[list[dict]] = []
-    for l in sorted(lessons, key=lambda x: x.get("start_time") or 0):
+    for slot in feedback_slots(sorted(lessons, key=lambda x: x.get("start_time") or 0)):
+        l = slot[0]
         last = groups[-1][-1] if groups else None
         if last is not None:
             gap = (_minutes(l.get("start_time")) or 0) - (_minutes(last.get("end_time")) or 0)
             same = (l.get("subject_name") or l.get("subject_short")) == (last.get("subject_name") or last.get("subject_short"))
             if same and bool(l.get("is_cancelled")) == bool(last.get("is_cancelled")) and 0 <= gap <= 20:
-                groups[-1].append(l)
+                groups[-1].extend(slot)
                 continue
-        groups.append([l])
+        groups.append(list(slot))
     return groups
+
+
+def _group_open(group: list[dict], done: set) -> bool:
+    """Eine Zeile ist offen, solange eine ihrer Stunden keine Rückmeldung hat;
+    bei Teamunterricht genügt die zu einem der Einträge."""
+    from .rewards import feedback_slots
+    return any(not any(l["id"] in done for l in slot) for slot in feedback_slots(group))
 
 
 def _minutes(hhmm) -> int | None:
@@ -241,7 +232,7 @@ def rings(account_id: int, today: date, now: datetime) -> dict:
             rated = {r[0] for r in conn.execute(
                 f"SELECT lesson_id FROM lesson_checkins WHERE account_id=? AND rating IS NOT NULL "
                 f"AND lesson_id IN ({','.join('?' * len(ids))})", (account_id, *ids))}
-    open_fb = sum(1 for g in ended if any(l["id"] not in rated for l in g))
+    open_fb = sum(1 for g in ended if _group_open(g, rated))
     # Vergessene Rückmeldungen der Tage davor bleiben offen, bis sie nachgeholt
     # sind (D210), wie überfällige Aufgaben.
     try:

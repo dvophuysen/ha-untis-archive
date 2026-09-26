@@ -25,7 +25,7 @@ import sqlite3
 from contextlib import closing
 from datetime import date, datetime, timedelta
 
-from . import family_board
+from . import family_board, rewards
 from .courses import hidden_keys, lesson_is_hidden
 from .db import history_conn, webapp_conn
 from .lernstand import PROGRESS
@@ -37,7 +37,6 @@ LOG = logging.getLogger("schul_cockpit.week_rolling")
 DAYS = 5
 LOOKAHEAD = 100      # Sommerferien plus Puffer
 LOOKBACK = 70
-FEEDBACK_DAYS = 7    # wie die Familienkarte: ältere Rückmeldungen führen hierher
 EXAM_TIMEOUT = 4.0
 
 
@@ -166,6 +165,7 @@ def annotate(account_id: int, lessons: list[dict]) -> None:
     ids = [l["id"] for l in lessons]
     checkins: dict[int, dict] = {}
     caught: set[int] = set()
+    waived: set[int] = set()
     if ids:
         marks = ",".join("?" * len(ids))
         with closing(webapp_conn()) as c:
@@ -173,6 +173,9 @@ def annotate(account_id: int, lessons: list[dict]) -> None:
                                f"WHERE account_id=? AND lesson_id IN ({marks})", (account_id, *ids)):
                 checkins[r["lesson_id"]] = {"rating": r["rating"], "note": r["note"]}
             caught = {r[0] for r in c.execute(f"SELECT lesson_id FROM caught_up "
+                                              f"WHERE account_id=? AND lesson_id IN ({marks})", (account_id, *ids))}
+            # Von Eltern erlassen (D210): keine offene Rückmeldung.
+            waived = {r[0] for r in c.execute(f"SELECT lesson_id FROM feedback_waivers "
                                               f"WHERE account_id=? AND lesson_id IN ({marks})", (account_id, *ids))}
     try:
         from . import sources
@@ -184,6 +187,7 @@ def annotate(account_id: int, lessons: list[dict]) -> None:
         l["rating"] = ck["rating"] if ck else None
         l["checkin"] = ck
         l["caught_up"] = l["id"] in caught
+        l["waived"] = l["id"] in waived
 
 
 def _ended(lesson: dict, day: str, today: date, now: datetime) -> bool:
@@ -196,8 +200,13 @@ def _ended(lesson: dict, day: str, today: date, now: datetime) -> bool:
 
 
 def _unrated(lessons: list[dict], day: str, today: date, now: datetime) -> list[dict]:
-    return [l for l in lessons if not l.get("is_cancelled") and not l.get("was_absent")
-            and _ended(l, day, today, now) and not (l.get("checkin") or {}).get("rating")]
+    """Die offenen Stunden eines gezeigten Tages. Wie ``rewards.feedback_due``:
+    ein Eintrag ohne Fach und eine erlassene Stunde sind nie offen, beim
+    Teamunterricht genügt die Rückmeldung zu einem der Einträge."""
+    ended = [l for l in lessons if not l.get("is_cancelled") and not l.get("was_absent") and l.get("subject_name")
+             and not l.get("waived") and _ended(l, day, today, now)]
+    return [l for slot in rewards.feedback_slots(ended)
+            if not any((x.get("checkin") or {}).get("rating") for x in slot) for l in slot]
 
 
 async def exams_between(account_id: int, first: date, last: date, today: date) -> list[dict]:
@@ -355,17 +364,21 @@ async def rolling(account_id: int, today: date, now: datetime, *, start: date | 
             if rows:
                 fb_days.append({"date": day["date"], "label": day["label"], "lessons": rows})
     else:
-        # Ältere Stunden ohne Rückmeldung: Die Familienkarte führt hierher.
-        lo = today - timedelta(days=FEEDBACK_DAYS)
-        earlier = _visible(account_id, lo, today - timedelta(days=1))
-        flat = [l for ls in earlier.values() for l in ls]
+        # Vergessene Rückmeldungen der Vortage, dieselben wie auf „Heute“, im
+        # Ring und auf der Familienkarte, die hierher führt (D210).
+        try:
+            flat = [dict(l) for l in rewards.feedback_backlog(account_id, today - timedelta(days=1), now)]
+        except Exception:
+            LOG.warning("Offene Rückmeldungen für Konto %s nicht lesbar", account_id, exc_info=True)
+            flat = []
         if flat:
             annotate(account_id, flat)
+        earlier: dict[str, list[dict]] = {}
+        for l in flat:
+            earlier.setdefault(l["date"], []).append(l)
         for d in sorted(earlier):
-            rows = _unrated(earlier[d], d, today, now)
-            if rows:
-                fb_days.append({"date": d, "label": family_board.day_label(d), "lessons": rows})
-    feedback = {"count": sum(len(x["lessons"]) for x in fb_days), "days": fb_days}
+            fb_days.append({"date": d, "label": family_board.day_label(d), "lessons": earlier[d]})
+    feedback = {"count": sum(rewards.feedback_count(x["lessons"]) for x in fb_days), "days": fb_days}
 
     return {**base, "mode": mode, "days": days, "feedback": feedback, "holiday": None,
             "range": {"start": day_list[0], "end": day_list[-1]},
