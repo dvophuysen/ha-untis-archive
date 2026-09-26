@@ -265,7 +265,7 @@ def stoff(account_id: int, subject: str, topics: list[dict], exam_date: str | No
     numbers = {str(c.get("number")) for c in picked}
     # Die feinste Gliederung: ein Kapitel nur, wenn keiner seiner Abschnitte dabei ist.
     leaves = [c for c in picked if not any(n != str(c.get("number")) and n.startswith(f"{c.get('number')}.") for n in numbers)]
-    sections, models = [], []
+    sections, models, by_topic = [], [], {}
     for c in leaves:
         titles = []
         for p in c.get("page_index") or []:
@@ -275,9 +275,14 @@ def stoff(account_id: int, subject: str, topics: list[dict], exam_date: str | No
             if _MODEL_PAGES.search(t) and p.get("page") not in models:
                 models.append(p.get("page"))
         span = f"S. {c.get('start_page')}" + (f"–{c['end_page']}" if c.get("end_page") else "")
-        sections.append({"abschnitt": f"{c.get('number')} {c.get('title')}".strip(), "seiten": span,
+        name = f"{c.get('number')} {c.get('title')}".strip()
+        sections.append({"abschnitt": name, "seiten": span,
                          "umfang_seiten": max(1, (c.get("end_page") or c.get("start_page") or 0) - (c.get("start_page") or 0) + 1),
                          "inhalt": titles[:8]})
+        lo, hi = c.get("start_page") or 0, c.get("end_page") or c.get("start_page") or 0
+        for t in topics:
+            if t.get("id") is not None and any(lo <= p <= hi for p in topic_pages(t)):
+                by_topic.setdefault(t["id"], []).append({"abschnitt": name, "seiten": span, "umfang": hi - lo + 1})
     for c in picked:
         for p in c.get("page_index") or []:
             if _MODEL_PAGES.search(p.get("title") or "") and p.get("page") not in models:
@@ -292,10 +297,49 @@ def stoff(account_id: int, subject: str, topics: list[dict], exam_date: str | No
     except Exception:
         notice = []
     out = {}
+    if by_topic:
+        out["_je_thema"] = by_topic  # intern: für die Zuordnung der Plätze, nicht für das Modell
     if sections:
         out["abschnitte"] = sections
     if models:
         out["seiten_wie_eine_arbeit"] = sorted(p for p in models if p is not None)
     if notice:
         out["themenliste_lehrkraft"] = notice[-2:]
+    return out
+
+
+def assign_sections(plan: list[dict], by_topic: dict[int, list[dict]]) -> list[str | None]:
+    """Jedem Platz einer Probearbeit einen Abschnitt seines Themas geben, damit
+    jeder Abschnitt vorkommt, größere zuerst und öfter (D220)."""
+    used: dict[int, int] = {}
+    out = []
+    for p in plan:
+        secs = sorted(by_topic.get(p["topic_id"]) or [], key=lambda x: -x["umfang"])
+        if not secs:
+            out.append(None)
+            continue
+        k = used.get(p["topic_id"], 0)
+        used[p["topic_id"]] = k + 1
+        s = secs[k % len(secs)]
+        out.append(f"{s['abschnitt']} ({s['seiten']})")
+    return out
+
+
+# Wie eine echte Arbeit (D220): Punkte je Anforderungsbereich, Gesamtpunkte je
+# Minute, Zeit. Liegt eine Arbeit daneben, entsteht sie einmal neu.
+POINTS_BY_AFB = {1: (1, 6), 2: (2, 8), 3: (3, 10)}
+
+
+def paper_issues(tasks: list[dict], minutes: int, fmt: str) -> list[str]:
+    out = []
+    for i, t in enumerate(tasks, 1):
+        lo, hi = POINTS_BY_AFB.get(int(t.get("afb") or 1), (1, 10))
+        if not lo <= float(t.get("points") or 0) <= hi:
+            out.append(f"Aufgabe {i} hat {t.get('points'):g} Punkte, im Bereich {t.get('afb')} sind {lo} bis {hi} üblich.")
+    total = sum(float(t.get("points") or 0) for t in tasks)
+    if fmt == "probe" and not 0.6 * minutes <= total <= 1.1 * minutes:
+        out.append(f"Zusammen {total:g} Punkte in {minutes} Minuten; üblich sind etwa {round(0.6 * minutes)} bis {round(1.1 * minutes)}.")
+    spent = sum(int(t.get("minutes") or 0) for t in tasks)
+    if spent and not 0.8 * minutes <= spent <= 1.15 * minutes:
+        out.append(f"Die Minuten der Aufgaben ergeben {spent}, die Arbeit hat {minutes}.")
     return out

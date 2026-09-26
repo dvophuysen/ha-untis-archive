@@ -1,3 +1,9 @@
+## 1.42.1
+
+- Probearbeit wie eine echte Arbeit: Jede Aufgabe gehört zu einem bestimmten Abschnitt des Schulbuchs, sodass jeder Abschnitt vorkommt. Punkte und Zeit werden nachgeprüft (je Aufgabe nicht zu viele Punkte, insgesamt passend zur Zeit); liegt eine Arbeit daneben, entsteht sie neu.
+- Keine Bilder zur Ausschmückung mehr: Aus dem Buch kommen nur Tabellen, Diagramme und Skizzen mit, die die Aufgabe braucht. Zeigt eine Abbildung andere Werte als die Aufgabe, berichtigt die Prüfung das.
+- Die Prüfung achtet beim Erstellen auch darauf, dass jede Aufgabe klar formuliert, in ihrer Zeit lösbar und auf Papier gut zu zeichnen ist.
+
 ## 1.42.0
 
 - Probearbeit als Generalprobe: Sie bekommt die Abschnitte des Schulbuchs zu den Themen der Arbeit, die Seiten mit Übungen im Stil einer Arbeit (Check-up, vermischte Aufgaben) und die Themenliste der Lehrkraft. Jeder Abschnitt kommt vor, größere Abschnitte mit mehr Punkten. Die Aufgaben verteilen sich nach dem Umfang der Themen im Buch, jedes Thema mindestens zweimal, über alle drei Anforderungsbereiche.

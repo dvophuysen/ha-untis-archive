@@ -402,7 +402,10 @@ CHECK = (
     "Punktzahl und Teilpunkten, die genau punkte ergeben. Liegt der Fehler in der Aufgabe selbst (mehrdeutig, verlangt etwas, "
     "das es nicht gibt, passt nicht zur Abbildung) und ist aufgabe_aendern true, steht in aufgabe der vollständige "
     "berichtigte Aufgabentext mit gleichem Stoff, Anforderungsbereich und Umfang; passt die Abbildung nicht und ist die "
-    "Aufgabe ohne sie lösbar, setze abbildung_weglassen=true. Ist aufgabe_aendern false, bleibt der Aufgabentext, wie er ist. "
+    "Aufgabe ohne sie lösbar, setze abbildung_weglassen=true; eine Abbildung, die nur schmückt oder andere Werte zeigt als die "
+    "Aufgabe, ist ein Fehler. Ist aufgabe_aendern true, prüfst du außerdem, ob die Aufgabe in eine echte Klassenarbeit passt: "
+    "klar formuliert, ohne Platzhalter außer Lücken zum Ausfüllen, in ihren minuten lösbar, Zahlen so, dass eine verlangte "
+    "Zeichnung auf Papier gelingt; sonst ok=false und aufgabe berichtigt. Ist aufgabe_aendern false, bleibt der Aufgabentext, wie er ist. "
     "rechnerpruefung nennt, was eine Rechnerprüfung schon gefunden hat; sie irrt bei richtiger Lesart nicht. "
     "Eine Bewertung je Aufgabe, nr wie in aufgaben. Nur JSON: "
     + json.dumps(CheckOut.model_json_schema()))
@@ -413,7 +416,7 @@ async def _check(account_id: int, subject: str, tasks: list[dict], flagged: dict
     from . import ai_gateway as ai
     context = {"fach": subject, "aufgabe_aendern": rewrite, "aufgaben": [
         {"nr": i + 1, "aufgabe": t.get("prompt"), "solution": t.get("solution"), "criteria": t.get("criteria"),
-         "punkte": t.get("points"), "abbildung": t.get("abbildung_text") or t.get("figur_text") or None,
+         "punkte": t.get("points"), "minuten": t.get("minutes"), "abbildung": t.get("abbildung_text") or t.get("figur_text") or None,
          "rechnerpruefung": [x["text"] for x in flagged.get(i, [])]} for i, t in enumerate(tasks)]}
     last = None
     for _ in range(2):  # ein unlesbares Ergebnis darf einmal wiederholt werden

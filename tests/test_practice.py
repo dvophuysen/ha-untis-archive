@@ -515,3 +515,22 @@ def test_the_probe_gets_the_book_sections_model_pages_and_the_teachers_list(monk
     assert got["abschnitte"][0]["umfang_seiten"] == 8 and got["seiten_wie_eine_arbeit"] == [32, 34]
     assert got["themenliste_lehrkraft"] == ["Themen: Gleichungen aufstellen, Probieren, Äquivalenzumformungen"]
     assert pr.stoff(1, "Mathematik", [], "2026-09-28")["abschnitte"][0]["abschnitt"].startswith("1.1"), "ohne Seiten: die Kapitel der letzten Wochen"
+
+
+def test_each_probe_place_gets_a_book_section_and_odd_points_are_found():
+    """D220: Jeder Abschnitt kommt in der Probearbeit vor; Punkte und Zeit wie
+    in einer echten Arbeit (vorher: 57 Punkte in 45 Minuten, Bereich I mit 13)."""
+    by_topic = {11: [{"abschnitt": "1.1 Aufstellen", "seiten": "S. 10–17", "umfang": 8},
+                     {"abschnitt": "1.3 Äquivalenzumformungen", "seiten": "S. 25–32", "umfang": 8}],
+                12: [{"abschnitt": "1.2 Probieren", "seiten": "S. 18–24", "umfang": 7}]}
+    plan = [{"topic_id": 12, "afb": 1}, {"topic_id": 11, "afb": 1}, {"topic_id": 12, "afb": 2},
+            {"topic_id": 11, "afb": 2}, {"topic_id": 13, "afb": 3}]
+    assert pr.assign_sections(plan, by_topic) == ["1.2 Probieren (S. 18–24)", "1.1 Aufstellen (S. 10–17)", "1.2 Probieren (S. 18–24)",
+                                                  "1.3 Äquivalenzumformungen (S. 25–32)", None]
+    good = [{"afb": 1, "points": 4, "minutes": 6}, {"afb": 1, "points": 5, "minutes": 7}, {"afb": 2, "points": 6, "minutes": 8},
+            {"afb": 2, "points": 7, "minutes": 8}, {"afb": 3, "points": 8, "minutes": 8}, {"afb": 3, "points": 8, "minutes": 8}]
+    assert pr.paper_issues(good, 45, "probe") == []
+    bad = [{**good[0], "points": 13}, {**good[1], "points": 12}] + good[2:]
+    got = pr.paper_issues(bad, 45, "probe")
+    assert got[0].startswith("Aufgabe 1 hat 13 Punkte") and got[1].startswith("Aufgabe 2 hat 12") and "Zusammen 54 Punkte" in got[2]
+    assert pr.paper_issues([{**t, "minutes": 2} for t in good], 45, "probe")[-1] == "Die Minuten der Aufgaben ergeben 12, die Arbeit hat 45."
