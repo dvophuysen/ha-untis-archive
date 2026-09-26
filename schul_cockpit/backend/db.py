@@ -1464,3 +1464,15 @@ CREATE TABLE IF NOT EXISTS feedback_waivers (
     PRIMARY KEY (account_id, lesson_id)
 );
 """))
+
+# Einmalig (D213): Die Freitagsliste von Konto 1 (gilt bis Sonntag, 27.09.)
+# enthielt neben der Mathearbeit am Montag Einstiegstests für spätere Arbeiten.
+# Auf Wunsch der Eltern gestrichen, nicht als versäumt gezählt; ab Montag
+# rechnet der Plan mit der Vorrang-Regel neu.
+_MIGRATIONS.append(("plan_focus_001_konto1_20260925", """
+UPDATE study_plan_days SET steps_json=(
+  SELECT json_group_array(json(value)) FROM json_each(study_plan_days.steps_json)
+  WHERE json_extract(value,'$.subject')='Mathematik')
+WHERE account_id=1 AND day='2026-09-25'
+  AND EXISTS(SELECT 1 FROM json_each(study_plan_days.steps_json) WHERE json_extract(value,'$.subject')='Mathematik');
+"""))

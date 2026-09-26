@@ -1,3 +1,8 @@
+## 1.38.1
+
+- Lernplan im Notfall: Steht eine Arbeit am nächsten oder übernächsten Schultag an und ist noch nicht sicher, enthält der Tagesplan nur noch Schritte für diese Arbeit (und einen Vokabeltest im selben Zeitraum). Einstiegstests und Übungen für spätere Arbeiten warten, bis die Arbeit geschrieben ist. Vorher kamen alle Arbeiten im Wechsel dran, auch eine, die erst in einem Monat ansteht.
+- Die laufende Freitagsliste eines Kindes enthält auf Wunsch der Eltern nur noch Mathematik; die gestrichenen Schritte zählen nicht als versäumt.
+
 ## 1.38.0
 
 - Vokabeln nach Lernstand statt nach festen Tagen: Jedes Wort trägt eine Haltbarkeit. Auf Anhieb richtig gilt es gleich als vorläufig sicher („sitzt“). Jede richtige Antwort mit etwas Abstand macht es haltbarer; dieselbe Antwort kurz danach bringt kaum etwas. Ab zwei Wochen Haltbarkeit heißt es „gefestigt“. Ein Fehler setzt es auf „wackelt“, bis es wieder richtig kommt. Ein Wort fällt nie allein durch Zeit zurück, es wird nur wieder fällig.

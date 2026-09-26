@@ -120,6 +120,39 @@ def test_no_cap_nearest_exam_first(world):
     assert "Biologie am 02.10.: noch etwa 6 Schritte in 2 Schultagen" in sp.outlook(1, MON)
 
 
+def test_an_exam_in_the_next_two_school_days_that_is_not_safe_is_all_there_is(world):
+    """Notfall (D213): Mathe am Montag, Stand schlecht. Die Freitagsliste hat nur
+    Mathe; Einstiegstests für Musik (eine Woche später) und Englisch (ein Monat)
+    warten. Am Dienstag ist die Mathearbeit geschrieben, dann kommen die anderen."""
+    fri = MON - timedelta(days=3)
+    exam("ma", "Mathematik", MON, ["Gleichungen", "Wertetabellen"])
+    exam("mu", "Musik", MON + timedelta(days=7), ["Notenwerte"])
+    exam("en", "Englisch", MON + timedelta(days=32), ["Tenses"])
+    steps = sp.compute(1, fri)
+    assert steps and {s["exam_key"] for s in steps} == {"ma"}, [s["key"] for s in steps]
+    # Zwei Schultage vorher gilt noch der Wechsel (D189), sofern Zeit ist.
+    later = sp.compute(1, MON + timedelta(days=1))
+    assert "mu" in {s["exam_key"] for s in later}
+    # Hat die nahe Arbeit nichts mehr offen, wartet nichts.
+    assert sp._focus(1, fri, [{"exam_key": "ma", "exam_date": MON.isoformat(), "need": 0, "steps": []}]) == set()
+
+
+def test_the_one_time_cleanup_keeps_only_maths(env):
+    import json
+    steps = [{"key": "a", "subject": "Mathematik"}, {"key": "b", "subject": "Musik"},
+             {"key": "c", "subject": "Englisch"}, {"key": "d", "subject": "Mathematik"}]
+    sql = dict(db._MIGRATIONS)["plan_focus_001_konto1_20260925"]
+    with closing(db.webapp_conn()) as c, c:
+        for acc in (1, 2):
+            c.execute("INSERT INTO study_plan_days(account_id,day,steps_json,computed_at) VALUES(?,?,?,'t')",
+                      (acc, "2026-09-25", json.dumps(steps)))
+        c.execute("INSERT INTO study_plan_days(account_id,day,steps_json,computed_at) VALUES(1,'2026-09-24',?,'t')", (json.dumps(steps),))
+        c.executescript(sql)
+        got = {(r[0], r[1]): [s["key"] for s in json.loads(r[2])] for r in c.execute("SELECT account_id,day,steps_json FROM study_plan_days")}
+    assert got[(1, "2026-09-25")] == ["a", "d"]
+    assert got[(2, "2026-09-25")] == ["a", "b", "c", "d"] and got[(1, "2026-09-24")] == ["a", "b", "c", "d"]
+
+
 def test_no_new_tasks_on_the_weekend_the_friday_list_carries_it(world, monkeypatch):
     fri = MON + timedelta(days=4)
     exam("ma", "Mathematik", SAT + timedelta(days=9), ["A", "B"])
@@ -137,10 +170,15 @@ def test_no_new_tasks_on_the_weekend_the_friday_list_carries_it(world, monkeypat
     world["free"].update(MON + timedelta(days=i) for i in range(5))
     assert sp.compute(1, MON) == []
     world["free"].clear()
+    # Französisch am Dienstag ist ein Notfall (D213); ein Vokabeltest am Montag
+    # gehört ins selbe Fenster und kommt im Wechsel dazu, nicht ans Ende.
     vocab(monkeypatch, [{"subject": "Englisch", "unit": "Unit 2", "target": 20, "done": False, "href": "#/vokabeln",
-                         "exam_key": "voc", "why": "Test am Freitag."}])
+                         "exam_key": "voc", "exam_date": (SAT + timedelta(days=2)).isoformat(), "why": "Test am Montag."}])
     kinds = [s["kind"] for s in sp.compute(1, fri)]
     assert "vocab" in kinds and kinds.index("vocab") < len(kinds) - 1, "Vokabeln im Wechsel, nicht ans Ende"
+    vocab(monkeypatch, [{"subject": "Englisch", "unit": "Unit 2", "target": 20, "done": False, "href": "#/vokabeln",
+                         "exam_key": "voc", "exam_date": (SAT + timedelta(days=6)).isoformat(), "why": "Test am Freitag."}])
+    assert "vocab" not in [s["kind"] for s in sp.compute(1, fri)], "ein späterer Vokabeltest wartet im Notfall"
     assert sp.compute(1, SAT) == []
 
 
