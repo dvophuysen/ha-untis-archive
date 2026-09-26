@@ -75,3 +75,22 @@ def test_on_the_weekend_the_friday_list_is_the_one_to_adjust(world):
     days = pa.days(1, sat)
     assert [d["day"] for d in days] == [MON + timedelta(days=4), MON + timedelta(days=7)]
     assert days[0]["label"].startswith("Liste vom Freitag")
+
+
+def test_a_step_shown_as_speaking_test_can_be_dropped(world):
+    """Wird eine Arbeit nach dem Festhalten als Sprechprüfung erkannt, steht ihr
+    Einstiegstest mit anderem Schlüssel da; Streichen trifft ihn trotzdem.
+    Fehler vorher: „Dieser Schritt steht nicht im Plan.“"""
+    from backend import exam_meta
+    exam("ma", "Mathematik", MON + timedelta(days=2), ["Brüche"])
+    exam("en", "Englisch", MON + timedelta(days=3), ["Meine Familie"])
+    raw = sp.ensure(1, MON)
+    assert any(s["key"].startswith("paper:en:einstieg") for s in raw)
+    exam_meta.remember(1, "en", "Sprechprüfung Englisch Jg.6")
+    st = pa.state(1, MON, MON)
+    oral = next(s for s in st["steps"] if s["key"] == "oral:en:einstieg")
+    assert not any(c["key"] == "oral:en:einstieg" for c in st["candidates"]), "steht schon da, nicht doppelt anbieten"
+    st = pa.change(1, MON, MON, "drop", oral["key"], 1)
+    assert "oral:en:einstieg" not in keys(st["steps"]) and st["changes"][0]["title"] == oral["title"]
+    assert not any(s["exam_key"] == "en" for s in sp.view(1, MON, store=False)["steps"])
+    assert any(c["key"] == "oral:en:einstieg" for c in st["candidates"]), "lässt sich wieder aufnehmen"

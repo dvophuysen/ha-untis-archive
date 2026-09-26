@@ -1,3 +1,7 @@
+## 1.41.1
+
+- „Lernen anpassen“: Ein Einstiegstest, den die App nachträglich als Sprechprüfung erkannt hat, lässt sich jetzt streichen. Vorher kam „Dieser Schritt steht nicht im Plan“, weil der Schritt in der festgehaltenen Liste noch als schriftlicher Einstiegstest stand. Er wird auch nicht mehr doppelt zum Hinzufügen angeboten, und das Protokoll nennt ihn so, wie er angezeigt wurde.
+
 ## 1.41.0
 
 - Ein Bereich im Raster gilt erst nach zwei Aufgaben als sicher, auch nach vollen Punkten im Einstiegstest. Der Einstiegstest erspart weiter das Gespräch zu einem Thema, das er voll gezeigt hat, der Kurztest bestätigt dann.

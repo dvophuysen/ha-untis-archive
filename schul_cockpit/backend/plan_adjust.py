@@ -37,6 +37,17 @@ def rows(account_id: int, day: date) -> list[dict]:
         return []  # Tabelle entsteht mit der Migration; vorher gibt es keine Änderungen
 
 
+def aliases(step: dict) -> set[str]:
+    """Die Schlüssel, unter denen ein festgehaltener Schritt angezeigt werden kann:
+    Wird eine Arbeit nachträglich als Sprechprüfung erkannt, zeigt die App ihren
+    Einstiegstest als „Einstiegstest Sprechprüfung“ mit anderem Schlüssel
+    (study_plan._convert_oral, D195). Streichen muss beide treffen."""
+    out = {step["key"]}
+    if step.get("kind") in ("paper", "dialog") and step.get("format") == "einstieg" and step.get("exam_key"):
+        out.add(f"oral:{step['exam_key']}:einstieg")
+    return out
+
+
 def apply(account_id: int, day: date, steps: list[dict], changes: list[dict] | None = None,
           candidates=None) -> list[dict]:
     """Die Liste des Tages mit den Änderungen der Eltern, in ihrer Reihenfolge.
@@ -44,9 +55,9 @@ def apply(account_id: int, day: date, steps: list[dict], changes: list[dict] | N
     übrigen Schritte, aus denen „mehr“ den nächsten nimmt."""
     out = [dict(s) for s in steps]
     for r in rows(account_id, day) if changes is None else changes:
-        keys = {s["key"] for s in out}
+        keys = {k for s in out for k in aliases(s)}
         if r["action"] == "drop":
-            out = [s for s in out if s["key"] != r["step_key"]]
+            out = [s for s in out if r["step_key"] not in aliases(s)]
         elif r["action"] == "add" and r["step_key"] not in keys and r["step_json"]:
             out.append({**json.loads(r["step_json"]), "by_parent": True})
         elif r["action"] == "less":
@@ -64,7 +75,7 @@ def candidates(account_id: int, day: date, current: list[dict], raw: list[dict] 
     die übrigen Schritte der Arbeiten (die im Notfall-Fenster zuerst, sonst nach
     Termin, je Arbeit in der Reihenfolge des Plans), dann das Vokabelpensum."""
     from . import study_plan as sp
-    have = {s["key"] for s in current}
+    have = {k for s in current for k in aliases(s)}
     out: list[dict] = []
 
     def take(st):
@@ -93,9 +104,9 @@ def materialize(account_id: int, day: date, raw: list[dict]) -> None:
     concrete: list[tuple[str, str, str | None, int | None, str]] = []
     pool = None
     for r in changes:
-        keys = {s["key"] for s in steps}
+        keys = {k for s in steps for k in aliases(s)}
         if r["action"] == "drop":
-            steps = [s for s in steps if s["key"] != r["step_key"]]
+            steps = [s for s in steps if r["step_key"] not in aliases(s)]
             concrete.append(("drop", r["step_key"], None, r["user_id"], r["created_at"]))
         elif r["action"] == "add":
             if r["step_key"] not in keys and r["step_json"]:
@@ -142,8 +153,9 @@ def state(account_id: int, day: date, today: date) -> dict:
     steps = apply(account_id, day, base, changes, candidates=pool)
     checked = sp.mark_done(account_id, steps, day, max(day, today)) if steps else []
     names = _names([r["user_id"] for r in changes])
+    shown = {s["key"]: s["title"] for s in checked}
     log = [{"action": r["action"], "title": (json.loads(r["step_json"])["title"] if r["step_json"]
-                                             else next((s["title"] for s in base if s["key"] == r["step_key"]), "")),
+                                             else shown.get(r["step_key"]) or next((s["title"] for s in base if r["step_key"] in aliases(s)), "")),
             "at": r["created_at"], "by": names.get(r["user_id"], "")} for r in changes]
     return {"day": day.isoformat(), "frozen": frozen,
             "steps": [{k: s.get(k) for k in ("key", "kind", "title", "subject", "exam_date", "format", "done",
@@ -186,14 +198,18 @@ def change(account_id: int, day: date, today: date, action: str, key: str | None
         if not last:
             raise LookupError("Es ist nichts mehr offen.")
         action, step_key = "drop", last["key"]
+        step_json = json.dumps({"key": last["key"], "title": last["title"]}, ensure_ascii=False)
     elif raw is not None and action == "more":
         nxt = next(iter(candidates(account_id, day, current, raw)), None)
         if not nxt:
             raise LookupError("Es gibt keinen weiteren Schritt.")
         action, step_key, step_json = "add", nxt["key"], json.dumps(nxt, ensure_ascii=False)
     elif action == "drop":
-        if not any(s["key"] == key for s in current):
+        if not any(key in aliases(s) for s in current):
             raise LookupError("Dieser Schritt steht nicht im Plan.")
+        # So, wie die Eltern ihn gesehen haben, fürs Protokoll (auch umgestellt).
+        seen = next((s for s in sp.mark_done(account_id, current, day, max(day, today)) if s["key"] == key), None)
+        step_json = json.dumps({"key": key, "title": seen["title"]}, ensure_ascii=False) if seen else None
     elif action == "add":
         found = next((s for s in candidates(account_id, day, current, raw) if s["key"] == key), None)
         if not found:
