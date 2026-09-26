@@ -1,3 +1,8 @@
+## 1.39.0
+
+- Eltern können das Lernpensum anpassen: Auf der Familienkarte unter den Ringen „Lernen anpassen“. Einfach mit − und + (ein Schritt weniger, der nächste dazu), etwa an vollen Tagen. Erweitert: einzelne Schritte streichen oder aus der Liste der übrigen Schritte hinzufügen, auch Gestrichenes wieder aufnehmen. Gilt für den Plan von heute (am Wochenende die Freitagsliste) und für den nächsten Schultag; für einen Tag, der noch nicht feststeht, wirken − und + als Anzahl und werden am Morgen zu einzelnen Schritten.
+- Gestrichenes zählt nie als versäumt, Hinzugefügtes gehört zum Tagesplan (Serie, Ring, Tagesabschluss). Das Kind sieht bei einem hinzugefügten Schritt „Von deinen Eltern dazugenommen“. Jede Änderung steht mit Uhrzeit im Blatt, „Zurücksetzen“ stellt den Plan der App wieder her.
+
 ## 1.38.1
 
 - Lernplan im Notfall: Steht eine Arbeit am nächsten oder übernächsten Schultag an und ist noch nicht sicher, enthält der Tagesplan nur noch Schritte für diese Arbeit (und einen Vokabeltest im selben Zeitraum). Einstiegstests und Übungen für spätere Arbeiten warten, bis die Arbeit geschrieben ist. Vorher kamen alle Arbeiten im Wechsel dran, auch eine, die erst in einem Monat ansteht.

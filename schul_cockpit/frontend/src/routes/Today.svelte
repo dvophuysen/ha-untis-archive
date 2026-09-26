@@ -385,7 +385,7 @@
           {#each learnSteps as s (s.key)}
             <div class="learn-step" class:done={s.done} class:waiting={s.waiting}>
               <span class="learn-check" class:checked={s.done} aria-hidden="true">{s.done ? '✓' : ''}</span>
-              <span class="learn-body"><strong>{s.title}</strong><small>{s.why}</small></span>
+              <span class="learn-body"><strong>{s.title}</strong><small>{#if s.by_parent}Von deinen Eltern dazugenommen. {/if}{s.why}</small></span>
               {#if s.done}<span class="learn-state">{s.skipped ? 'entfällt' : 'erledigt'}</span>{:else if s.waiting}<span class="learn-state">wartet</span>{:else if s.attempt_id}<button class="primary learn-go" onclick={() => startStep(s)}>{study?.read_only ? 'Öffnen' : 'Weiter'}</button>{:else if !study?.read_only}<button class="primary learn-go" disabled={!!stepBusy} onclick={() => startStep(s)}>{stepBusy === s.key ? 'Wird erstellt …' : 'Los'}</button>{/if}
             </div>
           {:else}<p class="all-clear">✓ Heute ist nichts zum Lernen Pflicht.</p>{/each}

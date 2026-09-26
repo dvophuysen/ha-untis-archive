@@ -10,6 +10,7 @@
   // wird nicht wiederholt.
   import ActionLabel from '../lib/ActionLabel.svelte';
   import DayRings from '../lib/DayRings.svelte';
+  import PlanAdjust from '../lib/PlanAdjust.svelte';
   import { subjectStyle } from '../lib/subjectStyle.js';
   import { formatShortDate, weekdayOf } from '../lib/format.js';
   import { untrack } from 'svelte';
@@ -21,6 +22,8 @@
   import { slotsOf, withGaps, periodTitle } from '../lib/dayStrip.js';
 
   let data = $state(null);
+  // Lernen anpassen (D214): für welches Kind das Blatt offen ist.
+  let adjusting = $state(null);
   let loading = $state(true);
   let error = $state(null);
 
@@ -164,6 +167,7 @@
           {#if rg.carry_day || st?.tight?.length}
             <p class="ring-note">{#if rg.carry_day}Stand vom {weekdayOf(rg.carry_day)}{/if}{#each st?.tight ?? [] as t}{rg.carry_day ? ' · ' : ''}eng bis {subjectStyle(t.subject).name} am {formatShortDate(t.exam_date)}{/each}</p>
           {/if}
+          <button class="adjust-open" onclick={() => (adjusting = kid)}>Lernen anpassen</button>
         {:else}
           {#if kid.study}
           <!-- Lernen heute (D180): nur zur Information, die App steuert selbst nach. -->
@@ -227,6 +231,10 @@
   <StageLegend stages={['sitzt', 'wackelt', 'angefangen', 'neu']} labels={{ neu: 'noch nicht geübt' }} />
 {/if}
 
+{#if adjusting}
+  <PlanAdjust accountId={adjusting.account_id} name={adjusting.name} onclose={() => (adjusting = null)} onchange={load} />
+{/if}
+
 <style>
   .dash { display: grid; gap: 1rem; grid-template-columns: 1fr; align-items: start; }
   @media (min-width: 720px) { .dash { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -282,6 +290,7 @@
     margin-bottom: 0.2rem;
   }
   /* Offenes Lernen ist kein Versäumnis: neutral statt grün (D180). */
+  .adjust-open { display: block; margin: 0 0 var(--sp-2) auto; background: none; border: none; color: var(--accent); font-size: var(--fs-sm); text-decoration: underline; padding: 4px 0; }
   .ring-note { margin: calc(-1 * var(--sp-1)) 0 var(--sp-2); font-size: var(--fs-xs); color: var(--fg-muted); }
   button.okline.study.open { background: var(--bg-elevated); color: var(--fg); }
   .row {

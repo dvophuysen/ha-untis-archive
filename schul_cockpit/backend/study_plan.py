@@ -57,6 +57,10 @@ def _de(iso: str) -> str:
     return f"{d.day:02d}.{d.month:02d}."
 
 
+def _weekday(d: date) -> str:
+    return ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")[d.weekday()]
+
+
 # ------------------------------------------------------------------ Eingaben
 
 def _exams(account_id: int, day: date) -> list[dict]:
@@ -251,6 +255,7 @@ def exam_plan(account_id: int, exam: dict, day: date, school: list[date]) -> dic
     return {"exam_key": exam["exam_key"], "subject": subject, "exam_date": exam["exam_date"], "need": need,
             "days": len(days), "weekend": weekend, "behind": behind,
             "ready": ready, "total": total, "steps": today_steps,
+            "all_steps": [{**st, "tight": tight} for st in seq],
             "sequence": [{k: st.get(k) for k in ("key", "kind", "format", "topic_id", "title")} for st in seq]}
 
 
@@ -380,7 +385,8 @@ def outlook(account_id: int, day: date) -> str:
 
 # -------------------------------------------------------------- Einfrieren
 
-def stored(account_id: int, day: date) -> list[dict] | None:
+def stored_raw(account_id: int, day: date) -> list[dict] | None:
+    """Die festgehaltene Liste, wie die App sie berechnet hat."""
     try:
         with closing(webapp_conn()) as c:
             row = c.execute("SELECT steps_json FROM study_plan_days WHERE account_id=? AND day=?",
@@ -388,6 +394,16 @@ def stored(account_id: int, day: date) -> list[dict] | None:
     except Exception:
         return None
     return json.loads(row[0]) if row else None
+
+
+def stored(account_id: int, day: date) -> list[dict] | None:
+    """Die festgehaltene Liste mit den Änderungen der Eltern (D214). Sie gilt
+    überall: auf „Heute“, im Ring, für Serie und Tagesabschluss."""
+    raw = stored_raw(account_id, day)
+    if raw is None:
+        return None
+    from . import plan_adjust
+    return plan_adjust.apply(account_id, day, raw)
 
 
 # Stand der Planlogik. Ein festgehaltener Tagesplan wird nur an den hier
@@ -404,11 +420,20 @@ def ensure(account_id: int, day: date) -> list[dict]:
     if found is not None and not (day.isoformat() in REPLAN_DAYS and _version(account_id, day) < PLAN_VERSION):
         return found
     steps = compute(account_id, day)
+    fresh = found is None
     with closing(webapp_conn()) as c, c:
         c.execute("INSERT INTO study_plan_days(account_id,day,steps_json,computed_at,version) VALUES(?,?,?,?,?) "
                   "ON CONFLICT(account_id,day) DO UPDATE SET steps_json=excluded.steps_json,computed_at=excluded.computed_at,"
                   "version=excluded.version",
                   (account_id, day.isoformat(), json.dumps(steps, ensure_ascii=False), rewards.now_local().isoformat(), PLAN_VERSION))
+    if fresh:
+        try:
+            # Was Eltern am Vorabend als Anzahl eingestellt haben, wird jetzt zu
+            # bestimmten Schritten (D214).
+            from . import plan_adjust
+            plan_adjust.materialize(account_id, day, steps)
+        except Exception:
+            LOG.warning("Anpassung der Eltern für %s nicht übernommen", day, exc_info=True)
     return stored(account_id, day) or steps
 
 
@@ -559,7 +584,7 @@ def open_count(account_id: int, day: date, until: date | None = None) -> int:
 # ------------------------------------------------------------------ Ansicht
 
 PUBLIC = ("key", "kind", "title", "why", "subject", "exam_key", "exam_date", "format", "topic_id", "level", "href",
-          "done", "tight", "attempt_id", "skipped", "waiting")
+          "done", "tight", "attempt_id", "skipped", "waiting", "by_parent")
 
 
 def _attach_papers(account_id: int, steps: list[dict], day: date) -> None:
@@ -589,7 +614,9 @@ def view(account_id: int, day: date, *, store: bool, until: date | None = None) 
     steps = ensure(account_id, day) if store else stored(account_id, day)
     frozen = steps is not None
     if steps is None:
-        steps = compute(account_id, day)
+        from . import plan_adjust
+        base = compute(account_id, day)
+        steps = plan_adjust.apply(account_id, day, base, candidates=lambda: plan_adjust.candidates(account_id, day, base))
     checked = mark_done(account_id, steps, day, until)
     try:
         _attach_papers(account_id, checked, day)

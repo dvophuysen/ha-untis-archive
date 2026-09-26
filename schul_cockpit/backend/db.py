@@ -1476,3 +1476,19 @@ UPDATE study_plan_days SET steps_json=(
 WHERE account_id=1 AND day='2026-09-25'
   AND EXISTS(SELECT 1 FROM json_each(study_plan_days.steps_json) WHERE json_extract(value,'$.subject')='Mathematik');
 """))
+# Eltern passen den Lernplan eines Tages an (D214): weniger, mehr, streichen,
+# hinzufügen. Getrennt vom festgehaltenen Plan, damit er sich zurücksetzen lässt.
+_MIGRATIONS.append(("plan_adjust_001", """
+CREATE TABLE IF NOT EXISTS study_plan_changes (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ account_id INTEGER NOT NULL,
+ day TEXT NOT NULL,
+ action TEXT NOT NULL,
+ step_key TEXT,
+ step_json TEXT,
+ user_id INTEGER,
+ created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_study_plan_changes_day ON study_plan_changes(account_id, day, id);
+"""))
+
