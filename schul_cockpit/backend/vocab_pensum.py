@@ -222,8 +222,10 @@ def practiced(account_id: int, day: date, word_ids: list[int] | None = None, *, 
 
 
 def _href(subject: str, unit: str) -> str:
+    """Der Trainer zu genau dieser Einheit; ``plan=1``: aus dem Lernplan
+    gestartet, dann fragt er nur diese Einheit ab (D215)."""
     from urllib.parse import quote
-    return f"#/vokabeln/{quote(subject, safe='')}?unit={quote(unit, safe='')}"
+    return f"#/vokabeln/{quote(subject, safe='')}?unit={quote(unit, safe='')}&plan=1"
 
 
 # ---------------------------------------------------------------- Zielkurve

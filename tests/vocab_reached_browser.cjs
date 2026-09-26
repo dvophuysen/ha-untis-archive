@@ -41,6 +41,14 @@ await page.getByText('Einstiegstest Mathematik').waitFor();
 assert.equal(await page.getByRole('link',{name:'Weiter im Lernplan'}).getAttribute('href'),'#/today?s=lernen');
 await page.getByRole('button',{name:'Noch weiterüben'}).click();
 await page.getByRole('heading',{name:/Pensum geschafft/}).waitFor({state:'detached'});
+// Aus dem Lernplan gestartet (plan=1): nur diese Lektion, keine andere wählbar.
+await page.goto('http://127.0.0.1:4187/#/vokabeln/LATEIN?unit=L2&plan=1');await page.reload();
+await page.getByRole('heading',{name:'Aus deinem Lernplan: L2'}).waitFor();
+assert.equal(await page.locator('button.unit').count(),1,'nur die Lektion aus dem Lernplan');
+assert.equal(await page.locator('button.unit',{hasText:'L1'}).count(),0);
+await page.getByRole('button',{name:'Freiwillig eine andere Einheit üben'}).click();
+await page.locator('button.unit',{hasText:'L1'}).waitFor();
+assert.ok(!page.url().includes('plan=1'),'freiwillig: ohne Sperre');
 assert.deepEqual(errors,[]);
 console.log('PASS: pensum progress in the round, reached message with next plan step, hint for a unit that does not count');
 }finally{await browser.close();server.close();}

@@ -76,7 +76,7 @@ def test_exam_entry_spreads_open_words_over_school_days(env, free):
     assert len(items) == 1
     e = items[0]
     assert e["subject"] == EN and e["unit"] == "Unit 3" and e["exam_key"] == "cal:en-voc"
-    assert e["href"] == "#/vokabeln/ENGLISCH?unit=Unit%203"
+    assert e["href"] == "#/vokabeln/ENGLISCH?unit=Unit%203&plan=1", "aus dem Lernplan: nur diese Einheit (D215)"
     assert e["days_left"] == 10 and e["open"] == 60 and e["target"] == 10 and not e["done"]
     assert e["why"].startswith("Der Vokabeltest ist in 10 Schultagen. 60 Wörter sitzen noch nicht")
     # Schwache Trefferquote und drei Tage vor dem Test: mehr Wörter.

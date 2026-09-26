@@ -1,3 +1,8 @@
+## 1.39.1
+
+- Vokabeln aus dem Lernplan: Startet das Kind eine Lektion aus dem Lernpfad, fragt der Trainer nur genau diese Lektion ab; andere Einheiten lassen sich dort nicht wählen. Freiwillig eine andere zu üben geht über einen eigenen Link.
+- Ein Einstiegstest im Tagesplan entfällt als „nicht mehr nötig“, sobald der Stand schon gemessen ist, etwa durch eine Probearbeit.
+
 ## 1.39.0
 
 - Kurztest eines Kindes berichtigt: Die Musterlösung nannte bei 2x − 6 = 3 fälschlich x = 4; die richtige Antwort 4,5 kostete deshalb einen halben Punkt. Aufgabe 1 zählt jetzt 9 von 9, der Kurztest 16 von 18.

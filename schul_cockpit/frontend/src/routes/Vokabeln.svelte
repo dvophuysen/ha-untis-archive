@@ -21,7 +21,17 @@
   // davon und wird beim Wechsel der Einheit wieder aufgehoben (D100).
   // Startwert; App.svelte erzeugt die Seite je Fach und Einheit neu ({#key}).
   // svelte-ignore state_referenced_locally
-  let unit = $state(initialUnit), section = $state(''), box = $state(''), stage = $state(1), direction = $state('from');
+  // Aus dem Lernplan gestartet (?plan=1, D215): nur genau diese Einheit (und
+  // ein mitgegebener Abschnitt) wird abgefragt; andere lassen sich hier nicht
+  // wählen. Freiwillig eine andere zu üben, geht über einen eigenen Link.
+  const startQuery = new URLSearchParams(window.location.hash.split('?')[1] ?? '');
+  let locked = $state(startQuery.get('plan') === '1' && !!initialUnit);
+  let unit = $state(initialUnit), section = $state(startQuery.get('section') ?? ''), box = $state(''), stage = $state(1), direction = $state('from');
+  function unlock() {
+    locked = false;
+    const q = new URLSearchParams(window.location.hash.split('?')[1] ?? ''); q.delete('plan');
+    history.replaceState(null, '', `${window.location.hash.split('?')[0]}${q.toString() ? `?${q}` : ''}`);
+  }
   let cards = $state([]), index = $state(0), answer = $state(''), spoken = $state(false), edits = $state(0);
   let verdict = $state(null), pending = $state(null), done = $state(false), tally = $state({ correct: 0, wrong: 0, skipped: 0 });
   let answerInput = $state(null);
@@ -46,8 +56,8 @@
   const sections = $derived(currentUnit?.sections || []);
   // Kästen gehören unter ihren Abschnitt, nicht daneben (D116).
   const boxes = $derived(sections.find((s) => s.section === section)?.boxes || []);
-  function chooseUnit(name) { if (unit !== name) { unit = name; section = ''; box = ''; bookWords = null; } }
-  function chooseSection(name) { if (section !== name) { section = name; box = ''; bookWords = null; } }
+  function chooseUnit(name) { if (locked) return; if (unit !== name) { unit = name; section = ''; box = ''; bookWords = null; } }
+  function chooseSection(name) { if (locked) return; if (section !== name) { section = name; box = ''; bookWords = null; } }
 
   // Wortseiten werden beim Öffnen automatisch in Wörter zerlegt; solange das
   // läuft, lädt die Ansicht alle paar Sekunden nach.
@@ -247,7 +257,7 @@
         <h2>Durchgang fertig</h2>
         <p>{tally.correct} richtig · {tally.wrong} falsch oder noch nicht korrekt · {tally.skipped} ohne Wertung</p>
         <p class="muted">Noch unsichere Wörter kommen beim nächsten Mal zuerst. Deine Antwortzeit verschlechtert den Lernstand nicht.</p>
-        <div class="actions"><button class="primary" onclick={() => begin(stage, direction)}>Noch einmal, Wackler zuerst</button><button onclick={() => { done = false; cards = []; }}>Andere Einheit</button></div>
+        <div class="actions"><button class="primary" onclick={() => begin(stage, direction)}>Noch einmal, Wackler zuerst</button>{#if locked}<a class="button" href="#/today?s=lernen">Zum Lernplan</a>{:else}<button onclick={() => { done = false; cards = []; }}>Andere Einheit</button>{/if}</div>
       </section>
     {/if}
     {#if !data.units.length}
@@ -255,15 +265,20 @@
         <a href={`#/materialien/${encodeURIComponent(subject)}`}>Material hinzufügen</a></section>
     {:else}
       <section class="card">
+        {#if locked}
+          <h2>Aus deinem Lernplan: {currentUnit?.label || unit}{#if section} · {section}{/if}</h2>
+          <p class="muted small">Abgefragt wird nur diese Einheit. <button class="linkish" onclick={unlock}>Freiwillig eine andere Einheit üben</button></p>
+        {:else}
         <h2>Welche Einheit?</h2>
-        {#if data.overview?.started_units}
+        {/if}
+        {#if !locked && data.overview?.started_units}
           <p><strong>Dein Stand in {data.overview.started_units} begonnenen Einheiten</strong></p>
           <VocabProgress progress={data.overview.progress} />
           {#if lang.into}<VocabProgress progress={data.overview.writing_progress} label="Schreibweise" />{/if}
           <p class="muted small">Jedes Wort zählt einmal. Noch nicht begonnene Einheiten zählen hier nicht mit.</p>
-        {:else}<p class="muted small">Noch keine Einheit begonnen. Ungeübte Wörter sind grau und zählen nicht als Fehler.</p>{/if}
+        {:else if !locked}<p class="muted small">Noch keine Einheit begonnen. Ungeübte Wörter sind grau und zählen nicht als Fehler.</p>{/if}
         <div class="units">
-          {#each data.units as u (u.unit)}
+          {#each locked ? data.units.filter((u) => u.unit === unit) : data.units as u (u.unit)}
             <button class="unit" class:chosen={unit === u.unit} onclick={() => chooseUnit(u.unit)}>
               <strong>{u.label || u.unit}</strong>
               <span>{u.words ? `${u.words} Wörter · Bedeutung: ${unitSummary(u, 's1')}` : u.unread ? 'Quelle noch nicht freigegeben' : 'keine Lernwörter auf diesen Seiten'}</span>
@@ -273,7 +288,7 @@
             </button>
           {/each}
         </div>
-        {#if sections.length}
+        {#if sections.length && !locked}
           <h3>Ganzes Kapitel oder ein Teil?</h3>
           <div class="units">
             <button class="unit" class:chosen={!section} onclick={() => chooseSection('')}>

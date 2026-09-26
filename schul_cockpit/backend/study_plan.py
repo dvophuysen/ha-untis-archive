@@ -566,6 +566,11 @@ def _settle(account_id: int, steps: list[dict]) -> None:
             reason = ""
             if s["kind"] == "paper" and oral(account_id, s["exam_key"]):
                 reason = "Nicht mehr nötig: Es ist eine Sprechprüfung, geübt wird im Gespräch."
+            elif s["kind"] == "paper" and s.get("format") == "einstieg" and rows and any(
+                    cell["state"] != "offen" for r in rows.values() for cell in r["cells"].values()):
+                # Der Einstiegstest misst, wo das Kind steht; ist das schon gemessen
+                # (etwa durch eine Probearbeit), fällt er weg (D215).
+                reason = "Nicht mehr nötig: Dein Stand ist schon gemessen."
             elif s.get("topic_id") and rows and not row:
                 reason = "Nicht mehr nötig: Das Thema steht nicht mehr auf der Liste."
             elif s["kind"] == "dialog" and row:

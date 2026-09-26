@@ -137,6 +137,17 @@ def test_an_exam_in_the_next_two_school_days_that_is_not_safe_is_all_there_is(wo
     assert sp._focus(1, fri, [{"exam_key": "ma", "exam_date": MON.isoformat(), "need": 0, "steps": []}]) == set()
 
 
+def test_an_entry_test_goes_once_the_state_is_measured(world):
+    """D215: Misst schon eine andere Arbeit den Stand (etwa eine Probearbeit),
+    fällt der Einstiegstest der festgehaltenen Liste als „nicht mehr nötig“ weg."""
+    t = exam("ma", "Mathematik", MON + timedelta(days=1), ["Gleichungen"])[0]
+    steps = sp.compute(1, MON)
+    assert steps[0]["format"] == "einstieg"
+    answer(t, 2, 2)
+    first = sp.mark_done(1, steps, MON)[0]
+    assert first["done"] and first["skipped"] and "schon gemessen" in first["why"]
+
+
 def test_a_fixed_list_is_shown_next_exam_first(world):
     """D215: Auch eine schon festgehaltene Liste steht nach Termin, ohne dass
     etwas dazukommt oder wegfällt."""
