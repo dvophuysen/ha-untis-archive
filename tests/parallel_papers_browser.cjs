@@ -30,6 +30,7 @@ await page.goto('http://127.0.0.1:4186/#/today');
 const second=page.locator('.learn-step',{hasText:'Wertetabellen'});await second.waitFor();
 await second.getByRole('button',{name:'Los'}).click();
 await second.getByRole('button',{name:'Wird erstellt …'}).waitFor();
+for(let i=0;i<50&&!posts.length;i++)await new Promise(r=>setTimeout(r,100));
 assert.deepEqual(posts,[{exam_key:'ma',format:'kurz',topic_ids:[12],level:null}],'neuer Kurztest statt des Kurztests zu Gleichungen, der gerade ausgewertet wird');
 // Während er entsteht, bleibt der andere Kurztest bedienbar.
 const first=page.locator('.learn-step',{hasText:'Gleichungen'});

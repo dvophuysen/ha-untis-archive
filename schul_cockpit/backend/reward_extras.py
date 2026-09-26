@@ -47,7 +47,7 @@ def note_extra_vocab(account_id: int, user, day: date | None = None, *, acting: 
             if c.execute("SELECT 1 FROM reward_events WHERE account_id=? AND kind='extra' AND ref=?",
                          (account_id, f"vocab:{day.isoformat()}")).fetchone():
                 return False
-        done = vocab_pensum.practiced(account_id, day)
+        done = vocab_pensum.practiced(account_id, day, gave_up=False)
         if len(done) < EXTRA_WORDS:
             return False
         items = vocab_pensum.daily(account_id, day)

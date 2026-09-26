@@ -107,6 +107,7 @@
   // Lernen (D180): der eingefrorene Pflichtplan des Tages, erledigt live geprüft.
   const study = $derived(data?.study_plan ?? null);
   const learnSteps = $derived(study?.steps ?? []);
+  const nowKey = $derived(learnSteps.find((s) => !s.done && !s.waiting)?.key ?? null);
   const learnOpen = $derived(learnSteps.filter(s => !s.done).length);
   const nextStep = $derived(learnSteps.find(s => !s.done && !s.waiting) ?? null);
   const afterSchool = $derived(phase === 'nach' || phase === 'frei');
@@ -392,10 +393,11 @@
       {:else}
         {#if tightText}<p class="learn-hint">{tightText}</p>{/if}
         <div class="list">
-          {#each learnSteps as s (s.key)}
-            <div class="learn-step" class:done={s.done} class:waiting={s.waiting}>
-              <span class="learn-check" class:checked={s.done} aria-hidden="true">{s.done ? '✓' : ''}</span>
-              <span class="learn-body"><strong>{s.title}</strong><small>{#if s.by_parent}Von deinen Eltern dazugenommen. {/if}{s.why}</small></span>
+          {#each learnSteps as s, i (s.key)}
+            <!-- Ein Lernpfad (D215): nummeriert in der Reihenfolge des Plans, der nächste offene Schritt „Jetzt dran“. -->
+            <div class="learn-step" class:done={s.done} class:waiting={s.waiting} class:now={s.key === nowKey}>
+              <span class="learn-check" class:checked={s.done} aria-hidden="true">{s.done ? '✓' : i + 1}</span>
+              <span class="learn-body">{#if s.key === nowKey}<em class="now-tag">Jetzt dran</em>{/if}<strong>{s.title}</strong><small>{#if s.by_parent}Von deinen Eltern dazugenommen. {/if}{s.why}</small></span>
               {#if s.done}<span class="learn-state">{s.skipped ? 'entfällt' : 'erledigt'}</span>{:else if s.waiting}<span class="learn-state">wartet</span>{:else if s.attempt_id}<button class="primary learn-go" onclick={() => startStep(s)}>{study?.read_only ? 'Öffnen' : 'Weiter'}</button>{:else if !study?.read_only}<button class="primary learn-go" disabled={stepBusy.includes(s.key)} onclick={() => startStep(s)}>{stepBusy.includes(s.key) ? 'Wird erstellt …' : 'Los'}</button>{/if}
             </div>
           {:else}<p class="all-clear">✓ Heute ist nichts zum Lernen Pflicht.</p>{/each}
@@ -493,6 +495,9 @@
   .learn-step:last-child{border-bottom:0}
   .learn-check{width:24px;height:24px;border-radius:50%;border:2px solid var(--border);display:grid;place-items:center;font-weight:800;font-size:.8rem}
   .learn-check.checked{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .learn-step.now{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
+  .learn-step.now .learn-check{border-color:var(--accent);color:var(--accent)}
+  .now-tag{display:block;font-style:normal;font-size:var(--fs-xs);font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
   .learn-body{display:grid;gap:2px;overflow-wrap:anywhere}
   .learn-body small{color:var(--fg-muted);font-size:var(--fs-xs)}
   .learn-step.done .learn-body strong{color:var(--fg-muted)}

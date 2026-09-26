@@ -112,9 +112,9 @@ def test_no_cap_nearest_exam_first(world):
     ready(far[0]); ready(mid[0])
     steps = sp.compute(1, MON)
     got = [s["exam_key"] for s in steps]
-    # Biologie: 6 Schritte in 2 Schultagen vor dem Puffer → heute 3; Physik: 3 in 4 → heute 1.
-    # Im Wechsel, nicht ein Fach am Stück (D189).
-    assert got.count("bi") == 3 and got.count("ph") == 1 and got[:2] == ["bi", "ph"], got
+    # Biologie: 6 Schritte in 2 Schultagen vor dem Puffer, es wird eng → heute 3
+    # und nur Biologie (D215); Physik (3 in 4) wartet.
+    assert got == ["bi", "bi", "bi"], got
     plans = {p["exam_key"]: p for p in sp.plans(1, MON)}
     assert plans["bi"]["need"] == 6 and plans["bi"]["days"] == 2 and plans["ge"]["need"] == 3
     assert "Biologie am 02.10.: noch etwa 6 Schritte in 2 Schultagen" in sp.outlook(1, MON)
@@ -137,6 +137,18 @@ def test_an_exam_in_the_next_two_school_days_that_is_not_safe_is_all_there_is(wo
     assert sp._focus(1, fri, [{"exam_key": "ma", "exam_date": MON.isoformat(), "need": 0, "steps": []}]) == set()
 
 
+def test_a_fixed_list_is_shown_next_exam_first(world):
+    """D215: Auch eine schon festgehaltene Liste steht nach Termin, ohne dass
+    etwas dazukommt oder wegfällt."""
+    import json
+    steps = [{"key": "en", "kind": "dialog", "title": "E", "exam_date": "2026-10-01"},
+             {"key": "voc", "kind": "vocab", "title": "V", "exam_date": None},
+             {"key": "ma", "kind": "dialog", "title": "M", "exam_date": "2026-09-30"}]
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO study_plan_days(account_id,day,steps_json,computed_at) VALUES(1,?,?,'t')", (MON.isoformat(), json.dumps(steps)))
+    assert [s["key"] for s in sp.view(1, MON, store=False)["steps"]] == ["ma", "en", "voc"]
+
+
 def test_the_one_time_cleanup_keeps_only_maths(env):
     import json
     steps = [{"key": "a", "subject": "Mathematik"}, {"key": "b", "subject": "Musik"},
@@ -151,6 +163,15 @@ def test_the_one_time_cleanup_keeps_only_maths(env):
         got = {(r[0], r[1]): [s["key"] for s in json.loads(r[2])] for r in c.execute("SELECT account_id,day,steps_json FROM study_plan_days")}
     assert got[(1, "2026-09-25")] == ["a", "d"]
     assert got[(2, "2026-09-25")] == ["a", "b", "c", "d"] and got[(1, "2026-09-24")] == ["a", "b", "c", "d"]
+
+
+def test_without_a_squeeze_the_next_exam_comes_first_then_the_later_one(world, monkeypatch):
+    """Nächste Arbeit zuerst, spätere danach, nicht im Wechsel (D215)."""
+    def plan(key, when, n):
+        return {"exam_key": key, "exam_date": when, "need": n, "weekend": False, "behind": False,
+                "steps": [{"key": f"{key}{i}", "kind": "dialog", "exam_key": key} for i in range(n)]}
+    monkeypatch.setattr(sp, "plans", lambda a, d: [plan("ph", "2026-10-20", 2), plan("bi", "2026-10-12", 2)])
+    assert [s["key"] for s in sp.compute(1, MON)] == ["bi0", "bi1", "ph0", "ph1"]
 
 
 def test_no_new_tasks_on_the_weekend_the_friday_list_carries_it(world, monkeypatch):
@@ -171,11 +192,11 @@ def test_no_new_tasks_on_the_weekend_the_friday_list_carries_it(world, monkeypat
     assert sp.compute(1, MON) == []
     world["free"].clear()
     # Französisch am Dienstag ist ein Notfall (D213); ein Vokabeltest am Montag
-    # gehört ins selbe Fenster und kommt im Wechsel dazu, nicht ans Ende.
+    # gehört ins selbe Fenster und steht als nächste Prüfung vorn (D215).
     vocab(monkeypatch, [{"subject": "Englisch", "unit": "Unit 2", "target": 20, "done": False, "href": "#/vokabeln",
                          "exam_key": "voc", "exam_date": (SAT + timedelta(days=2)).isoformat(), "why": "Test am Montag."}])
     kinds = [s["kind"] for s in sp.compute(1, fri)]
-    assert "vocab" in kinds and kinds.index("vocab") < len(kinds) - 1, "Vokabeln im Wechsel, nicht ans Ende"
+    assert kinds[0] == "vocab" and len(kinds) > 1, "der Vokabeltest am Montag kommt vor der Arbeit am Dienstag"
     vocab(monkeypatch, [{"subject": "Englisch", "unit": "Unit 2", "target": 20, "done": False, "href": "#/vokabeln",
                          "exam_key": "voc", "exam_date": (SAT + timedelta(days=6)).isoformat(), "why": "Test am Freitag."}])
     assert "vocab" not in [s["kind"] for s in sp.compute(1, fri)], "ein späterer Vokabeltest wartet im Notfall"

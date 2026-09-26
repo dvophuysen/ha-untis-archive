@@ -69,13 +69,31 @@
   }
   $effect(() => { void accountId; void subject; polls = 0; load(); return () => clearTimeout(pollTimer); });
 
-  // Tagespensum (D181): wie viele Wörter heute dran sind und warum. Neu geladen
-  // beim Öffnen und nach jedem Durchgang, nicht nach jeder Antwort.
+  // Tagespensum (D181): wie viele Wörter heute dran sind und warum. Am freien
+  // Tag die Vokabelschritte der Liste vom letzten Schultag (D215). Neu geladen
+  // beim Öffnen, nach jedem Durchgang und im Hintergrund nach jeder Antwort,
+  // damit das Kind in der Runde sieht, wann das Pensum geschafft ist.
   let pensum = $state([]);
+  let reached = $state(null), nextStep = $state(null);
   async function loadPensum() {
-    try { pensum = (await api.get(`/api/accounts/${accountId}/vocab/pensum`)).items || []; } catch { pensum = []; }
+    try {
+      const before = pensum.find((e) => e.done === false && same(e));
+      pensum = (await api.get(`/api/accounts/${accountId}/vocab/pensum`)).items || [];
+      const now = pensum.find((e) => same(e));
+      if (before && now?.done && !reached) { reached = now; loadNextStep(); }
+    } catch { pensum = []; }
   }
   $effect(() => { void accountId; loadPensum(); });
+  const same = (e) => !!subject && e.subject?.toLowerCase() === subject.toLowerCase() && e.unit === unit;
+  // Die Einheit, die fürs Pensum zählt, und eine andere, falls das Kind gerade woanders übt.
+  const ownPensum = $derived(pensum.find(same) ?? null);
+  const otherPensum = $derived(ownPensum ? null : pensum.find((e) => !e.done) ?? null);
+  async function loadNextStep() {
+    try {
+      const plan = await api.get(`/api/accounts/${accountId}/study-plan/today`);
+      nextStep = (plan.steps ?? []).find((s) => !s.done && !s.waiting && s.kind !== 'vocab') ?? null;
+    } catch { nextStep = null; }
+  }
   const pct = (e) => Math.min(100, Math.round((100 * e.practiced) / Math.max(1, e.target)));
 
   // Vokabeltest auf Papier (D181).
@@ -125,6 +143,7 @@
       if (r.result === 'unclear') { pending = r; return; }
       pending = null; verdict = r;
       if (r.result === 'correct') tally.correct++; else tally.wrong++;
+      if (pensum.length) loadPensum();
     } catch (e) { error = e.message; } finally { busy = false; clock.resume(); }
   }
   function next(skip = false) {
@@ -339,6 +358,18 @@
       {/if}
     {/if}
   {:else}
+    {#if reached}
+      <section class="card reached" role="status">
+        <h2>🎉 Pensum geschafft: {reached.practiced} von {reached.target} Wörtern</h2>
+        <p>Du kannst freiwillig weiterüben. {#if nextStep}Als Nächstes im Lernplan: <b>{nextStep.title}</b>{/if}</p>
+        <div class="actions"><a class="primary button" href="#/today?s=lernen">Weiter im Lernplan</a><button onclick={() => (reached = null)}>Noch weiterüben</button></div>
+      </section>
+    {:else if ownPensum && !ownPensum.done}
+      <div class="pensum-mini" aria-label="Pensum"><span>Pensum: {ownPensum.practiced} von {ownPensum.target}</span>
+        <span class="pensum-bar"><span style:width={`${pct(ownPensum)}%`}></span></span></div>
+    {:else if otherPensum}
+      <p class="pensum-other">Fürs Pensum zählt <a href={otherPensum.href} onclick={() => { if (subject && otherPensum.subject.toLowerCase() === subject.toLowerCase()) { chooseUnit(otherPensum.unit); cards = []; } }}>{otherPensum.unit_label}</a> ({otherPensum.practiced} von {otherPensum.target}). Diese Einheit übst du freiwillig.</p>
+    {/if}
     <section class="card trainer">
       <div class="progress"><span>{stage === 2 ? 'Stufe 2: Schreibweise' : askForeign ? `${langName} → Deutsch` : `Deutsch → ${langName}`}</span><span>{index + 1} von {cards.length}</span></div>
       <p class="ask">{stage === 2 ? `Schreib es auf ${langName} …` : askForeign ? 'Was heißt …' : `Sag es auf ${langName} …`}</p>
@@ -460,6 +491,9 @@
   .verdict.incorrect { background: var(--bad-soft); }
   .verdict p { margin: 0.2rem 0; }
   .result p { margin: 0.3rem 0; }
+  .pensum-mini { display: grid; gap: 4px; margin: 0 0 var(--sp-2); font-size: var(--fs-sm); }
+  .pensum-other { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); color: var(--fg-muted); }
+  .reached h2 { margin-top: 0; }
   .pensum { display: grid; gap: var(--sp-2); margin: var(--sp-2) 0; }
   .pensum-row { display: grid; gap: 4px; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); border: 1px solid var(--border); background: var(--bg-card); color: var(--fg); text-decoration: none; }
   .pensum-head { display: flex; justify-content: space-between; gap: var(--sp-2); align-items: baseline; flex-wrap: wrap; font-size: var(--fs-sm); }

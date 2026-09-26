@@ -44,7 +44,9 @@ HOLD_SHARE, HOLD_WORDS = 0.1, 3
 def pensum(account_id: int, day: date | None = None, user: CurrentUser = Depends(get_current_user)):
     access(user, account_id)
     day = day or today_local()
-    return {"day": day.isoformat(), "items": vocab_pensum.daily(account_id, day)}
+    # Am freien Tag gilt die Liste vom letzten Schultag weiter (D205, D215).
+    items = vocab_pensum.daily(account_id, day) or vocab_pensum.carried(account_id, day)
+    return {"day": day.isoformat(), "items": items}
 
 
 # ------------------------------------------------------------------ Papiertest

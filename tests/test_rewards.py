@@ -227,7 +227,7 @@ def test_extra_mile_only_beyond_the_pensum_and_only_for_the_child(world, monkeyp
     items = [{"target": 10, "done": True}]
     practiced = set(range(15))
     monkeypatch.setattr(vocab_pensum, "daily", lambda account, day: items)
-    monkeypatch.setattr(vocab_pensum, "practiced", lambda account, day, ids=None: practiced)
+    monkeypatch.setattr(vocab_pensum, "practiced", lambda account, day, ids=None, **kw: practiced)
     assert not reward_extras.note_extra_vocab(1, KID, START)
     practiced.update(range(15, 20))
     assert not reward_extras.note_extra_vocab(1, PARENT, START)

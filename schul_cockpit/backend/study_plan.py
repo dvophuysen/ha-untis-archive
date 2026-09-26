@@ -316,23 +316,15 @@ def compute(account_id: int, day: date) -> list[dict]:
     vocab = _vocab(account_id, day)
     ordered = sorted(plans(account_id, day), key=lambda p: p["exam_date"])
     focus = _focus(account_id, day, ordered)
-    if focus:
-        # Notfall (D213): Eine Arbeit steht am nächsten oder übernächsten
-        # Schultag an und ist noch nicht sicher. Dann gilt nur sie (und ein
-        # Vokabeltest im selben Fenster); alles andere, auch Einstiegstests
-        # für spätere Arbeiten, wartet.
-        groups = [p["steps"] for p in ordered if p["exam_key"] in focus]
-        groups += [[_vocab_step(v)] for v in vocab if v.get("exam_key") and _vocab_in_window(account_id, day, v)]
-    else:
-        # Alle anstehenden Prüfungen im Wechsel, nicht ein Fach am Stück (D189):
-        # je Arbeit ihr Anteil, die Schritte reihum, die nächste Prüfung zuerst.
-        groups = [p["steps"] for p in ordered if p["steps"]]
-        groups += [[_vocab_step(v)] for v in vocab if v.get("exam_key")]
-    steps = []
-    while any(groups):
-        for g in groups:
-            if g:
-                steps.append(g.pop(0))
+    # Die nächste Arbeit zuerst, spätere danach (D215, ersetzt den Wechsel aus
+    # D189). Im Notfall nur die Arbeiten im Notfall (D213): eine unsichere
+    # Arbeit in den nächsten zwei Schultagen oder eine, bei der es eng wird;
+    # dazu ein Vokabeltest im selben Fenster.
+    groups = [(p["exam_date"], p["steps"]) for p in ordered if p["steps"] and (not focus or p["exam_key"] in focus)]
+    groups += [(v.get("exam_date") or "9999-12-31", [_vocab_step(v)]) for v in vocab
+               if v.get("exam_key") and (not focus or _vocab_in_window(account_id, day, v))]
+    groups.sort(key=lambda g: g[0])
+    steps = [st for _, g in groups for st in g]
     if steps:
         return steps
     # Grundpensum: jeden Schultag etwas, das erspart das Büffeln am Ende.
@@ -350,11 +342,11 @@ def _focus_until(account_id: int, day: date) -> date | None:
 
 
 def _focus(account_id: int, day: date, ordered: list[dict]) -> set[str]:
-    """Arbeiten im Notfall-Fenster, für die noch etwas zu tun ist (D213)."""
+    """Arbeiten im Notfall, für die heute etwas zu tun ist: in den nächsten zwei
+    Schultagen (D213) oder mit Engpass, wo die Lerntage nicht mehr reichen (D215)."""
     until = _focus_until(account_id, day)
-    if until is None:
-        return set()
-    return {p["exam_key"] for p in ordered if p["exam_date"] <= until.isoformat() and p["need"] and p["steps"]}
+    return {p["exam_key"] for p in ordered if p["need"] and p["steps"]
+            and ((until is not None and p["exam_date"] <= until.isoformat()) or p.get("weekend") or p.get("behind"))}
 
 
 def _vocab_in_window(account_id: int, day: date, v: dict) -> bool:
@@ -658,6 +650,9 @@ def view(account_id: int, day: date, *, store: bool, until: date | None = None) 
         base = compute(account_id, day)
         steps = plan_adjust.apply(account_id, day, base, candidates=lambda: plan_adjust.candidates(account_id, day, base))
     checked = mark_done(account_id, steps, day, until)
+    # Nächste Arbeit zuerst (D215), auch in einer schon festgehaltenen Liste:
+    # nur die Reihenfolge, nichts kommt dazu oder fällt weg.
+    checked.sort(key=lambda st: st.get("exam_date") or "9999-12-31")
     try:
         _attach_papers(account_id, checked, day)
     except Exception:

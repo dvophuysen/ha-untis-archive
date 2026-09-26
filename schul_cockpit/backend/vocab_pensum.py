@@ -198,19 +198,21 @@ def _is_due(state: dict, day: date) -> bool:
     return s1["stage"] in SECURE and bool(s1.get("due")) and s1["due"] <= day.isoformat()
 
 
-def practiced(account_id: int, day: date, word_ids: list[int] | None = None) -> set[int]:
+def practiced(account_id: int, day: date, word_ids: list[int] | None = None, *, gave_up: bool = True) -> set[int]:
     """Verschiedene Wörter, die das Kind an diesem Tag geübt hat (richtig oder
     falsch, Rückfragen nicht). Eltern zählen nur als „Kind am Elterngerät“; das
     hält die Belohnung mit fest (reward_events, D175).
 
-    „Weiß ich nicht“ im Trainer (falsch ohne Antwort) zählt nicht als geübt:
-    Wer das Wort danach noch einmal beantwortet, hat es geübt, auch falsch. Ein
-    leeres Feld im Papiertest ist dagegen eine geschriebene Antwort."""
+    „Weiß ich nicht“ ist fürs Pensum eine falsche Antwort wie jede andere: Das
+    Kind hat das Wort gesehen und die Lösung gelesen; das Wort wackelt und kommt
+    vorn wieder (D215, Nutzer: „ich sehe gar nicht, warum wir hier eine
+    Sonderlösung haben“). Für Extrameile und Abzeichen zählt es nicht
+    (``gave_up=False``), sonst lohnte sich Durchklicken."""
+    skip = "" if gave_up else "AND NOT (a.result='incorrect' AND TRIM(COALESCE(a.answer,''))='' AND COALESCE(a.source,'')!='paper') "
     with closing(webapp_conn()) as c:
         rows = c.execute(
             "SELECT a.word_id,a.user_id,u.role FROM vocab_attempts a LEFT JOIN users u ON u.id=a.user_id "
-            "WHERE a.account_id=? AND substr(a.created_at,1,10)=? AND a.result!='unclear' "
-            "AND NOT (a.result='incorrect' AND TRIM(COALESCE(a.answer,''))='' AND COALESCE(a.source,'')!='paper') "
+            "WHERE a.account_id=? AND substr(a.created_at,1,10)=? AND a.result!='unclear' " + skip +
             "AND COALESCE((SELECT excluded FROM vocab_attempt_reviews r WHERE r.attempt_id=a.id ORDER BY r.id DESC LIMIT 1),0)=0",
             (account_id, day.isoformat())).fetchall()
         noted = {r[0].split(":", 1)[0] for r in c.execute(
@@ -372,6 +374,38 @@ def _base_entry(account_id: int, day: date) -> dict | None:
     return {"subject": subject, "unit": unit, "unit_label": label, "target": target, "done": len(done_words) >= target,
             "practiced": len(done_words), "href": _href(subject, unit), "exam_key": None, "exam_date": None,
             "days_left": None, "open": new + relearn, "due": due, "relearn": relearn, "new": new, "rate": None, "why": why}
+
+
+def carried(account_id: int, today: date) -> list[dict]:
+    """Am freien Tag: die Vokabelschritte der Liste vom letzten Schultag mit dem
+    Stand seit jenem Tag (D205, D215). So sieht das Kind auch am Wochenende im
+    Trainer, was noch fehlt und wann es geschafft ist."""
+    from . import study_plan as sp
+    first = sp.carry_day(account_id, today)
+    if not first:
+        return []
+    steps = [s for s in (sp.stored(account_id, first) or []) if s.get("kind") == "vocab"]
+    if not steps:
+        return []
+    entries = {sp._vocab_key(v): v for v in daily(account_id, first)}
+    out = []
+    for st in steps:
+        subject = st.get("subject") or ""
+        unit = (st.get("key") or "").split(":", 2)[-1]
+        e = dict(entries.get(st["key"]) or {"subject": subject, "unit": unit, "unit_label": unit,
+                                             "href": st.get("href") or _href(subject, unit), "exam_key": st.get("exam_key"),
+                                             "exam_date": None, "why": st.get("why") or ""})
+        target = int(st.get("target") or e.get("target") or MIN_WORDS)
+        ids = _unit_words(account_id, e["subject"], e["unit"])
+        seen: set[int] = set()
+        d = first
+        while d <= today:
+            seen |= practiced(account_id, d, ids)
+            d += timedelta(days=1)
+        e.update(target=target, practiced=len(seen), done=len(seen) >= target, carry_from=first.isoformat(),
+                 why=f"Aus der Liste vom {WEEKDAYS[first.weekday()]}; geübt seit {WEEKDAYS[first.weekday()]}. " + (e.get("why") or ""))
+        out.append(e)
+    return out
 
 
 # ------------------------------------------------------------------ Schnittstelle

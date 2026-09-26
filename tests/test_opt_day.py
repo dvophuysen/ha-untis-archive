@@ -249,7 +249,9 @@ def test_gave_up_is_no_practised_word_and_one_event_per_word_and_day(setup):
     today = vocab.now_iso()[:10]
     day = date.fromisoformat(today)
     assert _q("SELECT COUNT(*) FROM reward_activity WHERE day=?", today)[0][0] == 1, "aber als Handlung des Tages"
-    assert vocab_pensum.practiced(1, day) == set()
+    # Fürs Pensum ist es ein falsch geübtes Wort (D215), für Extrameile und Abzeichen nicht.
+    assert vocab_pensum.practiced(1, day) == {ids[0]}
+    assert vocab_pensum.practiced(1, day, gave_up=False) == set()
     assert ask(ids[1], answer="sein").json()["result"] == "correct"
     assert ask(ids[1], answer="sich befinden").json()["result"] == "correct"
     assert _events("vocab") == [f"{ids[1]}:{today}"], "ein Ereignis je Wort und Tag"
@@ -266,7 +268,8 @@ def test_a_blank_on_the_paper_test_still_counts_as_practised(env):
         for wid, source, answer in ((one, "paper", ""), (two, None, ""), (three, None, "falsch")):
             c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,created_at,user_id,source) "
                       "VALUES(1,?,1,'from',?,'incorrect','2026-09-14T16:00:00+02:00',2,?)", (wid, answer, source))
-    assert vocab_pensum.practiced(1, date(2026, 9, 14)) == {one, three}
+    assert vocab_pensum.practiced(1, date(2026, 9, 14)) == {one, two, three}, "fürs Pensum zählt auch „Weiß ich nicht“ (D215)"
+    assert vocab_pensum.practiced(1, date(2026, 9, 14), gave_up=False) == {one, three}
 
 
 # ------------------------------------------------------- Papiertest (9)

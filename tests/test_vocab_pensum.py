@@ -226,6 +226,42 @@ def test_holidays_beyond_the_timetable_are_not_school_days(env, monkeypatch):
     assert days[:5] == week and days[5:] == [date(2026, 10, 26), date(2026, 10, 27), date(2026, 10, 28), date(2026, 10, 29), date(2026, 10, 30)]
 
 
+def test_i_dont_know_counts_for_the_pensum_as_a_wrong_answer_but_not_for_extras(env, free):
+    """„Weiß ich nicht“: Das Kind hat das Wort gesehen, es zählt fürs Pensum als
+    falsch geübt (D215); für Extrameile und Abzeichen nicht."""
+    ids = words(3)
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO vocab_attempts(account_id,word_id,stage,direction,answer,result,created_at,user_id) "
+                  "VALUES(1,?,1,'from','','incorrect',?,2)", (ids[0], f"{MON.isoformat()}T16:00:00+02:00"))
+    attempt(ids[1], MON)
+    assert vp.practiced(1, MON) == {ids[0], ids[1]}
+    assert vp.practiced(1, MON, gave_up=False) == {ids[1]}
+    from backend import vocab
+    with closing(db.webapp_conn()) as c:
+        assert vocab.word_states(c, 1, [ids[0]])[ids[0]]["s1"]["stage"] == "wackelt", "und das Wort wackelt"
+
+
+def test_on_a_free_day_the_trainer_shows_the_friday_vocab_step(env, free):
+    from backend import study_plan as sp
+    import json
+    fri = MON + timedelta(days=4)
+    ids = words(20)
+    step = {"key": "vocab:ENGLISCH:Unit 3", "kind": "vocab", "subject": EN, "target": 5, "title": "Vokabeln Englisch: Unit 3 · 5 Wörter"}
+    with closing(db.webapp_conn()) as c, c:
+        c.execute("INSERT INTO study_plan_days(account_id,day,steps_json,computed_at) VALUES(1,?,?,'t')", (fri.isoformat(), json.dumps([step])))
+    for wid in ids[:3]:
+        attempt(wid, fri)
+    sat = fri + timedelta(days=1)
+    free.update({sat, sat + timedelta(days=1)})
+    items = vp.carried(1, sat)
+    assert len(items) == 1 and (items[0]["practiced"], items[0]["target"], items[0]["done"]) == (3, 5, False)
+    assert items[0]["why"].startswith("Aus der Liste vom Freitag")
+    for wid in ids[3:5]:
+        attempt(wid, sat)
+    assert vp.carried(1, sat)[0]["done"], "am Samstag weitergeübt: geschafft"
+    assert vp.carried(1, fri) == [], "am Schultag selbst gilt das Tagespensum"
+
+
 def test_pensum_endpoint(env, free):
     client, state, _ = env
     client.app.include_router(vocab_daily.router, prefix="/api")
